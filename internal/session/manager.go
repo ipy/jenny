@@ -12,6 +12,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/ipy/jenny/internal/constants"
 )
 
 // TranscriptEntry represents a single turn in the conversation transcript.
@@ -246,6 +248,35 @@ func (m *Manager) SessionExists(sessionID string) bool {
 	path := m.transcriptPath(sessionID)
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// CheckRewriteSize checks if the transcript file exceeds the maximum size for
+// tombstone rewrite operations. Returns nil if the file is within limits or
+// does not exist. Returns an error if the file is too large, preventing OOM
+// during full rewrite operations.
+func (m *Manager) CheckRewriteSize(sessionID string) error {
+	if m.Disabled {
+		return nil
+	}
+	if sessionID == "" {
+		return fmt.Errorf("session ID is required")
+	}
+	if containsPathTraversal(sessionID) {
+		return fmt.Errorf("invalid session ID: path traversal not allowed")
+	}
+
+	path := m.transcriptPath(sessionID)
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // File doesn't exist, no rewrite needed
+		}
+		return fmt.Errorf("checking transcript file size: %w", err)
+	}
+	if info.Size() > constants.MaxTombstoneRewriteBytes {
+		return fmt.Errorf("transcript file size %d exceeds maximum %d bytes for rewrite", info.Size(), constants.MaxTombstoneRewriteBytes)
+	}
+	return nil
 }
 
 // RegisterShutdownFlush registers a signal handler to flush pending writes

@@ -2,9 +2,12 @@ package session
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/ipy/jenny/internal/constants"
 )
 
 func TestNewSessionID(t *testing.T) {
@@ -265,6 +268,116 @@ func TestManager_EmptySessionID(t *testing.T) {
 	// SessionExists should return false for empty
 	if m.SessionExists("") {
 		t.Error("SessionExists() = true, want false for empty session ID")
+	}
+}
+
+func TestManager_CheckRewriteSize(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp() error = %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	m, err := NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	sessionID := "sess_rewrite_test"
+
+	// CheckRewriteSize should return nil for nonexistent file
+	err = m.CheckRewriteSize(sessionID)
+	if err != nil {
+		t.Errorf("CheckRewriteSize() for nonexistent file = %v, want nil", err)
+	}
+
+	// Append entries to create a transcript file
+	for i := 0; i < 10; i++ {
+		entry := TranscriptEntry{Type: "user", Content: fmt.Sprintf("Hello %d", i)}
+		if err := m.AppendEntry(sessionID, entry); err != nil {
+			t.Fatalf("AppendEntry() error = %v", err)
+		}
+	}
+
+	// CheckRewriteSize should return nil for small file
+	err = m.CheckRewriteSize(sessionID)
+	if err != nil {
+		t.Errorf("CheckRewriteSize() for small file = %v, want nil", err)
+	}
+}
+
+func TestManager_CheckRewriteSize_TooLarge(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp() error = %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	m, err := NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	sessionID := "sess_too_large"
+
+	// Create a file larger than MaxTombstoneRewriteBytes
+	path := m.transcriptPath(sessionID)
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	// Write enough data to exceed 50 MiB
+	data := make([]byte, constants.MaxTombstoneRewriteBytes+1)
+	for i := range data {
+		data[i] = 'x'
+	}
+	if _, err := f.Write(data); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	f.Close()
+
+	// CheckRewriteSize should return error for large file
+	err = m.CheckRewriteSize(sessionID)
+	if err == nil {
+		t.Error("CheckRewriteSize() for large file = nil, want error")
+	}
+}
+
+func TestManager_CheckRewriteSize_EmptySessionID(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp() error = %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	m, err := NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	// Empty session ID should error
+	err = m.CheckRewriteSize("")
+	if err == nil {
+		t.Error("CheckRewriteSize() for empty session ID = nil, want error")
+	}
+}
+
+func TestManager_CheckRewriteSize_Disabled(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp() error = %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	m, err := NewManager(tmpDir, true) // disabled
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	// When disabled, CheckRewriteSize should return nil (no file operations)
+	err = m.CheckRewriteSize("sess_any")
+	if err != nil {
+		t.Errorf("CheckRewriteSize() when disabled = %v, want nil", err)
 	}
 }
 
