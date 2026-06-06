@@ -451,7 +451,6 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 		var textOutput string
 		var toolResults []api.ToolResult
 		var toolUseBlocks []api.ToolUseBlock
-		var modelName string
 
 		// Process blocks as they arrive
 		for block := range blocksChan {
@@ -503,9 +502,7 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 			Content:    streamResult.Blocks,
 			StopReason: streamResult.StopReason,
 			Usage:      streamResult.Usage,
-		}
-		if resp.Model == "" {
-			resp.Model = modelName
+			Model:      streamResult.Model,
 		}
 
 		// Build and append assistant message with text and tool_use blocks

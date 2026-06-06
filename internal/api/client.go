@@ -278,17 +278,20 @@ func (c *Client) SendMessage(ctx context.Context, messages []Message, tools []To
 
 // streamAccumulator tracks content blocks during streaming.
 type streamAccumulator struct {
-	blocks     []ContentBlock // Content blocks by index
-	texts      []string       // Accumulated text per block index
-	usage      Usage
-	stopReason StopReason
+	blocks        []ContentBlock // Content blocks by index
+	texts         []string       // Accumulated text per block index
+	toolInputJSON map[int]string // Accumulated partial JSON for tool_use blocks
+	model         string
+	usage         Usage
+	stopReason    StopReason
 }
 
 // newStreamAccumulator creates a new stream accumulator.
 func newStreamAccumulator() *streamAccumulator {
 	return &streamAccumulator{
-		blocks: make([]ContentBlock, 0),
-		texts:  make([]string, 0),
+		blocks:        make([]ContentBlock, 0),
+		texts:         make([]string, 0),
+		toolInputJSON: make(map[int]string),
 	}
 }
 
@@ -313,6 +316,16 @@ func (acc *streamAccumulator) setBlockType(index int, blockType string) {
 	acc.blocks[index].Type = blockType
 }
 
+// setModel sets the model from a message_start event.
+func (acc *streamAccumulator) setModel(model string) {
+	acc.model = model
+}
+
+// getModel returns the captured model.
+func (acc *streamAccumulator) getModel() string {
+	return acc.model
+}
+
 // setUsage sets the usage from a message_delta event.
 func (acc *streamAccumulator) setUsage(usage Usage) {
 	acc.usage = usage
@@ -321,6 +334,23 @@ func (acc *streamAccumulator) setUsage(usage Usage) {
 // setStopReason sets the stop reason from a message_delta event.
 func (acc *streamAccumulator) setStopReason(reason StopReason) {
 	acc.stopReason = reason
+}
+
+// appendToolInputJSON appends partial JSON to the tool input accumulator.
+func (acc *streamAccumulator) appendToolInputJSON(index int, partialJSON string) {
+	acc.toolInputJSON[index] += partialJSON
+}
+
+// finalizeToolInput parses accumulated JSON into ToolInput for the block.
+func (acc *streamAccumulator) finalizeToolInput(index int) {
+	if jsonStr, ok := acc.toolInputJSON[index]; ok && jsonStr != "" {
+		var input map[string]any
+		if err := json.Unmarshal([]byte(jsonStr), &input); err != nil {
+			input = make(map[string]any)
+		}
+		acc.ensureBlock(index)
+		acc.blocks[index].ToolInput = input
+	}
 }
 
 // getBlocks returns the accumulated content blocks.
@@ -340,6 +370,7 @@ type StreamResult struct {
 	StopReason StopReason
 	Usage      Usage
 	Error      string
+	Model      string
 }
 
 // SendMessageStream sends a streaming message to the API.
@@ -480,6 +511,7 @@ func (c *Client) SendMessageStream(
 			switch e := variant.(type) {
 			case anthropic.MessageStartEvent:
 				hasMessageStart = true
+				acc.setModel(string(e.Message.Model))
 				log.Debug("Stream: message_start")
 
 			case anthropic.ContentBlockStartEvent:
@@ -505,14 +537,16 @@ func (c *Client) SendMessageStream(
 				if delta.Text != "" {
 					acc.appendText(index, delta.Text)
 				} else if delta.PartialJSON != "" {
-					// For partial JSON tool input, append to existing block
-					acc.appendText(index, delta.PartialJSON)
+					// For partial JSON tool input, accumulate in toolInputJSON map
+					acc.appendToolInputJSON(index, delta.PartialJSON)
 				}
 				log.Debug("Stream: content_block_delta", "index", index, "text", delta.Text)
 
 			case anthropic.ContentBlockStopEvent:
 				index := int(e.Index)
 				log.Debug("Stream: content_block_stop", "index", index)
+				// Parse accumulated tool input JSON into ToolInput
+				acc.finalizeToolInput(index)
 				// Yield the completed block
 				acc.ensureBlock(index)
 				blocksChan <- StreamContentBlock{Index: index, Block: acc.blocks[index]}
@@ -547,7 +581,10 @@ func (c *Client) SendMessageStream(
 			log.Warn("Stream incomplete, triggering fallback", "hasMessageStart", hasMessageStart, "hasMessageStop", hasMessageStop, "error", result.Error)
 			if onStreamingFallback != nil {
 				cancel()
-				resp, err := onStreamingFallback(ctx)
+				// Create a new context with fallback timeout since the original ctx is cancelled
+				fallbackCtx, fallbackCancel := context.WithTimeout(context.Background(), fallbackTimeout)
+				defer fallbackCancel()
+				resp, err := onStreamingFallback(fallbackCtx)
 				if err != nil {
 					result.Error = err.Error()
 					return
@@ -564,6 +601,7 @@ func (c *Client) SendMessageStream(
 		result.Blocks = acc.getBlocks()
 		result.StopReason = acc.stopReason
 		result.Usage = acc.usage
+		result.Model = acc.getModel()
 	}()
 
 	return blocksChan, result
