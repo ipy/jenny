@@ -90,11 +90,12 @@ Implement in this order:
    - Unknown tool → immediate error (does not hang)
    - **Gap:** sequential only; no thinking/interrupt/spill/compaction handling
 
-5. - [ ] Session persistence — [`session-persistence.md`](./session-persistence.md)
+5. - [x] Session persistence — [session-persistence.md](./session-persistence.md)
    - JSONL transcript per project directory ✓
-   - Progress/ephemeral message types are not chain nodes (do not fork conversation on reload)
-   - Tombstone rewrite capped to prevent OOM on huge sessions
-   - Flush on shutdown; respect persistence-disable flag
+   - Progress/ephemeral message types are not chain nodes (do not fork conversation on reload) ✓
+   - Tombstone rewrite capped to prevent OOM on huge sessions ✓
+   - Flush on shutdown; respect persistence-disable flag ✓
+
 
 6. - [x] Session resume (`-r`) — partial — [`session-resume.md`](./session-resume.md)
    - Rebuild message history from transcript ✓

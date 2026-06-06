@@ -2,15 +2,11 @@
 title: Session Persistence
 slug: session-persistence
 priority: P0
-status: partial
+status: done
 spec: complete
-code: partial
+code: done
 package: internal/session
-gaps:
-  - Progress/ephemeral types not filtered on reload
-  - No tombstone rewrite cap (50 MiB)
-  - No shutdown flush hook
-  - No --no-session-persistence
+gaps: []
 depends_on:
   - session-id-stability
 ---
