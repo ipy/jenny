@@ -163,6 +163,85 @@ func TestAC2_SkipWhenMainAgentWroteMemory(t *testing.T) {
 	}
 }
 
+// TestAC2_PostSkipFollowUpTurn verifies that after a skip, the next eligible
+// turn still triggers extraction correctly.
+func TestAC2_PostSkipFollowUpTurn(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := ExtractorConfig{
+		IsSubAgent:         false,
+		ExtractEveryNTurns: 1,
+		AutoMemoryEnabled:  true,
+		ProjectRoot:        "/test/project",
+	}
+
+	invokeCount := 0
+	mockClient := &mockExtractionAPIClient{
+		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string) (*api.Response, error) {
+			invokeCount++
+			return &api.Response{}, nil
+		},
+	}
+
+	me := NewMemoryExtractor(mockClient, cfg).WithMemdir(tmpDir).WithTimeout(100 * time.Millisecond)
+
+	// Simulate main agent editing a file under auto-mem dir (first turn - skip)
+	autoMemDir := filepath.Join(tmpDir, "memory")
+	editPath := filepath.Join(autoMemDir, "feedback", "test.md")
+
+	turnCtx := TurnContext{
+		StopReason: api.StopReasonEndTurn,
+		AssistantMessage: &api.Message{
+			ID:      "msg_1",
+			Content: "I updated the memory",
+			ToolUse: []api.ToolUseBlock{
+				{
+					ID:   "tool_1",
+					Name: "edit",
+					Input: map[string]any{
+						"file_path": editPath,
+					},
+				},
+			},
+		},
+	}
+
+	me.CheckAndExtract(context.Background(), turnCtx)
+	time.Sleep(200 * time.Millisecond)
+
+	// Extraction should be skipped in first turn
+	if invokeCount != 0 {
+		t.Error("AC2 follow-up FAIL: first turn should skip extraction")
+	}
+
+	// Second turn: no main agent write to auto-mem - extraction should run
+	turnCtx = TurnContext{
+		StopReason: api.StopReasonEndTurn,
+		AssistantMessage: &api.Message{
+			ID:      "msg_2",
+			Content: "Regular conversation, no memory write",
+			// No ToolUse targeting auto-mem
+		},
+	}
+
+	me.CheckAndExtract(context.Background(), turnCtx)
+	time.Sleep(200 * time.Millisecond)
+
+	// Second turn should trigger extraction
+	if invokeCount != 1 {
+		t.Errorf("AC2 follow-up FAIL: second turn should trigger extraction, got %d", invokeCount)
+	} else {
+		t.Log("AC2 follow-up PASS: second turn triggers extraction after skip")
+	}
+
+	// Cursor should advance to msg_2
+	if me.lastMemoryMessageUuid != "msg_2" {
+		t.Errorf("AC2 follow-up FAIL: cursor should advance to msg_2, got %s", me.lastMemoryMessageUuid)
+	} else {
+		t.Log("AC2 follow-up PASS: cursor advances to msg_2 after second turn")
+	}
+}
+
 // TestAC3_CompactionCursorFallback verifies that when UUID is missing after
 // compaction, the cursor falls back to counting messages.
 func TestAC3_CompactionCursorFallback(t *testing.T) {
@@ -297,6 +376,46 @@ func TestAC4_EditScopedToAutoMem(t *testing.T) {
 	}
 
 	t.Log("AC4 PASS: Extraction tools are properly scoped to auto-mem directory")
+
+	// AC4 runtime enforcement sub-test: verify Edit/Write outside memdir is rejected
+	t.Run("EditRejectsPathOutsideMemdir", func(t *testing.T) {
+		autoMemDir := filepath.Join(tmpDir, "memory")
+		os.MkdirAll(autoMemDir, 0755)
+
+		for _, tl := range tools {
+			if tl.Name() == "edit" {
+				// Try to execute Edit with a path outside memdir
+				result, err := tl.Execute(context.Background(), map[string]any{
+					"file_path":  "/tmp/outside_memdir.txt",
+					"old_string": "test",
+					"new_string": "replaced",
+				}, autoMemDir)
+				if err != nil {
+					t.Fatalf("Edit Execute returned error: %v", err)
+				}
+				if result == nil || !result.IsError {
+					t.Error("AC4 runtime FAIL: Edit should reject path outside memdir")
+				} else {
+					t.Log("AC4 runtime PASS: Edit correctly rejects path outside memdir")
+				}
+			}
+			if tl.Name() == "write" {
+				// Try to execute Write with a path outside memdir
+				result, err := tl.Execute(context.Background(), map[string]any{
+					"file_path": "/tmp/outside_memdir.txt",
+					"content":   "test content",
+				}, autoMemDir)
+				if err != nil {
+					t.Fatalf("Write Execute returned error: %v", err)
+				}
+				if result == nil || !result.IsError {
+					t.Error("AC4 runtime FAIL: Write should reject path outside memdir")
+				} else {
+					t.Log("AC4 runtime PASS: Write correctly rejects path outside memdir")
+				}
+			}
+		}
+	})
 }
 
 // TestAC5_CoalescingConcurrentRequests verifies that concurrent extraction

@@ -381,8 +381,18 @@ func (me *MemoryExtractor) buildExtractionPrompt(turnCtx TurnContext, manifest s
 	sb.WriteString("\nRecent conversation:\n")
 
 	// Include recent messages (up to message limit)
-	if turnCtx.RecentMessages != nil {
-		for _, msg := range turnCtx.RecentMessages {
+	// AC3: If UUID is missing (after compaction), fall back to counting
+	messages := turnCtx.RecentMessages
+	if turnCtx.AssistantMessage != nil && turnCtx.AssistantMessage.ID == "" && me.lastMemoryMessageCount > 0 {
+		if me.lastMemoryMessageCount < len(messages) {
+			messages = messages[me.lastMemoryMessageCount:]
+		} else {
+			messages = nil
+		}
+	}
+
+	if messages != nil {
+		for _, msg := range messages {
 			sb.WriteString("\n[")
 			sb.WriteString(msg.Role)
 			sb.WriteString("]: ")
@@ -407,6 +417,16 @@ func (me *MemoryExtractor) processExtractionResponse(ctx context.Context, resp *
 				continue
 			}
 
+			// AC4: Explicit path guard - reject Edit/Write outside auto-mem
+			if t.Name() == "edit" || t.Name() == "write" {
+				if filePath, ok := block.ToolUse.Args["file_path"].(string); ok {
+					if !me.isUnderAutoMem(filePath) {
+						log.Warn("Extraction tool rejected: path outside auto-mem", "tool", t.Name(), "path", filePath)
+						continue
+					}
+				}
+			}
+
 			// Use auto-mem dir as cwd for path validation
 			result, err := t.Execute(ctx, block.ToolUse.Args, me.memdir)
 			if err != nil {
@@ -421,21 +441,19 @@ func (me *MemoryExtractor) processExtractionResponse(ctx context.Context, resp *
 // finalizeExtraction completes the extraction and triggers a trailing run if needed.
 func (me *MemoryExtractor) finalizeExtraction() {
 	me.mu.Lock()
-	me.inProgress = false
 	pendingCtx := me.pendingCtx
 	me.pendingCtx = nil
 	me.pendingCancel = nil
-	me.mu.Unlock()
 
 	// If there was a stashed context, trigger a trailing extraction
+	// BEFORE releasing the inProgress lock to prevent Drain race
 	if pendingCtx != nil {
 		log.Debug("Memory extraction: running trailing extraction")
+		me.inProgress = true // Keep inProgress true for trailing extraction
 		go func() {
 			defer me.finalizeExtraction()
 
-			me.mu.Lock()
-			me.inProgress = true
-			me.mu.Unlock()
+			me.mu.Unlock() // Unlock after goroutine starts
 
 			extractCtx, cancel := context.WithTimeout(context.Background(), me.timeout)
 			defer cancel()
@@ -448,7 +466,11 @@ func (me *MemoryExtractor) finalizeExtraction() {
 				log.Warn("Trailing memory extraction failed", "error", err)
 			}
 		}()
+		return // Goroutine will call finalizeExtraction again
 	}
+
+	me.inProgress = false
+	me.mu.Unlock()
 }
 
 // Drain waits for any in-progress extraction to complete during shutdown.
