@@ -171,5 +171,3 @@ func PathInWorkingDir(filePath, cwd string) (string, error) {
 
 	return absFilePath, nil
 }
-
-

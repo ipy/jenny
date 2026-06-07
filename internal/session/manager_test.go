@@ -292,7 +292,7 @@ func TestManager_CheckRewriteSize(t *testing.T) {
 	}
 
 	// Append entries to create a transcript file
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		entry := TranscriptEntry{Type: "user", Content: fmt.Sprintf("Hello %d", i)}
 		if err := m.AppendEntry(sessionID, entry); err != nil {
 			t.Fatalf("AppendEntry() error = %v", err)

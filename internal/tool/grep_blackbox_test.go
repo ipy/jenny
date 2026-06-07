@@ -16,7 +16,7 @@ func TestBlackBox_AC1_HeadLimit(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create 310 files with matching content
-	for i := 0; i < 310; i++ {
+	for i := range 310 {
 		p := filepath.Join(tmpDir, fmt.Sprintf("file%d.txt", i))
 		if err := os.WriteFile(p, []byte("match content"), 0644); err != nil {
 			t.Fatalf("failed to create file: %v", err)
@@ -103,12 +103,12 @@ func TestBlackBox_AC3_Timeout(t *testing.T) {
 	// Test 1: timeout=0 (as float64) with a search that requires scanning many files.
 	// The timeout value flows through as float64 (matching JSON decode behavior).
 	tmpDir := t.TempDir()
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		dir := filepath.Join(tmpDir, fmt.Sprintf("d%d", i))
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			t.Fatal(err)
 		}
-		for j := 0; j < 100; j++ {
+		for j := range 100 {
 			p := filepath.Join(dir, fmt.Sprintf("f%d.txt", j))
 			if err := os.WriteFile(p, []byte("content data for search pattern here\n"), 0644); err != nil {
 				t.Fatal(err)
@@ -134,7 +134,7 @@ func TestBlackBox_AC4_OutputCap(t *testing.T) {
 
 	// Single file with many lines that match, exceeding 20K chars
 	var sb strings.Builder
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		sb.WriteString("This is a very long line of text for testing grep output truncation. ")
 		sb.WriteString("We need to exceed twenty thousand characters easily. ")
 		sb.WriteString(string('A' + rune(i%26)))

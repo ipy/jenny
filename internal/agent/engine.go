@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/ipy/jenny/internal/api"
@@ -165,7 +166,7 @@ func (e *QueryEngine) SubmitMessage(ctx context.Context, prompt string) (string,
 func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, sessionID string) (string, error) {
 	systemPrompt := AssembleSystemPrompt(e.streamCfg, e.tools, cwd)
 
-	for i := 0; i < MaxIterations; i++ {
+	for range MaxIterations {
 		e.mu.Lock()
 		// AC2: maxTurns enforcement - check before each API call
 		if e.maxTurns > 0 && e.turnCount >= e.maxTurns {
@@ -247,7 +248,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		)
 
 		// Process streaming blocks
-		var textOutput string
+		var textOutput strings.Builder
 		var toolResults []api.ToolResult
 		var toolUseBlocks []api.ToolUseBlock
 
@@ -255,7 +256,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		for block := range blocksChan {
 			switch block.Block.Type {
 			case "text":
-				textOutput += block.Block.Text
+				textOutput.WriteString(block.Block.Text)
 				if e.streamCfg.Enabled && e.streamCfg.IncludePartial {
 					// Output partial text as we receive it
 					msg := StreamMessage{
@@ -312,20 +313,20 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		// Build and append assistant message with text and tool_use blocks
 		assistantMsg := api.Message{
 			Role:    "assistant",
-			Content: textOutput,
+			Content: textOutput.String(),
 		}
 		if len(toolUseBlocks) > 0 {
 			assistantMsg.ToolUse = toolUseBlocks
 		}
-		if textOutput != "" || len(toolUseBlocks) > 0 {
+		if textOutput.String() != "" || len(toolUseBlocks) > 0 {
 			messages = append(messages, assistantMsg)
 		}
 
 		// Persist assistant message to transcript BEFORE tool execution
-		if e.sessionManager != nil && (textOutput != "" || len(toolUseBlocks) > 0) {
+		if e.sessionManager != nil && (textOutput.String() != "" || len(toolUseBlocks) > 0) {
 			entry := session.TranscriptEntry{
 				Type:    "assistant",
-				Content: textOutput,
+				Content: textOutput.String(),
 			}
 			for _, tu := range toolUseBlocks {
 				entry.ToolUse = append(entry.ToolUse, session.ToolUse{
@@ -410,7 +411,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				if e.streamCfg.Enabled {
 					msg := StreamMessage{
 						Type:      "result",
-						Result:    textOutput,
+						Result:    textOutput.String(),
 						SessionID: sessionID,
 						Model:     resp.Model,
 						Usage: &Usage{
@@ -424,13 +425,13 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					data, _ := json.Marshal(msg)
 					fmt.Fprintln(os.Stdout, string(data))
 				}
-				return textOutput, nil
+				return textOutput.String(), nil
 			}
 			// Output final result
 			if e.streamCfg.Enabled {
 				msg := StreamMessage{
 					Type:      "result",
-					Result:    textOutput,
+					Result:    textOutput.String(),
 					SessionID: sessionID,
 					Model:     resp.Model,
 					Usage: &Usage{
@@ -444,7 +445,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				data, _ := json.Marshal(msg)
 				fmt.Fprintln(os.Stdout, string(data))
 			}
-			return textOutput, nil
+			return textOutput.String(), nil
 
 		case api.StopReasonToolUse:
 			// Continue the loop to let the model process tool results
@@ -464,13 +465,13 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			continue
 
 		case api.StopReasonMaxTokens:
-			return textOutput, fmt.Errorf("max tokens reached")
+			return textOutput.String(), fmt.Errorf("max tokens reached")
 
 		case api.StopReasonStopSeq:
 			if e.streamCfg.Enabled {
 				msg := StreamMessage{
 					Type:      "result",
-					Result:    textOutput,
+					Result:    textOutput.String(),
 					SessionID: sessionID,
 					Model:     resp.Model,
 					Usage: &Usage{
@@ -484,11 +485,11 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				data, _ := json.Marshal(msg)
 				fmt.Fprintln(os.Stdout, string(data))
 			}
-			return textOutput, nil
+			return textOutput.String(), nil
 		}
 
 		// If we get here without text output and without tool results, something is wrong
-		if textOutput == "" && len(toolResults) == 0 && len(toolUseBlocks) == 0 {
+		if textOutput.String() == "" && len(toolResults) == 0 && len(toolUseBlocks) == 0 {
 			return "", fmt.Errorf("unexpected empty response")
 		}
 	}

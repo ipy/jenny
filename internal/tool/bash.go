@@ -666,5 +666,3 @@ func isReadOnlyCommand(command string) bool {
 	}
 	return false
 }
-
-

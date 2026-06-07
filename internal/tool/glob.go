@@ -236,5 +236,3 @@ func (t *GlobTool) Execute(ctx context.Context, input map[string]any, cwd string
 		Truncated: truncated,
 	}, nil
 }
-
-

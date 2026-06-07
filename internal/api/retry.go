@@ -63,10 +63,7 @@ func (e *RetryableHTTPError) Error() string {
 // computeBackoff computes the backoff delay for a given attempt.
 func computeBackoff(attempt int, cfg RetryConfig, retryAfter *time.Duration) time.Duration {
 	// Exponential backoff: min(baseDelay * 2^attempt, maxDelay)
-	delay := cfg.BaseDelay * (1 << attempt)
-	if delay > cfg.MaxDelay {
-		delay = cfg.MaxDelay
-	}
+	delay := min(cfg.BaseDelay*(1<<attempt), cfg.MaxDelay)
 
 	// Apply jitter: delay = delay * (1 - jitter + rand.Float64() * 2 * jitter)
 	jitterRange := cfg.Jitter * 2

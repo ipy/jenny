@@ -37,8 +37,9 @@ bin/
 dist/
 
 /jenny
-jenny-*
-jenny_*
+/jenny-*
+/jenny_*
 .jenny/
+**/fake-mcp-server
 
 references/

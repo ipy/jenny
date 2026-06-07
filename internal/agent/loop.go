@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/ipy/jenny/internal/api"
 	"github.com/ipy/jenny/internal/mcp"
@@ -179,7 +180,7 @@ func Run(ctx context.Context, prompt string, tools []tool.Tool, cwd string) (str
 	}
 
 	// Main agent loop
-	for i := 0; i < MaxIterations; i++ {
+	for range MaxIterations {
 		// Send message to API (pass nil for toolResults as we include them in messages)
 		resp, err := client.SendMessage(ctx, messages, apiTools, nil, systemPrompt)
 		if err != nil {
@@ -187,14 +188,14 @@ func Run(ctx context.Context, prompt string, tools []tool.Tool, cwd string) (str
 		}
 
 		// Process response content
-		var textOutput string
+		var textOutput strings.Builder
 		var toolResults []api.ToolResult
 		var toolUseBlocks []api.ToolUseBlock
 
 		for _, block := range resp.Content {
 			switch block.Type {
 			case "text":
-				textOutput += block.Text
+				textOutput.WriteString(block.Text)
 			case "tool_use":
 				// Collect tool_use blocks for the assistant message
 				toolUseBlocks = append(toolUseBlocks, api.ToolUseBlock{
@@ -236,12 +237,12 @@ func Run(ctx context.Context, prompt string, tools []tool.Tool, cwd string) (str
 		// Build and append assistant message with text and tool_use blocks
 		assistantMsg := api.Message{
 			Role:    "assistant",
-			Content: textOutput,
+			Content: textOutput.String(),
 		}
 		if len(toolUseBlocks) > 0 {
 			assistantMsg.ToolUse = toolUseBlocks
 		}
-		if textOutput != "" || len(toolUseBlocks) > 0 {
+		if textOutput.String() != "" || len(toolUseBlocks) > 0 {
 			messages = append(messages, assistantMsg)
 		}
 
@@ -263,9 +264,9 @@ func Run(ctx context.Context, prompt string, tools []tool.Tool, cwd string) (str
 				messages = append(messages, userMsg)
 				// Don't continue - end_turn means the model is done
 				// Return textOutput which may be empty if model already provided final answer
-				return textOutput, nil
+				return textOutput.String(), nil
 			}
-			return textOutput, nil
+			return textOutput.String(), nil
 
 		case api.StopReasonToolUse:
 			// Continue the loop to let the model process tool results
@@ -285,14 +286,14 @@ func Run(ctx context.Context, prompt string, tools []tool.Tool, cwd string) (str
 			continue
 
 		case api.StopReasonMaxTokens:
-			return textOutput, fmt.Errorf("max tokens reached")
+			return textOutput.String(), fmt.Errorf("max tokens reached")
 
 		case api.StopReasonStopSeq:
-			return textOutput, nil
+			return textOutput.String(), nil
 		}
 
 		// If we get here without text output and without tool results, something is wrong
-		if textOutput == "" && len(toolResults) == 0 && len(toolUseBlocks) == 0 {
+		if textOutput.String() == "" && len(toolResults) == 0 && len(toolUseBlocks) == 0 {
 			return "", fmt.Errorf("unexpected empty response")
 		}
 	}

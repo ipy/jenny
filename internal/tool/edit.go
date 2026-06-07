@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -206,10 +207,7 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 	// Zero matches: return specific error with snippet
 	if count == 0 {
 		// Provide context about where the string was expected
-		previewLen := 100
-		if len(content) < previewLen {
-			previewLen = len(content)
-		}
+		previewLen := min(len(content), 100)
 		preview := content[:previewLen]
 		if previewLen < len(content) {
 			preview += "..."
@@ -281,12 +279,5 @@ func normalizeLineEndings(content string) string {
 
 // isBinary checks if content appears to be binary.
 func isBinary(content string) bool {
-	for _, b := range []byte(content) {
-		if b == 0 {
-			return true
-		}
-	}
-	return false
+	return slices.Contains([]byte(content), 0)
 }
-
-

@@ -203,8 +203,8 @@ func parseGitdirFile(gitFilePath string) (string, error) {
 	scanner := bufio.NewScanner(file)
 	if scanner.Scan() {
 		line := scanner.Text()
-		if strings.HasPrefix(line, "gitdir: ") {
-			gitdir := strings.TrimPrefix(line, "gitdir: ")
+		if after, ok := strings.CutPrefix(line, "gitdir: "); ok {
+			gitdir := after
 			gitdir = strings.TrimSpace(gitdir)
 
 			// Resolve relative path against the .git file's directory
@@ -404,8 +404,8 @@ func readBranchAndHead(gitDir string) (branch string, head string, err error) {
 		return "", "", err
 	}
 
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(data), "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
@@ -425,8 +425,8 @@ func readBranchAndHead(gitDir string) (branch string, head string, err error) {
 		if err != nil {
 			// Ref file not found - could be a symref or packed
 			// For now, return the ref name
-			if strings.HasPrefix(ref, "refs/heads/") {
-				branch = strings.TrimPrefix(ref, "refs/heads/")
+			if after, ok := strings.CutPrefix(ref, "refs/heads/"); ok {
+				branch = after
 			} else {
 				branch = ref
 			}
@@ -434,8 +434,8 @@ func readBranchAndHead(gitDir string) (branch string, head string, err error) {
 		}
 
 		head = strings.TrimSpace(string(refData))
-		if strings.HasPrefix(ref, "refs/heads/") {
-			branch = strings.TrimPrefix(ref, "refs/heads/")
+		if after, ok := strings.CutPrefix(ref, "refs/heads/"); ok {
+			branch = after
 		} else {
 			branch = ref
 		}

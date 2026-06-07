@@ -70,7 +70,7 @@ func TestExecutor_AC1_ParallelReadOnly(t *testing.T) {
 	}
 
 	start := time.Now()
-	results, err := executor.Execute(context.Background(),blocks)
+	results, err := executor.Execute(context.Background(), blocks)
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -112,7 +112,7 @@ func TestExecutor_AC2_SerializedMutation(t *testing.T) {
 	}
 
 	start := time.Now()
-	results, err := executor.Execute(context.Background(),writeBlocks)
+	results, err := executor.Execute(context.Background(), writeBlocks)
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -135,7 +135,7 @@ func TestExecutor_AC2_SerializedMutation(t *testing.T) {
 		{ID: "5", Name: "read", Input: map[string]any{"file_path": "b.txt"}},
 	}
 
-	mixedResults, err := executor.Execute(context.Background(),mixedBlocks)
+	mixedResults, err := executor.Execute(context.Background(), mixedBlocks)
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)
 	}
@@ -262,7 +262,7 @@ func TestExecutor_AC4_UnknownTool(t *testing.T) {
 	}
 
 	start := time.Now()
-	results, err := executor.Execute(context.Background(),blocks)
+	results, err := executor.Execute(context.Background(), blocks)
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -305,7 +305,7 @@ func TestExecutor_AC5_ResultOrdering(t *testing.T) {
 		{ID: "3", Name: "grep", Input: map[string]any{}},
 	}
 
-	results, err := executor.Execute(context.Background(),blocks)
+	results, err := executor.Execute(context.Background(), blocks)
 
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)
@@ -351,7 +351,7 @@ func TestExecutor_MixedBatch(t *testing.T) {
 	}
 
 	start := time.Now()
-	results, err := executor.Execute(context.Background(),blocks)
+	results, err := executor.Execute(context.Background(), blocks)
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -396,7 +396,7 @@ func TestExecutor_MixedBatch(t *testing.T) {
 func TestExecutor_ConcurrencyCap(t *testing.T) {
 	// Create 15 read tools
 	tools := make([]tool.Tool, 15)
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		tools[i] = &execMockTool{name: "read", delay: 100 * time.Millisecond, isSafe: true}
 	}
 
@@ -408,7 +408,7 @@ func TestExecutor_ConcurrencyCap(t *testing.T) {
 	}
 
 	blocks := make([]toolUseBlock, 15)
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		blocks[i] = toolUseBlock{
 			ID:    fmt.Sprintf("%d", i+1),
 			Name:  "read",
@@ -417,7 +417,7 @@ func TestExecutor_ConcurrencyCap(t *testing.T) {
 	}
 
 	start := time.Now()
-	results, err := executor.Execute(context.Background(),blocks)
+	results, err := executor.Execute(context.Background(), blocks)
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -463,7 +463,7 @@ func TestExecutor_BashFailureDoesNotAbortNonBash(t *testing.T) {
 		{ID: "2", Name: "read", Input: map[string]any{"file_path": "a.txt"}},
 	}
 
-	results, err := executor.Execute(context.Background(),blocks)
+	results, err := executor.Execute(context.Background(), blocks)
 
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)
@@ -489,7 +489,7 @@ func TestExecutor_EmptyBatch(t *testing.T) {
 
 	executor := NewToolExecutor(tools, "/tmp")
 
-	results, err := executor.Execute(context.Background(),[]toolUseBlock{})
+	results, err := executor.Execute(context.Background(), []toolUseBlock{})
 
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)
@@ -519,7 +519,7 @@ func TestExecutor_AllReadOnlyTools(t *testing.T) {
 	}
 
 	start := time.Now()
-	results, err := executor.Execute(context.Background(),blocks)
+	results, err := executor.Execute(context.Background(), blocks)
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -553,7 +553,7 @@ func TestExecutor_BashAbortOnlyAffectsBash(t *testing.T) {
 		{ID: "3", Name: "bash", Input: map[string]any{"command": "sleep 10"}},
 	}
 
-	results, err := executor.Execute(context.Background(),blocks)
+	results, err := executor.Execute(context.Background(), blocks)
 
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)

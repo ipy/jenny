@@ -184,7 +184,7 @@ func TestGlobTool_AC1_Max100Results(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create 150 files
-	for i := 0; i < 150; i++ {
+	for i := range 150 {
 		fullPath := filepath.Join(tmpDir, filepath.Join("dir", fmt.Sprintf("file%d.txt", i)))
 		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
 			t.Fatalf("failed to create directory: %v", err)
@@ -321,7 +321,7 @@ func TestGlobTool_AC5_ConcurrencySafe(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create some files
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		if err := os.WriteFile(filepath.Join(tmpDir, "file.txt"), []byte("content"), 0644); err != nil {
 			t.Fatalf("failed to create file: %v", err)
 		}
@@ -331,7 +331,7 @@ func TestGlobTool_AC5_ConcurrencySafe(t *testing.T) {
 
 	// Run multiple concurrent executions
 	done := make(chan bool)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		go func() {
 			result, err := tool.Execute(context.Background(), map[string]any{
 				"pattern": "*.txt",
@@ -349,7 +349,7 @@ func TestGlobTool_AC5_ConcurrencySafe(t *testing.T) {
 	}
 
 	// Check all results
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		if !<-done {
 			t.Errorf("concurrent execution %d failed", i)
 		}

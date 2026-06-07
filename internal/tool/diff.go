@@ -42,7 +42,7 @@ func GenerateUnifiedDiff(oldContent, newContent, path string) string {
 	var hunks []string
 	var currentHunk []DiffLine
 
-	for i := 0; i < len(diff); i++ {
+	for i := range diff {
 		diffLine := diff[i]
 		switch diffLine.Type {
 		case "context":
@@ -106,11 +106,7 @@ func computeLCS(oldLines, newLines []string) []diffEntry {
 			if oldLines[i-1] == newLines[j-1] {
 				lcs[i][j] = lcs[i-1][j-1] + 1
 			} else {
-				if lcs[i-1][j] > lcs[i][j-1] {
-					lcs[i][j] = lcs[i-1][j]
-				} else {
-					lcs[i][j] = lcs[i][j-1]
-				}
+				lcs[i][j] = max(lcs[i-1][j], lcs[i][j-1])
 			}
 		}
 	}

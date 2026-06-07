@@ -180,7 +180,7 @@ func TestGrepTool_AC1_HeadLimit(t *testing.T) {
 
 	// Create 300 files with matching content in top-level directories
 	// to keep path lengths short enough to fit ~250 within 20K char limit
-	for i := 0; i < 300; i++ {
+	for i := range 300 {
 		fullPath := filepath.Join(tmpDir, fmt.Sprintf("file%d.txt", i))
 		if err := os.WriteFile(fullPath, []byte("match"), 0644); err != nil {
 			t.Fatalf("failed to create file: %v", err)
@@ -305,7 +305,7 @@ func TestGrepTool_AC4_OutputCap(t *testing.T) {
 	// Create a file with large content that will exceed 20K when searched
 	// Each line is ~100 chars, 300 lines = ~30K chars
 	var largeContent strings.Builder
-	for i := 0; i < 300; i++ {
+	for i := range 300 {
 		largeContent.WriteString("This is a very long line of text for testing output truncation in grep tool. ")
 		largeContent.WriteString("We need to create enough content to exceed the 20K character limit. ")
 		largeContent.WriteString("Line number: ")
@@ -436,7 +436,7 @@ func TestGrepTool_ConcurrencySafe(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create some files
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		if err := os.WriteFile(filepath.Join(tmpDir, "file.txt"), []byte("content"), 0644); err != nil {
 			t.Fatalf("failed to create file: %v", err)
 		}
@@ -446,7 +446,7 @@ func TestGrepTool_ConcurrencySafe(t *testing.T) {
 
 	// Run multiple concurrent executions
 	done := make(chan bool)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		go func() {
 			result, err := tool.Execute(context.Background(), map[string]any{
 				"pattern": "content",
@@ -464,7 +464,7 @@ func TestGrepTool_ConcurrencySafe(t *testing.T) {
 	}
 
 	// Check all results
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		if !<-done {
 			t.Errorf("concurrent execution %d failed", i)
 		}

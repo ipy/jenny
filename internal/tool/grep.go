@@ -294,5 +294,3 @@ func boolVal(input map[string]any, key string) bool {
 	}
 	return false
 }
-
-

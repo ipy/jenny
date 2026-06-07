@@ -138,10 +138,7 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 	offset := 1
 	offsetExplicit := false
 	if offsetVal, ok := input["offset"].(float64); ok {
-		offset = int(offsetVal)
-		if offset < 1 {
-			offset = 1
-		}
+		offset = max(int(offsetVal), 1)
 		offsetExplicit = true
 	}
 
@@ -184,12 +181,12 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 
 	for i, line := range lines {
 		lineStr := strconv.Itoa(offset + i)
-		output.WriteString(fmt.Sprintf("%6s\t%s\n", lineStr, line))
+		fmt.Fprintf(&output, "%6s\t%s\n", lineStr, line)
 	}
 
 	// Add summary
-	output.WriteString(fmt.Sprintf("\n[%d lines, started at line %d, total lines in file: %d]",
-		readLines, offset, totalLines))
+	fmt.Fprintf(&output, "\n[%d lines, started at line %d, total lines in file: %d]",
+	readLines, offset, totalLines)
 
 	result := &ToolResult{
 		Content: output.String(),
@@ -221,5 +218,3 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 
 	return result, nil
 }
-
-

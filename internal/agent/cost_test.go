@@ -504,7 +504,7 @@ func TestAC4_ResultLineContainsCacheAndCostFields(t *testing.T) {
 
 	// Find the result line
 	var resultLine string
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		if strings.Contains(line, `"type":"result"`) {
 			resultLine = line
 			break
@@ -664,7 +664,7 @@ func TestAC5_BudgetStopInRunStream(t *testing.T) {
 
 	// Verify result line is emitted
 	var resultLine string
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		if strings.Contains(line, `"type":"result"`) {
 			resultLine = line
 			break

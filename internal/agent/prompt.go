@@ -71,7 +71,7 @@ func gitStatusSection(cwd string) (string, bool) {
 			statusOutput = statusOutput[:maxGitStatusChars] + "\n... (truncated)"
 		}
 		// Indent each line
-		for _, line := range strings.Split(statusOutput, "\n") {
+		for line := range strings.SplitSeq(statusOutput, "\n") {
 			if line != "" {
 				section.WriteString("    " + line + "\n")
 			}

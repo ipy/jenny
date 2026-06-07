@@ -78,7 +78,7 @@ func TestComputeBackoff_Jitter(t *testing.T) {
 	minDelay := time.Hour
 	maxDelay := time.Duration(0)
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		delay := computeBackoff(0, cfg, nil)
 		if delay < minDelay {
 			minDelay = delay
@@ -643,7 +643,7 @@ func TestBackoff_Jitter(t *testing.T) {
 
 	// Collect multiple samples and verify range
 	delays := make([]time.Duration, 50)
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		delays[i] = computeBackoff(0, cfg, nil)
 	}
 
