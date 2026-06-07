@@ -27,6 +27,11 @@ type TranscriptEntry struct {
 
 	// Session state fields - used for session-level state persistence
 	CompactFailCount int `json:"compact_fail_count,omitempty"`
+
+	// Worktree state fields - used for worktree isolation and resume
+	WorktreePath   string `json:"worktree_path,omitempty"`
+	WorktreeBranch string `json:"worktree_branch,omitempty"`
+	WorktreeCWD    string `json:"worktree_cwd,omitempty"`
 }
 
 // ToolUse represents a tool call in the transcript.

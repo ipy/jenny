@@ -127,6 +127,7 @@ type StreamConfig struct {
 	AutoMemoryEnabled    bool                        // Whether auto-memory is enabled
 	MemoryContent        string                      // Memory content to inject into system prompt
 	Skills               []skills.Skill              // Discovered skills for manifest
+	IsForkChild          bool                        // True when this session is a fork child (subagent spawned another agent)
 }
 
 // ToolParam represents a tool parameter for the API.
@@ -356,6 +357,9 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 		cfg.SessionID = sessionID
 	}
 
+	// AC1: Store IsForkChild in context so tools can check it
+	ctx = context.WithValue(ctx, forkChildKey, cfg.IsForkChild)
+
 	// Create QueryEngine - it handles API client creation, cost state restoration,
 	// tool parameter conversion, and the agent loop lifecycle
 	engine := NewQueryEngine(cfg, tools, model)
@@ -371,3 +375,7 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 
 	return result, sessionID, err
 }
+
+// forkChildKey is the context key for storing fork child flag.
+// Uses a string key to match the tool package's key.
+const forkChildKey = "agent.forkChild"

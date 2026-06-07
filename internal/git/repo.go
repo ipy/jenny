@@ -3,7 +3,9 @@ package git
 
 import (
 	"bufio"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -777,4 +779,80 @@ func matchGlob(path, pattern string) bool {
 
 	matched, _ := regexp.MatchString(buf.String(), path)
 	return matched
+}
+
+// CreateWorktree creates a new git worktree at the specified path with a new branch.
+// The worktree is created at .claude/worktrees/<branch> relative to the repo root.
+func CreateWorktree(repoRoot, branch string) (string, error) {
+	worktreePath := filepath.Join(repoRoot, ".claude", "worktrees", branch)
+
+	// Check if repo root is valid git repository
+	if _, err := findGitRoot(repoRoot); err != nil {
+		return "", fmt.Errorf("not a git repository: %w", err)
+	}
+
+	// Create parent directory
+	if err := os.MkdirAll(filepath.Dir(worktreePath), 0755); err != nil {
+		return "", fmt.Errorf("creating worktree parent directory: %w", err)
+	}
+
+	// Use git worktree add -b to create worktree with new branch
+	// We need to use shell for git command since git worktree add -b requires interactive git config
+	cmd := exec.Command("git", "worktree", "add", "-b", branch, worktreePath)
+	cmd.Dir = repoRoot
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("git worktree add failed: %w", err)
+	}
+
+	return worktreePath, nil
+}
+
+// RemoveWorktree removes a git worktree and its branch.
+func RemoveWorktree(worktreePath string) error {
+	// Get the repo root from the worktree path
+	repoRoot, err := findGitRoot(worktreePath)
+	if err != nil {
+		return fmt.Errorf("finding repo root: %w", err)
+	}
+
+	// Get branch name from worktree
+	gitDir, err := resolveGitDir(worktreePath)
+	if err != nil {
+		return fmt.Errorf("resolving gitdir: %w", err)
+	}
+
+	// Read the HEAD to get the branch name
+	headPath := filepath.Join(gitDir, "HEAD")
+	data, err := os.ReadFile(headPath)
+	if err != nil {
+		return fmt.Errorf("reading HEAD: %w", err)
+	}
+
+	branch := strings.TrimSpace(string(data))
+	if after, ok := strings.CutPrefix(branch, "ref: "); ok {
+		branch = after
+		// Extract branch name
+		if after, ok := strings.CutPrefix(branch, "refs/heads/"); ok {
+			branch = after
+		}
+	}
+
+	// Remove the worktree using git worktree remove
+	cmd := exec.Command("git", "worktree", "remove", worktreePath, "--force")
+	cmd.Dir = repoRoot
+	if err := cmd.Run(); err != nil {
+		// If removal fails, try to remove the directory manually
+		if rmErr := os.RemoveAll(worktreePath); rmErr != nil {
+			return fmt.Errorf("git worktree remove failed and manual removal failed: %w, %v", err, rmErr)
+		}
+	}
+
+	// Prune the branch if it exists
+	if branch != "" && !isDetachedHEAD(branch) {
+		pruneCmd := exec.Command("git", "branch", "-D", branch)
+		pruneCmd.Dir = repoRoot
+		_ = pruneCmd.Run() // Ignore errors here
+	}
+
+	return nil
 }

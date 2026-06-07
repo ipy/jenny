@@ -6,6 +6,10 @@ import (
 	"fmt"
 )
 
+// forkChildKey is the context key for checking if we're in a fork child.
+// This is set by the agent loop when spawning subagents.
+const forkChildKey = "agent.forkChild"
+
 // SubagentParams holds parameters for running a subagent.
 type SubagentParams struct {
 	Prompt          string
@@ -92,7 +96,7 @@ func (t *AgentTool) InputSchema() map[string]any {
 			},
 			"isolation": map[string]any{
 				"type":        "string",
-				"description": "Isolation mode: worktree for temp worktree (not yet implemented), none otherwise",
+				"description": "Isolation mode: worktree for temp worktree, none otherwise",
 			},
 			"cwd": map[string]any{
 				"type":        "string",
@@ -103,8 +107,27 @@ func (t *AgentTool) InputSchema() map[string]any {
 	}
 }
 
+// isForkChild checks if the current execution context indicates we're in a subagent.
+// This is used to block recursive fork (AC1).
+func isForkChild(ctx context.Context) bool {
+	if v := ctx.Value(forkChildKey); v != nil {
+		if b, ok := v.(bool); ok && b {
+			return true
+		}
+	}
+	return false
+}
+
 // Execute runs the agent tool with the given input.
 func (t *AgentTool) Execute(ctx context.Context, input map[string]any, cwd string) (*ToolResult, error) {
+	// AC1: Check for recursive fork blocking via context
+	if isForkChild(ctx) {
+		return &ToolResult{
+			Content: "recursive fork not allowed",
+			IsError: true,
+		}, nil
+	}
+
 	// Extract required parameters
 	prompt, ok := input["prompt"].(string)
 	if !ok || prompt == "" {
