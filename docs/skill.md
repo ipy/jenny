@@ -2,9 +2,9 @@
 title: Skill Tool
 slug: skill
 priority: P3
-status: not_started
+status: partial
 spec: complete
-code: not_started
+code: done
 package: internal/tool
 gaps:
   - Runtime enforcement of `allowed-tools` patterns.

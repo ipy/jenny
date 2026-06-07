@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/git"
+	"github.com/ipy/jenny/internal/skills"
 	"github.com/ipy/jenny/internal/tool"
 )
 
@@ -166,6 +167,13 @@ func AssembleSystemPrompt(cfg StreamConfig, tools []tool.Tool, cwd string) strin
 	// AC4: Platform/cwd context
 	if platform, ok := platformSection(cwd); ok {
 		sections = append(sections, platform)
+	}
+
+	// Skills manifest (AC2)
+	if len(cfg.Skills) > 0 {
+		if manifest := skills.SkillsManifest(cfg.Skills); manifest != "" {
+			sections = append(sections, manifest)
+		}
 	}
 
 	// AC5: Append section (only if not overridden)

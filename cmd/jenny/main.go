@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/ipy/jenny/internal/agent"
 	"github.com/ipy/jenny/internal/cli"
 	"github.com/ipy/jenny/internal/mcp"
 	"github.com/ipy/jenny/internal/session"
+	"github.com/ipy/jenny/internal/skills"
 	"github.com/ipy/jenny/internal/tool"
 )
 
@@ -112,8 +114,20 @@ func run() error {
 	// AC4: ReadFileCache is wired through StreamConfig -> QueryEngine -> tools
 	// But Registry.Build() also needs it to create Write/Edit/NotebookEdit tools
 	readFileCache := tool.NewReadFileCache()
+
+	// Discover skills from project .jenny/skills/ directory
+	var discoveredSkills []skills.Skill
+	projectSkillsDir := filepath.Join(cwd, ".jenny", "skills")
+	if _, err := os.Stat(projectSkillsDir); err == nil {
+		// Directory exists, discover skills
+		discoveredSkills, err = skills.Discover(projectSkillsDir)
+		if err != nil {
+			return fmt.Errorf("discovering skills: %w", err)
+		}
+	}
+
 	var tools []tool.Tool
-	tools = tool.NewRegistry().
+	registry := tool.NewRegistry().
 		WithBaseTools().
 		WithWebFetchEnabled(true).
 		WithWebSearchEnabled(true).
@@ -122,7 +136,8 @@ func run() error {
 		WithMCPTools(mcpTools).
 		WithDenyRules(flags.DeniedTools).
 		WithSkipPermissions(flags.SkipPermissions).
-		Build()
+		WithSkills(discoveredSkills)
+	tools = registry.Build()
 
 	// Ensure MCP clients are shut down on exit
 	if len(flags.MCPConfig) > 0 {
@@ -144,6 +159,7 @@ func run() error {
 		IsResume:        flags.SessionResume != "", // True when resuming an existing session via -r
 		MCPConfig:       mcpConfig,
 		ReadFileCache:   readFileCache,
+		Skills:          discoveredSkills,
 	}
 
 	// Run agent

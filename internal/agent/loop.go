@@ -10,6 +10,7 @@ import (
 	"github.com/ipy/jenny/internal/api"
 	"github.com/ipy/jenny/internal/mcp"
 	"github.com/ipy/jenny/internal/session"
+	"github.com/ipy/jenny/internal/skills"
 	"github.com/ipy/jenny/internal/tool"
 )
 
@@ -125,6 +126,7 @@ type StreamConfig struct {
 	ReadFileCache        *tool.ReadFileCache         // Cache for read-before-write enforcement
 	AutoMemoryEnabled    bool                        // Whether auto-memory is enabled
 	MemoryContent        string                      // Memory content to inject into system prompt
+	Skills               []skills.Skill              // Discovered skills for manifest
 }
 
 // ToolParam represents a tool parameter for the API.

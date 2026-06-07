@@ -4,6 +4,7 @@ package tool
 import (
 	"github.com/ipy/jenny/internal/lsp"
 	"github.com/ipy/jenny/internal/sandbox"
+	"github.com/ipy/jenny/internal/skills"
 )
 
 // Registry builds a filtered, ordered list of tools.
@@ -21,6 +22,7 @@ type Registry struct {
 	lspEnabled       bool
 	lspClient        *lsp.Client
 	model            string
+	skills           []skills.Skill
 }
 
 // NewRegistry creates a new Registry.
@@ -110,6 +112,12 @@ func (r *Registry) WithLSPClient(client lsp.Client) *Registry {
 	return r
 }
 
+// WithSkills sets the discovered skills for the skill tool.
+func (r *Registry) WithSkills(skills []skills.Skill) *Registry {
+	r.skills = skills
+	return r
+}
+
 // Build returns the final ordered tool list.
 // Built-in tools appear first, then MCP tools. Deny rules and enabled flags
 // filter the output. On name collision, the built-in tool wins.
@@ -155,6 +163,11 @@ func (r *Registry) Build() []Tool {
 		// Add LSP tool if enabled and client is provided (P3).
 		if r.lspEnabled && r.lspClient != nil {
 			r.baseTools = append(r.baseTools, NewLSPTool(*r.lspClient))
+		}
+
+		// Add Skill tool if skills are discovered (P3).
+		if len(r.skills) > 0 {
+			r.baseTools = append(r.baseTools, NewSkillTool(r.skills))
 		}
 	}
 
