@@ -7,8 +7,6 @@ spec: complete
 code: done
 package: internal/agent
 gaps:
-  - "Stale in-flight (>60s): not yet implemented"
-  - "Rapid update coalescing (15s window): not yet implemented"
   - "Natural break detection: not yet implemented"
 depends_on:
   - context-compaction

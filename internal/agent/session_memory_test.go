@@ -11,19 +11,6 @@ import (
 	"github.com/ipy/jenny/internal/api"
 )
 
-// mockClient is a simple mock API client for testing
-type mockClient struct {
-	response *api.Response
-	err      error
-}
-
-func (m *mockClient) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string) (*api.Response, error) {
-	if m.err != nil {
-		return nil, m.err
-	}
-	return m.response, nil
-}
-
 // mockAPIClient is a test double that implements the API client interface
 type mockAPIClient struct {
 	sendMessageFn func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string) (*api.Response, error)
@@ -48,8 +35,8 @@ func TestAC1_SessionMemoryInitAt10KTokens(t *testing.T) {
 	// Create mock API client
 	mockClient := &mockAPIClient{}
 
-	// Create session memory instance
-	sm := NewSessionMemory("test-session-ac1", mockClient, compactCfg)
+	// Create session memory instance with isolated temp dir
+	sm := NewSessionMemory("test-session-ac1", mockClient, compactCfg).WithMemdir(t.TempDir())
 
 	// Verify no file exists initially
 	if sm.fileExists() {
@@ -121,7 +108,7 @@ func TestAC2_UpdateRequiresBothThresholds(t *testing.T) {
 	}
 
 	mockClient := &mockAPIClient{}
-	sm := NewSessionMemory("test-session-ac2", mockClient, compactCfg)
+	sm := NewSessionMemory("test-session-ac2", mockClient, compactCfg).WithMemdir(t.TempDir())
 
 	// Create the memory file first (simulate init happened)
 	_ = sm.Init()
@@ -183,7 +170,7 @@ func TestAC3_15SecondTimeout(t *testing.T) {
 		},
 	}
 
-	sm := NewSessionMemory("test-session-ac3", slowClient, compactCfg)
+	sm := NewSessionMemory("test-session-ac3", slowClient, compactCfg).WithMemdir(t.TempDir()).SetTimeoutOverride(100 * time.Millisecond)
 
 	// Create memory file
 	_ = sm.Init()
@@ -233,7 +220,7 @@ func TestAC4_ForkedAgentEditOnly(t *testing.T) {
 		},
 	}
 
-	sm := NewSessionMemory("test-session-ac4", mockClient, compactCfg)
+	sm := NewSessionMemory("test-session-ac4", mockClient, compactCfg).WithMemdir(t.TempDir())
 
 	// Create memory file
 	_ = sm.Init()
@@ -261,7 +248,7 @@ func TestAC5_DisabledWhenAutoCompactOff(t *testing.T) {
 	}
 
 	mockClient := &mockAPIClient{}
-	sm := NewSessionMemory("test-session-ac5", mockClient, compactCfg)
+	sm := NewSessionMemory("test-session-ac5", mockClient, compactCfg).WithMemdir(t.TempDir())
 
 	// Even with 10K+ tokens, should not trigger
 	shouldAct, action := sm.CheckThreshold(15000, 5)
@@ -284,7 +271,7 @@ func TestAC5_DisabledWhenAutoCompactOff(t *testing.T) {
 		DisableCompact:     true,
 	}
 
-	sm2 := NewSessionMemory("test-session-ac5-2", mockClient, compactCfg2)
+	sm2 := NewSessionMemory("test-session-ac5-2", mockClient, compactCfg2).WithMemdir(t.TempDir())
 
 	shouldAct, action = sm2.CheckThreshold(15000, 5)
 
@@ -304,7 +291,7 @@ func TestAC5_DisabledBothFlags(t *testing.T) {
 	}
 
 	mockClient := &mockAPIClient{}
-	sm := NewSessionMemory("test-session-ac5-both", mockClient, compactCfg)
+	sm := NewSessionMemory("test-session-ac5-both", mockClient, compactCfg).WithMemdir(t.TempDir())
 
 	shouldAct, action := sm.CheckThreshold(20000, 10)
 
@@ -321,14 +308,14 @@ func TestSessionMemory_FilePath(t *testing.T) {
 	compactCfg := CompactConfig{}
 
 	mockClient := &mockAPIClient{}
-	sm := NewSessionMemory("sess_abc123", mockClient, compactCfg)
+	sm := NewSessionMemory("sess_abc123", mockClient, compactCfg).WithMemdir(t.TempDir())
 
-	// Verify file path ends with session ID and is under session-memory directory
+	// Verify file path ends with session ID and is under the memdir
 	if !strings.HasSuffix(sm.memoryFilePath, "sess_abc123.md") {
 		t.Fatalf("Expected memory file path to end with sess_abc123.md, got %s", sm.memoryFilePath)
 	}
-	if !strings.Contains(sm.memoryFilePath, "session-memory") {
-		t.Fatalf("Expected memory file path to contain session-memory, got %s", sm.memoryFilePath)
+	if !strings.Contains(sm.memoryFilePath, sm.memdir) {
+		t.Fatalf("Expected memory file path to be under memdir, got %s", sm.memoryFilePath)
 	}
 }
 
@@ -341,7 +328,7 @@ func TestSessionMemory_ReadCacheRestricted(t *testing.T) {
 	}
 
 	mockClient := &mockAPIClient{}
-	sm := NewSessionMemory("test-session-cache", mockClient, compactCfg)
+	sm := NewSessionMemory("test-session-cache", mockClient, compactCfg).WithMemdir(t.TempDir())
 
 	// Create memory file
 	_ = sm.Init()
@@ -368,7 +355,7 @@ func TestSessionMemory_ResetBaselines(t *testing.T) {
 	compactCfg := CompactConfig{}
 
 	mockClient := &mockAPIClient{}
-	sm := NewSessionMemory("test-session-reset", mockClient, compactCfg)
+	sm := NewSessionMemory("test-session-reset", mockClient, compactCfg).WithMemdir(t.TempDir())
 
 	// Set up state
 	sm.accumTokens = 20000
@@ -387,6 +374,90 @@ func TestSessionMemory_ResetBaselines(t *testing.T) {
 	}
 	if sm.lastUpdateTime.IsZero() {
 		t.Fatal("lastUpdateTime should be set")
+	}
+}
+
+// TestAC4_StaleInFlight verifies that updates are skipped when the last update
+// was more than 60 seconds ago (stale in-flight condition).
+func TestAC4_StaleInFlight(t *testing.T) {
+	compactCfg := CompactConfig{
+		DisableAutoCompact: false,
+		DisableCompact:     false,
+	}
+
+	invoked := false
+	mockClient := &mockAPIClient{
+		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string) (*api.Response, error) {
+			invoked = true
+			return &api.Response{}, nil
+		},
+	}
+
+	sm := NewSessionMemory("test-session-stale", mockClient, compactCfg).WithMemdir(t.TempDir())
+
+	// Create memory file
+	_ = sm.Init()
+
+	// Set lastUpdateTime to 90 seconds ago (stale)
+	sm.SetLastUpdateTime(time.Now().Add(-90 * time.Second))
+
+	// Set up state that would trigger update
+	sm.lastBaseline = 0
+	sm.lastToolBaseline = 0
+	sm.accumTokens = 15000
+	sm.toolCalls = 10
+
+	ctx := context.Background()
+	err := sm.Update(ctx)
+	if err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
+	// Verify forked agent was NOT invoked
+	if invoked {
+		t.Fatal("Forked agent should not be invoked for stale in-flight update")
+	}
+}
+
+// TestAC5_CoalescingWindow verifies that updates are skipped when the last update
+// was less than 15 seconds ago (coalescing window).
+func TestAC5_CoalescingWindow(t *testing.T) {
+	compactCfg := CompactConfig{
+		DisableAutoCompact: false,
+		DisableCompact:     false,
+	}
+
+	invoked := false
+	mockClient := &mockAPIClient{
+		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string) (*api.Response, error) {
+			invoked = true
+			return &api.Response{}, nil
+		},
+	}
+
+	sm := NewSessionMemory("test-session-coalesce", mockClient, compactCfg).WithMemdir(t.TempDir())
+
+	// Create memory file
+	_ = sm.Init()
+
+	// Set lastUpdateTime to 5 seconds ago (within coalescing window)
+	sm.SetLastUpdateTime(time.Now().Add(-5 * time.Second))
+
+	// Set up state that would trigger update
+	sm.lastBaseline = 0
+	sm.lastToolBaseline = 0
+	sm.accumTokens = 15000
+	sm.toolCalls = 10
+
+	ctx := context.Background()
+	err := sm.Update(ctx)
+	if err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
+	// Verify forked agent was NOT invoked
+	if invoked {
+		t.Fatal("Forked agent should not be invoked for coalesced update")
 	}
 }
 

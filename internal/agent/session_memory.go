@@ -35,6 +35,7 @@ type SessionMemory struct {
 	memoryFilePath   string
 	client           APIClient
 	readCache        *tool.ReadFileCache
+	timeoutOverride  time.Duration // If non-zero, used instead of default 15s timeout
 }
 
 // NewSessionMemory creates a new SessionMemory instance.
@@ -52,6 +53,34 @@ func NewSessionMemory(sessionID string, client APIClient, compactCfg CompactConf
 		client:           client,
 		readCache:        tool.NewReadFileCache(),
 	}
+}
+
+// WithMemdir sets a custom memory directory, overriding the default
+// ~/.jenny/session-memory path. This is primarily for test isolation.
+func (sm *SessionMemory) WithMemdir(dir string) *SessionMemory {
+	sm.memdir = dir
+	sm.memoryFilePath = filepath.Join(dir, sm.sessionID+".md")
+	return sm
+}
+
+// SetTimeoutOverride sets a custom timeout for the Update operation.
+// This is primarily for testing. A zero duration means "use default".
+func (sm *SessionMemory) SetTimeoutOverride(d time.Duration) *SessionMemory {
+	sm.timeoutOverride = d
+	return sm
+}
+
+// effectiveTimeout returns the timeout to use for Update operations.
+func (sm *SessionMemory) effectiveTimeout() time.Duration {
+	if sm.timeoutOverride > 0 {
+		return sm.timeoutOverride
+	}
+	return 15 * time.Second
+}
+
+// SetLastUpdateTime sets the lastUpdateTime for testing purposes.
+func (sm *SessionMemory) SetLastUpdateTime(t time.Time) {
+	sm.lastUpdateTime = t
 }
 
 // MemoryFilePath returns the path to the session memory file.
@@ -122,8 +151,20 @@ func (sm *SessionMemory) Init() error {
 }
 
 // Update invokes a forked sub-agent to update the session memory file.
-// It uses a 15-second timeout and Edit-only tool access.
+// It uses a 15-second timeout (or override) and Edit-only tool access.
 func (sm *SessionMemory) Update(ctx context.Context) error {
+	// AC4: Stale in-flight check - skip if last update was >60s ago
+	if !sm.lastUpdateTime.IsZero() && time.Since(sm.lastUpdateTime) > 60*time.Second {
+		log.Debug("Session memory update skipped: stale in-flight")
+		return nil
+	}
+
+	// AC5: Coalescing window check - skip if last update was <15s ago
+	if !sm.lastUpdateTime.IsZero() && time.Since(sm.lastUpdateTime) < sm.effectiveTimeout() {
+		log.Debug("Session memory update skipped: within coalescing window")
+		return nil
+	}
+
 	// Check if file exists - if not, recreate it
 	if !sm.fileExists() {
 		if err := sm.Init(); err != nil {
@@ -144,8 +185,8 @@ func (sm *SessionMemory) Update(ctx context.Context) error {
 	// Record read in cache so Edit tool's read-before-write check passes
 	sm.readCache.RecordRead(sm.memoryFilePath, string(currentContent), info.ModTime(), true)
 
-	// Create context with 15-second timeout
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	// Create context with timeout (default 15s, or override)
+	ctx, cancel := context.WithTimeout(ctx, sm.effectiveTimeout())
 	defer cancel()
 
 	// Build prompt for the forked agent
