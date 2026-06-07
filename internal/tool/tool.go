@@ -1,17 +1,14 @@
 // Package tool provides the tool interface and implementations for the agent.
 package tool
 
-import "context"
+import (
+	"context"
+
+	"github.com/ipy/jenny/internal/toolresult"
+)
 
 // ToolResult represents the result of a tool execution.
-type ToolResult struct {
-	// Content is the text content of the tool result.
-	Content string `json:"content"`
-	// IsError indicates whether the tool execution resulted in an error.
-	IsError bool `json:"is_error,omitempty"`
-	// Truncated indicates the result was truncated due to size limits.
-	Truncated bool `json:"truncated,omitempty"`
-}
+type ToolResult = toolresult.ToolResult
 
 // Tool defines the interface for agent tools.
 type Tool interface {

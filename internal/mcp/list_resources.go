@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ipy/jenny/internal/tool"
+	"github.com/ipy/jenny/internal/toolresult"
 )
 
 const resourceCacheTTL = 30 * time.Second
@@ -72,7 +72,7 @@ func (t *ListMcpResourcesTool) InputSchema() map[string]any {
 }
 
 // Execute lists MCP resources from connected servers.
-func (t *ListMcpResourcesTool) Execute(ctx context.Context, input map[string]any, cwd string) (*tool.ToolResult, error) {
+func (t *ListMcpResourcesTool) Execute(ctx context.Context, input map[string]any, cwd string) (*toolresult.ToolResult, error) {
 	serverFilter, _ := input["server"].(string)
 
 	// AC2: Invalid server errors with available names
@@ -85,7 +85,7 @@ func (t *ListMcpResourcesTool) Execute(ctx context.Context, input map[string]any
 			for name := range clients {
 				available = append(available, name)
 			}
-			return &tool.ToolResult{
+			return &toolresult.ToolResult{
 				Content: fmt.Sprintf("MCP server '%s' not found. Available servers: %v", serverFilter, available),
 				IsError: true,
 			}, nil
@@ -99,7 +99,7 @@ func (t *ListMcpResourcesTool) Execute(ctx context.Context, input map[string]any
 }
 
 // executeForServer returns resources for a single server.
-func (t *ListMcpResourcesTool) executeForServer(ctx context.Context, serverName string, client *Client) (*tool.ToolResult, error) {
+func (t *ListMcpResourcesTool) executeForServer(ctx context.Context, serverName string, client *Client) (*toolresult.ToolResult, error) {
 	resources, err := t.getResourcesWithCache(ctx, serverName, client)
 	if err != nil {
 		// AC3: Per-server failure returns empty array for that server
@@ -110,11 +110,11 @@ func (t *ListMcpResourcesTool) executeForServer(ctx context.Context, serverName 
 }
 
 // executeForAllServers returns resources from all connected servers concurrently.
-func (t *ListMcpResourcesTool) executeForAllServers(ctx context.Context) (*tool.ToolResult, error) {
+func (t *ListMcpResourcesTool) executeForAllServers(ctx context.Context) (*toolresult.ToolResult, error) {
 	clients := GetMCPClients()
 	if len(clients) == 0 {
 		// AC4: Empty result includes tools-may-exist note
-		return &tool.ToolResult{
+		return &toolresult.ToolResult{
 			Content: "[]\nNote: No MCP servers connected. Resources may be empty while tools still exist.",
 			IsError: false,
 		}, nil
@@ -190,7 +190,7 @@ func (t *ListMcpResourcesTool) executeForAllServers(ctx context.Context) (*tool.
 
 	// AC4: Empty result includes tools-may-exist note
 	if !hasResources && len(serverErrors) == 0 {
-		return &tool.ToolResult{
+		return &toolresult.ToolResult{
 			Content: "[]\nNote: No resources found. Resources may be empty while tools still exist.",
 			IsError: false,
 		}, nil
@@ -200,7 +200,7 @@ func (t *ListMcpResourcesTool) executeForAllServers(ctx context.Context) (*tool.
 	if len(serverErrors) > 0 {
 		errBytes, _ := json.Marshal(serverErrors)
 		resBytes, _ := json.Marshal(allOutputs)
-		return &tool.ToolResult{
+		return &toolresult.ToolResult{
 			Content: fmt.Sprintf(`{"resources":%s,"errors":%s}`, string(resBytes), string(errBytes)),
 			IsError: false,
 		}, nil
@@ -208,13 +208,13 @@ func (t *ListMcpResourcesTool) executeForAllServers(ctx context.Context) (*tool.
 
 	jsonBytes, err := json.Marshal(allOutputs)
 	if err != nil {
-		return &tool.ToolResult{
+		return &toolresult.ToolResult{
 			Content: fmt.Sprintf("Error marshaling resources: %v", err),
 			IsError: true,
 		}, nil
 	}
 
-	return &tool.ToolResult{
+	return &toolresult.ToolResult{
 		Content: string(jsonBytes),
 		IsError: false,
 	}, nil
@@ -258,7 +258,7 @@ func (t *ListMcpResourcesTool) getResourcesWithCache(ctx context.Context, server
 }
 
 // buildResult constructs the JSON output from resources.
-func (t *ListMcpResourcesTool) buildResult(resources []MCPResource, serverName string) (*tool.ToolResult, error) {
+func (t *ListMcpResourcesTool) buildResult(resources []MCPResource, serverName string) (*toolresult.ToolResult, error) {
 	// Build output array with server field
 	output := make([]map[string]any, 0, len(resources))
 	for _, r := range resources {
@@ -278,13 +278,13 @@ func (t *ListMcpResourcesTool) buildResult(resources []MCPResource, serverName s
 
 	jsonBytes, err := json.Marshal(output)
 	if err != nil {
-		return &tool.ToolResult{
+		return &toolresult.ToolResult{
 			Content: fmt.Sprintf("Error marshaling resources: %v", err),
 			IsError: true,
 		}, nil
 	}
 
-	return &tool.ToolResult{
+	return &toolresult.ToolResult{
 		Content: string(jsonBytes),
 		IsError: false,
 	}, nil

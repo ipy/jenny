@@ -14,7 +14,7 @@ import (
 	"sync"
 
 	"github.com/ipy/jenny/internal/log"
-	"github.com/ipy/jenny/internal/tool"
+	"github.com/ipy/jenny/internal/toolresult"
 )
 
 // Client represents an MCP client connection to a server.
@@ -136,6 +136,27 @@ type contentPart struct {
 	Mime string `json:"mimeType,omitempty"`
 }
 
+// resourceContent represents a content item in a resources/read response.
+type resourceContent struct {
+	Type     string `json:"type"`
+	Text     string `json:"text,omitempty"`
+	MimeType string `json:"mimeType,omitempty"`
+	Blob     string `json:"blob,omitempty"`
+}
+
+// resourcesReadResult represents the result of a resources/read call.
+type resourcesReadResult struct {
+	Content []resourceContent `json:"content"`
+}
+
+// ResourceContent represents a resource's content returned by ReadResource.
+type ResourceContent struct {
+	Type     string
+	Text     string
+	MimeType string
+	Blob     []byte
+}
+
 // MCPTool implements tool.Tool for an MCP tool.
 type MCPTool struct {
 	serverName  string
@@ -159,10 +180,10 @@ func (t *MCPTool) InputSchema() map[string]any {
 }
 
 // Execute runs the tool with the given input and returns the result.
-func (t *MCPTool) Execute(ctx context.Context, input map[string]any, cwd string) (*tool.ToolResult, error) {
+func (t *MCPTool) Execute(ctx context.Context, input map[string]any, cwd string) (*toolresult.ToolResult, error) {
 	client := GetClient(t.serverName)
 	if client == nil {
-		return &tool.ToolResult{
+		return &toolresult.ToolResult{
 			Content: fmt.Sprintf("Error: MCP server '%s' not found", t.serverName),
 			IsError: true,
 		}, nil
@@ -170,13 +191,13 @@ func (t *MCPTool) Execute(ctx context.Context, input map[string]any, cwd string)
 
 	result, err := client.CallTool(t.toolName, input)
 	if err != nil {
-		return &tool.ToolResult{
+		return &toolresult.ToolResult{
 			Content: fmt.Sprintf("Error calling MCP tool: %v", err),
 			IsError: true,
 		}, nil
 	}
 
-	return &tool.ToolResult{
+	return &toolresult.ToolResult{
 		Content: result,
 		IsError: false,
 	}, nil
@@ -418,6 +439,51 @@ func (c *Client) ListResources(ctx context.Context) ([]MCPResource, error) {
 	}
 
 	return resources, nil
+}
+
+// ReadResource reads a single resource content by URI.
+func (c *Client) ReadResource(ctx context.Context, uri string) ([]ResourceContent, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.proc == nil {
+		return nil, fmt.Errorf("not connected to MCP server %s", c.Name)
+	}
+
+	req := jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      nextJSONID(),
+		Method:  "resources/read",
+		Params: map[string]any{
+			"uri": uri,
+		},
+	}
+
+	resp, err := c.sendRequest(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("resources/read request failed: %w", err)
+	}
+
+	if resp.Error != nil {
+		return nil, fmt.Errorf("resources/read error: %s (code %d)", resp.Error.Message, resp.Error.Code)
+	}
+
+	var readResult resourcesReadResult
+	if err := json.Unmarshal(resp.Result, &readResult); err != nil {
+		return nil, fmt.Errorf("parsing resources/read result: %w", err)
+	}
+
+	contents := make([]ResourceContent, 0, len(readResult.Content))
+	for _, r := range readResult.Content {
+		contents = append(contents, ResourceContent{
+			Type:     r.Type,
+			Text:     r.Text,
+			MimeType: r.MimeType,
+			Blob:     []byte(r.Blob), // Blob is base64-encoded in JSON
+		})
+	}
+
+	return contents, nil
 }
 
 // CallTool calls a tool on the MCP server.
