@@ -122,6 +122,8 @@ type StreamConfig struct {
 	AppendSystemPrompt   string                      // Content appended after assembled prompt
 	OverrideSystemPrompt bool                        // When true, suppresses AppendSystemPrompt
 	ReadFileCache        *tool.ReadFileCache         // Cache for read-before-write enforcement
+	AutoMemoryEnabled    bool                        // Whether auto-memory is enabled
+	MemoryContent        string                      // Memory content to inject into system prompt
 }
 
 // ToolParam represents a tool parameter for the API.

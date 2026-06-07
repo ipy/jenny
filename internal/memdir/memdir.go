@@ -201,16 +201,25 @@ func (m *Memdir) ReadIndex() (string, error) {
 	// Check byte cap
 	byteCapFired := len(data) > MaxIndexBytes
 
-	// Truncate line-first
+	// Build warning string first so we can account for its size in truncation
+	lineWarning := fmt.Sprintf("MEMORY.md truncated: %d-line cap\n\n", MaxIndexLines)
+	byteWarning := fmt.Sprintf("MEMORY.md truncated: %d KB cap\n\n", MaxIndexBytes/1024)
+
+	// Truncate line-first, then byte-at-last-newline, leaving room for warning
 	if lineCapFired {
 		lines = lines[:MaxIndexLines]
 		content = strings.Join(lines, "\n")
 
-		// Then truncate byte-at-last-newline
-		if byteCapFired || len(content) > MaxIndexBytes {
-			// Find the last newline within the byte limit
-			maxLen := min(len(content), MaxIndexBytes)
-			truncated := content[:maxLen]
+		// Truncate byte-at-last-newline, leaving room for warning
+		// When both caps fire, use byte warning (more specific to content size)
+		warning := lineWarning
+		if byteCapFired {
+			warning = byteWarning
+		}
+		warningLen := len(warning)
+		maxContentLen := MaxIndexBytes - warningLen
+		if len(content) > maxContentLen {
+			truncated := content[:maxContentLen]
 			lastNewline := strings.LastIndex(truncated, "\n")
 			if lastNewline > 0 {
 				content = truncated[:lastNewline]
@@ -220,12 +229,12 @@ func (m *Memdir) ReadIndex() (string, error) {
 		}
 
 		// Prepend warning
-		warning := fmt.Sprintf("MEMORY.md truncated: %d-line cap\n\n", MaxIndexLines)
 		content = warning + content
 	} else if byteCapFired {
-		// Only byte cap fired
-		maxLen := MaxIndexBytes
-		truncated := content[:maxLen]
+		// Only byte cap fired - leave room for warning
+		warningLen := len(byteWarning)
+		maxContentLen := MaxIndexBytes - warningLen
+		truncated := content[:maxContentLen]
 		lastNewline := strings.LastIndex(truncated, "\n")
 		if lastNewline > 0 {
 			content = truncated[:lastNewline]
@@ -234,8 +243,7 @@ func (m *Memdir) ReadIndex() (string, error) {
 		}
 
 		// Prepend warning
-		warning := fmt.Sprintf("MEMORY.md truncated: %d KB cap\n\n", MaxIndexBytes/1024)
-		content = warning + content
+		content = byteWarning + content
 	}
 
 	return content, nil
@@ -413,33 +421,49 @@ func (m *Memdir) UpdateIndex(entries []string) error {
 	// Check byte cap
 	byteCapFired := len(data) > MaxIndexBytes
 
+	// Build warning strings so we can account for their size in truncation
+	lineWarning := fmt.Sprintf("MEMORY.md truncated: %d-line cap\n\n", MaxIndexLines)
+	byteWarning := fmt.Sprintf("MEMORY.md truncated: %d KB cap\n\n", MaxIndexBytes/1024)
+
 	if lineCapFired {
 		allLines = allLines[:MaxIndexLines]
 		finalContent = strings.Join(allLines, "\n")
 		data = []byte(finalContent)
 
-		if byteCapFired || len(data) > MaxIndexBytes {
-			maxLen := min(len(finalContent), MaxIndexBytes)
-			truncated := finalContent[:maxLen]
+		// Truncate byte-at-last-newline, leaving room for warning
+		// When both caps fire, use byte warning (more specific to content size)
+		warning := lineWarning
+		if byteCapFired {
+			warning = byteWarning
+		}
+		warningLen := len(warning)
+		maxContentLen := MaxIndexBytes - warningLen
+		if len(data) > maxContentLen {
+			truncated := finalContent[:maxContentLen]
 			lastNewline := strings.LastIndex(truncated, "\n")
 			if lastNewline > 0 {
 				finalContent = truncated[:lastNewline]
+			} else {
+				finalContent = truncated
 			}
 		}
 
 		// Prepend warning
-		warning := fmt.Sprintf("MEMORY.md truncated: %d-line cap\n\n", MaxIndexLines)
 		finalContent = warning + finalContent
 	} else if byteCapFired {
-		maxLen := MaxIndexBytes
-		truncated := finalContent[:maxLen]
+		// Leave room for warning
+		warningLen := len(byteWarning)
+		maxContentLen := MaxIndexBytes - warningLen
+		truncated := finalContent[:maxContentLen]
 		lastNewline := strings.LastIndex(truncated, "\n")
 		if lastNewline > 0 {
 			finalContent = truncated[:lastNewline]
+		} else {
+			finalContent = truncated
 		}
 
-		warning := fmt.Sprintf("MEMORY.md truncated: %d KB cap\n\n", MaxIndexBytes/1024)
-		finalContent = warning + finalContent
+		// Prepend warning
+		finalContent = byteWarning + finalContent
 	}
 
 	if err := os.WriteFile(indexPath, []byte(finalContent), 0644); err != nil {

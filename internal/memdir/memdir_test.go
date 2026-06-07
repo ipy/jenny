@@ -247,17 +247,23 @@ func TestMemdir_ReadIndex_Caps(t *testing.T) {
 
 	t.Run("AC2: enforces 25KB byte cap", func(t *testing.T) {
 		// Build content exceeding 25KB but under 200 lines
+		// 25600 / 200 = 128 bytes per line minimum, use 140+ bytes per line
 		var b strings.Builder
 		b.WriteString("# Auto-Memory Index\n\n")
-		// Each line is about 20 bytes, 200 lines * 20 = 4000 bytes, so we need more
-		line := "user/test-entry.md very long content to exceed the 25kb limit here\n"
+		// Use a line that is definitely > 140 bytes
+		line := "user/test-entry.md very long content to exceed the 25kb limit here and ensure we have enough bytes to actually exceed the threshold and pass the test\n"
+		lineLen := len([]byte(line))
+		if lineLen < 140 {
+			// This should not happen with the line above, but keep as safeguard
+			line = line + strings.Repeat("x", 140-lineLen)
+		}
 		for range 200 {
 			b.WriteString(line)
 		}
 		content := b.String()
 
-		if len([]byte(content)) < MaxIndexBytes {
-			t.Skip("content not large enough to test byte cap")
+		if len([]byte(content)) <= MaxIndexBytes {
+			t.Fatalf("content too small: %d bytes, need > %d", len([]byte(content)), MaxIndexBytes)
 		}
 
 		indexPath := m.IndexPath()
@@ -281,26 +287,58 @@ func TestMemdir_ReadIndex_Caps(t *testing.T) {
 	})
 
 	t.Run("AC5: truncation warning identifies which cap fired", func(t *testing.T) {
-		// Test line cap warning
-		var b strings.Builder
-		b.WriteString("# Auto-Memory Index\n\n")
-		for i := range 250 {
-			b.WriteString("user/entry" + string(rune('0'+i%10)) + ".md\n")
-		}
+		t.Run("line cap fires", func(t *testing.T) {
+			// Build content exceeding 200 lines
+			var b strings.Builder
+			b.WriteString("# Auto-Memory Index\n\n")
+			for i := range 250 {
+				b.WriteString("user/entry" + string(rune('0'+i%10)) + ".md\n")
+			}
 
-		indexPath := m.IndexPath()
-		if err := os.WriteFile(indexPath, []byte(b.String()), 0644); err != nil {
-			t.Fatalf("WriteFile error = %v", err)
-		}
+			indexPath := m.IndexPath()
+			if err := os.WriteFile(indexPath, []byte(b.String()), 0644); err != nil {
+				t.Fatalf("WriteFile error = %v", err)
+			}
 
-		result, err := m.ReadIndex()
-		if err != nil {
-			t.Fatalf("ReadIndex() error = %v", err)
-		}
+			result, err := m.ReadIndex()
+			if err != nil {
+				t.Fatalf("ReadIndex() error = %v", err)
+			}
 
-		if !strings.Contains(result, "200-line cap") {
-			t.Error("expected 200-line cap warning")
-		}
+			if !strings.Contains(result, "200-line cap") {
+				t.Error("expected 200-line cap warning")
+			}
+		})
+
+		t.Run("byte cap fires", func(t *testing.T) {
+			// Build content exceeding 25KB but under 200 lines
+			// Use ~140 bytes per line * 200 = ~28000 bytes > 25600
+			var b strings.Builder
+			b.WriteString("# Auto-Memory Index\n\n")
+			line := "user/test-entry.md very long content to exceed the 25kb limit here and ensure we have enough bytes to actually exceed the threshold and pass the test\n"
+			for range 200 {
+				b.WriteString(line)
+			}
+			content := b.String()
+
+			if len([]byte(content)) <= MaxIndexBytes {
+				t.Fatalf("content too small: %d bytes, need > %d", len([]byte(content)), MaxIndexBytes)
+			}
+
+			indexPath := m.IndexPath()
+			if err := os.WriteFile(indexPath, []byte(content), 0644); err != nil {
+				t.Fatalf("WriteFile error = %v", err)
+			}
+
+			result, err := m.ReadIndex()
+			if err != nil {
+				t.Fatalf("ReadIndex() error = %v", err)
+			}
+
+			if !strings.Contains(result, "25 KB cap") {
+				t.Error("expected 25 KB cap warning")
+			}
+		})
 	})
 }
 

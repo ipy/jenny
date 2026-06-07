@@ -10,7 +10,9 @@ import (
 	"sync"
 
 	"github.com/ipy/jenny/internal/api"
+	"github.com/ipy/jenny/internal/git"
 	"github.com/ipy/jenny/internal/log"
+	"github.com/ipy/jenny/internal/memdir"
 	"github.com/ipy/jenny/internal/session"
 	"github.com/ipy/jenny/internal/tool"
 )
@@ -169,6 +171,23 @@ func (e *QueryEngine) SubmitMessage(ctx context.Context, prompt string) (string,
 	cwd, err := os.Getwd()
 	if err != nil {
 		cwd = "/"
+	}
+
+	// AC1: Create memdir and inject memory content into system prompt
+	if e.streamCfg.AutoMemoryEnabled {
+		if gitRoot, err := git.GetRoot(cwd); err == nil {
+			memdirCfg := memdir.Config{
+				ProjectRoot:       gitRoot,
+				AutoMemoryEnabled: true,
+			}
+			if m, err := memdir.New(memdirCfg); err == nil {
+				_ = m.Create()
+				// Read memory content to inject into system prompt
+				if indexContent, err := m.ReadIndex(); err == nil && indexContent != "" {
+					e.streamCfg.MemoryContent = indexContent
+				}
+			}
+		}
 	}
 
 	// Build messages slice - use history if resuming, otherwise start fresh

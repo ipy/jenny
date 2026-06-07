@@ -143,6 +143,11 @@ func AssembleSystemPrompt(cfg StreamConfig, tools []tool.Tool, cwd string) strin
 	// Assemble default sections: intro + tool list + git + platform
 	var sections []string
 
+	// AC1: Memory content injected as <system-reminder> block (at start)
+	if cfg.MemoryContent != "" {
+		sections = append(sections, "<system-reminder>\n"+cfg.MemoryContent+"\n</system-reminder>")
+	}
+
 	// Default intro
 	if intro, ok := defaultIntroSection(); ok {
 		sections = append(sections, intro)

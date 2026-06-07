@@ -372,7 +372,7 @@ func TestReadMcpResourceTool_AC5_ConcurrentCalls(t *testing.T) {
 
 	var wg sync.WaitGroup
 	const numGoroutines = 10
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -407,9 +407,7 @@ func TestReadMcpResourceTool_AC5_ConcurrentCalls_SingleClient(t *testing.T) {
 	var wg sync.WaitGroup
 	const numGoroutines = 10
 	for range numGoroutines {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			result, err := tool.Execute(context.Background(), map[string]any{
 				"server": "single-server",
 				"uri":    "file:///text.txt",
@@ -421,7 +419,7 @@ func TestReadMcpResourceTool_AC5_ConcurrentCalls_SingleClient(t *testing.T) {
 			if result.IsError {
 				t.Errorf("unexpected error: %s", result.Content)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }
