@@ -13,6 +13,7 @@ gaps:
   - "Content truncation at MAX_MCP_OUTPUT_TOKENS not implemented"
   - "Resource cache not implemented"
   - "Progress events not implemented"
+defer_to: P4
 depends_on:
   - mcp-config
 ---

@@ -10,6 +10,7 @@ gaps:
   - readFileState round-trip deferred (requires Read tool state cache)
   - maxBudgetUsd via StreamConfig but not via QueryEngine method
   - Cross-turn state (permissionDenials, discoveredSkillNames, etc.) deferred
+defer_to: P3
 depends_on:
   - session-persistence
   - agent-loop

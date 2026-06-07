@@ -9,6 +9,7 @@ package: internal/log
 gaps:
   - No error ring buffer
   - No last-request capture
+defer_to: P3
 depends_on:
   []
 ---

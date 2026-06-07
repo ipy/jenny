@@ -2,6 +2,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -638,21 +639,20 @@ func TestAC5_TurnCounterIsAccurate(t *testing.T) {
 }
 
 // TestAC3_StreamJsonCallsSetOutput verifies that when stream-json mode is
-// enabled (StreamConfig.Enabled = true), the engine calls log.SetOutput(os.Stderr)
-// to redirect logs away from stdout NDJSON output.
+// enabled (StreamConfig.Enabled = true), log output is redirected to stderr
+// and does not appear on stdout (which is reserved for NDJSON).
 func TestAC3_StreamJsonCallsSetOutput(t *testing.T) {
-	// This test verifies the wiring path: when stream-json is enabled,
-	// log output should go to stderr, not stdout.
+	// This test verifies that when stream-json mode is active, log output
+	// goes to stderr rather than stdout. This prevents debug/info logs
+	// from corrupting the NDJSON stream on stdout.
 	//
-	// The actual redirection happens in runLoop at engine.go:186-188:
+	// The redirection happens in runLoop at engine.go:186-188:
 	//   if e.streamCfg.Enabled {
 	//       log.SetOutput(os.Stderr)
 	//   }
 	//
-	// We verify this by checking that log.SetOutput is called with stderr
-	// when stream-json mode is active. Since we can't easily mock log.SetOutput,
-	// we verify the code path is exercised by checking that the engine
-	// processes requests when stream-json is enabled.
+	// We verify this by capturing both stdout and stderr during engine execution
+	// and ensuring no log output appears on stdout.
 
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
@@ -679,6 +679,24 @@ func TestAC3_StreamJsonCallsSetOutput(t *testing.T) {
 		os.Setenv("ANTHROPIC_API_KEY", origAPIKey)
 	}()
 
+	// Save original stdout and stderr
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+
+	// Create pipes to capture stdout and stderr
+	stdoutR, stdoutW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() error: %v", err)
+	}
+	stderrR, stderrW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() error: %v", err)
+	}
+
+	// Redirect stdout and stderr to our pipes
+	os.Stdout = stdoutW
+	os.Stderr = stderrW
+
 	cfg := StreamConfig{
 		Enabled:        true, // Stream-json mode enabled - should trigger log.SetOutput(os.Stderr)
 		SessionManager: sessMgr,
@@ -691,10 +709,63 @@ func TestAC3_StreamJsonCallsSetOutput(t *testing.T) {
 	defer cancel()
 
 	_, err = engine.SubmitMessage(ctx, "test")
+
+	// Close write ends to signal EOF on read ends
+	stdoutW.Close()
+	stderrW.Close()
+
+	// Restore original stdout and stderr
+	os.Stdout = oldStdout
+	os.Stderr = oldStderr
+
 	if err != nil {
 		t.Fatalf("SubmitMessage error: %v", err)
 	}
 
-	// Verify the engine completed successfully with stream-json enabled
-	t.Log("AC3 PASS: engine completed with stream-json mode enabled")
+	// Read captured stdout (should only contain NDJSON lines, no log output)
+	var stdoutBuf bytes.Buffer
+	io.Copy(&stdoutBuf, stdoutR)
+	stdoutOutput := stdoutBuf.String()
+
+	// Read captured stderr (should contain log output)
+	var stderrBuf bytes.Buffer
+	io.Copy(&stderrBuf, stderrR)
+	stderrOutput := stderrBuf.String()
+
+	// Verify engine completed successfully with stream-json enabled
+	t.Log("AC3: engine completed with stream-json mode enabled")
+
+	// AC3 verification: When stream-json is enabled, no log output should appear on stdout.
+	// Stdout should only contain NDJSON lines (stream_request_start, result, etc.)
+	// Log lines would contain patterns like "level=INFO", "level=DEBUG", "msg=", etc.
+	stdoutLines := strings.Split(strings.TrimSpace(stdoutOutput), "\n")
+	var jsonLines, logLines []string
+	for _, line := range stdoutLines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// NDJSON lines should be valid JSON starting with {
+		if strings.HasPrefix(line, "{") {
+			jsonLines = append(jsonLines, line)
+		} else if strings.Contains(line, "=") && strings.Contains(line, "msg=") {
+			// This looks like a log line (slog format with = and msg=)
+			logLines = append(logLines, line)
+		}
+	}
+
+	if len(logLines) > 0 {
+		t.Errorf("AC3 FAIL: found %d log line(s) on stdout, expected 0 (logs should go to stderr)", len(logLines))
+		for _, ll := range logLines {
+			t.Logf("  stdout log: %s", ll)
+		}
+	} else {
+		t.Log("AC3 PASS: no log output found on stdout (all logs redirected to stderr)")
+	}
+
+	// Also verify that stderr received some output (logs and/or debug info)
+	// We just verify something came through on stderr as confirmation
+	if len(strings.TrimSpace(stderrOutput)) > 0 {
+		t.Logf("AC3 PASS: stderr received %d bytes of output", len(stderrOutput))
+	}
 }
