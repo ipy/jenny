@@ -216,3 +216,80 @@ func TestStreamContentBlock(t *testing.T) {
 		t.Errorf("expected tool ID 'toolu_123', got %q", block.Block.ToolID)
 	}
 }
+
+func TestToolToSDK_WebSearchMaxUses(t *testing.T) {
+	// Test that web_search with MaxUses set uses WebSearchTool20250305Param with max_uses=8
+	maxUses := int64(8)
+	webSearchTool := ToolParam{
+		Name:        "web_search",
+		Description: "Web search tool",
+		InputSchema: ToolInputSchema{
+			Type:       "object",
+			Properties: map[string]any{},
+			Required:   []string{},
+		},
+		MaxUses: &maxUses,
+	}
+
+	sdkTool := toolToSDK(webSearchTool)
+
+	// Verify it uses OfWebSearchTool20250305 variant
+	if sdkTool.OfWebSearchTool20250305 == nil {
+		t.Fatal("expected OfWebSearchTool20250305 to be non-nil for web_search with MaxUses")
+	}
+
+	// Verify MaxUses is set to 8
+	if !sdkTool.OfWebSearchTool20250305.MaxUses.Valid() {
+		t.Fatal("expected MaxUses to be valid")
+	}
+	if sdkTool.OfWebSearchTool20250305.MaxUses.Value != 8 {
+		t.Errorf("expected MaxUses=8, got %d", sdkTool.OfWebSearchTool20250305.MaxUses.Value)
+	}
+}
+
+func TestToolToSDK_GenericTool(t *testing.T) {
+	// Test that non-web_search tools use the generic ToolParam
+	tool := ToolParam{
+		Name:        "read",
+		Description: "Read tool",
+		InputSchema: ToolInputSchema{
+			Type:       "object",
+			Properties: map[string]any{},
+			Required:   []string{},
+		},
+	}
+
+	sdkTool := toolToSDK(tool)
+
+	// Verify it uses OfTool variant
+	if sdkTool.OfTool == nil {
+		t.Fatal("expected OfTool to be non-nil for generic tool")
+	}
+	if sdkTool.OfWebSearchTool20250305 != nil {
+		t.Error("expected OfWebSearchTool20250305 to be nil for generic tool")
+	}
+}
+
+func TestToolToSDK_WebSearchWithoutMaxUses(t *testing.T) {
+	// Test that web_search without MaxUses uses the generic ToolParam
+	tool := ToolParam{
+		Name:        "web_search",
+		Description: "Web search tool",
+		InputSchema: ToolInputSchema{
+			Type:       "object",
+			Properties: map[string]any{},
+			Required:   []string{},
+		},
+		MaxUses: nil,
+	}
+
+	sdkTool := toolToSDK(tool)
+
+	// Verify it uses OfTool variant (not OfWebSearchTool20250305)
+	if sdkTool.OfTool == nil {
+		t.Fatal("expected OfTool to be non-nil for web_search without MaxUses")
+	}
+	if sdkTool.OfWebSearchTool20250305 != nil {
+		t.Error("expected OfWebSearchTool20250305 to be nil for web_search without MaxUses")
+	}
+}

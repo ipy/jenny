@@ -62,7 +62,7 @@ func NewQueryEngine(cfg StreamConfig, tools []tool.Tool, model string) *QueryEng
 		if req, ok := schema["required"].([]string); ok {
 			required = req
 		}
-		toolParams = append(toolParams, ToolParam{
+		tp := ToolParam{
 			Name:        t.Name(),
 			Description: t.Description(),
 			InputSchema: ToolInputSchema{
@@ -70,7 +70,13 @@ func NewQueryEngine(cfg StreamConfig, tools []tool.Tool, model string) *QueryEng
 				Properties: props,
 				Required:   required,
 			},
-		})
+		}
+		// Set MaxUses for web_search to enforce max results at definition level
+		if t.Name() == "web_search" {
+			maxUses := int64(tool.WebSearchMaxResults)
+			tp.MaxUses = &maxUses
+		}
+		toolParams = append(toolParams, tp)
 	}
 
 	// Initialize cost state (restore from disk if resuming)

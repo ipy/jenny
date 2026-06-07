@@ -12,6 +12,9 @@ const (
 	webSearchMaxResults  = 8 // AC3: maximum results per call
 )
 
+// WebSearchMaxResults is the maximum results per call for web search.
+const WebSearchMaxResults = webSearchMaxResults
+
 // supportedWebSearchModels contains model prefixes that support web search.
 // These are first-party Claude models and their cloud equivalents.
 var supportedWebSearchModels = []string{
