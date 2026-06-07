@@ -130,8 +130,10 @@ type ContentBlock struct {
 
 // Usage represents token usage information.
 type Usage struct {
-	InputTokens  int
-	OutputTokens int
+	InputTokens              int
+	OutputTokens             int
+	CacheReadInputTokens     int
+	CacheCreationInputTokens int
 }
 
 // SendMessage sends a message to the API and returns the response.
@@ -242,12 +244,18 @@ func (c *Client) SendMessage(ctx context.Context, messages []Message, tools []To
 		StopReason: StopReason(string(resp.StopReason)),
 	}
 
-	// Convert usage
+	// Convert usage (AC1: extract all four token types)
 	if resp.Usage.InputTokens > 0 {
 		response.Usage.InputTokens = int(resp.Usage.InputTokens)
 	}
 	if resp.Usage.OutputTokens > 0 {
 		response.Usage.OutputTokens = int(resp.Usage.OutputTokens)
+	}
+	if resp.Usage.CacheReadInputTokens > 0 {
+		response.Usage.CacheReadInputTokens = int(resp.Usage.CacheReadInputTokens)
+	}
+	if resp.Usage.CacheCreationInputTokens > 0 {
+		response.Usage.CacheCreationInputTokens = int(resp.Usage.CacheCreationInputTokens)
 	}
 
 	// Convert content blocks using type switch
@@ -570,10 +578,12 @@ func (c *Client) SendMessageStream(
 				pendingBlocks = append(pendingBlocks, StreamContentBlock{Index: index, Block: acc.blocks[index]})
 
 			case anthropic.MessageDeltaEvent:
-				if e.Usage.InputTokens > 0 {
+				if e.Usage.InputTokens > 0 || e.Usage.OutputTokens > 0 {
 					acc.setUsage(Usage{
-						InputTokens:  int(e.Usage.InputTokens),
-						OutputTokens: int(e.Usage.OutputTokens),
+						InputTokens:              int(e.Usage.InputTokens),
+						OutputTokens:             int(e.Usage.OutputTokens),
+						CacheReadInputTokens:     int(e.Usage.CacheReadInputTokens),
+						CacheCreationInputTokens: int(e.Usage.CacheCreationInputTokens),
 					})
 				}
 				if e.Delta.StopReason != "" {

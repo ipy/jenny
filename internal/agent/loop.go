@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/ipy/jenny/internal/api"
+	"github.com/ipy/jenny/internal/log"
 	"github.com/ipy/jenny/internal/session"
 	"github.com/ipy/jenny/internal/tool"
 )
@@ -111,6 +112,7 @@ type StreamConfig struct {
 	SessionManager  *session.Manager
 	HistoryMessages []api.Message // Messages loaded from transcript for resume
 	IsResume        bool          // True when resuming an existing session (skip duplicate user message persistence)
+	MaxBudgetUSD    float64       // Budget limit in USD (0 = no limit)
 }
 
 // ToolParam represents a tool parameter for the API.
@@ -316,8 +318,11 @@ type StreamMessage struct {
 
 // Usage represents token usage information for streaming output.
 type Usage struct {
-	InputTokens  int `json:"input_tokens,omitempty"`
-	OutputTokens int `json:"output_tokens,omitempty"`
+	InputTokens              int     `json:"input_tokens,omitempty"`
+	OutputTokens             int     `json:"output_tokens,omitempty"`
+	CacheReadInputTokens     int     `json:"cache_read_input_tokens,omitempty"`
+	CacheCreationInputTokens int     `json:"cache_creation_input_tokens,omitempty"`
+	TotalCostUSD             float64 `json:"total_cost_usd,omitempty"`
 }
 
 // RunStream executes the agent loop with streaming JSON output.
@@ -338,6 +343,15 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 	client, err := api.NewClientWithModel(model)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create API client: %v", err)
+	}
+
+	// Initialize cost state (AC2: cost persistence, AC3: resume cost restore)
+	costState := &CostState{}
+	if cfg.IsResume && sessionID != "" {
+		if restored, ok, err := RestoreCostState(sessionID); err == nil && ok {
+			costState = restored
+			log.Debug("Cost state restored", "sessionID", sessionID, "totalCostUSD", costState.TotalCostUSD)
+		}
 	}
 
 	// Get working directory
@@ -421,6 +435,31 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 
 	// Main agent loop
 	for i := 0; i < MaxIterations; i++ {
+		// AC5: Budget enforcement - check before each API call
+		if cfg.MaxBudgetUSD > 0 {
+			if exceeded, _ := CheckBudgetExceeded(costState, cfg.MaxBudgetUSD); exceeded {
+				// Budget exceeded - output error result and stop
+				if cfg.Enabled {
+					msg := StreamMessage{
+						Type:      "result",
+						SessionID: sessionID,
+						Model:     model,
+						Usage: &Usage{
+							InputTokens:              0,
+							OutputTokens:             0,
+							CacheReadInputTokens:     0,
+							CacheCreationInputTokens: 0,
+							TotalCostUSD:             costState.TotalCostUSD,
+						},
+						IsError: true,
+					}
+					data, _ := json.Marshal(msg)
+					fmt.Fprintln(os.Stdout, string(data))
+				}
+				return "", sessionID, fmt.Errorf("budget exceeded: %.4f USD > %.4f USD limit", costState.TotalCostUSD, cfg.MaxBudgetUSD)
+			}
+		}
+
 		// Emit stream_request_start before each API iteration (AC4)
 		if cfg.Enabled {
 			msg := StreamMessage{
@@ -494,6 +533,9 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 
 		// Check if streaming completed with error
 		if streamResult.Error != "" && len(streamResult.Blocks) == 0 {
+			// Save cost state on error before returning
+			costState.LastSessionID = sessionID
+			_ = SaveCostState(costState)
 			return "", sessionID, fmt.Errorf("streaming error: %v", streamResult.Error)
 		}
 
@@ -503,6 +545,12 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 			StopReason: streamResult.StopReason,
 			Usage:      streamResult.Usage,
 			Model:      streamResult.Model,
+		}
+
+		// AC2: Accumulate cost for this turn
+		if resp.Model != "" {
+			AccumulateUsage(costState, resp.Model, resp.Usage)
+			costState.LastSessionID = sessionID
 		}
 
 		// Build and append assistant message with text and tool_use blocks
@@ -629,13 +677,19 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 						SessionID: sessionID,
 						Model:     resp.Model,
 						Usage: &Usage{
-							InputTokens:  resp.Usage.InputTokens,
-							OutputTokens: resp.Usage.OutputTokens,
+							InputTokens:              resp.Usage.InputTokens,
+							OutputTokens:             resp.Usage.OutputTokens,
+							CacheReadInputTokens:     resp.Usage.CacheReadInputTokens,
+							CacheCreationInputTokens: resp.Usage.CacheCreationInputTokens,
+							TotalCostUSD:             costState.TotalCostUSD,
 						},
 					}
 					data, _ := json.Marshal(msg)
 					fmt.Fprintln(os.Stdout, string(data))
 				}
+				// AC2: Save cost state before returning
+				costState.LastSessionID = sessionID
+				_ = SaveCostState(costState)
 				return textOutput, sessionID, nil
 			}
 			// Output final result
@@ -646,13 +700,19 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 					SessionID: sessionID,
 					Model:     resp.Model,
 					Usage: &Usage{
-						InputTokens:  resp.Usage.InputTokens,
-						OutputTokens: resp.Usage.OutputTokens,
+						InputTokens:              resp.Usage.InputTokens,
+						OutputTokens:             resp.Usage.OutputTokens,
+						CacheReadInputTokens:     resp.Usage.CacheReadInputTokens,
+						CacheCreationInputTokens: resp.Usage.CacheCreationInputTokens,
+						TotalCostUSD:             costState.TotalCostUSD,
 					},
 				}
 				data, _ := json.Marshal(msg)
 				fmt.Fprintln(os.Stdout, string(data))
 			}
+			// AC2: Save cost state before returning
+			costState.LastSessionID = sessionID
+			_ = SaveCostState(costState)
 			return textOutput, sessionID, nil
 
 		case api.StopReasonToolUse:
@@ -673,6 +733,9 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 			continue
 
 		case api.StopReasonMaxTokens:
+			// Save cost state on error before returning
+			costState.LastSessionID = sessionID
+			_ = SaveCostState(costState)
 			return textOutput, sessionID, fmt.Errorf("max tokens reached")
 
 		case api.StopReasonStopSeq:
@@ -683,21 +746,33 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 					SessionID: sessionID,
 					Model:     resp.Model,
 					Usage: &Usage{
-						InputTokens:  resp.Usage.InputTokens,
-						OutputTokens: resp.Usage.OutputTokens,
+						InputTokens:              resp.Usage.InputTokens,
+						OutputTokens:             resp.Usage.OutputTokens,
+						CacheReadInputTokens:     resp.Usage.CacheReadInputTokens,
+						CacheCreationInputTokens: resp.Usage.CacheCreationInputTokens,
+						TotalCostUSD:             costState.TotalCostUSD,
 					},
 				}
 				data, _ := json.Marshal(msg)
 				fmt.Fprintln(os.Stdout, string(data))
 			}
+			// AC2: Save cost state before returning
+			costState.LastSessionID = sessionID
+			_ = SaveCostState(costState)
 			return textOutput, sessionID, nil
 		}
 
 		// If we get here without text output and without tool results, something is wrong
 		if textOutput == "" && len(toolResults) == 0 && len(toolUseBlocks) == 0 {
+			// Save cost state on error before returning
+			costState.LastSessionID = sessionID
+			_ = SaveCostState(costState)
 			return "", sessionID, fmt.Errorf("unexpected empty response")
 		}
 	}
 
+	// Save cost state before returning on max iterations
+	costState.LastSessionID = sessionID
+	_ = SaveCostState(costState)
 	return "", sessionID, fmt.Errorf("max iterations (%d) exceeded", MaxIterations)
 }
