@@ -4,6 +4,7 @@ package mcp
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -156,6 +157,10 @@ type ResourceContent struct {
 	MimeType string
 	Blob     []byte
 }
+
+// readResourceHook allows injecting mock behavior for testing ReadResource.
+// If set, this function is called instead of the actual ReadResource RPC.
+var readResourceHook func(ctx context.Context, clientName string, uri string) ([]ResourceContent, error)
 
 // MCPTool implements tool.Tool for an MCP tool.
 type MCPTool struct {
@@ -443,6 +448,11 @@ func (c *Client) ListResources(ctx context.Context) ([]MCPResource, error) {
 
 // ReadResource reads a single resource content by URI.
 func (c *Client) ReadResource(ctx context.Context, uri string) ([]ResourceContent, error) {
+	// Use test hook if set
+	if readResourceHook != nil {
+		return readResourceHook(ctx, c.Name, uri)
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -475,11 +485,19 @@ func (c *Client) ReadResource(ctx context.Context, uri string) ([]ResourceConten
 
 	contents := make([]ResourceContent, 0, len(readResult.Content))
 	for _, r := range readResult.Content {
+		var blobData []byte
+		if r.Blob != "" {
+			var err error
+			blobData, err = base64.StdEncoding.DecodeString(r.Blob)
+			if err != nil {
+				return nil, fmt.Errorf("decoding blob data: %w", err)
+			}
+		}
 		contents = append(contents, ResourceContent{
 			Type:     r.Type,
 			Text:     r.Text,
 			MimeType: r.MimeType,
-			Blob:     []byte(r.Blob), // Blob is base64-encoded in JSON
+			Blob:     blobData,
 		})
 	}
 
@@ -687,4 +705,33 @@ func GetMCPClients() map[string]*Client {
 	result := make(map[string]*Client, len(clients))
 	maps.Copy(result, clients)
 	return result
+}
+
+// SetReadResourceHook sets the test hook for ReadResource (only for testing).
+func SetReadResourceHook(hook func(ctx context.Context, clientName string, uri string) ([]ResourceContent, error)) {
+	readResourceHook = hook
+}
+
+// ResetReadResourceHook clears the test hook for ReadResource.
+func ResetReadResourceHook() {
+	readResourceHook = nil
+}
+
+// SetTestClient registers a mock client for testing (only for testing).
+func SetTestClient(name string, client *Client) {
+	clientsMu.Lock()
+	defer clientsMu.Unlock()
+	clients[NormalizeName(name)] = client
+}
+
+// ResetTestClients clears all test clients.
+func ResetTestClients() {
+	clientsMu.Lock()
+	defer clientsMu.Unlock()
+	clients = make(map[string]*Client)
+}
+
+// GetClientsMu returns the clients mutex for testing synchronization.
+func GetClientsMu() *sync.RWMutex {
+	return &clientsMu
 }

@@ -2,7 +2,13 @@ package tool
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/ipy/jenny/internal/mcp"
@@ -158,9 +164,229 @@ func TestReadMcpResourceTool_InputSchemaRequiredFields(t *testing.T) {
 	}
 }
 
-// Note: AC2-AC5 require integration testing with a real MCP client/server.
-// These acceptance criteria are tested via:
-// - mcp/read_resource_test.go: tests ReadResource method on Client directly
-// - Integration tests that exercise the full MCP flow
+// TestReadMcpResourceTool_AC2_TextInline tests AC2: text content is returned inline.
+func TestReadMcpResourceTool_AC2_TextInline(t *testing.T) {
+	// Save and restore global state
+	mcp.ResetTestClients()
+	mcp.ResetReadResourceHook()
+	t.Cleanup(func() {
+		mcp.ResetTestClients()
+		mcp.ResetReadResourceHook()
+	})
+
+	// Register mock client
+	mcp.SetTestClient("test-server", &mcp.Client{Name: "test-server"})
+
+	// Set up hook to return text content
+	mcp.SetReadResourceHook(func(ctx context.Context, clientName string, uri string) ([]mcp.ResourceContent, error) {
+		if clientName == "test-server" && uri == "file:///test.txt" {
+			return []mcp.ResourceContent{
+				{Type: "text", Text: "Hello, World!", MimeType: "text/plain"},
+			}, nil
+		}
+		return nil, fmt.Errorf("unexpected client/uri: %s/%s", clientName, uri)
+	})
+
+	tool := NewReadMcpResourceTool()
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"server": "test-server",
+		"uri":    "file:///test.txt",
+	}, t.TempDir())
+	if err != nil {
+		t.Fatalf("Execute returned unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Errorf("expected no error, got: %s", result.Content)
+	}
+
+	// Parse output JSON
+	var output struct {
+		Contents []struct {
+			URI         string `json:"uri"`
+			MimeType    string `json:"mimeType,omitempty"`
+			Text        string `json:"text,omitempty"`
+			BlobSavedTo string `json:"blobSavedTo,omitempty"`
+		} `json:"contents"`
+	}
+	if err := json.Unmarshal([]byte(result.Content), &output); err != nil {
+		t.Fatalf("failed to parse JSON: %v\ncontent: %s", err, result.Content)
+	}
+
+	if len(output.Contents) != 1 {
+		t.Fatalf("expected 1 content item, got %d", len(output.Contents))
+	}
+	if output.Contents[0].Text != "Hello, World!" {
+		t.Errorf("expected text 'Hello, World!', got %q", output.Contents[0].Text)
+	}
+	if output.Contents[0].BlobSavedTo != "" {
+		t.Errorf("expected no blobSavedTo for text content, got %s", output.Contents[0].BlobSavedTo)
+	}
+	if output.Contents[0].MimeType != "text/plain" {
+		t.Errorf("expected mimeType 'text/plain', got %q", output.Contents[0].MimeType)
+	}
+}
+
+// TestReadMcpResourceTool_AC3_BlobPersist tests AC3: binary content is decoded and saved to disk.
+func TestReadMcpResourceTool_AC3_BlobPersist(t *testing.T) {
+	// Save and restore global state
+	mcp.ResetTestClients()
+	mcp.ResetReadResourceHook()
+	t.Cleanup(func() {
+		mcp.ResetTestClients()
+		mcp.ResetReadResourceHook()
+	})
+
+	// Register mock client
+	mcp.SetTestClient("blob-server", &mcp.Client{Name: "blob-server"})
+
+	// Set up hook to return blob content
+	mcp.SetReadResourceHook(func(ctx context.Context, clientName string, uri string) ([]mcp.ResourceContent, error) {
+		if clientName == "blob-server" && uri == "file:///image.png" {
+			return []mcp.ResourceContent{
+				{Type: "blob", Blob: []byte("Hello"), MimeType: "image/png"},
+			}, nil
+		}
+		return nil, fmt.Errorf("unexpected client/uri: %s/%s", clientName, uri)
+	})
+
+	cwd := t.TempDir()
+	tool := NewReadMcpResourceTool()
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"server": "blob-server",
+		"uri":    "file:///image.png",
+	}, cwd)
+	if err != nil {
+		t.Fatalf("Execute returned unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Errorf("expected no error, got: %s", result.Content)
+	}
+
+	// Parse output JSON
+	var output struct {
+		Contents []struct {
+			URI         string `json:"uri"`
+			MimeType    string `json:"mimeType,omitempty"`
+			BlobSavedTo string `json:"blobSavedTo,omitempty"`
+		} `json:"contents"`
+	}
+	if err := json.Unmarshal([]byte(result.Content), &output); err != nil {
+		t.Fatalf("failed to parse JSON: %v\ncontent: %s", err, result.Content)
+	}
+
+	if len(output.Contents) != 1 {
+		t.Fatalf("expected 1 content item, got %d", len(output.Contents))
+	}
+	if output.Contents[0].BlobSavedTo == "" {
+		t.Fatal("expected blobSavedTo to be set for blob content")
+	}
+
+	// Verify file exists and contains decoded data
+	data, err := os.ReadFile(output.Contents[0].BlobSavedTo)
+	if err != nil {
+		t.Fatalf("failed to read saved blob file: %v", err)
+	}
+	if string(data) != "Hello" {
+		t.Errorf("expected file content 'Hello', got %q", string(data))
+	}
+
+	// Verify file is in the correct directory
+	expectedDir := filepath.Join(cwd, ".jenny", "mcp-resources")
+	if filepath.Dir(output.Contents[0].BlobSavedTo) != expectedDir {
+		t.Errorf("expected file in %s, got %s", expectedDir, filepath.Dir(output.Contents[0].BlobSavedTo))
+	}
+}
+
+// TestReadMcpResourceTool_AC4_PersistFailure tests AC4: disk write failure returns error, not base64.
+func TestReadMcpResourceTool_AC4_PersistFailure(t *testing.T) {
+	// Save and restore global state
+	mcp.ResetTestClients()
+	mcp.ResetReadResourceHook()
+	t.Cleanup(func() {
+		mcp.ResetTestClients()
+		mcp.ResetReadResourceHook()
+	})
+
+	// Register mock client
+	mcp.SetTestClient("fail-server", &mcp.Client{Name: "fail-server"})
+
+	// Set up hook to return blob content
+	mcp.SetReadResourceHook(func(ctx context.Context, clientName string, uri string) ([]mcp.ResourceContent, error) {
+		if clientName == "fail-server" {
+			return []mcp.ResourceContent{
+				{Type: "blob", Blob: []byte("Hello"), MimeType: "image/png"},
+			}, nil
+		}
+		return nil, fmt.Errorf("unexpected client/uri: %s/%s", clientName, uri)
+	})
+
+	// Use a path that cannot be written to (empty string or invalid path)
+	cwd := "/nonexistent/path/that/cannot/be/created"
+	tool := NewReadMcpResourceTool()
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"server": "fail-server",
+		"uri":    "file:///image.png",
+	}, cwd)
+	if err != nil {
+		t.Fatalf("Execute returned unexpected error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected IsError=true for persist failure")
+	}
+	if !strings.Contains(result.Content, "Error saving binary content to disk") {
+		t.Errorf("expected persist error message, got: %s", result.Content)
+	}
+	// AC4: The result must NOT contain the raw base64 data
+	if strings.Contains(result.Content, "SGVsbG8=") {
+		t.Error("result must NOT contain raw base64 data when persist fails")
+	}
+}
+
+// TestReadMcpResourceTool_AC5_ConcurrentCalls tests AC5: concurrent calls are safe.
+func TestReadMcpResourceTool_AC5_ConcurrentCalls(t *testing.T) {
+	// Save and restore global state
+	mcp.ResetTestClients()
+	t.Cleanup(func() {
+		mcp.ResetTestClients()
+		mcp.ResetReadResourceHook()
+	})
+
+	// Register mock client
+	mcp.SetTestClient("concurrent-server", &mcp.Client{Name: "concurrent-server"})
+
+	counter := atomic.Int64{}
+	mcp.SetReadResourceHook(func(ctx context.Context, clientName string, uri string) ([]mcp.ResourceContent, error) {
+		counter.Add(1)
+		return []mcp.ResourceContent{
+			{Type: "text", Text: "response", MimeType: "text/plain"},
+		}, nil
+	})
+
+	cwd := t.TempDir()
+	tool := NewReadMcpResourceTool()
+
+	var wg sync.WaitGroup
+	const numGoroutines = 10
+	for range numGoroutines {
+		wg.Go(func() {
+			result, err := tool.Execute(context.Background(), map[string]any{
+				"server": "concurrent-server",
+				"uri":    "file:///test.txt",
+			}, cwd)
+			if err != nil {
+				t.Errorf("Execute returned error: %v", err)
+				return
+			}
+			if result.IsError {
+				t.Errorf("unexpected error: %s", result.Content)
+			}
+		})
+	}
+	wg.Wait()
+
+	if counter.Load() != numGoroutines {
+		t.Errorf("expected %d calls, got %d", numGoroutines, counter.Load())
+	}
+}
 
 var _ = mcp.GetClient // Reference mcp package to ensure it compiles

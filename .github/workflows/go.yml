@@ -39,8 +39,24 @@ jobs:
 
     - name: Build
       run: |
-        go build -v ./...
-        go build -v -o jenny ./cmd/jenny
+        # Multi-arch builds
+        platforms=("linux/amd64" "linux/arm64" "darwin/amd64" "darwin/arm64" "windows/amd64")
+        for platform in "${platforms[@]}"; do
+          platform_split=(${platform//\// })
+          GOOS=${platform_split[0]}
+          GOARCH=${platform_split[1]}
+          output_name="jenny-$GOOS-$GOARCH"
+          if [ $GOOS = "windows" ]; then
+            output_name+='.exe'
+          fi
+          echo "Building $output_name..."
+          GOOS=$GOOS GOARCH=$GOARCH go build -v -o "$output_name" ./cmd/jenny
+          
+          # Apply executable permissions to Unix binaries
+          if [ $GOOS != "windows" ]; then
+            chmod +x "$output_name"
+          fi
+        done
 
     - name: Run Jenny (Pre-release)
       if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && env.ANTHROPIC_AUTH_TOKEN != '' }}
@@ -50,10 +66,10 @@ jobs:
         ANTHROPIC_MODEL: ${{ secrets.ANTHROPIC_MODEL }}
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        ./jenny --verbose --dangerously-skip-permissions "You are a release assistant.
+        ./jenny-linux-amd64 --verbose --dangerously-skip-permissions "You are a release assistant.
         1. Check the latest GitHub release version using 'gh release list'.
         2. Determine the next alpha version number (e.g., if latest is v0.1.0, next could be v0.1.1-alpha.1).
         3. Create a new git tag for this version and push it.
         4. Generate a descriptive release title and a clear, easy-to-understand summary of the changes and new features based on the commits since the last release.
-        5. Create a GitHub pre-release using 'gh release create' with the generated title and notes, attaching the 'jenny' binary as a release asset.
+        5. Create a GitHub pre-release using 'gh release create' with the generated title and notes, attaching ALL 'jenny-*' binaries (including .exe) as release assets.
         Do not modify any files in the repository."
