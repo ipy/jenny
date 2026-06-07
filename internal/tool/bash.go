@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ipy/jenny/internal/constants"
@@ -318,6 +319,7 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 		timeout = int(timeoutVal)
 	}
 
+	// Create a background context for timeout (not for TaskStop cancellation)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 
 	// Create result channel
@@ -331,26 +333,33 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 		t.taskManager = NewTaskManager()
 	}
 
+	// Set project root on task manager for project-relative paths
+	if t.projectRoot != "" {
+		t.taskManager.WithProjectRoot(t.projectRoot)
+	}
+
 	// Get output file path
 	outputFile := ""
 	if tm := t.taskManager; tm != nil {
 		path, err := tm.TaskOutputPath(taskID)
 		if err == nil {
 			outputFile = path
-			// Store task info
+			// Store task info (Process will be set after cmd.Start())
 			tm.Store(taskID, &TaskInfo{
 				TaskID:     taskID,
 				State:      TaskStateRunning,
 				OutputFile: outputFile,
 				StartTime:  time.Now(),
 				Command:    command,
-				Cancel:     cancel,
 			})
 		}
 	}
 
 	// Store in background tasks (using string key for compatibility)
 	t.backgroundTasks.Store(taskID, resultCh)
+
+	// Track if command completed (for synchronization)
+	var cmdDone int32 = 0
 
 	// Spawn goroutine
 	go func() {
@@ -367,10 +376,29 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 		// Channel to signal command completion
 		done := make(chan struct{})
 
-		// Start command
+		// Start time for duration tracking
 		startTime := time.Now()
+
+		// Inner goroutine runs the command
 		go func() {
-			err := cmd.Run()
+			err := cmd.Start()
+			if err != nil {
+				// Command failed to start
+				output.WriteString(fmt.Sprintf("failed to start command: %v", err))
+				close(done)
+				atomic.StoreInt32(&cmdDone, 1)
+				return
+			}
+
+			// Store process reference for TaskStop (AC5)
+			if t.taskManager != nil && cmd.Process != nil {
+				t.taskManager.UpdateProcess(taskID, cmd.Process)
+			}
+
+			// Wait for command completion
+			err = cmd.Wait()
+
+			// Capture output
 			output.WriteString(stdout.String())
 			if stderr.Len() > 0 {
 				if output.Len() > 0 {
@@ -389,21 +417,11 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 				}
 			}
 
-			// AC2: Emit progress event after 2s if still running
-			if t.taskManager != nil {
-				// Check if task is still running after 2 seconds
-				select {
-				case <-time.After(2 * time.Second):
-					// Task is still running, emit progress
-					EmitTaskProgress(taskID, 2.0, output.String())
-				case <-done:
-					// Command completed before 2 seconds, no progress event
-				}
-			}
+			// Calculate duration
+			duration := time.Since(startTime).Seconds()
 
-			// Write result to output file (AC1)
+			// Write final result to output file (AC1)
 			if t.taskManager != nil {
-				duration := time.Since(startTime).Seconds()
 				_ = t.taskManager.WriteTaskResult(taskID, output.String(), exitCode, duration)
 
 				// Update task state
@@ -418,35 +436,65 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 				})
 			}
 
+			// Store result for parent
+			cmdOutput := output.String()
+			var result *ToolResult
+			if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
+				exitCode := cmd.ProcessState.ExitCode()
+				result = &ToolResult{
+					Content: fmt.Sprintf("%s\n(exit code: %d)", cmdOutput, exitCode),
+					IsError: exitCode != 0,
+				}
+			} else {
+				result = &ToolResult{
+					Content: cmdOutput,
+					IsError: false,
+				}
+			}
+
+			// Signal completion BEFORE sending result (to avoid race with outer close)
 			close(done)
+			atomic.StoreInt32(&cmdDone, 1)
+
+			// Now send result (after done is closed, so outer won't close resultCh yet)
+			resultCh <- result
 		}()
 
-		// Wait for done signal
-		<-done
+		// AC2: Progress timer runs concurrently with command
+		progressTimer := time.NewTimer(2 * time.Second)
+		flushTicker := time.NewTicker(5 * time.Second)
+		defer progressTimer.Stop()
+		defer flushTicker.Stop()
 
-		// Build result
-		cmdOutput := output.String()
-		var result *ToolResult
-		if ctx.Err() == context.DeadlineExceeded {
-			result = &ToolResult{
-				Content: fmt.Sprintf("Command timed out after %d seconds", timeout),
-				IsError: true,
+		// Wait for either the progress timer, a flush tick, or command completion
+		select {
+		case <-progressTimer.C:
+			// Task ran for more than 2 seconds - emit progress
+			if t.taskManager != nil {
+				EmitTaskProgress(taskID, 2.0, output.String())
 			}
-		} else if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-			exitCode := cmd.ProcessState.ExitCode()
-			result = &ToolResult{
-				Content: fmt.Sprintf("%s\n(exit code: %d)", cmdOutput, exitCode),
-				IsError: exitCode != 0,
+			// Wait for command completion
+			<-done
+		case <-flushTicker.C:
+			// Periodic flush of partial output (AC1)
+			if t.taskManager != nil {
+				duration := time.Since(startTime).Seconds()
+				_ = t.taskManager.FlushPartialOutput(taskID, output.String(), duration)
 			}
-		} else {
-			result = &ToolResult{
-				Content: cmdOutput,
-				IsError: false,
-			}
+			// Wait for command completion
+			<-done
+		case <-done:
+			// Command completed before either timer fired - no progress event
 		}
 
+		// Cancel context to clean up timeout resources
 		cancel()
-		resultCh <- result
+
+		// Wait for inner goroutine to finish sending result before closing
+		for atomic.LoadInt32(&cmdDone) == 0 {
+			time.Sleep(10 * time.Millisecond)
+		}
+
 		close(resultCh)
 		t.backgroundTasks.Delete(taskID)
 

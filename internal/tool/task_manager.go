@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -26,7 +27,7 @@ type TaskInfo struct {
 	OutputFile string
 	StartTime  time.Time
 	Command    string
-	Cancel     func()
+	Process    *os.Process
 }
 
 // TaskCompletion holds a completion notification for a background task.
@@ -43,6 +44,7 @@ type TaskManager struct {
 	tasks           map[string]*TaskInfo
 	completionQueue []TaskCompletion
 	tasksDir        string
+	projectRoot     string
 }
 
 // NewTaskManager creates a new TaskManager.
@@ -52,8 +54,15 @@ func NewTaskManager() *TaskManager {
 	}
 }
 
+// WithProjectRoot sets the project root directory for task output files.
+func (tm *TaskManager) WithProjectRoot(root string) *TaskManager {
+	tm.projectRoot = root
+	return tm
+}
+
 // TasksDir returns the directory for task output files.
 // Creates the directory if it doesn't exist.
+// Uses projectRoot/.jenny/tasks if projectRoot is set, otherwise falls back to ~/.jenny/tasks.
 func (tm *TaskManager) TasksDir() (string, error) {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
@@ -62,13 +71,18 @@ func (tm *TaskManager) TasksDir() (string, error) {
 		return tm.tasksDir, nil
 	}
 
-	// Use .jenny/tasks in home directory
-	homeDir, _ := os.UserHomeDir()
-	if homeDir == "" {
-		homeDir = "."
+	var tasksDir string
+	if tm.projectRoot != "" {
+		// Use project-relative .jenny/tasks directory
+		tasksDir = filepath.Join(tm.projectRoot, ".jenny", "tasks")
+	} else {
+		// Fall back to ~/.jenny/tasks
+		homeDir, _ := os.UserHomeDir()
+		if homeDir == "" {
+			homeDir = "."
+		}
+		tasksDir = filepath.Join(homeDir, ".jenny", "tasks")
 	}
-	jennyHome := filepath.Join(homeDir, ".jenny")
-	tasksDir := filepath.Join(jennyHome, "tasks")
 
 	if err := os.MkdirAll(tasksDir, 0755); err != nil {
 		return "", fmt.Errorf("creating tasks directory: %w", err)
@@ -118,7 +132,17 @@ func (tm *TaskManager) UpdateState(taskID string, state TaskState) {
 	}
 }
 
-// Stop terminates a running task.
+// UpdateProcess updates the process reference for a task.
+func (tm *TaskManager) UpdateProcess(taskID string, process *os.Process) {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	if info, ok := tm.tasks[taskID]; ok {
+		info.Process = process
+	}
+}
+
+// Stop terminates a running task using SIGTERM then SIGKILL after 5s.
+// This implements the AC5 requirement for graceful process termination.
 func (tm *TaskManager) Stop(taskID string) error {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
@@ -132,10 +156,21 @@ func (tm *TaskManager) Stop(taskID string) error {
 		return fmt.Errorf("task not found or already completed")
 	}
 
-	// Call cancel function if available
-	if info.Cancel != nil {
-		info.Cancel()
+	// Use SIGTERM for graceful shutdown first
+	if info.Process != nil {
+		_ = info.Process.Signal(syscall.SIGTERM)
 	}
+
+	// Give process 5 seconds to exit gracefully, then SIGKILL
+	time.AfterFunc(5*time.Second, func() {
+		tm.mu.Lock()
+		defer tm.mu.Unlock()
+		if info, ok := tm.tasks[taskID]; ok && info.State == TaskStateRunning {
+			if info.Process != nil {
+				_ = info.Process.Signal(syscall.SIGKILL)
+			}
+		}
+	})
 
 	info.State = TaskStateStopped
 	return nil
@@ -194,6 +229,35 @@ func (tm *TaskManager) WriteTaskResult(taskID string, output string, exitCode in
 
 	if err := os.WriteFile(path, append(data, '\n'), 0644); err != nil {
 		return fmt.Errorf("writing task result: %w", err)
+	}
+
+	return nil
+}
+
+// FlushPartialOutput writes accumulated partial output to the task's output file.
+// This is called periodically during task execution to ensure partial output is
+// available if the task is interrupted.
+func (tm *TaskManager) FlushPartialOutput(taskID string, output string, durationSeconds float64) error {
+	path, err := tm.TaskOutputPath(taskID)
+	if err != nil {
+		return err
+	}
+
+	entry := TaskResultEntry{
+		Type:            "task_result",
+		TaskID:          taskID,
+		Output:          output,
+		ExitCode:        -1, // -1 indicates task still running
+		DurationSeconds: durationSeconds,
+	}
+
+	data, err := json.Marshal(entry)
+	if err != nil {
+		return fmt.Errorf("marshaling partial result: %w", err)
+	}
+
+	if err := os.WriteFile(path, append(data, '\n'), 0644); err != nil {
+		return fmt.Errorf("writing partial result: %w", err)
 	}
 
 	return nil
