@@ -66,12 +66,68 @@ var DefaultPricing = map[string]ModelPricing{
 	},
 }
 
+// DefaultPricingCNY is the CNY pricing table for known models.
+// Rates are per-token in CNY (approximately USD × 7.0).
+var DefaultPricingCNY = map[string]ModelPricing{
+	"deepseek-v4-flash": {
+		InputUSD:         0.0000105,  // ¥10.50/1M input
+		OutputUSD:        0.000056,   // ¥56.00/1M output
+		CacheReadUSD:     0.00000105, // ¥1.05/1M cache read
+		CacheCreationUSD: 0.000028,   // ¥28.00/1M cache creation
+	},
+	"claude-sonnet-4-20250514": {
+		InputUSD:         0.000021,   // ¥21.00/1M input
+		OutputUSD:        0.000105,   // ¥105.00/1M output
+		CacheReadUSD:     0.000021,   // Same as input (cache hit)
+		CacheCreationUSD: 0.00013125, // ¥131.25/1M cache creation
+	},
+	"claude-opus-4-20250514": {
+		InputUSD:         0.000105,   // ¥105.00/1M input
+		OutputUSD:        0.000525,   // ¥525.00/1M output
+		CacheReadUSD:     0.000105,   // Same as input
+		CacheCreationUSD: 0.00013125, // ¥131.25/1M cache creation
+	},
+	"claude-3-5-sonnet-latest": {
+		InputUSD:         0.000021,   // ¥21.00/1M input
+		OutputUSD:        0.000105,   // ¥105.00/1M output
+		CacheReadUSD:     0.000021,   // Same as input
+		CacheCreationUSD: 0.00013125, // ¥131.25/1M cache creation
+	},
+	"claude-3-5-sonnet-20240620": {
+		InputUSD:         0.000021,   // ¥21.00/1M input
+		OutputUSD:        0.000105,   // ¥105.00/1M output
+		CacheReadUSD:     0.000021,   // Same as input
+		CacheCreationUSD: 0.00013125, // ¥131.25/1M cache creation
+	},
+	"claude-3-opus-latest": {
+		InputUSD:         0.000105,   // ¥105.00/1M input
+		OutputUSD:        0.000525,   // ¥525.00/1M output
+		CacheReadUSD:     0.000105,   // Same as input
+		CacheCreationUSD: 0.00013125, // ¥131.25/1M cache creation
+	},
+	"claude-3-opus-20240229": {
+		InputUSD:         0.000105,   // ¥105.00/1M input
+		OutputUSD:        0.000525,   // ¥525.00/1M output
+		CacheReadUSD:     0.000105,   // Same as input
+		CacheCreationUSD: 0.00013125, // ¥131.25/1M cache creation
+	},
+}
+
 // UnknownModelPricing is the conservative default for unknown models.
 var UnknownModelPricing = ModelPricing{
 	InputUSD:         0.000003,
 	OutputUSD:        0.000015,
 	CacheReadUSD:     0.000003,
 	CacheCreationUSD: 0.00001875,
+	UnknownModel:     true,
+}
+
+// UnknownModelPricingCNY is the conservative default CNY pricing for unknown models.
+var UnknownModelPricingCNY = ModelPricing{
+	InputUSD:         0.000021,   // ¥21.00/1M input
+	OutputUSD:        0.000105,   // ¥105.00/1M output
+	CacheReadUSD:     0.000021,   // Same as input
+	CacheCreationUSD: 0.00013125, // ¥131.25/1M cache creation
 	UnknownModel:     true,
 }
 
@@ -82,13 +138,16 @@ type ModelUsage struct {
 	CacheReadInputTokens     int
 	CacheCreationInputTokens int
 	CostUSD                  float64
+	CostCNY                  float64
 }
 
 // CostState tracks accumulated cost across all models.
 type CostState struct {
 	LastSessionID       string
+	Currency            string `json:"currency,omitempty"`
 	ModelUsage          map[string]ModelUsage
 	TotalCostUSD        float64
+	TotalCostCNY        float64
 	HasUnknownModelCost bool
 
 	// Compaction state - persisted for session resume
@@ -151,15 +210,22 @@ func RestoreCostState(sessionID string) (*CostState, bool, error) {
 }
 
 // GetModelPricing returns the pricing for a model, using conservative default for unknown models.
-func GetModelPricing(model string) ModelPricing {
+// The currency parameter selects the appropriate pricing table ("USD" or "CNY").
+func GetModelPricing(model string, currency string) ModelPricing {
+	if currency == "CNY" {
+		if pricing, ok := DefaultPricingCNY[model]; ok {
+			return pricing
+		}
+		return UnknownModelPricingCNY
+	}
 	if pricing, ok := DefaultPricing[model]; ok {
 		return pricing
 	}
 	return UnknownModelPricing
 }
 
-// CalculateCostUSD calculates the USD cost for given token counts using model pricing.
-func CalculateCostUSD(pricing ModelPricing, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens int) float64 {
+// CalculateCost calculates the cost for given token counts using model pricing.
+func CalculateCost(pricing ModelPricing, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens int) float64 {
 	cost := float64(inputTokens)*pricing.InputUSD +
 		float64(outputTokens)*pricing.OutputUSD +
 		float64(cacheReadTokens)*pricing.CacheReadUSD +
@@ -179,26 +245,43 @@ func AccumulateUsage(state *CostState, model string, usage api.Usage) {
 	mu.CacheReadInputTokens += usage.CacheReadInputTokens
 	mu.CacheCreationInputTokens += usage.CacheCreationInputTokens
 
-	pricing := GetModelPricing(model)
-	mu.CostUSD = CalculateCostUSD(pricing, mu.InputTokens, mu.OutputTokens, mu.CacheReadInputTokens, mu.CacheCreationInputTokens)
+	// Always compute USD cost for backward compatibility
+	pricingUSD := GetModelPricing(model, "USD")
+	mu.CostUSD = CalculateCost(pricingUSD, mu.InputTokens, mu.OutputTokens, mu.CacheReadInputTokens, mu.CacheCreationInputTokens)
+
+	// Compute CNY cost when currency is CNY
+	if state.Currency == "CNY" {
+		pricingCNY := GetModelPricing(model, "CNY")
+		mu.CostCNY = CalculateCost(pricingCNY, mu.InputTokens, mu.OutputTokens, mu.CacheReadInputTokens, mu.CacheCreationInputTokens)
+	}
+
 	state.ModelUsage[model] = mu
 
-	if pricing.UnknownModel {
+	if pricingUSD.UnknownModel {
 		state.HasUnknownModelCost = true
 	}
 
-	// Recalculate total
+	// Recalculate totals
 	state.TotalCostUSD = 0
+	state.TotalCostCNY = 0
 	for _, m := range state.ModelUsage {
 		state.TotalCostUSD += m.CostUSD
+		state.TotalCostCNY += m.CostCNY
 	}
 }
 
 // CheckBudgetExceeded checks if the accumulated cost exceeds the budget.
+// The currency parameter is used for error message formatting.
 // Returns true if budget is exceeded (should stop) and the current total cost.
-func CheckBudgetExceeded(state *CostState, maxBudgetUSD float64) (bool, float64) {
-	if maxBudgetUSD <= 0 {
+func CheckBudgetExceeded(state *CostState, maxBudget float64, currency string) (bool, float64) {
+	if maxBudget <= 0 {
+		if currency == "CNY" {
+			return false, state.TotalCostCNY
+		}
 		return false, state.TotalCostUSD
 	}
-	return state.TotalCostUSD > maxBudgetUSD, state.TotalCostUSD
+	if currency == "CNY" {
+		return state.TotalCostCNY > maxBudget, state.TotalCostCNY
+	}
+	return state.TotalCostUSD > maxBudget, state.TotalCostUSD
 }

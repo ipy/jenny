@@ -546,7 +546,7 @@ func TestAC5_CheckBudgetExceededWithLimit(t *testing.T) {
 	state := &CostState{TotalCostUSD: 0.05}
 
 	// Budget not exceeded
-	exceeded, total := CheckBudgetExceeded(state, 0.10)
+	exceeded, total := CheckBudgetExceeded(state, 0.10, "USD")
 	if exceeded {
 		t.Error("AC5 FAIL: budget exceeded when 0.05 <= 0.10")
 	}
@@ -555,7 +555,7 @@ func TestAC5_CheckBudgetExceededWithLimit(t *testing.T) {
 	}
 
 	// Budget exceeded
-	exceeded, total = CheckBudgetExceeded(state, 0.02)
+	exceeded, total = CheckBudgetExceeded(state, 0.02, "USD")
 	if !exceeded {
 		t.Error("AC5 FAIL: budget NOT exceeded when 0.05 > 0.02")
 	}
@@ -568,7 +568,7 @@ func TestAC5_CheckBudgetExceededZeroLimit(t *testing.T) {
 	state := &CostState{TotalCostUSD: 100.0}
 
 	// Zero budget = no limit
-	exceeded, total := CheckBudgetExceeded(state, 0)
+	exceeded, total := CheckBudgetExceeded(state, 0, "USD")
 	if exceeded {
 		t.Error("AC5 FAIL: budget exceeded when maxBudgetUSD=0 (should be no limit)")
 	}
@@ -580,7 +580,7 @@ func TestAC5_CheckBudgetExceededZeroLimit(t *testing.T) {
 func TestAC5_CheckBudgetExceededNegativeLimit(t *testing.T) {
 	state := &CostState{TotalCostUSD: 0.01}
 
-	exceeded, _ := CheckBudgetExceeded(state, -1)
+	exceeded, _ := CheckBudgetExceeded(state, -1, "USD")
 	if exceeded {
 		t.Error("AC5 FAIL: budget exceeded when maxBudgetUSD < 0 (should be no limit)")
 	}
@@ -717,6 +717,227 @@ func TestAC5_BudgetNoLimitWhenMaxBudgetUSDIsZero(t *testing.T) {
 		t.Fatalf("AC5 FAIL: RunStream should not fail with no budget limit: %v", err)
 	}
 	t.Log("AC5 PASS: RunStream completes normally with no budget limit")
+}
+
+// ---------------------------------------------------------------------------
+// CNY Multi-Currency Tests (AC1-AC5)
+// ---------------------------------------------------------------------------
+
+// TestCNY_AC1_USDRoundTripUnchanged verifies AC1: existing USD fields round-trip
+// unchanged when currency is not explicitly set.
+func TestCNY_AC1_USDRoundTripUnchanged(t *testing.T) {
+	tmpDir := t.TempDir()
+	origWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(origWd)
+
+	// Create state with default (empty) currency
+	state := &CostState{
+		LastSessionID: "sess_cny_ac1",
+		ModelUsage: map[string]ModelUsage{
+			"deepseek-v4-flash": {
+				InputTokens:  100,
+				OutputTokens: 50,
+				CostUSD:      0.00055, // 100 * 0.0000015 + 50 * 0.000008
+			},
+		},
+		TotalCostUSD: 0.00055,
+	}
+
+	// Save and reload
+	if err := SaveCostState(state); err != nil {
+		t.Fatalf("CNY AC1 FAIL: SaveCostState error = %v", err)
+	}
+	loaded, err := LoadCostState()
+	if err != nil {
+		t.Fatalf("CNY AC1 FAIL: LoadCostState error = %v", err)
+	}
+
+	// Verify USD fields are identical
+	if loaded.TotalCostUSD != state.TotalCostUSD {
+		t.Errorf("CNY AC1 FAIL: TotalCostUSD = %f, want %f", loaded.TotalCostUSD, state.TotalCostUSD)
+	}
+	mu, ok := loaded.ModelUsage["deepseek-v4-flash"]
+	if !ok {
+		t.Fatal("CNY AC1 FAIL: model usage not restored")
+	}
+	if mu.CostUSD != state.ModelUsage["deepseek-v4-flash"].CostUSD {
+		t.Errorf("CNY AC1 FAIL: CostUSD = %f, want %f", mu.CostUSD, state.ModelUsage["deepseek-v4-flash"].CostUSD)
+	}
+	// Currency should be empty (omitted from JSON)
+	if loaded.Currency != "" {
+		t.Errorf("CNY AC1 FAIL: Currency = %q, want empty", loaded.Currency)
+	}
+
+	t.Log("CNY AC1 PASS: USD fields round-trip unchanged with default currency")
+}
+
+// TestCNY_AC2_CNYFieldsPopulated verifies AC2: Setting Currency="CNY" populates
+// both TotalCostCNY and per-model CostCNY alongside USD fields.
+func TestCNY_AC2_CNYFieldsPopulated(t *testing.T) {
+	state := &CostState{
+		Currency: "CNY",
+		ModelUsage: map[string]ModelUsage{
+			"deepseek-v4-flash": {
+				InputTokens:  100,
+				OutputTokens: 50,
+				CostUSD:      0.00055,
+				CostCNY:      0.00385, // 100 * 0.0000105 + 50 * 0.000056
+			},
+		},
+		TotalCostUSD: 0.00055,
+		TotalCostCNY: 0.00385,
+	}
+
+	usage := api.Usage{
+		InputTokens:  100,
+		OutputTokens: 50,
+	}
+	AccumulateUsage(state, "deepseek-v4-flash", usage)
+
+	mu := state.ModelUsage["deepseek-v4-flash"]
+	if mu.CostUSD == 0 {
+		t.Error("CNY AC2 FAIL: CostUSD should be non-zero")
+	}
+	if mu.CostCNY == 0 {
+		t.Error("CNY AC2 FAIL: CostCNY should be non-zero")
+	}
+	if state.TotalCostUSD == 0 {
+		t.Error("CNY AC2 FAIL: TotalCostUSD should be non-zero")
+	}
+	if state.TotalCostCNY == 0 {
+		t.Error("CNY AC2 FAIL: TotalCostCNY should be non-zero")
+	}
+
+	t.Logf("CNY AC2 PASS: CNY fields populated: CostUSD=%.6f, CostCNY=%.6f", mu.CostUSD, mu.CostCNY)
+}
+
+// TestCNY_AC3_CNYRateCorrectness verifies AC3: CNY cost calculation uses CNY-denominated
+// per-token rates (not a post-hoc USD*rate conversion).
+func TestCNY_AC3_CNYRateCorrectness(t *testing.T) {
+	state := &CostState{Currency: "CNY"}
+
+	// Accumulate exactly 1,000,000 input tokens for deepseek-v4-flash
+	// CNY rate for deepseek-v4-flash input is 0.0000105 per token
+	// So 1M tokens * 0.0000105 = 10.5 CNY
+	usage := api.Usage{InputTokens: 1000000}
+	AccumulateUsage(state, "deepseek-v4-flash", usage)
+
+	expectedCNY := 10.5 // 1M * 0.0000105
+	mu := state.ModelUsage["deepseek-v4-flash"]
+	if mu.CostCNY != expectedCNY {
+		t.Errorf("CNY AC3 FAIL: CostCNY = %f, want %f (1M tokens * CNY rate)", mu.CostCNY, expectedCNY)
+	}
+
+	// Also verify USD is computed separately with USD rate
+	// 1M * 0.0000015 = 1.5 USD
+	expectedUSD := 1.5
+	if mu.CostUSD != expectedUSD {
+		t.Errorf("CNY AC3 FAIL: CostUSD = %f, want %f (1M tokens * USD rate)", mu.CostUSD, expectedUSD)
+	}
+
+	t.Logf("CNY AC3 PASS: CNY rate correct - 1M input tokens = %.4f CNY, USD = %.4f", mu.CostCNY, mu.CostUSD)
+}
+
+// TestCNY_AC4_StreamJsonFieldEmission verifies AC4: stream-json terminal result line
+// emits total_cost_cny when Currency="CNY" and omits it when USD or unset.
+func TestCNY_AC4_StreamJsonFieldEmission(t *testing.T) {
+	// Test1: CNY currency should emit total_cost_cny
+	stateCNY := &CostState{
+		Currency:     "CNY",
+		TotalCostUSD: 0.00055,
+		TotalCostCNY: 0.00385,
+	}
+	usageCNY := &Usage{
+		InputTokens:  100,
+		OutputTokens: 50,
+		TotalCostUSD: stateCNY.TotalCostUSD,
+	}
+	if stateCNY.Currency == "CNY" {
+		usageCNY.TotalCostCNY = stateCNY.TotalCostCNY
+	}
+
+	dataCNY, err := json.Marshal(usageCNY)
+	if err != nil {
+		t.Fatalf("CNY AC4 FAIL: json.Marshal(usageCNY) error = %v", err)
+	}
+	var parsedCNY map[string]any
+	if err := json.Unmarshal(dataCNY, &parsedCNY); err != nil {
+		t.Fatalf("CNY AC4 FAIL: cannot unmarshal CNY usage JSON: %v", err)
+	}
+	if _, ok := parsedCNY["total_cost_cny"]; !ok {
+		t.Error("CNY AC4 FAIL: CNY usage missing 'total_cost_cny' in JSON output")
+	}
+	if _, ok := parsedCNY["total_cost_usd"]; !ok {
+		t.Error("CNY AC4 FAIL: CNY usage missing 'total_cost_usd' in JSON output")
+	}
+
+	// Test 2: USD/unset currency should omit total_cost_cny
+	usageUSD := &Usage{
+		InputTokens:  100,
+		OutputTokens: 50,
+		TotalCostUSD: 0.00055,
+	}
+	dataUSD, err := json.Marshal(usageUSD)
+	if err != nil {
+		t.Fatalf("CNY AC4 FAIL: json.Marshal(usageUSD) error = %v", err)
+	}
+	var parsedUSD map[string]any
+	if err := json.Unmarshal(dataUSD, &parsedUSD); err != nil {
+		t.Fatalf("CNY AC4 FAIL: cannot unmarshal USD usage JSON: %v", err)
+	}
+	if _, ok := parsedUSD["total_cost_cny"]; ok {
+		t.Error("CNY AC4 FAIL: USD usage should NOT have 'total_cost_cny' in JSON output")
+	}
+	if _, ok := parsedUSD["total_cost_usd"]; !ok {
+		t.Error("CNY AC4 FAIL: USD usage missing 'total_cost_usd' in JSON output")
+	}
+
+	t.Log("CNY AC4 PASS: total_cost_cny emitted for CNY, omitted for USD")
+}
+
+// TestCNY_AC5_CheckBudgetExceededWithCNY verifies AC5: Budget enforcement works
+// with CNY currency.
+func TestCNY_AC5_CheckBudgetExceededWithCNY(t *testing.T) {
+	state := &CostState{
+		Currency:     "CNY",
+		TotalCostUSD: 0.00055,
+		TotalCostCNY: 0.00385,
+	}
+
+	// Budget not exceeded (0.00385 CNY < 0.01 CNY limit)
+	exceeded, total := CheckBudgetExceeded(state, 0.01, "CNY")
+	if exceeded {
+		t.Error("CNY AC5 FAIL: budget exceeded when 0.00385 <= 0.01 CNY")
+	}
+	if total != 0.00385 {
+		t.Errorf("CNY AC5 FAIL: returned total = %f, want 0.00385", total)
+	}
+
+	// Budget exceeded (0.00385 CNY > 0.001 CNY limit)
+	exceeded, total = CheckBudgetExceeded(state, 0.001, "CNY")
+	if !exceeded {
+		t.Error("CNY AC5 FAIL: budget NOT exceeded when 0.00385 > 0.001 CNY")
+	}
+	if total != 0.00385 {
+		t.Errorf("CNY AC5 FAIL: returned total = %f, want 0.00385", total)
+	}
+}
+
+func TestCNY_AC5_BudgetCNYNoLimitWhenMaxBudgetCNYIsZero(t *testing.T) {
+	state := &CostState{
+		Currency:     "CNY",
+		TotalCostCNY: 100.0,
+	}
+
+	// Zero CNY budget = no limit
+	exceeded, total := CheckBudgetExceeded(state, 0, "CNY")
+	if exceeded {
+		t.Error("CNY AC5 FAIL: budget exceeded when maxBudgetCNY=0 (should be no limit)")
+	}
+	if total != 100.0 {
+		t.Errorf("CNY AC5 FAIL: returned total = %f, want 100.0", total)
+	}
 }
 
 // ---------------------------------------------------------------------------

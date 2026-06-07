@@ -262,11 +262,36 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		e.turnCount++
 		currentTurn := e.turnCount
 		budgetUSD := e.streamCfg.MaxBudgetUSD
+		budgetCNY := e.streamCfg.MaxBudgetCNY
 		e.mu.Unlock()
 
 		// AC2: Budget enforcement - check before each API call
-		if budgetUSD > 0 {
-			if exceeded, _ := CheckBudgetExceeded(e.costState, budgetUSD); exceeded {
+		// Use CNY budget if currency is CNY, otherwise use USD budget
+		currency := e.costState.Currency
+		if currency == "CNY" && budgetCNY > 0 {
+			if exceeded, _ := CheckBudgetExceeded(e.costState, budgetCNY, "CNY"); exceeded {
+				if e.streamCfg.Enabled {
+					msg := StreamMessage{
+						Type:      "result",
+						SessionID: sessionID,
+						Model:     e.model,
+						Usage: &Usage{
+							InputTokens:              0,
+							OutputTokens:             0,
+							CacheReadInputTokens:     0,
+							CacheCreationInputTokens: 0,
+							TotalCostUSD:             e.costState.TotalCostUSD,
+							TotalCostCNY:             e.costState.TotalCostCNY,
+						},
+						IsError: true,
+					}
+					data, _ := json.Marshal(msg)
+					fmt.Fprintln(os.Stdout, string(data))
+				}
+				return "", fmt.Errorf("budget exceeded: %.4f CNY > %.4f CNY limit", e.costState.TotalCostCNY, budgetCNY)
+			}
+		} else if budgetUSD > 0 {
+			if exceeded, _ := CheckBudgetExceeded(e.costState, budgetUSD, "USD"); exceeded {
 				if e.streamCfg.Enabled {
 					msg := StreamMessage{
 						Type:      "result",
@@ -531,18 +556,22 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				messages = append(messages, userMsg)
 				// end_turn means the model is done - output final result
 				if e.streamCfg.Enabled {
+					usage := &Usage{
+						InputTokens:              resp.Usage.InputTokens,
+						OutputTokens:             resp.Usage.OutputTokens,
+						CacheReadInputTokens:     resp.Usage.CacheReadInputTokens,
+						CacheCreationInputTokens: resp.Usage.CacheCreationInputTokens,
+						TotalCostUSD:             e.costState.TotalCostUSD,
+					}
+					if e.costState.Currency == "CNY" {
+						usage.TotalCostCNY = e.costState.TotalCostCNY
+					}
 					msg := StreamMessage{
 						Type:      "result",
 						Result:    textOutput.String(),
 						SessionID: sessionID,
 						Model:     resp.Model,
-						Usage: &Usage{
-							InputTokens:              resp.Usage.InputTokens,
-							OutputTokens:             resp.Usage.OutputTokens,
-							CacheReadInputTokens:     resp.Usage.CacheReadInputTokens,
-							CacheCreationInputTokens: resp.Usage.CacheCreationInputTokens,
-							TotalCostUSD:             e.costState.TotalCostUSD,
-						},
+						Usage:     usage,
 					}
 					data, _ := json.Marshal(msg)
 					fmt.Fprintln(os.Stdout, string(data))
@@ -553,18 +582,22 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			}
 			// Output final result
 			if e.streamCfg.Enabled {
+				usage := &Usage{
+					InputTokens:              resp.Usage.InputTokens,
+					OutputTokens:             resp.Usage.OutputTokens,
+					CacheReadInputTokens:     resp.Usage.CacheReadInputTokens,
+					CacheCreationInputTokens: resp.Usage.CacheCreationInputTokens,
+					TotalCostUSD:             e.costState.TotalCostUSD,
+				}
+				if e.costState.Currency == "CNY" {
+					usage.TotalCostCNY = e.costState.TotalCostCNY
+				}
 				msg := StreamMessage{
 					Type:      "result",
 					Result:    textOutput.String(),
 					SessionID: sessionID,
 					Model:     resp.Model,
-					Usage: &Usage{
-						InputTokens:              resp.Usage.InputTokens,
-						OutputTokens:             resp.Usage.OutputTokens,
-						CacheReadInputTokens:     resp.Usage.CacheReadInputTokens,
-						CacheCreationInputTokens: resp.Usage.CacheCreationInputTokens,
-						TotalCostUSD:             e.costState.TotalCostUSD,
-					},
+					Usage:     usage,
 				}
 				data, _ := json.Marshal(msg)
 				fmt.Fprintln(os.Stdout, string(data))
@@ -596,18 +629,22 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 
 		case api.StopReasonStopSeq:
 			if e.streamCfg.Enabled {
+				usage := &Usage{
+					InputTokens:              resp.Usage.InputTokens,
+					OutputTokens:             resp.Usage.OutputTokens,
+					CacheReadInputTokens:     resp.Usage.CacheReadInputTokens,
+					CacheCreationInputTokens: resp.Usage.CacheCreationInputTokens,
+					TotalCostUSD:             e.costState.TotalCostUSD,
+				}
+				if e.costState.Currency == "CNY" {
+					usage.TotalCostCNY = e.costState.TotalCostCNY
+				}
 				msg := StreamMessage{
 					Type:      "result",
 					Result:    textOutput.String(),
 					SessionID: sessionID,
 					Model:     resp.Model,
-					Usage: &Usage{
-						InputTokens:              resp.Usage.InputTokens,
-						OutputTokens:             resp.Usage.OutputTokens,
-						CacheReadInputTokens:     resp.Usage.CacheReadInputTokens,
-						CacheCreationInputTokens: resp.Usage.CacheCreationInputTokens,
-						TotalCostUSD:             e.costState.TotalCostUSD,
-					},
+					Usage:     usage,
 				}
 				data, _ := json.Marshal(msg)
 				fmt.Fprintln(os.Stdout, string(data))

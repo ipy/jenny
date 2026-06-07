@@ -116,6 +116,7 @@ type StreamConfig struct {
 	HistoryMessages      []api.Message               // Messages loaded from transcript for resume
 	IsResume             bool                        // True when resuming an existing session (skip duplicate user message persistence)
 	MaxBudgetUSD         float64                     // Budget limit in USD (0 = no limit)
+	MaxBudgetCNY         float64                     // Budget limit in CNY (0 = no limit)
 	MaxTurns             int                         // Maximum turns (0 = unlimited)
 	MCPConfig            map[string]mcp.MCPServerDef // Loaded MCP server configurations
 	CustomSystemPrompt   string                      // Custom system prompt; replaces defaults when set
@@ -334,6 +335,7 @@ type Usage struct {
 	CacheReadInputTokens     int     `json:"cache_read_input_tokens,omitempty"`
 	CacheCreationInputTokens int     `json:"cache_creation_input_tokens,omitempty"`
 	TotalCostUSD             float64 `json:"total_cost_usd,omitempty"`
+	TotalCostCNY             float64 `json:"total_cost_cny,omitempty"`
 }
 
 // RunStream executes the agent loop with streaming JSON output.
