@@ -489,17 +489,32 @@ func (c *Client) SendMessageStream(
 		acc := newStreamAccumulator()
 		hasMessageStart := false
 		hasMessageStop := false
+		// Buffer blocks to avoid leaking partial content when fallback is triggered
+		var pendingBlocks []StreamContentBlock
 
 		// Process stream events using iterator pattern
 		// Use idle timeout check on each iteration
 		lastEventTime := time.Now()
 
 		for stream.Next() {
-			// Check idle timeout
+			// Check idle timeout - trigger fallback instead of just returning
 			if time.Since(lastEventTime) > idleTimeout {
-				log.Warn("Idle timeout reached, cancelling stream")
+				log.Warn("Idle timeout reached, triggering fallback")
 				cancel()
 				result.Error = "idle timeout"
+				if onStreamingFallback != nil {
+					fallbackCtx, fallbackCancel := context.WithTimeout(context.Background(), fallbackTimeout)
+					defer fallbackCancel()
+					resp, err := onStreamingFallback(fallbackCtx)
+					if err != nil {
+						result.Error = err.Error()
+						return
+					}
+					result.Blocks = resp.Content
+					result.StopReason = resp.StopReason
+					result.Usage = resp.Usage
+					return
+				}
 				return
 			}
 			lastEventTime = time.Now()
@@ -534,12 +549,13 @@ func (c *Client) SendMessageStream(
 			case anthropic.ContentBlockDeltaEvent:
 				index := int(e.Index)
 				delta := e.Delta
-				if delta.Text != "" {
+				// Only append text for text blocks; tool_use blocks should use PartialJSON
+				if delta.Text != "" && acc.blocks[index].Type == "text" {
 					acc.appendText(index, delta.Text)
-				} else if delta.PartialJSON != "" {
-					// For partial JSON tool input, accumulate in toolInputJSON map
+				}
+				// Always process partial JSON for tool input accumulation
+				if delta.PartialJSON != "" {
 					acc.appendToolInputJSON(index, delta.PartialJSON)
-					// Parse accumulated JSON into ToolInput so it's available during streaming
 					acc.finalizeToolInput(index)
 				}
 				log.Debug("Stream: content_block_delta", "index", index, "text", delta.Text)
@@ -549,9 +565,9 @@ func (c *Client) SendMessageStream(
 				log.Debug("Stream: content_block_stop", "index", index)
 				// Parse accumulated tool input JSON into ToolInput
 				acc.finalizeToolInput(index)
-				// Yield the completed block
+				// Buffer block instead of sending immediately to avoid leaking partial content on fallback
 				acc.ensureBlock(index)
-				blocksChan <- StreamContentBlock{Index: index, Block: acc.blocks[index]}
+				pendingBlocks = append(pendingBlocks, StreamContentBlock{Index: index, Block: acc.blocks[index]})
 
 			case anthropic.MessageDeltaEvent:
 				if e.Usage.InputTokens > 0 {
@@ -560,8 +576,8 @@ func (c *Client) SendMessageStream(
 						OutputTokens: int(e.Usage.OutputTokens),
 					})
 				}
-				if e.Delta.StopDetails.Type != "" {
-					acc.setStopReason(StopReason(e.Delta.StopDetails.Type))
+				if e.Delta.StopReason != "" {
+					acc.setStopReason(StopReason(e.Delta.StopReason))
 				}
 				log.Debug("Stream: message_delta")
 
@@ -581,6 +597,7 @@ func (c *Client) SendMessageStream(
 		shouldFallback := !hasMessageStart || !hasMessageStop || result.Error != ""
 		if shouldFallback {
 			log.Warn("Stream incomplete, triggering fallback", "hasMessageStart", hasMessageStart, "hasMessageStop", hasMessageStop, "error", result.Error)
+			// Discard pending blocks - they will not be sent to channel
 			if onStreamingFallback != nil {
 				cancel()
 				// Create a new context with fallback timeout since the original ctx is cancelled
@@ -599,7 +616,10 @@ func (c *Client) SendMessageStream(
 			}
 		}
 
-		// Stream completed successfully
+		// Stream completed successfully - send buffered blocks to channel
+		for _, block := range pendingBlocks {
+			blocksChan <- block
+		}
 		result.Blocks = acc.getBlocks()
 		result.StopReason = acc.stopReason
 		result.Usage = acc.usage
