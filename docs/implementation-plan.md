@@ -153,7 +153,7 @@ Implement in this order:
 
 7. - [x] Read — partial — [`read.md`](./read.md)
 8. - [x] Glob — [`glob.md`](./glob.md)
-9. - [ ] Grep — [`grep.md`](./grep.md) _(host ripgrep first; sandboxed path in P2)_
+9. - [x] Grep — [`grep.md`](./grep.md) _(host ripgrep first; sandboxed path in P2)_
 10. - [ ] Dangerous command gate — [`dangerous-command-gate.md`](./dangerous-command-gate.md)
 11. - [ ] Bash (full) — [`bash.md`](./bash.md) _(includes former read-only baseline — partial)_
     - Classifier + sandbox; output spill; sed simulation; `run_in_background`

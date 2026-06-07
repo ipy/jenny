@@ -19,8 +19,8 @@ func (t *mockTool) Execute(map[string]any, string) (*ToolResult, error) {
 func TestRegistry_WithBaseTools(t *testing.T) {
 	tools := NewRegistry().WithBaseTools().Build()
 
-	if len(tools) != 2 {
-		t.Errorf("expected 2 base tools, got %d", len(tools))
+	if len(tools) != 4 {
+		t.Errorf("expected 4 base tools, got %d", len(tools))
 	}
 
 	names := make(map[string]bool)
@@ -34,6 +34,12 @@ func TestRegistry_WithBaseTools(t *testing.T) {
 	if !names["bash"] {
 		t.Error("expected 'bash' tool")
 	}
+	if !names["Glob"] {
+		t.Error("expected 'Glob' tool")
+	}
+	if !names["Grep"] {
+		t.Error("expected 'Grep' tool")
+	}
 }
 
 func TestRegistry_WithDenyRules(t *testing.T) {
@@ -42,12 +48,17 @@ func TestRegistry_WithDenyRules(t *testing.T) {
 		WithDenyRules([]string{"read"}).
 		Build()
 
-	if len(tools) != 1 {
-		t.Errorf("expected 1 tool after denying 'read', got %d", len(tools))
+	if len(tools) != 3 {
+		t.Errorf("expected 3 tools after denying 'read', got %d", len(tools))
 	}
 
-	if len(tools) > 0 && tools[0].Name() != "bash" {
-		t.Errorf("expected remaining tool to be 'bash', got %q", tools[0].Name())
+	// Should have bash, Glob, Grep remaining
+	names := make(map[string]bool)
+	for _, t := range tools {
+		names[t.Name()] = true
+	}
+	if names["read"] {
+		t.Error("'read' should have been denied")
 	}
 }
 
@@ -58,8 +69,8 @@ func TestRegistry_DenyRules_NonExistent(t *testing.T) {
 		Build()
 
 	// Denying a non-existent tool should be a no-op
-	if len(tools) != 2 {
-		t.Errorf("expected 2 tools when denying non-existent, got %d", len(tools))
+	if len(tools) != 4 {
+		t.Errorf("expected 4 tools when denying non-existent, got %d", len(tools))
 	}
 }
 
@@ -74,8 +85,8 @@ func TestRegistry_WithMCPTools(t *testing.T) {
 		WithMCPTools(mcpTools).
 		Build()
 
-	if len(tools) != 4 {
-		t.Errorf("expected 4 tools (2 base + 2 MCP), got %d", len(tools))
+	if len(tools) != 6 {
+		t.Errorf("expected 6 tools (4 base + 2 MCP), got %d", len(tools))
 	}
 
 	// Base tools should come first
@@ -85,13 +96,19 @@ func TestRegistry_WithMCPTools(t *testing.T) {
 	if tools[1].Name() != "bash" {
 		t.Errorf("expected second tool to be 'bash', got %q", tools[1].Name())
 	}
+	if tools[2].Name() != "Glob" {
+		t.Errorf("expected third tool to be 'Glob', got %q", tools[2].Name())
+	}
+	if tools[3].Name() != "Grep" {
+		t.Errorf("expected fourth tool to be 'Grep', got %q", tools[3].Name())
+	}
 
 	// MCP tools should come after
-	if tools[2].Name() != "mcp__server__tool1" {
-		t.Errorf("expected third tool to be 'mcp__server__tool1', got %q", tools[2].Name())
+	if tools[4].Name() != "mcp__server__tool1" {
+		t.Errorf("expected fifth tool to be 'mcp__server__tool1', got %q", tools[4].Name())
 	}
-	if tools[3].Name() != "mcp__server__tool2" {
-		t.Errorf("expected fourth tool to be 'mcp__server__tool2', got %q", tools[3].Name())
+	if tools[5].Name() != "mcp__server__tool2" {
+		t.Errorf("expected sixth tool to be 'mcp__server__tool2', got %q", tools[5].Name())
 	}
 }
 
@@ -106,8 +123,8 @@ func TestRegistry_BuiltInWins(t *testing.T) {
 		WithMCPTools(mcpTools).
 		Build()
 
-	if len(tools) != 2 {
-		t.Errorf("expected 2 tools (built-in takes precedence), got %d", len(tools))
+	if len(tools) != 4 {
+		t.Errorf("expected 4 tools (built-in takes precedence), got %d", len(tools))
 	}
 
 	// First tool should still be the built-in read
@@ -122,12 +139,17 @@ func TestRegistry_WithEnabled(t *testing.T) {
 		WithEnabled("bash", false).
 		Build()
 
-	if len(tools) != 1 {
-		t.Errorf("expected 1 tool after disabling 'bash', got %d", len(tools))
+	if len(tools) != 3 {
+		t.Errorf("expected 3 tools after disabling 'bash', got %d", len(tools))
 	}
 
-	if len(tools) > 0 && tools[0].Name() != "read" {
-		t.Errorf("expected remaining tool to be 'read', got %q", tools[0].Name())
+	// Should have read, Glob, Grep remaining
+	names := make(map[string]bool)
+	for _, t := range tools {
+		names[t.Name()] = true
+	}
+	if names["bash"] {
+		t.Error("'bash' should have been disabled")
 	}
 }
 
@@ -137,8 +159,8 @@ func TestRegistry_WithEnabled_NotDisabled(t *testing.T) {
 		WithEnabled("bash", true). // Explicitly enabled (default anyway)
 		Build()
 
-	if len(tools) != 2 {
-		t.Errorf("expected 2 tools, got %d", len(tools))
+	if len(tools) != 4 {
+		t.Errorf("expected 4 tools, got %d", len(tools))
 	}
 }
 
@@ -148,8 +170,8 @@ func TestRegistry_EmptyDenyList(t *testing.T) {
 		WithDenyRules([]string{}).
 		Build()
 
-	if len(tools) != 2 {
-		t.Errorf("expected 2 tools with empty deny list, got %d", len(tools))
+	if len(tools) != 4 {
+		t.Errorf("expected 4 tools with empty deny list, got %d", len(tools))
 	}
 }
 
@@ -187,8 +209,8 @@ func TestRegistry_DenyMCPTool(t *testing.T) {
 		WithDenyRules([]string{"mcp__server__tool1"}).
 		Build()
 
-	if len(tools) != 3 {
-		t.Errorf("expected 3 tools (2 base + 1 MCP), got %d", len(tools))
+	if len(tools) != 5 {
+		t.Errorf("expected 5 tools (4 base + 1 MCP), got %d", len(tools))
 	}
 }
 
@@ -205,11 +227,11 @@ func TestRegistry_CombinedFilters(t *testing.T) {
 		WithEnabled("bash", false).
 		Build()
 
-	if len(tools) != 2 {
-		t.Errorf("expected 2 tools, got %d", len(tools))
+	if len(tools) != 4 {
+		t.Errorf("expected 4 tools (Glob, Grep + 2 MCP), got %d", len(tools))
 	}
 
-	// Should only have bash and one MCP tool
+	// Should have Glob, Grep, and2 MCP tools
 	names := make(map[string]bool)
 	for _, t := range tools {
 		names[t.Name()] = true
@@ -220,5 +242,11 @@ func TestRegistry_CombinedFilters(t *testing.T) {
 	}
 	if names["bash"] {
 		t.Error("'bash' should have been disabled")
+	}
+	if !names["Glob"] {
+		t.Error("'Glob' should be present")
+	}
+	if !names["Grep"] {
+		t.Error("'Grep' should be present")
 	}
 }

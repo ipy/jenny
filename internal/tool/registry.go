@@ -17,11 +17,13 @@ func NewRegistry() *Registry {
 	}
 }
 
-// WithBaseTools registers the canonical base tools (Read, Bash).
+// WithBaseTools registers the canonical base tools (Read, Bash, Glob, Grep).
 func (r *Registry) WithBaseTools() *Registry {
 	r.baseTools = []Tool{
 		NewReadTool(),
 		NewBashTool(),
+		NewGlobTool(),
+		NewGrepTool(),
 	}
 	return r
 }
