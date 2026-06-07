@@ -157,6 +157,16 @@ type ContentBlock struct {
 	ToolID    string
 	ToolName  string
 	ToolInput map[string]any
+
+	// WebSearchResult holds web_search_tool_result data when Type is "web_search_tool_result".
+	WebSearchResult *WebSearchResultData
+}
+
+// WebSearchResultData holds web search result information including error codes.
+type WebSearchResultData struct {
+	ToolUseID string
+	IsError   bool
+	ErrorCode string // e.g., "invalid_tool_input", "max_uses_exceeded"
 }
 
 // Usage represents token usage information.
@@ -322,6 +332,22 @@ func (c *Client) doSendMessage(ctx context.Context, messages []Message, tools []
 				ToolID:    block.ID,
 				ToolName:  block.Name,
 				ToolInput: input,
+			})
+		case "web_search_tool_result":
+			// Process web search results - extract error codes if present
+			webSearchData := &WebSearchResultData{
+				ToolUseID: block.ToolUseID,
+			}
+			// Check if this is an error response - WebSearchToolResultBlockContentUnion
+			// has AsResponseWebSearchToolResultError method that returns the error if present
+			errResult := block.Content.AsResponseWebSearchToolResultError()
+			if errResult.ErrorCode != "" {
+				webSearchData.IsError = true
+				webSearchData.ErrorCode = string(errResult.ErrorCode)
+			}
+			response.Content = append(response.Content, ContentBlock{
+				Type:            "web_search_tool_result",
+				WebSearchResult: webSearchData,
 			})
 		}
 	}

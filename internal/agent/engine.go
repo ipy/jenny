@@ -435,6 +435,16 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					data, _ := json.Marshal(msg)
 					fmt.Fprintln(os.Stdout, string(data))
 				}
+			case "web_search_tool_result":
+				// AC5: Process web search results and surface error codes
+				if block.Block.WebSearchResult != nil && block.Block.WebSearchResult.IsError {
+					// Surface server error code as a tool result
+					toolResults = append(toolResults, api.ToolResult{
+						ToolUseID: block.Block.WebSearchResult.ToolUseID,
+						Content:   fmt.Sprintf("web search error: %s", block.Block.WebSearchResult.ErrorCode),
+						IsError:   true,
+					})
+				}
 			}
 		}
 

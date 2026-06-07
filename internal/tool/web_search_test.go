@@ -215,20 +215,46 @@ func TestWebSearchTool_AC4_SupportedModels(t *testing.T) {
 }
 
 func TestWebSearchTool_AC5_ServerErrorCodes(t *testing.T) {
-	// AC5 is about surfacing server error codes - this is handled by the API
-	// returning error responses. Our tool just needs to not crash when
-	// processing error responses. We can test that Execute handles edge cases.
+	// AC5: Server error codes from the API are surfaced as strings in the tool result text.
+	//
+	// Architecture: WebSearch is a server-side tool. When the API returns
+	// web_search_tool_result blocks with errors, the agent engine (engine.go)
+	// processes them and creates tool_results with the error code surfaced.
+	// Execute() validates inputs locally; API error surfacing happens in the
+	// agent's content block processing loop (engine.go ~line 438).
+	//
+	// Unit test scope: We test that Execute() handles edge cases gracefully
+	// and doesn't crash. Full AC5 testing requires integration testing with
+	// actual API responses containing web_search_tool_result error blocks.
 	tool := NewWebSearchTool("claude-4-sonnet-20250604")
 	ctx := context.Background()
 
-	// Valid query should not return server error content
-	result, err := tool.Execute(ctx, map[string]any{"query": "test search"}, "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	// AC5 unit test: Verify Execute() handles various inputs without crashing
+	tests := []struct {
+		name  string
+		input map[string]any
+	}{
+		{"valid query", map[string]any{"query": "test search"}},
+		{"query with special chars", map[string]any{"query": "test <script>alert('xss')</script>"}},
+		{"empty allowed_domains", map[string]any{"query": "test", "allowed_domains": []any{}}},
+		{"empty blocked_domains", map[string]any{"query": "test", "blocked_domains": []any{}}},
 	}
-	// Should not contain server error codes
-	if strings.Contains(result.Content, "error_code") {
-		t.Errorf("expected no error_code in successful result, got: %s", result.Content)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tool.Execute(ctx, tt.input, "")
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			// Execute() should not crash and should return a valid result
+			if result == nil {
+				t.Fatal("expected non-nil result")
+			}
+			// Successful execution should not contain error_code in content
+			if strings.Contains(result.Content, "error_code") {
+				t.Errorf("expected no error_code in result, got: %s", result.Content)
+			}
+		})
 	}
 }
 
