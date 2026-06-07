@@ -33,6 +33,11 @@ func (t *ReadTool) WithReadFileCache(cache *ReadFileCache) *ReadTool {
 	return t
 }
 
+// GetReadFileCache returns the read cache. Used for testing wiring verification.
+func (t *ReadTool) GetReadFileCache() *ReadFileCache {
+	return t.readCache
+}
+
 // Description returns a description of the tool.
 func (t *ReadTool) Description() string {
 	return "Read the contents of a file. Use this to view files with line numbers for reference."
