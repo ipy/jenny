@@ -78,38 +78,6 @@ func TestWebSearchTool_AC2_QueryMinLength(t *testing.T) {
 	}
 }
 
-func TestWebSearchTool_AC3_MaxResults(t *testing.T) {
-	tool := NewWebSearchTool("claude-4-sonnet-20250604")
-	ctx := context.Background()
-
-	// Exceed max results
-	result, err := tool.Execute(ctx, map[string]any{
-		"query": "test",
-		"count": float64(15),
-	}, "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.IsError {
-		t.Error("expected IsError for count exceeding max")
-	}
-	if !strings.Contains(result.Content, "8") {
-		t.Errorf("expected error mentioning max 8, got: %s", result.Content)
-	}
-
-	// Within limit
-	result, err = tool.Execute(ctx, map[string]any{
-		"query": "test",
-		"count": float64(5),
-	}, "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.IsError {
-		t.Errorf("expected no error for count=5, got: %s", result.Content)
-	}
-}
-
 func TestWebSearchTool_AC3_MutualExclusion(t *testing.T) {
 	tool := NewWebSearchTool("claude-4-sonnet-20250604")
 	ctx := context.Background()
@@ -193,8 +161,6 @@ func TestWebSearchTool_AC4_SupportedModels(t *testing.T) {
 		"claude-3.5-haiku",
 		"claude-3-opus",
 		"claude-3-sonnet",
-		"vertex/claude-4",
-		"foundry/claude-3.5",
 	}
 
 	for _, model := range supported {

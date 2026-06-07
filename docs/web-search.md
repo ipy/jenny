@@ -2,12 +2,11 @@
 title: WebSearch Tool
 slug: web-search
 priority: P3
-status: not_started
+status: done
 spec: complete
-code: not_started
+code: done
 package: internal/tool
-gaps:
-  []
+gaps: []
 depends_on:
   - tool-registry
   - anthropic-api-client

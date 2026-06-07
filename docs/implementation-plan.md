@@ -190,8 +190,8 @@ Implement in this order:
 
 #### Engine
 
-- [ ] Memdir — [`memdir.md`](./memdir.md)
-- [ ] Session memory — [`session-memory.md`](./session-memory.md)
+- [x] Memdir — [`memdir.md`](./memdir.md)
+- [x] Session memory — [`session-memory.md`](./session-memory.md)
 - [x] Memory extraction — [`memory-extraction.md`](./memory-extraction.md)
 - [x] Structured logging — partial — [`structured-logging.md`](./structured-logging.md)
 

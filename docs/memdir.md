@@ -2,12 +2,11 @@
 title: Memdir (Auto-Memory Directory)
 slug: memdir
 priority: P3
-status: not_started
+status: done
 spec: complete
-code: not_started
+code: done
 package: internal/memdir
-gaps:
-  []
+gaps: []
 depends_on:
   - system-prompt
 ---

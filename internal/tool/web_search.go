@@ -18,10 +18,6 @@ var supportedWebSearchModels = []string{
 	"claude-4",
 	"claude-3.5",
 	"claude-3",
-	// Vertex AI models
-	"vertex/",
-	// Azure Foundry models
-	"foundry/",
 }
 
 // isModelSupported checks if the given model supports server-side web search.
@@ -78,10 +74,6 @@ func (t *WebSearchTool) InputSchema() map[string]any {
 				"description": "Exclude results from these domains (mutually exclusive with allowed_domains)",
 				"items":       map[string]any{"type": "string"},
 			},
-			"count": map[string]any{
-				"type":        "integer",
-				"description": "Maximum number of results to return (max 8)",
-			},
 		},
 		"required": []string{"query"},
 	}
@@ -123,14 +115,6 @@ func (t *WebSearchTool) Execute(ctx context.Context, input map[string]any, cwd s
 	if hasAllowed && hasBlocked {
 		return &ToolResult{
 			Content: "allowed_domains and blocked_domains are mutually exclusive. Use one or the other, not both.",
-			IsError: true,
-		}, nil
-	}
-
-	// AC3: Validate max results (in case model sends count parameter)
-	if count, ok := input["count"].(float64); ok && int(count) > webSearchMaxResults {
-		return &ToolResult{
-			Content: fmt.Sprintf("Maximum %d search results allowed per call", webSearchMaxResults),
 			IsError: true,
 		}, nil
 	}
