@@ -2,12 +2,14 @@
 title: Query Engine Lifecycle
 slug: query-engine
 priority: P1
-status: not_started
+status: partial
 spec: complete
-code: not_started
+code: done
 package: internal/agent
 gaps:
-  - Run/RunStream only; no readFileState, maxTurns, maxBudgetUsd, structured output
+  - readFileState round-trip deferred (requires Read tool state cache)
+  - maxBudgetUsd via StreamConfig but not via QueryEngine method
+  - Cross-turn state (permissionDenials, discoveredSkillNames, etc.) deferred
 depends_on:
   - session-persistence
   - agent-loop

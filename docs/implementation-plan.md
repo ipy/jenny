@@ -140,9 +140,10 @@ Implement in this order:
 #### Engine
 
 1. - [ ] Default tool preset / registry — [`tool-registry.md`](./tool-registry.md)
-2. - [ ] QueryEngine lifecycle — [`query-engine.md`](./query-engine.md)
-   - Persist user message to transcript before API loop
-   - Seed `readFileState` from resume; support `maxTurns`, `maxBudgetUsd`
+2. - [x] QueryEngine lifecycle — [`query-engine.md`](./query-engine.md) — partial
+   - Persist user message to transcript before API loop ✓
+   - AC1-AC5: persist-before-API, maxTurns, flush on completion, RunStream refactor, turn counter ✓
+   - **Gap:** readFileState, maxBudgetUsd wired but not via engine
 3. - [ ] Git helpers — [`git-helpers.md`](./git-helpers.md) _(moved from P2)_
 4. - [ ] System prompt assembly — [`system-prompt.md`](./system-prompt.md)
 5. - [ ] Parallel tool execution — [`parallel-tool-execution.md`](./parallel-tool-execution.md) _(after tools below)_

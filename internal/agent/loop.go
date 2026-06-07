@@ -3,12 +3,10 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 
 	"github.com/ipy/jenny/internal/api"
-	"github.com/ipy/jenny/internal/log"
 	"github.com/ipy/jenny/internal/mcp"
 	"github.com/ipy/jenny/internal/session"
 	"github.com/ipy/jenny/internal/tool"
@@ -114,6 +112,7 @@ type StreamConfig struct {
 	HistoryMessages []api.Message               // Messages loaded from transcript for resume
 	IsResume        bool                        // True when resuming an existing session (skip duplicate user message persistence)
 	MaxBudgetUSD    float64                     // Budget limit in USD (0 = no limit)
+	MaxTurns        int                         // Maximum turns (0 = unlimited)
 	MCPConfig       map[string]mcp.MCPServerDef // Loaded MCP server configurations
 }
 
@@ -330,6 +329,7 @@ type Usage struct {
 // RunStream executes the agent loop with streaming JSON output.
 // It outputs NDJSON lines to stdout for each message.
 // Uses SSE streaming for API calls when cfg.Enabled is true.
+// AC4: Refactored to delegate to QueryEngine while preserving all existing behavior.
 func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string, cfg StreamConfig, model string) (string, string, error) {
 	// Use provided session ID or generate a new one
 	sessionID := cfg.SessionID
@@ -339,442 +339,21 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 			return "", "", fmt.Errorf("generating session ID: %v", err)
 		}
 		sessionID = newSessionID
+		cfg.SessionID = sessionID
 	}
 
-	// Create API client with optional model override
-	client, err := api.NewClientWithModel(model)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to create API client: %v", err)
-	}
+	// Create QueryEngine - it handles API client creation, cost state restoration,
+	// tool parameter conversion, and the agent loop lifecycle
+	engine := NewQueryEngine(cfg, tools, model)
 
-	// Initialize cost state (AC2: cost persistence, AC3: resume cost restore)
-	costState := &CostState{}
-	if cfg.IsResume && sessionID != "" {
-		if restored, ok, err := RestoreCostState(sessionID); err == nil && ok {
-			costState = restored
-			log.Debug("Cost state restored", "sessionID", sessionID, "totalCostUSD", costState.TotalCostUSD)
-		}
-	}
+	// AC4: Delegate to QueryEngine.SubmitMessage which handles:
+	// - Persist-before-API ordering (AC1)
+	// - Turn counter management (AC5)
+	// - MaxTurns enforcement (AC2)
+	// - Budget enforcement (AC2)
+	// - Cost accumulation and flush (AC3)
+	// - Stream-json emission, SSE streaming, tool execution
+	result, err := engine.SubmitMessage(ctx, prompt)
 
-	// Get working directory
-	if cwd == "" {
-		cwd, err = os.Getwd()
-		if err != nil {
-			cwd = "/"
-		}
-	}
-
-	// System prompt (sent as top-level parameter, not as a role:system message)
-	systemPrompt := defaultSystemPrompt
-
-	// Initialize messages: use history if resuming, otherwise create new user message
-	var messages []api.Message
-	if len(cfg.HistoryMessages) > 0 {
-		messages = cfg.HistoryMessages
-		// Append the new prompt as a user message
-		messages = append(messages, api.Message{
-			Role:    "user",
-			Content: prompt,
-		})
-		// For resumed sessions, check if the user message is a duplicate of one already in the transcript
-		skipUserPersist := false
-		if cfg.SessionManager != nil && cfg.IsResume {
-			exists, err := cfg.SessionManager.UserMessageExists(sessionID, prompt)
-			if err != nil {
-				return "", "", fmt.Errorf("checking for duplicate user message: %w", err)
-			}
-			skipUserPersist = exists
-		}
-		// Persist user message to transcript unless it's a duplicate
-		if cfg.SessionManager != nil && !skipUserPersist {
-			if err := cfg.SessionManager.AppendEntry(sessionID, session.TranscriptEntry{
-				Type:    "user",
-				Content: prompt,
-			}); err != nil {
-				return "", "", fmt.Errorf("persisting user message to transcript: %w", err)
-			}
-		}
-	} else {
-		messages = []api.Message{
-			{
-				Role:    "user",
-				Content: prompt,
-			},
-		}
-		// Persist initial user message to transcript (only for new sessions)
-		if cfg.SessionManager != nil {
-			if err := cfg.SessionManager.AppendEntry(sessionID, session.TranscriptEntry{
-				Type:    "user",
-				Content: prompt,
-			}); err != nil {
-				return "", "", fmt.Errorf("persisting user message to transcript: %w", err)
-			}
-		}
-	}
-
-	// Convert tools to API format
-	apiTools := make([]ToolParam, 0, len(tools))
-	for _, t := range tools {
-		schema := t.InputSchema()
-		props := make(map[string]any)
-		if p, ok := schema["properties"].(map[string]any); ok {
-			props = p
-		}
-		var required []string
-		if req, ok := schema["required"].([]string); ok {
-			required = req
-		}
-		apiTools = append(apiTools, ToolParam{
-			Name:        t.Name(),
-			Description: t.Description(),
-			InputSchema: ToolInputSchema{
-				Type:       "object",
-				Properties: props,
-				Required:   required,
-			},
-		})
-	}
-
-	// Main agent loop
-	for i := 0; i < MaxIterations; i++ {
-		// AC5: Budget enforcement - check before each API call
-		if cfg.MaxBudgetUSD > 0 {
-			if exceeded, _ := CheckBudgetExceeded(costState, cfg.MaxBudgetUSD); exceeded {
-				// Budget exceeded - output error result and stop
-				if cfg.Enabled {
-					msg := StreamMessage{
-						Type:      "result",
-						SessionID: sessionID,
-						Model:     model,
-						Usage: &Usage{
-							InputTokens:              0,
-							OutputTokens:             0,
-							CacheReadInputTokens:     0,
-							CacheCreationInputTokens: 0,
-							TotalCostUSD:             costState.TotalCostUSD,
-						},
-						IsError: true,
-					}
-					data, _ := json.Marshal(msg)
-					fmt.Fprintln(os.Stdout, string(data))
-				}
-				return "", sessionID, fmt.Errorf("budget exceeded: %.4f USD > %.4f USD limit", costState.TotalCostUSD, cfg.MaxBudgetUSD)
-			}
-		}
-
-		// Emit stream_request_start before each API iteration (AC4)
-		if cfg.Enabled {
-			msg := StreamMessage{
-				Type: "stream_request_start",
-			}
-			data, _ := json.Marshal(msg)
-			fmt.Fprintln(os.Stdout, string(data))
-		}
-
-		// Create fallback function for streaming failures (AC3)
-		fallbackFn := func(fallbackCtx context.Context) (*api.Response, error) {
-			return client.SendMessage(fallbackCtx, messages, apiTools, nil, systemPrompt)
-		}
-
-		// Use streaming API (AC1)
-		blocksChan, streamResult := client.SendMessageStream(
-			ctx,
-			messages,
-			apiTools,
-			nil,
-			systemPrompt,
-			api.DefaultIdleTimeout,
-			api.DefaultFallbackTimeout,
-			fallbackFn,
-		)
-
-		// Process streaming blocks
-		var textOutput string
-		var toolResults []api.ToolResult
-		var toolUseBlocks []api.ToolUseBlock
-
-		// Process blocks as they arrive
-		for block := range blocksChan {
-			switch block.Block.Type {
-			case "text":
-				textOutput += block.Block.Text
-				if cfg.Enabled && cfg.IncludePartial {
-					// Output partial text as we receive it
-					msg := StreamMessage{
-						Type:       "message",
-						Content:    block.Block.Text,
-						SessionID:  sessionID,
-						IsPartial:  true,
-						MessageIdx: i,
-					}
-					data, _ := json.Marshal(msg)
-					fmt.Fprintln(os.Stdout, string(data))
-				}
-			case "tool_use":
-				// Collect tool_use blocks for the assistant message
-				toolUseBlocks = append(toolUseBlocks, api.ToolUseBlock{
-					ID:    block.Block.ToolID,
-					Name:  block.Block.ToolName,
-					Input: block.Block.ToolInput,
-				})
-
-				if cfg.Enabled {
-					// Output tool use event
-					msg := StreamMessage{
-						Type:       "tool_use",
-						SessionID:  sessionID,
-						ToolName:   block.Block.ToolName,
-						ToolInput:  block.Block.ToolInput,
-						MessageIdx: i,
-					}
-					data, _ := json.Marshal(msg)
-					fmt.Fprintln(os.Stdout, string(data))
-				}
-			}
-		}
-
-		// Check if streaming completed with error
-		if streamResult.Error != "" && len(streamResult.Blocks) == 0 {
-			// Save cost state on error before returning
-			costState.LastSessionID = sessionID
-			_ = SaveCostState(costState)
-			return "", sessionID, fmt.Errorf("streaming error: %v", streamResult.Error)
-		}
-
-		// Use results from streaming (or fallback)
-		resp := &api.Response{
-			Content:    streamResult.Blocks,
-			StopReason: streamResult.StopReason,
-			Usage:      streamResult.Usage,
-			Model:      streamResult.Model,
-		}
-
-		// AC2: Accumulate cost for this turn
-		if resp.Model != "" {
-			AccumulateUsage(costState, resp.Model, resp.Usage)
-			costState.LastSessionID = sessionID
-		}
-
-		// Build and append assistant message with text and tool_use blocks
-		assistantMsg := api.Message{
-			Role:    "assistant",
-			Content: textOutput,
-		}
-		if len(toolUseBlocks) > 0 {
-			assistantMsg.ToolUse = toolUseBlocks
-		}
-		if textOutput != "" || len(toolUseBlocks) > 0 {
-			messages = append(messages, assistantMsg)
-		}
-
-		// Persist assistant message to transcript BEFORE tool execution (AC3 ordering)
-		if cfg.SessionManager != nil && (textOutput != "" || len(toolUseBlocks) > 0) {
-			entry := session.TranscriptEntry{
-				Type:    "assistant",
-				Content: textOutput,
-			}
-			for _, tu := range toolUseBlocks {
-				entry.ToolUse = append(entry.ToolUse, session.ToolUse{
-					ID:    tu.ID,
-					Name:  tu.Name,
-					Input: tu.Input,
-				})
-			}
-			if err := cfg.SessionManager.AppendEntry(sessionID, entry); err != nil {
-				return "", "", fmt.Errorf("persisting assistant message to transcript: %w", err)
-			}
-		}
-
-		// Now execute all tools and collect results
-		for _, block := range resp.Content {
-			if block.Type != "tool_use" {
-				continue
-			}
-
-			// Find and execute the tool
-			t := tool.FindTool(tools, block.ToolName)
-			var result *tool.ToolResult
-			var errContent string
-
-			if t == nil {
-				errContent = fmt.Sprintf("Error: Unknown tool '%s'", block.ToolName)
-				toolResults = append(toolResults, api.ToolResult{
-					ToolUseID: block.ToolID,
-					Content:   errContent,
-					IsError:   true,
-				})
-			} else {
-				// Execute tool
-				execResult, err := t.Execute(block.ToolInput, cwd)
-				if err != nil {
-					errContent = fmt.Sprintf("Error executing tool: %v", err)
-					toolResults = append(toolResults, api.ToolResult{
-						ToolUseID: block.ToolID,
-						Content:   errContent,
-						IsError:   true,
-					})
-				} else {
-					result = execResult
-					toolResults = append(toolResults, api.ToolResult{
-						ToolUseID: block.ToolID,
-						Content:   result.Content,
-						IsError:   result.IsError,
-					})
-				}
-			}
-
-			// Persist tool result to transcript AFTER assistant message (AC3 ordering)
-			entryContent := errContent
-			isError := true
-			if result != nil {
-				entryContent = result.Content
-				isError = result.IsError
-			}
-			if cfg.SessionManager != nil {
-				if err := cfg.SessionManager.AppendEntry(sessionID, session.TranscriptEntry{
-					Type:    "tool_result",
-					ToolID:  block.ToolID,
-					Content: entryContent,
-					IsError: isError,
-				}); err != nil {
-					return "", "", fmt.Errorf("persisting tool result to transcript: %w", err)
-				}
-			}
-
-			if cfg.Enabled {
-				// Output tool result event
-				msg := StreamMessage{
-					Type:       "tool_result",
-					SessionID:  sessionID,
-					Content:    entryContent,
-					IsError:    isError,
-					MessageIdx: i,
-				}
-				data, _ := json.Marshal(msg)
-				fmt.Fprintln(os.Stdout, string(data))
-			}
-		}
-
-		// Handle stop reason
-		switch resp.StopReason {
-		case api.StopReasonEndTurn:
-			if len(toolResults) > 0 {
-				// Send tool results back to model before ending
-				userMsg := api.Message{
-					Role:        "user",
-					ToolResults: make([]api.ToolResultBlock, 0, len(toolResults)),
-				}
-				for _, tr := range toolResults {
-					userMsg.ToolResults = append(userMsg.ToolResults, api.ToolResultBlock{
-						ToolUseID: tr.ToolUseID,
-						Content:   tr.Content,
-					})
-				}
-				messages = append(messages, userMsg)
-				// end_turn means the model is done - output final result
-				if cfg.Enabled {
-					msg := StreamMessage{
-						Type:      "result",
-						Result:    textOutput,
-						SessionID: sessionID,
-						Model:     resp.Model,
-						Usage: &Usage{
-							InputTokens:              resp.Usage.InputTokens,
-							OutputTokens:             resp.Usage.OutputTokens,
-							CacheReadInputTokens:     resp.Usage.CacheReadInputTokens,
-							CacheCreationInputTokens: resp.Usage.CacheCreationInputTokens,
-							TotalCostUSD:             costState.TotalCostUSD,
-						},
-					}
-					data, _ := json.Marshal(msg)
-					fmt.Fprintln(os.Stdout, string(data))
-				}
-				// AC2: Save cost state before returning
-				costState.LastSessionID = sessionID
-				_ = SaveCostState(costState)
-				return textOutput, sessionID, nil
-			}
-			// Output final result
-			if cfg.Enabled {
-				msg := StreamMessage{
-					Type:      "result",
-					Result:    textOutput,
-					SessionID: sessionID,
-					Model:     resp.Model,
-					Usage: &Usage{
-						InputTokens:              resp.Usage.InputTokens,
-						OutputTokens:             resp.Usage.OutputTokens,
-						CacheReadInputTokens:     resp.Usage.CacheReadInputTokens,
-						CacheCreationInputTokens: resp.Usage.CacheCreationInputTokens,
-						TotalCostUSD:             costState.TotalCostUSD,
-					},
-				}
-				data, _ := json.Marshal(msg)
-				fmt.Fprintln(os.Stdout, string(data))
-			}
-			// AC2: Save cost state before returning
-			costState.LastSessionID = sessionID
-			_ = SaveCostState(costState)
-			return textOutput, sessionID, nil
-
-		case api.StopReasonToolUse:
-			// Continue the loop to let the model process tool results
-			if len(toolResults) > 0 {
-				userMsg := api.Message{
-					Role:        "user",
-					ToolResults: make([]api.ToolResultBlock, 0, len(toolResults)),
-				}
-				for _, tr := range toolResults {
-					userMsg.ToolResults = append(userMsg.ToolResults, api.ToolResultBlock{
-						ToolUseID: tr.ToolUseID,
-						Content:   tr.Content,
-					})
-				}
-				messages = append(messages, userMsg)
-			}
-			continue
-
-		case api.StopReasonMaxTokens:
-			// Save cost state on error before returning
-			costState.LastSessionID = sessionID
-			_ = SaveCostState(costState)
-			return textOutput, sessionID, fmt.Errorf("max tokens reached")
-
-		case api.StopReasonStopSeq:
-			if cfg.Enabled {
-				msg := StreamMessage{
-					Type:      "result",
-					Result:    textOutput,
-					SessionID: sessionID,
-					Model:     resp.Model,
-					Usage: &Usage{
-						InputTokens:              resp.Usage.InputTokens,
-						OutputTokens:             resp.Usage.OutputTokens,
-						CacheReadInputTokens:     resp.Usage.CacheReadInputTokens,
-						CacheCreationInputTokens: resp.Usage.CacheCreationInputTokens,
-						TotalCostUSD:             costState.TotalCostUSD,
-					},
-				}
-				data, _ := json.Marshal(msg)
-				fmt.Fprintln(os.Stdout, string(data))
-			}
-			// AC2: Save cost state before returning
-			costState.LastSessionID = sessionID
-			_ = SaveCostState(costState)
-			return textOutput, sessionID, nil
-		}
-
-		// If we get here without text output and without tool results, something is wrong
-		if textOutput == "" && len(toolResults) == 0 && len(toolUseBlocks) == 0 {
-			// Save cost state on error before returning
-			costState.LastSessionID = sessionID
-			_ = SaveCostState(costState)
-			return "", sessionID, fmt.Errorf("unexpected empty response")
-		}
-	}
-
-	// Save cost state before returning on max iterations
-	costState.LastSessionID = sessionID
-	_ = SaveCostState(costState)
-	return "", sessionID, fmt.Errorf("max iterations (%d) exceeded", MaxIterations)
+	return result, sessionID, err
 }
