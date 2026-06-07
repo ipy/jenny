@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ipy/jenny/internal/log"
 	"github.com/ipy/jenny/internal/session"
 )
 
@@ -639,24 +640,25 @@ func TestAC5_TurnCounterIsAccurate(t *testing.T) {
 }
 
 // TestAC3_StreamJsonCallsSetOutput verifies that when stream-json mode is
-// enabled (StreamConfig.Enabled = true), log output is redirected to stderr
-// and does not appear on stdout (which is reserved for NDJSON).
+// enabled (StreamConfig.Enabled = true), log.SetOutput(os.Stderr) is called
+// to redirect log output to stderr and prevent it from corrupting NDJSON on stdout.
 func TestAC3_StreamJsonCallsSetOutput(t *testing.T) {
 	// This test verifies that when stream-json mode is active, log output
-	// goes to stderr rather than stdout. This prevents debug/info logs
-	// from corrupting the NDJSON stream on stdout.
+	// is redirected to stderr. This prevents debug/info logs from corrupting
+	// the NDJSON stream on stdout.
 	//
-	// The redirection happens in runLoop at engine.go:186-188:
+	// The redirection happens in runLoop at engine.go:213-215:
 	//   if e.streamCfg.Enabled {
 	//       log.SetOutput(os.Stderr)
 	//   }
 	//
 	// We verify this by:
-	// 1. Saving original stderr and capturing it via pipe
-	// 2. Temporarily setting log output to a bytes.Buffer
-	// 3. Running SubmitMessage with stream-json enabled
-	// 4. Restoring original stderr and checking if log output was redirected to it
-	// 5. Verifying no log output appears on stdout
+	// 1. Setting log output to a capture buffer BEFORE running SubmitMessage
+	// 2. Running SubmitMessage with stream-json enabled
+	// 3. After SubmitMessage completes, checking if the capture buffer received any logs
+	//    - If log.SetOutput(os.Stderr) was called, logs go to stderr (not to capture buffer)
+	//    - If log.SetOutput was NOT called, logs go to the capture buffer (empty = redirect worked)
+	// 4. Also verifying no log output appears on stdout
 
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
@@ -683,23 +685,26 @@ func TestAC3_StreamJsonCallsSetOutput(t *testing.T) {
 		os.Setenv("ANTHROPIC_API_KEY", origAPIKey)
 	}()
 
-	// Save original stdout and stderr
+	// Save original stdout
 	oldStdout := os.Stdout
-	oldStderr := os.Stderr
 
-	// Create pipes to capture stdout and stderr
+	// Create pipe to capture stdout
 	stdoutR, stdoutW, err := os.Pipe()
 	if err != nil {
 		t.Fatalf("os.Pipe() error: %v", err)
 	}
-	stderrR, stderrW, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe() error: %v", err)
-	}
 
-	// Redirect stdout and stderr to our pipes
+	// Redirect stdout to our pipe
 	os.Stdout = stdoutW
-	os.Stderr = stderrW
+
+	// Create a buffer to capture log output
+	// If log.SetOutput(os.Stderr) is called, logs go to stderr (captured separately), not here
+	// If log.SetOutput is NOT called, logs go here (proving redirect didn't happen)
+	logCapture := &bytes.Buffer{}
+
+	// Set log output to capture buffer BEFORE running SubmitMessage
+	// This allows us to verify if log.SetOutput(os.Stderr) was actually called
+	log.SetOutput(logCapture)
 
 	cfg := StreamConfig{
 		Enabled:        true, // Stream-json mode enabled - should trigger log.SetOutput(os.Stderr)
@@ -714,13 +719,11 @@ func TestAC3_StreamJsonCallsSetOutput(t *testing.T) {
 
 	_, err = engine.SubmitMessage(ctx, "test")
 
-	// Close write ends to signal EOF on read ends
+	// Close write end to signal EOF on read end
 	stdoutW.Close()
-	stderrW.Close()
 
-	// Restore original stdout and stderr BEFORE checking log output
+	// Restore original stdout BEFORE checking log output
 	os.Stdout = oldStdout
-	os.Stderr = oldStderr
 
 	if err != nil {
 		t.Fatalf("SubmitMessage error: %v", err)
@@ -731,29 +734,26 @@ func TestAC3_StreamJsonCallsSetOutput(t *testing.T) {
 	io.Copy(&stdoutBuf, stdoutR)
 	stdoutOutput := stdoutBuf.String()
 
-	// Read captured stderr (should contain log output if SetOutput wasn't called)
-	var stderrBuf bytes.Buffer
-	io.Copy(&stderrBuf, stderrR)
-	stderrOutput := stderrBuf.String()
+	// AC3: Verify log.SetOutput(os.Stderr) was actually called
+	// If the capture buffer is empty, it means logs went elsewhere (stderr) = SetOutput was called
+	// If the capture buffer has content, it means logs were captured here = SetOutput was NOT called
+	if logCapture.Len() > 0 {
+		t.Errorf("AC3 FAIL: log.SetOutput(os.Stderr) was NOT called; found %d bytes in log capture buffer", logCapture.Len())
+		t.Logf("Log output that should have been redirected: %s", logCapture.String())
+	} else {
+		t.Log("AC3 PASS: log.SetOutput(os.Stderr) was called (no logs in capture buffer)")
+	}
 
-	// Verify engine completed successfully with stream-json enabled
-	t.Log("AC3: engine completed with stream-json mode enabled")
-
-	// AC3 verification: When stream-json is enabled, no log output should appear on stdout.
-	// Stdout should only contain NDJSON lines (stream_request_start, result, etc.)
-	// Log lines would contain patterns like "level=INFO", "level=DEBUG", "msg=", etc.
+	// Also verify no log output appears on stdout
 	stdoutLines := strings.Split(strings.TrimSpace(stdoutOutput), "\n")
-	var jsonLines, logLines []string
+	var logLines []string
 	for _, line := range stdoutLines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		// NDJSON lines should be valid JSON starting with {
-		if strings.HasPrefix(line, "{") {
-			jsonLines = append(jsonLines, line)
-		} else if strings.Contains(line, "=") && strings.Contains(line, "msg=") {
-			// This looks like a log line (slog format with = and msg=)
+		// Log lines would contain patterns like "level=INFO", "level=DEBUG", "msg="
+		if strings.Contains(line, "=") && strings.Contains(line, "msg=") {
 			logLines = append(logLines, line)
 		}
 	}
@@ -764,12 +764,9 @@ func TestAC3_StreamJsonCallsSetOutput(t *testing.T) {
 			t.Logf("  stdout log: %s", ll)
 		}
 	} else {
-		t.Log("AC3 PASS: no log output found on stdout (all logs redirected to stderr)")
+		t.Log("AC3 PASS: no log output found on stdout")
 	}
 
-	// Also verify that stderr received some output (logs and/or debug info)
-	// We just verify something came through on stderr as confirmation
-	if len(strings.TrimSpace(stderrOutput)) > 0 {
-		t.Logf("AC3 PASS: stderr received %d bytes of output", len(stderrOutput))
-	}
+	// Reset log output to stderr for subsequent tests
+	log.SetOutput(os.Stderr)
 }
