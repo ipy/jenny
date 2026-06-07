@@ -50,6 +50,9 @@ type Config struct {
 	AllowedDomains []string
 	// DeniedDomains is the list of denied domains (always blocked).
 	DeniedDomains []string
+	// WebFetchAllowedDomains are domains allowed via WebFetch permission rules.
+	// These are merged with AllowedDomains when building the network allow list.
+	WebFetchAllowedDomains []string
 	// Ripgrep is the sandboxed ripgrep configuration.
 	Ripgrep RipgrepConfig
 	// FilesystemAllowedDirs is the list of allowed directory paths.

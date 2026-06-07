@@ -46,6 +46,18 @@ func (m *MacOSSandboxManager) Initialize(ctx context.Context, cfg Config) error 
 		return nil
 	}
 
+	// Validate sandboxed ripgrep binary if configured
+	if cfg.Ripgrep.Command != "" {
+		if err := exec.CommandContext(ctx, "which", cfg.Ripgrep.Command).Run(); err != nil {
+			m.initError = &ErrMissingDependency{
+				Backend:     BackendMacOS,
+				Dependency:  "ripgrep: " + cfg.Ripgrep.Command,
+				InstallHint: "Install ripgrep or configure correct path in sandbox.ripgrep",
+			}
+			return m.initError
+		}
+	}
+
 	m.available = true
 	m.active = cfg.Backend == BackendMacOS
 	return nil
@@ -81,13 +93,29 @@ func (m *MacOSSandboxManager) buildSandboxProfile(cfg Config, _ string) (string,
 	builder.WriteString("(version 1)\n")
 	builder.WriteString("(allow default)\n")
 
+	// Build merged allowed domains list for Normal mode
+	// Merge AllowedDomains + WebFetchAllowedDomains
+	allowedDomains := make([]string, 0, len(cfg.AllowedDomains)+len(cfg.WebFetchAllowedDomains))
+	allowedDomains = append(allowedDomains, cfg.AllowedDomains...)
+	allowedDomains = append(allowedDomains, cfg.WebFetchAllowedDomains...)
+
 	// Deny network by default unless allowed
 	if cfg.NetworkPolicy == NetworkPolicyManagedDomainsOnly {
 		builder.WriteString("(deny network*)\n")
-		// Allow specific domains
+		// Allow specific domains (only cfg.AllowedDomains, not WebFetchAllowedDomains)
 		for _, domain := range cfg.AllowedDomains {
 			fmt.Fprintf(&builder, "(allow network (remote %s))\n", domain)
 		}
+	} else if len(allowedDomains) > 0 {
+		// Normal mode: allow merged domains
+		for _, domain := range allowedDomains {
+			fmt.Fprintf(&builder, "(allow network (remote %s))\n", domain)
+		}
+	}
+
+	// Denied domains are always blocked regardless of policy mode
+	for _, domain := range cfg.DeniedDomains {
+		fmt.Fprintf(&builder, "(deny network (remote %s))\n", domain)
 	}
 
 	// Filesystem restrictions
@@ -105,7 +133,25 @@ func (m *MacOSSandboxManager) buildSandboxProfile(cfg Config, _ string) (string,
 func (m *MacOSSandboxManager) RefreshConfig(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	// Re-initialize with current config - in production would re-read from settings
+
+	// Re-check sandbox-exec availability
+	if err := exec.CommandContext(ctx, "which", "sandbox-exec").Run(); err != nil {
+		m.available = false
+		return nil
+	}
+
+	// Re-validate ripgrep binary if configured
+	if m.config.Ripgrep.Command != "" {
+		if err := exec.CommandContext(ctx, "which", m.config.Ripgrep.Command).Run(); err != nil {
+			m.available = false
+			return &ErrMissingDependency{
+				Backend:     BackendMacOS,
+				Dependency:  "ripgrep: " + m.config.Ripgrep.Command,
+				InstallHint: "Install ripgrep or configure correct path in sandbox.ripgrep",
+			}
+		}
+	}
+
 	m.available = true
 	m.active = m.config.Backend == BackendMacOS
 	return nil

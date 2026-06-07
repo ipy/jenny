@@ -213,9 +213,6 @@ func TestAC2_IsErrorToolResult(t *testing.T) {
 }
 
 // TestAC2_AllSixDirections verifies all 6 pairing directions work together.
-// NOTE: There is a known bug — the user message is appended to result TWICE
-// when pendingAssistant != nil (lines 273 and 298 in normalize.go). This test
-// validates the pairing logic while documenting the duplication.
 func TestAC2_AllSixDirections(t *testing.T) {
 	messages := []api.Message{
 		// Direction 4 test: leading user message with orphaned tool_results
@@ -248,7 +245,7 @@ func TestAC2_AllSixDirections(t *testing.T) {
 
 	result := ensureToolResultPairing(messages)
 
-	// Collect unique user tool_results by ToolUseID (handle duplication bug)
+	// Collect unique user tool_results by ToolUseID
 	allUserResults := make([]api.ToolResultBlock, 0)
 	for _, msg := range result {
 		if msg.Role == "user" {
@@ -275,25 +272,26 @@ func TestAC2_AllSixDirections(t *testing.T) {
 		t.Log("AC2 dir2 PASS: orphaned tool_result stripped")
 	}
 
-	// Dir3: tool_b should be deduped (count = 1, ignoring duplication bug):
-	// tool_b appears twice per duplicated message copy, so total count is 2x
-	// KNWON BUG: user message duplicated in output
-	if userResultIDs["tool_b"] == 0 {
-		t.Error("AC2 dir3 FAIL: tool_b result missing entirely")
+	// Dir3: tool_b should be deduped (count = 1):
+	if userResultIDs["tool_b"] != 1 {
+		t.Errorf("AC2 dir3 FAIL: expected tool_b count 1, got %d", userResultIDs["tool_b"])
 	} else {
-		t.Logf("AC2 dir3 PASS: tool_b deduped (count=%d, would be 1 without duplication bug)", userResultIDs["tool_b"])
+		t.Log("AC2 dir3 PASS: tool_b deduped (count=1)")
 	}
 
 	// Dir4: leading user tool_results with no matching tool_use should be stripped
 	// The leading user message should not add tool_results
 	t.Log("AC2 dir4 PASS: leading orphaned user tool_result stripped")
 
-	// Verify message structure: there should be at least 1 assistant + 1 user
+	// Verify message structure: there should be exactly 1 user message after the ghost one is handled
 	msgRoles := make([]string, 0)
 	for _, msg := range result {
 		msgRoles = append(msgRoles, msg.Role)
 	}
-	t.Logf("AC2: result message roles: %v (note: duplication bug causes extra copy)", msgRoles)
+	// Expected roles: user (ghost, may be stripped if empty), assistant, user
+	// If ghost is stripped: [assistant user]
+	// If ghost is kept (if it had content): [user assistant user]
+	t.Logf("AC2: result message roles: %v", msgRoles)
 }
 
 // ============================================================

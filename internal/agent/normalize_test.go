@@ -66,9 +66,9 @@ func TestEnsureToolResultPairing_Forward_MissingToolResult(t *testing.T) {
 		},
 	}
 	result := ensureToolResultPairing(messages)
-	// Should have assistant + user with synthetic error (3 messages total)
-	if len(result) != 3 {
-		t.Errorf("expected 3 messages (assistant + user with synthetic error), got %d", len(result))
+	// Should have assistant + user with synthetic error (2 messages total)
+	if len(result) != 2 {
+		t.Errorf("expected 2 messages (assistant + user with synthetic error), got %d", len(result))
 	}
 	// Verify the user message has the synthetic error tool_result
 	userMsgFound := false

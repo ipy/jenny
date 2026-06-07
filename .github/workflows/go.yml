@@ -50,7 +50,7 @@ jobs:
         ANTHROPIC_MODEL: ${{ secrets.ANTHROPIC_MODEL }}
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        ./jenny --dangerously-skip-permissions "You are a release assistant.
+        ./jenny --verbose --dangerously-skip-permissions "You are a release assistant.
         1. Check the latest GitHub release version using 'gh release list'.
         2. Determine the next alpha version number (e.g., if latest is v0.1.0, next could be v0.1.1-alpha.1).
         3. Create a new git tag for this version and push it.

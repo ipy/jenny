@@ -267,13 +267,6 @@ func ensureToolResultPairing(messages []api.Message) []api.Message {
 
 				msg.ToolResults = newToolResults
 
-				// Only add user message if it has content or tool_results
-				hasContent := msg.Content != ""
-				hasToolResults := len(msg.ToolResults) > 0
-				if hasContent || hasToolResults {
-					result = append(result, msg)
-				}
-
 			} else {
 				// Direction 4: Leading orphaned user tool_result - strip
 				// If we see a user message with tool_results but no preceding assistant,
