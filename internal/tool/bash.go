@@ -390,7 +390,8 @@ func parseCdTarget(command string, currentCwd string) string {
 func stripShellOperators(s string) string {
 	// Match any shell operator and everything after it
 	// Operators: &&, ||, ;, |, >, <, &, #
-	shellOpRegex := regexp.MustCompile(`^[\s]*([&\|;<>]|&&|\|\||##).*$`)
+	// Remove ^ anchor to match operators anywhere in the string
+	shellOpRegex := regexp.MustCompile(`\s*(&&|\|\||[&|;<>]).*$`)
 	return shellOpRegex.ReplaceAllString(s, "")
 }
 

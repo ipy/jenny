@@ -179,12 +179,12 @@ func TestBashTool_Timeout(t *testing.T) {
 	tool := NewBashTool(false)
 	cwd := "/tmp"
 
-	// Use sleep 1 with timeout< 1 second to ensure timeout fires before sleep completes.
-	// sleep 1 is allowed in foreground (AC3 exempts sleep < 2), but will be killed
-	// by the timeout before it completes.
+	// Use sleep 1 with timeout 0.5 seconds to ensure context deadline fires
+	// before sleep completes (~500ms deadline vs 1000ms sleep).
+	// sleep 1 is allowed in foreground (AC3 exempts sleep < 2).
 	result, err := tool.Execute(map[string]any{
 		"command": "sleep 1",
-		"timeout": float64(0),
+		"timeout": float64(0.5),
 	}, cwd)
 
 	if err != nil {
