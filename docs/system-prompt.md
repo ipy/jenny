@@ -2,16 +2,12 @@
 title: System Prompt Assembly
 slug: system-prompt
 priority: P1
-status: partial
+status: done
 spec: complete
-code: partial
+code: done
 package: internal/agent
-gaps:
-  - Static one-line default only
-  - No cwd/git/platform sections
-  - No custom replace-default semantics
 depends_on:
-  - git-helpers
+  - git-helpers (done)
   - tool-registry
 ---
 # System Prompt Assembly

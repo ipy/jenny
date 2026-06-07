@@ -104,16 +104,19 @@ func SessionID() (string, error) {
 
 // StreamConfig holds configuration for streaming output.
 type StreamConfig struct {
-	Enabled         bool
-	Verbose         bool
-	IncludePartial  bool
-	SessionID       string
-	SessionManager  *session.Manager
-	HistoryMessages []api.Message               // Messages loaded from transcript for resume
-	IsResume        bool                        // True when resuming an existing session (skip duplicate user message persistence)
-	MaxBudgetUSD    float64                     // Budget limit in USD (0 = no limit)
-	MaxTurns        int                         // Maximum turns (0 = unlimited)
-	MCPConfig       map[string]mcp.MCPServerDef // Loaded MCP server configurations
+	Enabled              bool
+	Verbose              bool
+	IncludePartial       bool
+	SessionID            string
+	SessionManager       *session.Manager
+	HistoryMessages      []api.Message               // Messages loaded from transcript for resume
+	IsResume             bool                        // True when resuming an existing session (skip duplicate user message persistence)
+	MaxBudgetUSD         float64                     // Budget limit in USD (0 = no limit)
+	MaxTurns             int                         // Maximum turns (0 = unlimited)
+	MCPConfig            map[string]mcp.MCPServerDef // Loaded MCP server configurations
+	CustomSystemPrompt   string                      // Custom system prompt; replaces defaults when set
+	AppendSystemPrompt   string                      // Content appended after assembled prompt
+	OverrideSystemPrompt bool                        // When true, suppresses AppendSystemPrompt
 }
 
 // ToolParam represents a tool parameter for the API.

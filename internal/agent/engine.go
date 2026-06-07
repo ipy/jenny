@@ -163,7 +163,7 @@ func (e *QueryEngine) SubmitMessage(ctx context.Context, prompt string) (string,
 // executing tools and accumulating cost, until the model signals
 // end_turn or stop_sequence, or a limit is reached.
 func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, sessionID string) (string, error) {
-	systemPrompt := defaultSystemPrompt
+	systemPrompt := AssembleSystemPrompt(e.streamCfg, e.tools, cwd)
 
 	for i := 0; i < MaxIterations; i++ {
 		e.mu.Lock()

@@ -145,7 +145,7 @@ Implement in this order:
    - AC1-AC5: persist-before-API, maxTurns, flush on completion, RunStream refactor, turn counter ✓
    - **Gap:** readFileState, maxBudgetUsd wired but not via engine
 3. - [ ] Git helpers — [`git-helpers.md`](./git-helpers.md) _(moved from P2)_
-4. - [ ] System prompt assembly — [`system-prompt.md`](./system-prompt.md)
+4. - [x] System prompt assembly — [`system-prompt.md`](./system-prompt.md) — AC1-AC5 implemented
 5. - [ ] Parallel tool execution — [`parallel-tool-execution.md`](./parallel-tool-execution.md) _(after tools below)_
 6. - [ ] Rate limit handling — [`rate-limit-handling.md`](./rate-limit-handling.md)
 

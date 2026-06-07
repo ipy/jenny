@@ -237,6 +237,13 @@ func isShallowClone(rootPath string) (bool, error) {
 	return false, err
 }
 
+// GetRoot returns the repository root path for a given start path.
+// It walks up from startPath looking for .git and returns the repo root.
+// Returns an error if not inside a git repository.
+func GetRoot(startPath string) (string, error) {
+	return findGitRoot(startPath)
+}
+
 // GetBranch returns the current branch name for the repository at rootPath.
 // Returns raw SHA for detached HEAD.
 func GetBranch(rootPath string) (string, error) {
