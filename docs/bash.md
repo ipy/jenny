@@ -2,14 +2,11 @@
 title: Bash Tool
 slug: bash
 priority: P1
-status: partial
+status: done
 spec: complete
-code: partial
+code: done
 package: internal/tool
-gaps:
-  - Read-only prefix allowlist only
-  - No sandbox/classifier/sed simulation
-  - No output spill or run_in_background
+gaps: []
 defer_to: P3
 depends_on:
   - tool-registry

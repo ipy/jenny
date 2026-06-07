@@ -146,7 +146,7 @@ Implement in this order:
    - Persist user message to transcript before API loop ✓
    - AC1-AC5: persist-before-API, maxTurns, flush on completion, RunStream refactor, turn counter ✓
    - **Gap:** readFileState, maxBudgetUsd wired but not via engine
-3. - [ ] Git helpers — [`git-helpers.md`](./git-helpers.md) _(moved from P2)_
+3. - [x] Git helpers — [`git-helpers.md`](./git-helpers.md) _(moved from P2)_
 4. - [x] System prompt assembly — [`system-prompt.md`](./system-prompt.md) — AC1-AC5 implemented
 5. - [x] Parallel tool execution — [`parallel-tool-execution.md`](./parallel-tool-execution.md) _(after tools below)_
 6. - [x] Rate limit handling — [`rate-limit-handling.md`](./rate-limit-handling.md)
@@ -180,7 +180,7 @@ Implement in this order:
 #### Tools
 
 5. - [x] Notebook edit — [`notebook-edit.md`](./notebook-edit.md)
-6. - [ ] ListMcpResources — [`list-mcp-resources.md`](./list-mcp-resources.md)
+6. - [x] ListMcpResources — [`list-mcp-resources.md`](./list-mcp-resources.md)
 7. - [ ] ReadMcpResource — [`read-mcp-resource.md`](./read-mcp-resource.md)
 
 ---
