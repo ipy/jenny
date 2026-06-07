@@ -78,16 +78,16 @@ func (c *Client) SetMaxTokensOverride(maxTokens int) {
 // Internal fields (IsVirtual, ID, Timestamp, Type) are used for transcript
 // management but are stripped during API serialization.
 type Message struct {
-	Role        string
-	Content     string
-	ToolUse     []ToolUseBlock
-	ToolResults []ToolResultBlock
+	Role        string            `json:"role"`
+	Content     string            `json:"content,omitempty"`
+	ToolUse     []ToolUseBlock    `json:"tool_use,omitempty"`
+	ToolResults []ToolResultBlock `json:"tool_results,omitempty"`
 
 	// Internal fields - not serialized to API
-	IsVirtual bool   // True for virtual/synthetic messages
-	ID        string // Internal message ID (UUID)
-	Type      string // Message type (user, assistant, system, progress)
-	Timestamp int64  // Unix timestamp for ordering
+	IsVirtual bool   `json:"-"`
+	ID        string `json:"-"`
+	Type      string `json:"-"`
+	Timestamp int64  `json:"-"`
 }
 
 // IsAPISafe returns true if this message should be sent to the API.
@@ -113,6 +113,7 @@ type ToolUseBlock struct {
 type ToolResultBlock struct {
 	ToolUseID string
 	Content   string
+	IsError   bool `json:"-"` // Error flag - not serialized to API
 }
 
 // ToolUse represents a tool call from the model.
@@ -335,7 +336,8 @@ func wrapSDKError(err error) error {
 	}
 
 	// Use errors.As with SDK's typed error to properly extract status code
-	if apiErr, ok := errors.AsType[*anthropic.Error](err); ok {
+	var apiErr *anthropic.Error
+	if errors.As(err, &apiErr); apiErr != nil {
 		// Extract Retry-After from response headers if present
 		var retryAfter *time.Duration
 		if apiErr.Response != nil {

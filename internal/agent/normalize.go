@@ -2,6 +2,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -9,8 +10,9 @@ import (
 )
 
 // normalizeMessages normalizes messages for API transmission.
-// It follows the 5-step order: internal filter, orphaned thinking filter,
-// trailing thinking strip, whitespace-only filter, non-empty assistant guard, tool pairing.
+// It follows the 6-step order: internal filter, orphaned thinking filter,
+// trailing thinking strip, whitespace-only filter, non-empty assistant guard,
+// tool pairing, and role merging.
 func normalizeMessages(messages []api.Message) []api.Message {
 	if len(messages) == 0 {
 		return messages
@@ -33,6 +35,9 @@ func normalizeMessages(messages []api.Message) []api.Message {
 
 	// Step 5: Tool pairing - enforce tool_use/tool_result pairing
 	messages = ensureToolResultPairing(messages)
+
+	// Step 6: Role merging - merge consecutive same-role messages
+	messages = mergeConsecutiveSameRole(messages)
 
 	return messages
 }
@@ -237,6 +242,12 @@ func ensureToolResultPairing(messages []api.Message) []api.Message {
 						continue // Strip orphaned tool_result
 					}
 
+					// Direction 6: is_error tool_result - ensure inner content is text-only
+					// If this is an error result with structured content, extract text only
+					if tr.IsError {
+						tr.Content = extractTextFromErrorContent(tr.Content)
+					}
+
 					resultToolUseIDs[tr.ToolUseID] = true
 					newToolResults = append(newToolResults, tr)
 				}
@@ -370,23 +381,26 @@ func mergeConsecutiveSameRole(messages []api.Message) []api.Message {
 	return result
 }
 
-// stripInternalFields removes internal metadata from messages before API send.
-// This includes UUIDs, timestamps, isVirtual flags, and non-API tool fields.
-func stripInternalFields(messages []api.Message) []api.Message {
-	var result []api.Message
-	for _, msg := range messages {
-		// Skip virtual messages (internal markers)
-		if msg.Role == "user" || msg.Role == "assistant" {
-			// isVirtual check would require an internal field on Message
-			// For now, we rely on the transcript filtering to exclude these
+// extractTextFromErrorContent extracts plain text from potentially structured error content.
+// If the content is JSON, it extracts the "error" or "message" field.
+// Otherwise, it returns the content as-is.
+func extractTextFromErrorContent(content string) string {
+	// Try to parse as JSON and extract error message
+	if strings.HasPrefix(strings.TrimSpace(content), "{") {
+		var data map[string]any
+		if err := json.Unmarshal([]byte(content), &data); err == nil {
+			// Try common error field names
+			for _, key := range []string{"error", "message", "msg"} {
+				if val, ok := data[key]; ok {
+					if str, ok := val.(string); ok {
+						return str
+					}
+				}
+			}
 		}
-
-		// Strip non-API fields from tool_use blocks (caller is non-API)
-		// The API client only sends ID, Name, Input - no action needed
-
-		result = append(result, msg)
 	}
-	return result
+	// Not JSON or couldn't extract - return original
+	return content
 }
 
 // media error message functions
@@ -469,4 +483,53 @@ func StripMediaErrorFromMessage(msg *api.Message, toolUseID string) {
 		}
 	}
 	msg.ToolResults = newToolResults
+}
+
+// FindLargestMediaToolUseID finds the tool_use_id with the largest content in tool_results.
+// This is used to identify which tool_result likely caused a media error.
+func FindLargestMediaToolUseID(messages []api.Message) string {
+	var largestID string
+	var largestSize int
+
+	// Find the last user message with tool_results
+	for i := len(messages) - 1; i >= 0; i-- {
+		msg := messages[i]
+		if msg.Role == "user" && len(msg.ToolResults) > 0 {
+			for _, tr := range msg.ToolResults {
+				if len(tr.Content) > largestSize {
+					largestSize = len(tr.Content)
+					largestID = tr.ToolUseID
+				}
+			}
+			break // Only consider the most recent user message
+		}
+	}
+
+	return largestID
+}
+
+// HandleMediaErrorOnRetry handles media errors during API calls.
+// It finds and strips the offending tool_result, then returns the modified messages.
+// Returns true if a media error was handled and messages were modified.
+func HandleMediaErrorOnRetry(messages []api.Message, errorMsg string) ([]api.Message, bool) {
+	_, isMedia := mapMediaErrorToUserMessage(errorMsg)
+	if !isMedia {
+		return messages, false
+	}
+
+	// Find the largest tool_result (likely caused the error)
+	toolUseID := FindLargestMediaToolUseID(messages)
+	if toolUseID == "" {
+		return messages, false
+	}
+
+	// Strip the offending tool_result from the last user message
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" {
+			StripMediaErrorFromMessage(&messages[i], toolUseID)
+			break
+		}
+	}
+
+	return messages, true
 }

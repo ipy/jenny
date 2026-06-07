@@ -297,6 +297,12 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 
 		// Check if streaming completed with error
 		if streamResult.Error != "" && len(streamResult.Blocks) == 0 {
+			// AC4: Check if this is a media error - if so, strip the offending tool_result and retry
+			var wasMediaError bool
+			messages, wasMediaError = HandleMediaErrorOnRetry(messages, streamResult.Error)
+			if wasMediaError {
+				continue // Retry with modified messages
+			}
 			return "", fmt.Errorf("streaming error: %v", streamResult.Error)
 		}
 
@@ -407,6 +413,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					userMsg.ToolResults = append(userMsg.ToolResults, api.ToolResultBlock{
 						ToolUseID: tr.ToolUseID,
 						Content:   tr.Content,
+						IsError:   tr.IsError,
 					})
 				}
 				messages = append(messages, userMsg)
@@ -461,6 +468,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					userMsg.ToolResults = append(userMsg.ToolResults, api.ToolResultBlock{
 						ToolUseID: tr.ToolUseID,
 						Content:   tr.Content,
+						IsError:   tr.IsError,
 					})
 				}
 				messages = append(messages, userMsg)
