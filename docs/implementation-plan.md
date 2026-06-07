@@ -147,7 +147,7 @@ Implement in this order:
 3. - [ ] Git helpers — [`git-helpers.md`](./git-helpers.md) _(moved from P2)_
 4. - [x] System prompt assembly — [`system-prompt.md`](./system-prompt.md) — AC1-AC5 implemented
 5. - [x] Parallel tool execution — [`parallel-tool-execution.md`](./parallel-tool-execution.md) _(after tools below)_
-6. - [ ] Rate limit handling — [`rate-limit-handling.md`](./rate-limit-handling.md)
+6. - [x] Rate limit handling — [`rate-limit-handling.md`](./rate-limit-handling.md)
 
 #### Tools
 
@@ -170,7 +170,7 @@ Implement in this order:
 
 #### Engine
 
-1. - [ ] Message normalization — [`message-normalization.md`](./message-normalization.md)
+1. - [x] Message normalization — [`message-normalization.md`](./message-normalization.md) — AC1-AC5 implemented
 2. - [ ] Context compaction — [`context-compaction.md`](./context-compaction.md)
 3. - [ ] Sandbox abstraction — [`sandbox.md`](./sandbox.md)
 4. _(Git helpers — shipped in P1)_

@@ -179,21 +179,8 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 	totalLines := lineNum
 	readLines := len(lines)
 
-	for i, line := range lines {
-		lineStr := strconv.Itoa(offset + i)
-		fmt.Fprintf(&output, "%6s\t%s\n", lineStr, line)
-	}
-
-	// Add summary
-	fmt.Fprintf(&output, "\n[%d lines, started at line %d, total lines in file: %d]",
-	readLines, offset, totalLines)
-
-	result := &ToolResult{
-		Content: output.String(),
-		IsError: false,
-	}
-
 	// Record the read in cache for read-before-write contract
+	// This must happen before early returns for empty/EOF cases
 	if t.readCache != nil {
 		fullContent := ""
 		if isFullRead {
@@ -214,6 +201,42 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 			finalMtime = finalInfo.ModTime()
 		}
 		t.readCache.RecordRead(absFilePath, fullContent, finalMtime, isFullRead)
+	}
+
+	// Handle empty file content - warning, not error
+	if totalLines == 0 {
+		fmt.Fprintf(&output, "[Warning: empty file]\n")
+		result := &ToolResult{
+			Content: output.String(),
+			IsError: false,
+		}
+		return result, nil
+	}
+
+	// Handle reading past EOF - warning with actual line count
+	if offset > totalLines {
+		fmt.Fprintf(&output, "[Warning: offset %d exceeds file line count %d]\n", offset, totalLines)
+		fmt.Fprintf(&output, "\n[%d lines, started at line %d, total lines in file: %d]",
+			readLines, offset, totalLines)
+		result := &ToolResult{
+			Content: output.String(),
+			IsError: false,
+		}
+		return result, nil
+	}
+
+	for i, line := range lines {
+		lineStr := strconv.Itoa(offset + i)
+		fmt.Fprintf(&output, "%6s\t%s\n", lineStr, line)
+	}
+
+	// Add summary
+	fmt.Fprintf(&output, "\n[%d lines, started at line %d, total lines in file: %d]",
+		readLines, offset, totalLines)
+
+	result := &ToolResult{
+		Content: output.String(),
+		IsError: false,
 	}
 
 	return result, nil

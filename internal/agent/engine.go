@@ -230,6 +230,9 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			fmt.Fprintln(os.Stdout, string(data))
 		}
 
+		// Normalize messages before API request (strip internal fields, enforce tool pairing, etc.)
+		messages = normalizeMessages(messages)
+
 		// Create fallback function for streaming failures (AC3)
 		fallbackFn := func(fallbackCtx context.Context) (*api.Response, error) {
 			return e.client.SendMessage(fallbackCtx, messages, e.toolParams, nil, systemPrompt)

@@ -75,11 +75,31 @@ func (c *Client) SetMaxTokensOverride(maxTokens int) {
 }
 
 // Message represents a message in the conversation.
+// Internal fields (IsVirtual, ID, Timestamp, Type) are used for transcript
+// management but are stripped during API serialization.
 type Message struct {
 	Role        string
 	Content     string
 	ToolUse     []ToolUseBlock
 	ToolResults []ToolResultBlock
+
+	// Internal fields - not serialized to API
+	IsVirtual bool   // True for virtual/synthetic messages
+	ID        string // Internal message ID (UUID)
+	Type      string // Message type (user, assistant, system, progress)
+	Timestamp int64  // Unix timestamp for ordering
+}
+
+// IsAPISafe returns true if this message should be sent to the API.
+// Virtual messages and progress messages are not API-safe.
+func (m *Message) IsAPISafe() bool {
+	if m.IsVirtual {
+		return false
+	}
+	if m.Type == "progress" {
+		return false
+	}
+	return true
 }
 
 // ToolUseBlock represents a tool use block in a message.
@@ -315,8 +335,7 @@ func wrapSDKError(err error) error {
 	}
 
 	// Use errors.As with SDK's typed error to properly extract status code
-	var apiErr *anthropic.Error
-	if errors.As(err, &apiErr) {
+	if apiErr, ok := errors.AsType[*anthropic.Error](err); ok {
 		// Extract Retry-After from response headers if present
 		var retryAfter *time.Duration
 		if apiErr.Response != nil {

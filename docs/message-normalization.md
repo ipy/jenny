@@ -2,12 +2,11 @@
 title: Message Normalization
 slug: message-normalization
 priority: P2
-status: not_started
+status: done
 spec: complete
-code: not_started
+code: done
 package: internal/agent
-gaps:
-  - Basic tool_result pairing in loop only; no full normalize pipeline
+gaps: []
 depends_on:
   - anthropic-api-client
 ---
