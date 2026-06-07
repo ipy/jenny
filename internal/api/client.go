@@ -4,7 +4,6 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"time"
 
@@ -22,8 +21,10 @@ const DefaultFallbackTimeout = 5 * time.Minute
 
 // Client wraps the Anthropic SDK client.
 type Client struct {
-	client anthropic.Client
-	model  string
+	client       anthropic.Client
+	model        string
+	retryConfig  RetryConfig
+	isBackground bool
 }
 
 // defaultModel is the default model used when ANTHROPIC_MODEL is not set.
@@ -49,8 +50,9 @@ func NewClientWithModel(model string) (*Client, error) {
 	client := anthropic.NewClient()
 
 	return &Client{
-		client: client,
-		model:  model,
+		client:      client,
+		model:       model,
+		retryConfig: DefaultRetryConfig(),
 	}, nil
 }
 
@@ -138,6 +140,14 @@ type Usage struct {
 
 // SendMessage sends a message to the API and returns the response.
 func (c *Client) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string) (*Response, error) {
+	// Wrap the actual send logic with retry
+	return c.sendWithRetry(ctx, func(ctx context.Context) (*Response, error) {
+		return c.doSendMessage(ctx, messages, tools, toolResults, systemPrompt)
+	}, c.isBackground)
+}
+
+// doSendMessage performs the actual message sending (used by retry logic).
+func (c *Client) doSendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string) (*Response, error) {
 	log.Debug("Sending message", "model", c.model)
 	log.Debug("System prompt", "prompt", systemPrompt)
 	log.Debug("Number of tools", "count", len(tools))
@@ -235,7 +245,9 @@ func (c *Client) SendMessage(ctx context.Context, messages []Message, tools []To
 	// Send request
 	resp, err := c.client.Messages.New(ctx, body)
 	if err != nil {
-		return nil, fmt.Errorf("API error: %v", err)
+		// Wrap SDK errors to extract status code for retry logic
+		wrappedErr := wrapSDKError(err)
+		return nil, wrappedErr
 	}
 
 	// Convert response
@@ -282,6 +294,55 @@ func (c *Client) SendMessage(ctx context.Context, messages []Message, tools []To
 	}
 
 	return response, nil
+}
+
+// wrapSDKError wraps SDK errors to extract HTTP status code for retry logic.
+func wrapSDKError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	// Try to extract status code from error message
+	// The SDK error format is typically: "error: HTTP 429 Too Many Requests"
+	errStr := err.Error()
+
+	// Check for known status codes in error message
+	statusCode := extractStatusCode(errStr)
+	if statusCode > 0 {
+		isPermanent := statusCode >= 400 && statusCode < 500 && statusCode != 429 && statusCode != 408 && statusCode != 409
+		return &RetryableHTTPError{
+			StatusCode:  statusCode,
+			Message:     errStr,
+			IsPermanent: isPermanent,
+		}
+	}
+
+	// For unknown errors, return as-is (will be handled as connection errors if retryable)
+	return err
+}
+
+// extractStatusCode extracts HTTP status code from error string.
+func extractStatusCode(errStr string) int {
+	// Look for "HTTP 429", "HTTP 529", etc.
+	for i := 0; i < len(errStr)-6; i++ {
+		if errStr[i:i+4] == "HTTP" {
+			// Skip space
+			j := i + 4
+			for j < len(errStr) && errStr[j] == ' ' {
+				j++
+			}
+			// Read status code
+			code := 0
+			for j < len(errStr) && errStr[j] >= '0' && errStr[j] <= '9' {
+				code = code*10 + int(errStr[j]-'0')
+				j++
+			}
+			if code > 0 {
+				return code
+			}
+		}
+	}
+	return 0
 }
 
 // streamAccumulator tracks content blocks during streaming.
