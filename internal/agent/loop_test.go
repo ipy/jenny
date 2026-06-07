@@ -31,7 +31,7 @@ func TestToolUseBlockCollection(t *testing.T) {
 
 	// Create mock tools
 	bashTool := tool.NewBashTool(false)
-	readTool := tool.NewReadTool(false)
+	readTool := tool.NewReadTool(false, nil)
 
 	// Verify tools have correct names
 	if bashTool.Name() != "bash" {
@@ -44,7 +44,7 @@ func TestToolUseBlockCollection(t *testing.T) {
 
 func TestFindTool(t *testing.T) {
 	bashTool := tool.NewBashTool(false)
-	readTool := tool.NewReadTool(false)
+	readTool := tool.NewReadTool(false, nil)
 
 	tools := []tool.Tool{bashTool, readTool}
 
@@ -189,7 +189,7 @@ func TestToolInputValidation(t *testing.T) {
 
 func TestReadToolInputValidation(t *testing.T) {
 	// Test that read tool validates inputs correctly
-	readTool := tool.NewReadTool(false)
+	readTool := tool.NewReadTool(false, nil)
 
 	// Test missing file_path
 	result, err := readTool.Execute(map[string]any{}, "/tmp")

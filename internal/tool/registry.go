@@ -9,6 +9,7 @@ type Registry struct {
 	enabled         map[string]bool
 	skipPermissions bool
 	hasBaseTools    bool
+	readCache       *ReadFileCache
 }
 
 // NewRegistry creates a new Registry.
@@ -22,6 +23,12 @@ func NewRegistry() *Registry {
 // WithBaseTools registers the canonical base tools (Read, Bash, Glob, Grep).
 func (r *Registry) WithBaseTools() *Registry {
 	r.hasBaseTools = true
+	return r
+}
+
+// WithReadFileCache enables the read-before-write cache for Read and Write tools.
+func (r *Registry) WithReadFileCache() *Registry {
+	r.readCache = NewReadFileCache()
 	return r
 }
 
@@ -61,10 +68,14 @@ func (r *Registry) Build() []Tool {
 	// Create base tools with skipPermissions if hasBaseTools is set
 	if r.hasBaseTools {
 		r.baseTools = []Tool{
-			NewReadTool(r.skipPermissions),
+			NewReadTool(r.skipPermissions, r.readCache),
 			NewBashTool(r.skipPermissions),
 			NewGlobTool(),
 			NewGrepTool(),
+		}
+		// Add WriteTool if readCache is configured
+		if r.readCache != nil {
+			r.baseTools = append(r.baseTools, NewWriteTool(r.readCache))
 		}
 	}
 

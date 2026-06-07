@@ -13,11 +13,12 @@ import (
 // ReadTool reads files and returns their contents with line numbers.
 type ReadTool struct {
 	skipPermissions bool
+	readCache       *ReadFileCache
 }
 
 // NewReadTool creates a new ReadTool.
-func NewReadTool(skipPermissions bool) *ReadTool {
-	return &ReadTool{skipPermissions: skipPermissions}
+func NewReadTool(skipPermissions bool, readCache *ReadFileCache) *ReadTool {
+	return &ReadTool{skipPermissions: skipPermissions, readCache: readCache}
 }
 
 // Name returns the tool name.
@@ -134,17 +135,23 @@ func (t *ReadTool) Execute(input map[string]any, cwd string) (*ToolResult, error
 
 	// Determine offset and limit
 	offset := 1
+	offsetExplicit := false
 	if offsetVal, ok := input["offset"].(float64); ok {
 		offset = int(offsetVal)
 		if offset < 1 {
 			offset = 1
 		}
+		offsetExplicit = true
 	}
 
 	limit := 0
+	limitExplicit := false
 	if limitVal, ok := input["limit"].(float64); ok {
 		limit = int(limitVal)
+		limitExplicit = true
 	}
+
+	isFullRead := !offsetExplicit && !limitExplicit
 
 	// Read and process the file
 	scanner := bufio.NewScanner(file)
@@ -183,8 +190,21 @@ func (t *ReadTool) Execute(input map[string]any, cwd string) (*ToolResult, error
 	output.WriteString(fmt.Sprintf("\n[%d lines, started at line %d, total lines in file: %d]",
 		readLines, offset, totalLines))
 
-	return &ToolResult{
+	result := &ToolResult{
 		Content: output.String(),
 		IsError: false,
-	}, nil
+	}
+
+	// Record the read in cache for read-before-write contract
+	if t.readCache != nil {
+		fullContent := ""
+		if isFullRead {
+			// Re-read the full file content for the cache
+			fullContentBytes, _ := os.ReadFile(absFilePath)
+			fullContent = string(fullContentBytes)
+		}
+		t.readCache.RecordRead(absFilePath, fullContent, info.ModTime(), isFullRead)
+	}
+
+	return result, nil
 }

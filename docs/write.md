@@ -2,9 +2,9 @@
 title: Write Tool
 slug: write
 priority: P1
-status: not_started
+status: done
 spec: complete
-code: not_started
+code: done
 package: internal/tool
 gaps:
   []
