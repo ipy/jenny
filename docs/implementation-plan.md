@@ -210,7 +210,7 @@ Implement in this order:
 #### Engine
 
 - [x] Subagent types — [`subagent-types.md`](./subagent-types.md)
-- [ ] Task (subagent) — [`task-subagent.md`](./task-subagent.md)
+- [x] Task (subagent) — [`task-subagent.md`](./task-subagent.md)
 - [ ] Agent resume / fork — [`agent-resume-fork.md`](./agent-resume-fork.md)
 - [ ] Background tasks — [`background-tasks.md`](./background-tasks.md)
 - [ ] Skills framework — [`skills-framework.md`](./skills-framework.md)

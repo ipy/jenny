@@ -144,6 +144,16 @@ func run() error {
 		WithSkills(discoveredSkills)
 	tools = registry.Build()
 
+	// Create subagent runners and AgentTool
+	denyRulesMap := make(map[string]bool)
+	for _, name := range flags.DeniedTools {
+		denyRulesMap[name] = true
+	}
+	localRunner := agent.NewLocalSubagentRunner(tools, denyRulesMap)
+	asyncRunner := agent.NewAsyncSubagentRunner(tools, denyRulesMap)
+	agentTool := tool.NewAgentTool(localRunner, asyncRunner)
+	tools = append(tools, agentTool)
+
 	// Ensure MCP clients are shut down on exit
 	if len(flags.MCPConfig) > 0 {
 		defer mcp.ShutdownAll()

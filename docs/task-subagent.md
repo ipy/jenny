@@ -2,12 +2,13 @@
 title: Task Tool (Subagent)
 slug: task-subagent
 priority: P4
-status: not_started
+status: partial
 spec: complete
-code: not_started
+code: done
 package: internal/agent
 gaps:
-  []
+  - "Worktree isolation (AC3) not yet implemented"
+  - "Interrupt partial extraction (AC4) not yet implemented"
 depends_on:
   - subagent-types
   - agent-loop

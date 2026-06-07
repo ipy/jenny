@@ -21,9 +21,13 @@ type SubagentType struct {
 // Otherwise, start with allowedTools and remove any entries in denied or deniedTools.
 // Returns a new slice (does not mutate the type).
 func (t SubagentType) FilterTools(denied []string) []string {
-	deniedMap := make(map[string]bool)
+	// Build combined deny list: explicit denied + type's deniedTools
+	denyMap := make(map[string]bool)
 	for _, d := range denied {
-		deniedMap[d] = true
+		denyMap[d] = true
+	}
+	for _, d := range t.deniedTools {
+		denyMap[d] = true
 	}
 
 	// If allowedTools contains "*", return all tools except denied
@@ -36,31 +40,21 @@ func (t SubagentType) FilterTools(denied []string) []string {
 		}
 		var result []string
 		for _, tool := range allTools {
-			if !deniedMap[tool] {
+			if !denyMap[tool] {
 				result = append(result, tool)
 			}
 		}
 		return result
 	}
 
-	// Otherwise, filter from allowedTools
+	// Otherwise, filter from allowedTools in single pass
 	var result []string
 	for _, tool := range t.allowedTools {
-		if !deniedMap[tool] {
+		if !denyMap[tool] {
 			result = append(result, tool)
 		}
 	}
-	// Also remove any tools in deniedTools
-	for _, d := range t.deniedTools {
-		deniedMap[d] = true
-	}
-	var filtered []string
-	for _, tool := range result {
-		if !deniedMap[tool] {
-			filtered = append(filtered, tool)
-		}
-	}
-	return filtered
+	return result
 }
 
 // CanResume returns whether this subagent type supports resuming a session.
