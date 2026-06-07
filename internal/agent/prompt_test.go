@@ -2,11 +2,30 @@ package agent
 
 import (
 	"context"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
 	"github.com/ipy/jenny/internal/tool"
 )
+
+func initTestGitRepo(t *testing.T, dir string) {
+	t.Helper()
+	cmd := exec.Command("git", "init")
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git init failed: %v", err)
+	}
+	cmd = exec.Command("git", "checkout", "-b", "main")
+	cmd.Dir = dir
+	_ = cmd.Run()
+	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "initial commit")
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git commit failed: %v", err)
+	}
+}
 
 // mockTool is a simple mock tool for testing.
 type mockTool struct {
@@ -92,15 +111,14 @@ func TestAssembleSystemPrompt_ToolListEmpty(t *testing.T) {
 
 func TestAssembleSystemPrompt_GitStatusInsideRepo(t *testing.T) {
 	// AC3: Git status injected when inside a git repo
-	// Use the current repo which is a git repo
-	cfg := StreamConfig{}
+	// Use a temporary git repo
+	tmpDir := t.TempDir()
+	initTestGitRepo(t, tmpDir)
 
+	cfg := StreamConfig{}
 	tools := []tool.Tool{}
 
-	// Use a path that's definitely inside a git repo
-	cwd := "/Users/sin/work/agents/jenny"
-
-	prompt := AssembleSystemPrompt(cfg, tools, cwd)
+	prompt := AssembleSystemPrompt(cfg, tools, tmpDir)
 
 	// Should contain git context
 	if !strings.Contains(prompt, "Git context:") {
@@ -119,9 +137,9 @@ func TestAssembleSystemPrompt_GitStatusOutsideRepo(t *testing.T) {
 	tools := []tool.Tool{}
 
 	// Use a path that is definitely NOT in a git repo
-	cwd := "/tmp"
+	nonGitDir := t.TempDir()
 
-	prompt := AssembleSystemPrompt(cfg, tools, cwd)
+	prompt := AssembleSystemPrompt(cfg, tools, nonGitDir)
 
 	// Should not contain git context
 	if strings.Contains(prompt, "Git context:") {
@@ -134,7 +152,7 @@ func TestAssembleSystemPrompt_PlatformContext(t *testing.T) {
 	cfg := StreamConfig{}
 	tools := []tool.Tool{}
 
-	cwd := "/Users/sin/work/agents/jenny"
+	cwd, _ := os.Getwd()
 
 	prompt := AssembleSystemPrompt(cfg, tools, cwd)
 
