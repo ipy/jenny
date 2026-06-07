@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -365,6 +366,9 @@ func TestSandbox_AC4_MockMissingDepsWarningMode(t *testing.T) {
 // (black-box: initializing on macOS should succeed since sandbox-exec is present)
 func TestSandbox_AC4_MacOSBackendDependencyCheck(t *testing.T) {
 	// This is a platform-specific test — only runs on darwin
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS sandbox tests require darwin")
+	}
 	sb := sandbox.NewMacOSSandboxManager()
 	cfg := sandbox.Config{
 		Backend:           sandbox.BackendMacOS,
@@ -641,6 +645,9 @@ func TestBashTool_AC1_Unhappy_NilSandboxInactive(t *testing.T) {
 
 func TestMacOSSandbox_AC4_Unhappy_MissingBinary(t *testing.T) {
 	// Test macOS backend behavior when binary is not found
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS sandbox tests require darwin")
+	}
 	sb := sandbox.NewMacOSSandboxManager()
 	// Use a non-existent ripgrep path to trigger missing dep error
 	cfg := sandbox.Config{
