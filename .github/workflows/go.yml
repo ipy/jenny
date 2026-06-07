@@ -15,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      ANTHROPIC_AUTH_TOKEN: ${{ secrets.ANTHROPIC_AUTH_TOKEN }}
     steps:
     - uses: actions/checkout@v4
       with:
@@ -25,6 +27,13 @@ jobs:
       with:
         go-version: '1.26.1'
 
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ripgrep
+        git config --global user.name "jenny-ci"
+        git config --global user.email "jenny-ci@users.noreply.github.com"
+
     - name: Test
       run: go test -v ./...
 
@@ -34,15 +43,13 @@ jobs:
         go build -v -o jenny ./cmd/jenny
 
     - name: Run Jenny (Pre-release)
-      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.ANTHROPIC_AUTH_TOKEN != '' }}
+      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && env.ANTHROPIC_AUTH_TOKEN != '' }}
       env:
-        ANTHROPIC_AUTH_TOKEN: ${{ secrets.ANTHROPIC_AUTH_TOKEN }}
+        ANTHROPIC_AUTH_TOKEN: ${{ env.ANTHROPIC_AUTH_TOKEN }}
         ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
         ANTHROPIC_MODEL: ${{ secrets.ANTHROPIC_MODEL }}
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        git config user.name "jenny-ci"
-        git config user.email "jenny-ci@users.noreply.github.com"
         ./jenny --dangerously-skip-permissions "You are a release assistant.
         1. Check the latest GitHub release version using 'gh release list'.
         2. Determine the next alpha version number (e.g., if latest is v0.1.0, next could be v0.1.1-alpha.1).
