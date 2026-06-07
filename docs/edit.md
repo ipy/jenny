@@ -2,9 +2,9 @@
 title: Edit Tool
 slug: edit
 priority: P1
-status: not_started
+status: complete
 spec: complete
-code: not_started
+code: complete
 package: internal/tool
 gaps:
   []

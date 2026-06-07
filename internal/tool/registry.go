@@ -73,9 +73,9 @@ func (r *Registry) Build() []Tool {
 			NewGlobTool(),
 			NewGrepTool(),
 		}
-		// Add WriteTool if readCache is configured
+		// Add WriteTool and EditTool if readCache is configured
 		if r.readCache != nil {
-			r.baseTools = append(r.baseTools, NewWriteTool(r.readCache))
+			r.baseTools = append(r.baseTools, NewWriteTool(r.readCache), NewEditTool(r.readCache))
 		}
 	}
 
