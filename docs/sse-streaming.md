@@ -7,7 +7,7 @@ spec: complete
 code: partial
 package: internal/api
 gaps:
-  - "Non-streaming fallback not triggered correctly on idle timeout (AC5)"
+  []
 depends_on:
   - anthropic-api-client
 ---

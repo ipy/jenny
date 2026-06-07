@@ -7,8 +7,6 @@ spec: complete
 code: partial
 package: internal/agent, internal/session
 gaps:
-  - readFileState not restored
-  - Cost state not restored
   - Queue-only filtering missing
   - Compaction boundaries missing
   - --continue/--fork-session not implemented

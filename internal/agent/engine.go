@@ -95,6 +95,12 @@ func NewQueryEngine(cfg StreamConfig, tools []tool.Tool, model string) *QueryEng
 				log.Debug("Compact fail count restored", "sessionID", sessionID, "count", count)
 			}
 		}
+		// AC2: Seed readFileState from transcript for read-before-write optimization on resume
+		if cfg.ReadFileCache != nil {
+			if err := seedReadFileCacheFromTranscript(cfg.ReadFileCache, cfg.SessionManager, sessionID); err != nil {
+				log.Debug("Failed to seed readFileCache from transcript", "sessionID", sessionID, "error", err)
+			}
+		}
 	}
 
 	engine := &QueryEngine{
@@ -797,4 +803,58 @@ func (e *QueryEngine) Drain(ctx context.Context) {
 		return
 	}
 	e.memExtractor.Drain(ctx)
+}
+
+// seedReadFileCacheFromTranscript seeds the ReadFileCache from transcript entries.
+// It extracts completed Read tool_use + tool_result pairs and adds them to the cache.
+func seedReadFileCacheFromTranscript(cache *tool.ReadFileCache, sessionManager *session.Manager, sessionID string) error {
+	if cache == nil || sessionManager == nil || sessionID == "" {
+		return nil
+	}
+
+	entries, err := sessionManager.LoadTranscript(sessionID)
+	if err != nil {
+		return err
+	}
+
+	// Build a map of tool_use ID -> tool_use entry for Read tools
+	readToolUses := make(map[string]session.TranscriptEntry)
+	for _, entry := range entries {
+		if entry.Type == "tool_use" && len(entry.ToolUse) > 0 {
+			for _, tu := range entry.ToolUse {
+				if tu.Name == "Read" {
+					readToolUses[tu.ID] = entry
+				}
+			}
+		}
+	}
+
+	// Now iterate through tool_result entries and match them to Read tool_use
+	for _, entry := range entries {
+		if entry.Type == "tool_result" && !entry.IsError {
+			if toolUseEntry, ok := readToolUses[entry.ToolID]; ok {
+				// Found a Read tool_result - extract path and content
+				if len(toolUseEntry.ToolUse) > 0 {
+					tu := toolUseEntry.ToolUse[0]
+					path, _ := tu.Input["file_path"].(string)
+					_, hasOffset := tu.Input["offset"]
+					_, hasLimit := tu.Input["limit"]
+
+					// Skip partial reads (offset or limit set means partial read)
+					if hasOffset || hasLimit {
+						continue
+					}
+
+					if path != "" && entry.Content != "" {
+						// Use current mtime since transcript doesn't store it precisely
+						if info, err := os.Stat(path); err == nil {
+							cache.Add(path, entry.Content, info.ModTime(), true)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return nil
 }

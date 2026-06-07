@@ -65,3 +65,15 @@ func (c *ReadFileCache) UpdateAfterWrite(path, content string, mtime time.Time) 
 		IsFullRead: true,
 	}
 }
+
+// Add adds a pre-seeded entry to the cache (used for resume seeding from transcript).
+func (c *ReadFileCache) Add(path, content string, mtime time.Time, isFullRead bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries[path] = &ReadFileEntry{
+		Path:       path,
+		Content:    content,
+		Mtime:      mtime,
+		IsFullRead: isFullRead,
+	}
+}

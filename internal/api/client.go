@@ -619,12 +619,20 @@ func (c *Client) SendMessageStream(
 		var pendingBlocks []StreamContentBlock
 
 		// Process stream events using iterator pattern
-		// Use idle timeout check on each iteration
-		lastEventTime := time.Now()
+		// Use independent watchdog timer to detect idle timeout while stream.Next() blocks
+		idleTimer := time.NewTimer(idleTimeout)
 
-		for stream.Next() {
-			// Check idle timeout - trigger fallback instead of just returning
-			if time.Since(lastEventTime) > idleTimeout {
+		// Use a labeled loop so we can break out when stream ends
+	streamLoop:
+		for {
+			// Use select to wait on either stream events or idle timeout
+			// This allows the watchdog to fire even while stream.Next() is blocked
+			streamReady := stream.Next()
+
+			// Check if idle timeout watchdog fired first
+			select {
+			case <-idleTimer.C:
+				// Idle timeout fired - cancel stream and trigger fallback
 				log.Warn("Idle timeout reached, triggering fallback")
 				cancel()
 				result.Error = "idle timeout"
@@ -642,8 +650,18 @@ func (c *Client) SendMessageStream(
 					return
 				}
 				return
+			default:
+				// Stream event arrived (or stream.Next() returned false)
+				// If stream is not ready, exit the loop to post-loop error/fallback checking
+				if !streamReady {
+					break streamLoop
+				}
+				// Stream is ready - reset the watchdog timer since we received an event
+				if !idleTimer.Stop() {
+					<-idleTimer.C // Drain expired timer channel if necessary
+				}
+				idleTimer.Reset(idleTimeout)
 			}
-			lastEventTime = time.Now()
 
 			event := stream.Current()
 

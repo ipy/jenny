@@ -101,6 +101,11 @@ func ValidateSessionID(id string) error {
 	return nil
 }
 
+// TranscriptDir returns the configured transcript directory.
+func (m *Manager) TranscriptDir() string {
+	return m.transcriptDir
+}
+
 // transcriptPath returns the path to the transcript file for a session.
 func (m *Manager) transcriptPath(sessionID string) string {
 	// Validate session ID doesn't contain path traversal attempts

@@ -342,9 +342,7 @@ func (r *AsyncSubagentRunner) RunSubagentAsync(params tool.SubagentParams) (*too
 	// Determine transcript directory - use session manager's dir if available
 	transcriptDir := "transcripts"
 	if r.sessionMgr != nil {
-		// Use reflection or a getter to get the transcript directory
-		// For now, default to "transcripts" in current working directory
-		transcriptDir = "transcripts"
+		transcriptDir = r.sessionMgr.TranscriptDir()
 	}
 
 	// Build output file path
