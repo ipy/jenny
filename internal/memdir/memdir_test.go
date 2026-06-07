@@ -229,11 +229,10 @@ func TestMemdir_ReadIndex_Caps(t *testing.T) {
 			t.Fatalf("ReadIndex() error = %v", err)
 		}
 
-		// Count lines
+		// Count lines (the result including the warning must respect the cap)
 		lines := strings.Split(strings.TrimSuffix(result, "\n"), "\n")
-		// Should have header + warning + max lines
-		if len(lines) > MaxIndexLines+3 { // +3 for header and warning
-			t.Errorf("line count %d exceeds max %d", len(lines), MaxIndexLines)
+		if len(lines) > MaxIndexLines {
+			t.Errorf("line count %d exceeds max %d (warning counts toward cap)", len(lines), MaxIndexLines)
 		}
 
 		// Should contain truncation warning

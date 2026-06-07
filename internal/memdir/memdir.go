@@ -205,48 +205,20 @@ func (m *Memdir) ReadIndex() (string, error) {
 	lineWarning := fmt.Sprintf("MEMORY.md truncated: %d-line cap\n\n", MaxIndexLines)
 	byteWarning := fmt.Sprintf("MEMORY.md truncated: %d KB cap\n\n", MaxIndexBytes/1024)
 
-	// Truncate line-first, then byte-at-last-newline, leaving room for warning
-	if lineCapFired {
-		lines = lines[:MaxIndexLines]
-		content = strings.Join(lines, "\n")
-
-		// Truncate byte-at-last-newline, leaving room for warning
-		// When both caps fire, use byte warning (more specific to content size)
-		warning := lineWarning
-		if byteCapFired {
-			warning = byteWarning
-		}
-		warningLen := len(warning)
-		maxContentLen := MaxIndexBytes - warningLen
-		if len(content) > maxContentLen {
-			truncated := content[:maxContentLen]
-			lastNewline := strings.LastIndex(truncated, "\n")
-			if lastNewline > 0 {
-				content = truncated[:lastNewline]
-			} else {
-				content = truncated
-			}
-		}
-
-		// Prepend warning
-		content = warning + content
-	} else if byteCapFired {
-		// Only byte cap fired - leave room for warning
-		warningLen := len(byteWarning)
-		maxContentLen := MaxIndexBytes - warningLen
-		truncated := content[:maxContentLen]
-		lastNewline := strings.LastIndex(truncated, "\n")
-		if lastNewline > 0 {
-			content = truncated[:lastNewline]
-		} else {
-			content = truncated
-		}
-
-		// Prepend warning
-		content = byteWarning + content
+	// When both caps fire, use byte warning (more specific to content size)
+	warning := lineWarning
+	if byteCapFired {
+		warning = byteWarning
 	}
 
-	return content, nil
+	// If neither cap fires, return content as-is (no warning)
+	if !lineCapFired && !byteCapFired {
+		return content, nil
+	}
+
+	// Truncate content to leave headroom for warning, satisfying both caps.
+	content = truncateForWarning(content, lines, lineCapFired, warning)
+	return warning + content, nil
 }
 
 // EnsureFresh checks if the file at path has an mtime older than 24 hours.
@@ -425,45 +397,16 @@ func (m *Memdir) UpdateIndex(entries []string) error {
 	lineWarning := fmt.Sprintf("MEMORY.md truncated: %d-line cap\n\n", MaxIndexLines)
 	byteWarning := fmt.Sprintf("MEMORY.md truncated: %d KB cap\n\n", MaxIndexBytes/1024)
 
-	if lineCapFired {
-		allLines = allLines[:MaxIndexLines]
-		finalContent = strings.Join(allLines, "\n")
-		data = []byte(finalContent)
+	// When both caps fire, use byte warning (more specific to content size)
+	warning := lineWarning
+	if byteCapFired {
+		warning = byteWarning
+	}
 
-		// Truncate byte-at-last-newline, leaving room for warning
-		// When both caps fire, use byte warning (more specific to content size)
-		warning := lineWarning
-		if byteCapFired {
-			warning = byteWarning
-		}
-		warningLen := len(warning)
-		maxContentLen := MaxIndexBytes - warningLen
-		if len(data) > maxContentLen {
-			truncated := finalContent[:maxContentLen]
-			lastNewline := strings.LastIndex(truncated, "\n")
-			if lastNewline > 0 {
-				finalContent = truncated[:lastNewline]
-			} else {
-				finalContent = truncated
-			}
-		}
-
-		// Prepend warning
+	if lineCapFired || byteCapFired {
+		// Truncate content to leave headroom for warning, satisfying both caps.
+		finalContent = truncateForWarning(finalContent, allLines, lineCapFired, warning)
 		finalContent = warning + finalContent
-	} else if byteCapFired {
-		// Leave room for warning
-		warningLen := len(byteWarning)
-		maxContentLen := MaxIndexBytes - warningLen
-		truncated := finalContent[:maxContentLen]
-		lastNewline := strings.LastIndex(truncated, "\n")
-		if lastNewline > 0 {
-			finalContent = truncated[:lastNewline]
-		} else {
-			finalContent = truncated
-		}
-
-		// Prepend warning
-		finalContent = byteWarning + finalContent
 	}
 
 	if err := os.WriteFile(indexPath, []byte(finalContent), 0644); err != nil {
@@ -477,4 +420,36 @@ func (m *Memdir) UpdateIndex(entries []string) error {
 func (m *Memdir) Exists() bool {
 	_, err := os.Stat(m.memoryPath)
 	return err == nil
+}
+
+// truncateForWarning shrinks content so the (warning + content) result satisfies
+// MaxIndexLines and MaxIndexBytes. The caller has already computed lines and
+// lineCapFired from the original content. When lineCapFired is true, the line
+// cap is enforced; otherwise the byte cap is enforced (and may reduce lines too
+// if a single line exceeds the byte budget). Warning headroom is reserved
+// before truncation so the final result respects both caps.
+func truncateForWarning(content string, lines []string, lineCapFired bool, warning string) string {
+	warningLines := strings.Count(warning, "\n")
+	warningBytes := len(warning)
+
+	maxContentLines := max(MaxIndexLines-warningLines, 0)
+	maxContentBytes := max(MaxIndexBytes-warningBytes, 0)
+
+	// Apply line cap first (per spec: line-first).
+	if lineCapFired && len(lines) > maxContentLines {
+		lines = lines[:maxContentLines]
+		content = strings.Join(lines, "\n")
+	}
+
+	// Apply byte cap, trimming at the last newline so we don't leave a partial line.
+	if len(content) > maxContentBytes {
+		truncated := content[:maxContentBytes]
+		if lastNewline := strings.LastIndex(truncated, "\n"); lastNewline > 0 {
+			content = truncated[:lastNewline]
+		} else {
+			content = truncated
+		}
+	}
+
+	return content
 }

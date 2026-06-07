@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ipy/jenny/internal/log"
+	"github.com/ipy/jenny/internal/memdir"
 	"github.com/ipy/jenny/internal/session"
 	"github.com/ipy/jenny/internal/tool"
 )
@@ -855,5 +857,138 @@ func TestAC4_QueryEngineWireReadFileCache(t *testing.T) {
 		t.Error("AC4 FAIL: engine's tools appear to have cacheA instead of cacheB")
 	} else {
 		t.Log("AC4 PASS: cacheA correctly NOT wired to engine's tools")
+	}
+}
+
+// TestAC1_MemdirCreatedAtPromptBuild verifies that memdir.Create() is wired
+// into the system-prompt build hook: when AutoMemoryEnabled is true and the
+// session is in a git repository, SubmitMessage must create the per-project
+// memory directory under the config home.
+func TestAC1_MemdirCreatedAtPromptBuild(t *testing.T) {
+	// Isolate HOME so memdir's config-home resolution points to a temp dir
+	// and the test can verify the directory exists without polluting the
+	// real user config.
+	tmpHome := t.TempDir()
+	origHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpHome)
+	defer os.Setenv("HOME", origHome)
+
+	// Set git identity so initTestGitRepo can create the initial commit.
+	// On cleanup, use Unsetenv when the original was empty so we don't
+	// leave GIT_AUTHOR_EMAIL="" set (git treats empty as malformed).
+	gitEnvVars := []string{"GIT_AUTHOR_EMAIL", "GIT_AUTHOR_NAME", "GIT_COMMITTER_EMAIL", "GIT_COMMITTER_NAME"}
+	origValues := make(map[string]string, len(gitEnvVars))
+	for _, k := range gitEnvVars {
+		origValues[k] = os.Getenv(k)
+	}
+	os.Setenv("GIT_AUTHOR_EMAIL", "test@example.com")
+	os.Setenv("GIT_AUTHOR_NAME", "Test")
+	os.Setenv("GIT_COMMITTER_EMAIL", "test@example.com")
+	os.Setenv("GIT_COMMITTER_NAME", "Test")
+	defer func() {
+		for _, k := range gitEnvVars {
+			if orig, ok := origValues[k]; ok && orig != "" {
+				os.Setenv(k, orig)
+			} else {
+				os.Unsetenv(k)
+			}
+		}
+	}()
+
+	// Init a git repo so memdir can resolve the project root from cwd.
+	repoDir := t.TempDir()
+	initTestGitRepo(t, repoDir)
+
+	origWd, _ := os.Getwd()
+	os.Chdir(repoDir)
+	defer os.Chdir(origWd)
+
+	sessMgr, err := session.NewManager(repoDir, false)
+	if err != nil {
+		t.Fatalf("NewManager error: %v", err)
+	}
+
+	// Mock server that returns a single end_turn response so SubmitMessage
+	// completes without making a real API call.
+	server := makeTestMockStreamServer([]string{
+		testSseLine("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"test","stop_reason":null,"usage":{"input_tokens":1,"output_tokens":1}}}`),
+		testSseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
+		testSseLine("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ok"}}`),
+		testSseLine("content_block_stop", `{"type":"content_block_stop","index":0}`),
+		testSseLine("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":1,"output_tokens":2}}`),
+		testSseLine("message_stop", `{"type":"message_stop"}`),
+	})
+	defer server.Close()
+
+	origBaseURL := os.Getenv("ANTHROPIC_BASE_URL")
+	origAPIKey := os.Getenv("ANTHROPIC_API_KEY")
+	os.Setenv("ANTHROPIC_BASE_URL", server.URL)
+	os.Setenv("ANTHROPIC_API_KEY", "test-key")
+	defer func() {
+		os.Setenv("ANTHROPIC_BASE_URL", origBaseURL)
+		os.Setenv("ANTHROPIC_API_KEY", origAPIKey)
+	}()
+
+	cfg := StreamConfig{
+		Enabled:           false,
+		SessionManager:    sessMgr,
+		SessionID:         "sess_ac1_memdir",
+		AutoMemoryEnabled: true,
+	}
+
+	engine := NewQueryEngine(cfg, nil, "")
+
+	// Compute the expected memdir path using the same library the engine
+	// calls. git.GetRoot resolves symlinks (e.g. /var -> /private/var on
+	// macOS), so we mirror that resolution here to compute the matching
+	// expected path.
+	resolvedRepoDir, err := filepath.EvalSymlinks(repoDir)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(repoDir) error: %v", err)
+	}
+	resolvedRepoDir, err = filepath.Abs(resolvedRepoDir)
+	if err != nil {
+		t.Fatalf("Abs(resolvedRepoDir) error: %v", err)
+	}
+
+	expectedMem, err := memdir.New(memdir.Config{
+		ProjectRoot:       resolvedRepoDir,
+		AutoMemoryEnabled: true,
+	})
+	if err != nil {
+		t.Fatalf("memdir.New() error: %v", err)
+	}
+	expectedPath := expectedMem.MemoryPath()
+
+	// Sanity: the expected path must live under the isolated HOME.
+	if !strings.HasPrefix(expectedPath, tmpHome) {
+		t.Fatalf("expected memdir path %q to be under HOME %q", expectedPath, tmpHome)
+	}
+
+	// Confirm the directory does not exist before SubmitMessage runs.
+	if _, err := os.Stat(expectedPath); !os.IsNotExist(err) {
+		t.Fatalf("expected memdir to not exist before SubmitMessage, stat err = %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, err := engine.SubmitMessage(ctx, "test prompt"); err != nil {
+		t.Fatalf("SubmitMessage() error: %v", err)
+	}
+
+	// AC1: memdir directory exists at the project-scoped config-home path.
+	if _, err := os.Stat(expectedPath); err != nil {
+		t.Errorf("AC1 FAIL: memdir directory %q was not created at prompt build time: %v", expectedPath, err)
+	} else {
+		t.Logf("AC1 PASS: memdir directory created at %q", expectedPath)
+	}
+
+	// MEMORY.md should also be created by Create().
+	indexPath := expectedMem.IndexPath()
+	if _, err := os.Stat(indexPath); err != nil {
+		t.Errorf("AC1 FAIL: MEMORY.md index was not created: %v", err)
+	} else {
+		t.Logf("AC1 PASS: MEMORY.md created at %q", indexPath)
 	}
 }
