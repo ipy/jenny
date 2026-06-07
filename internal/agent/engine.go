@@ -339,57 +339,38 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			}
 		}
 
-		// Now execute all tools and collect results
-		for _, block := range resp.Content {
-			if block.Type != "tool_use" {
-				continue
-			}
+		// Convert API tool use blocks to executor format
+		execBlocks := make([]toolUseBlock, 0, len(toolUseBlocks))
+		for _, tb := range toolUseBlocks {
+			execBlocks = append(execBlocks, toolUseBlock{
+				ID:    tb.ID,
+				Name:  tb.Name,
+				Input: tb.Input,
+			})
+		}
 
-			// Find and execute the tool
-			t := tool.FindTool(e.tools, block.ToolName)
-			var result *tool.ToolResult
-			var errContent string
+		// Execute all tools using the parallel executor
+		executor := NewToolExecutor(e.tools, cwd)
+		execResults, err := executor.Execute(execBlocks)
+		if err != nil {
+			return "", fmt.Errorf("executing tools: %w", err)
+		}
 
-			if t == nil {
-				errContent = fmt.Sprintf("Error: Unknown tool '%s'", block.ToolName)
-				toolResults = append(toolResults, api.ToolResult{
-					ToolUseID: block.ToolID,
-					Content:   errContent,
-					IsError:   true,
-				})
-			} else {
-				// Execute tool
-				execResult, err := t.Execute(block.ToolInput, cwd)
-				if err != nil {
-					errContent = fmt.Sprintf("Error executing tool: %v", err)
-					toolResults = append(toolResults, api.ToolResult{
-						ToolUseID: block.ToolID,
-						Content:   errContent,
-						IsError:   true,
-					})
-				} else {
-					result = execResult
-					toolResults = append(toolResults, api.ToolResult{
-						ToolUseID: block.ToolID,
-						Content:   result.Content,
-						IsError:   result.IsError,
-					})
-				}
-			}
+		// Process results and collect for API response
+		for _, res := range execResults {
+			toolResults = append(toolResults, api.ToolResult{
+				ToolUseID: res.ToolUseID,
+				Content:   res.Content,
+				IsError:   res.IsError,
+			})
 
 			// Persist tool result to transcript AFTER assistant message
-			entryContent := errContent
-			isError := true
-			if result != nil {
-				entryContent = result.Content
-				isError = result.IsError
-			}
 			if e.sessionManager != nil {
 				if err := e.sessionManager.AppendEntry(sessionID, session.TranscriptEntry{
 					Type:    "tool_result",
-					ToolID:  block.ToolID,
-					Content: entryContent,
-					IsError: isError,
+					ToolID:  res.ToolUseID,
+					Content: res.Content,
+					IsError: res.IsError,
 				}); err != nil {
 					return "", fmt.Errorf("persisting tool result to transcript: %w", err)
 				}
@@ -400,8 +381,8 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				msg := StreamMessage{
 					Type:       "tool_result",
 					SessionID:  sessionID,
-					Content:    entryContent,
-					IsError:    isError,
+					Content:    res.Content,
+					IsError:    res.IsError,
 					MessageIdx: currentTurn,
 				}
 				data, _ := json.Marshal(msg)
