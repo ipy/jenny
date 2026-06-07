@@ -81,7 +81,7 @@ func findGitRoot(startPath string) (string, error) {
 			// Found .git
 			var root string
 			if info.IsDir() {
-				root = filepath.Join(dir, ".git")
+				root = dir
 			} else {
 				// .git is a file - resolve gitdir
 				root = dir
@@ -507,6 +507,9 @@ func ValidateWorktreeDir(worktreePath string) (bool, error) {
 	}
 
 	commonDir := strings.TrimSpace(string(data))
+
+	// Resolve commonDir relative to worktreeGitDir before use
+	commonDir = filepath.Join(gitDir, commonDir)
 
 	// Validate: worktreeGitDir parent must be {commonDir}/worktrees
 	worktreeGitDir := gitDir

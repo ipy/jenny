@@ -28,7 +28,7 @@ func TestFindGitRoot(t *testing.T) {
 	// Normalize path for macOS (/var/folders -> /private/var/folders)
 	root, _ = filepath.EvalSymlinks(root)
 
-	expected := filepath.Join(tmpDir, ".git")
+	expected := tmpDir
 	expected, _ = filepath.EvalSymlinks(expected)
 	if root != expected {
 		t.Errorf("expected %q, got %q", expected, root)
@@ -410,7 +410,7 @@ func TestFindGitRoot_SymlinkLoop(t *testing.T) {
 	// Normalize path for macOS (/var/folders -> /private/var/folders)
 	root, _ = filepath.EvalSymlinks(root)
 
-	expected := filepath.Join(tmpDir, ".git")
+	expected := tmpDir
 	expected, _ = filepath.EvalSymlinks(expected)
 	if root != expected {
 		t.Errorf("expected %q, got %q", expected, root)
