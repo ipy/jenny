@@ -833,23 +833,30 @@ func seedReadFileCacheFromTranscript(cache *tool.ReadFileCache, sessionManager *
 	for _, entry := range entries {
 		if entry.Type == "tool_result" && !entry.IsError {
 			if toolUseEntry, ok := readToolUses[entry.ToolID]; ok {
-				// Found a Read tool_result - extract path and content
-				if len(toolUseEntry.ToolUse) > 0 {
-					tu := toolUseEntry.ToolUse[0]
-					path, _ := tu.Input["file_path"].(string)
-					_, hasOffset := tu.Input["offset"]
-					_, hasLimit := tu.Input["limit"]
-
-					// Skip partial reads (offset or limit set means partial read)
-					if hasOffset || hasLimit {
-						continue
+				// Find the specific tool_use that matches entry.ToolID
+				var tu *session.ToolUse
+				for i := range toolUseEntry.ToolUse {
+					if toolUseEntry.ToolUse[i].ID == entry.ToolID {
+						tu = &toolUseEntry.ToolUse[i]
+						break
 					}
+				}
+				if tu == nil {
+					continue
+				}
+				path, _ := tu.Input["file_path"].(string)
+				_, hasOffset := tu.Input["offset"]
+				_, hasLimit := tu.Input["limit"]
 
-					if path != "" && entry.Content != "" {
-						// Use current mtime since transcript doesn't store it precisely
-						if info, err := os.Stat(path); err == nil {
-							cache.Add(path, entry.Content, info.ModTime(), true)
-						}
+				// Skip partial reads (offset or limit set means partial read)
+				if hasOffset || hasLimit {
+					continue
+				}
+
+				if path != "" && entry.Content != "" {
+					// Use current mtime since transcript doesn't store it precisely
+					if info, err := os.Stat(path); err == nil {
+						cache.Add(path, entry.Content, info.ModTime(), true)
 					}
 				}
 			}
