@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/ipy/jenny/internal/sandbox"
 )
 
 const (
@@ -20,11 +22,19 @@ const (
 )
 
 // GrepTool searches file contents via ripgrep.
-type GrepTool struct{}
+type GrepTool struct {
+	sandbox sandbox.SandboxManager
+}
 
 // NewGrepTool creates a new GrepTool.
 func NewGrepTool() *GrepTool {
 	return &GrepTool{}
+}
+
+// WithSandbox sets the sandbox manager for the GrepTool.
+func (t *GrepTool) WithSandbox(sb sandbox.SandboxManager) *GrepTool {
+	t.sandbox = sb
+	return t
 }
 
 // Name returns the tool name.
@@ -111,12 +121,30 @@ func (t *GrepTool) Execute(ctx context.Context, input map[string]any, cwd string
 		return nil, fmt.Errorf("pattern is required and must be a string")
 	}
 
-	// Check if ripgrep is available
-	if _, err := exec.LookPath("rg"); err != nil {
-		return &ToolResult{
-			Content: "ripgrep (rg) not found. Install with: brew install ripgrep",
-			IsError: true,
-		}, nil
+	// Determine ripgrep command - use sandboxed ripgrep if available
+	rgCommand := "rg"
+	if t.sandbox != nil && t.sandbox.IsActive() {
+		// Use sandboxed ripgrep config if provided
+		ripgrepCfg := t.sandbox.RipgrepConfig()
+		if ripgrepCfg.Command != "" {
+			rgCommand = ripgrepCfg.Command
+		} else {
+			// Fall back to host ripgrep if no sandboxed config
+			if _, err := exec.LookPath("rg"); err != nil {
+				return &ToolResult{
+					Content: "ripgrep (rg) not found. Install with: brew install ripgrep",
+					IsError: true,
+				}, nil
+			}
+		}
+	} else {
+		// Sandbox not active - use host ripgrep
+		if _, err := exec.LookPath("rg"); err != nil {
+			return &ToolResult{
+				Content: "ripgrep (rg) not found. Install with: brew install ripgrep",
+				IsError: true,
+			}, nil
+		}
 	}
 
 	// Build ripgrep arguments
@@ -200,7 +228,7 @@ func (t *GrepTool) Execute(ctx context.Context, input map[string]any, cwd string
 	cmdCtx, cmdCancel := context.WithTimeout(derivedCtx, time.Duration(timeout)*time.Second)
 	defer cmdCancel()
 
-	cmd := exec.CommandContext(cmdCtx, "rg", args...)
+	cmd := exec.CommandContext(cmdCtx, rgCommand, args...)
 	cmd.Dir = cwd
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

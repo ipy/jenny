@@ -1,6 +1,8 @@
 // Package tool provides the tool interface, implementations, and registry.
 package tool
 
+import "github.com/ipy/jenny/internal/sandbox"
+
 // Registry builds a filtered, ordered list of tools.
 type Registry struct {
 	baseTools       []Tool
@@ -10,6 +12,7 @@ type Registry struct {
 	skipPermissions bool
 	hasBaseTools    bool
 	readCache       *ReadFileCache
+	sandbox         sandbox.SandboxManager
 }
 
 // NewRegistry creates a new Registry.
@@ -58,6 +61,12 @@ func (r *Registry) WithSkipPermissions(skip bool) *Registry {
 	return r
 }
 
+// WithSandbox sets the sandbox manager for Bash and Grep tools.
+func (r *Registry) WithSandbox(sb sandbox.SandboxManager) *Registry {
+	r.sandbox = sb
+	return r
+}
+
 // Build returns the final ordered tool list.
 // Built-in tools appear first, then MCP tools. Deny rules and enabled flags
 // filter the output. On name collision, the built-in tool wins.
@@ -76,6 +85,18 @@ func (r *Registry) Build() []Tool {
 		// Add WriteTool and EditTool if readCache is configured
 		if r.readCache != nil {
 			r.baseTools = append(r.baseTools, NewWriteTool(r.readCache), NewEditTool(r.readCache))
+		}
+
+		// Wire sandbox to BashTool and GrepTool if configured
+		if r.sandbox != nil {
+			for _, t := range r.baseTools {
+				switch tool := t.(type) {
+				case *BashTool:
+					tool.WithSandbox(r.sandbox)
+				case *GrepTool:
+					tool.WithSandbox(r.sandbox)
+				}
+			}
 		}
 	}
 

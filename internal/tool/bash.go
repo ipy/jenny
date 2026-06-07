@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ipy/jenny/internal/sandbox"
 )
 
 const (
@@ -23,6 +25,7 @@ const (
 // BashTool executes shell commands.
 type BashTool struct {
 	skipPermissions bool
+	sandbox         sandbox.SandboxManager
 	mu              sync.Mutex
 	commandCwd      string
 	projectRoot     string
@@ -34,6 +37,12 @@ func NewBashTool(skipPermissions bool) *BashTool {
 	return &BashTool{
 		skipPermissions: skipPermissions,
 	}
+}
+
+// WithSandbox sets the sandbox manager for the BashTool.
+func (t *BashTool) WithSandbox(sb sandbox.SandboxManager) *BashTool {
+	t.sandbox = sb
+	return t
 }
 
 // Name returns the tool name.
@@ -132,6 +141,16 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 	if !isCdCommand(command) && !validateCommandPaths(command, t.commandCwd) {
 		return &ToolResult{
 			Content: fmt.Sprintf("Error: Command '%s' is not allowed. Access outside working directory is prohibited.", command),
+			IsError: true,
+		}, nil
+	}
+
+	// Wrap command with sandbox if available and not bypassed
+	var wrapErr error
+	command, wrapErr = t.maybeWrapWithSandbox(command, input)
+	if wrapErr != nil {
+		return &ToolResult{
+			Content: fmt.Sprintf("Sandbox error: %v", wrapErr),
 			IsError: true,
 		}, nil
 	}
@@ -665,4 +684,25 @@ func isReadOnlyCommand(command string) bool {
 		}
 	}
 	return false
+}
+
+// maybeWrapWithSandbox wraps the command with sandbox if available and not bypassed.
+func (t *BashTool) maybeWrapWithSandbox(command string, input map[string]any) (string, error) {
+	// If no sandbox is configured, return original command
+	if t.sandbox == nil {
+		return command, nil
+	}
+
+	// If sandbox is not active, return original command
+	if !t.sandbox.IsActive() {
+		return command, nil
+	}
+
+	// Check for dangerouslyDisableSandbox flag
+	if disableSandbox, ok := input["dangerouslyDisableSandbox"].(bool); ok && disableSandbox {
+		return command, nil
+	}
+
+	// Wrap with sandbox
+	return t.sandbox.WrapWithSandbox(command)
 }
