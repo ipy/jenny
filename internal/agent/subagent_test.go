@@ -41,7 +41,7 @@ func TestSubagentTypeAllowedTools(t *testing.T) {
 		{
 			name:     "verification",
 			typeName: "verification",
-			expected: []string{"Read", "Glob", "Grep", "Bash"},
+			expected: []string{"Read", "TaskOutput", "TaskStop"},
 		},
 	}
 
@@ -69,7 +69,7 @@ func TestFilterTools(t *testing.T) {
 			name:      "general-purpose denies Bash",
 			typeName:  "general-purpose",
 			denied:    []string{"Bash"},
-			expectAbs: []string{"Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch", "LSP", "Skill", "NotebookEdit", "ReadMcpResource"},
+			expectAbs: []string{"Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch", "LSP", "Skill", "NotebookEdit", "ReadMcpResource", "TaskOutput", "TaskStop", "Task", "CronCreate", "CronDelete", "CronList"},
 		},
 		{
 			name:      "shell denies Bash",
@@ -99,7 +99,7 @@ func TestFilterTools(t *testing.T) {
 			name:      "general-purpose no denies",
 			typeName:  "general-purpose",
 			denied:    []string{},
-			expectAbs: []string{"Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebSearch", "WebFetch", "LSP", "Skill", "NotebookEdit", "ReadMcpResource"},
+			expectAbs: []string{"Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebSearch", "WebFetch", "LSP", "Skill", "NotebookEdit", "ReadMcpResource", "TaskOutput", "TaskStop", "Task", "CronCreate", "CronDelete", "CronList"},
 		},
 	}
 

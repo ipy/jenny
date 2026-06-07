@@ -32,6 +32,7 @@ func (t SubagentType) FilterTools(denied []string) []string {
 		allTools := []string{
 			"Read", "Write", "Edit", "Bash", "Glob", "Grep",
 			"WebSearch", "WebFetch", "LSP", "Skill", "NotebookEdit", "ReadMcpResource",
+			"TaskOutput", "TaskStop", "Task", "CronCreate", "CronDelete", "CronList",
 		}
 		var result []string
 		for _, tool := range allTools {
@@ -155,7 +156,7 @@ var Shell = SubagentType{
 var Verification = SubagentType{
 	Name:                    "verification",
 	Description:             "Verification agent for running tests and CI checks",
-	allowedTools:            []string{"Read", "Glob", "Grep", "Bash"},
+	allowedTools:            []string{"Read", "TaskOutput", "TaskStop"},
 	deniedTools:             []string{"Write", "Edit"},
 	model:                   "inherit",
 	oneShot:                 false,
