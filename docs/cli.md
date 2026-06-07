@@ -76,7 +76,7 @@ Help (`-h`) exits 0.
 | Feature | Status |
 |---------|--------|
 | `-r` resume | Wired |
-| `--mcp-config` | Parsed, not wired |
+| `--mcp-config` | Wired |
 | `--continue` | Not implemented |
 | `--no-session-persistence` | Not implemented |
 | `--fork-session` | Not implemented |

@@ -109,12 +109,11 @@ func run() error {
 	}
 
 	// Build tool registry with skipPermissions flag
-	// AC4: Create ReadFileCache and wire it to tools for read-before-write enforcement
-	readFileCache := tool.NewReadFileCache()
+	// AC4: ReadFileCache is now wired through StreamConfig -> QueryEngine -> tools
+	// ReadFileCache is passed via StreamConfig below instead of directly to registry
 	var tools []tool.Tool
 	tools = tool.NewRegistry().
 		WithBaseTools().
-		WithReadFileCache(readFileCache).
 		WithMCPTools(mcpTools).
 		WithDenyRules(flags.DeniedTools).
 		WithSkipPermissions(flags.SkipPermissions).
@@ -129,6 +128,7 @@ func run() error {
 	ctx := context.Background()
 
 	// Build stream config
+	// AC4: Create ReadFileCache and pass it through StreamConfig for engine-level wiring
 	streamCfg := agent.StreamConfig{
 		Enabled:         flags.OutputFormat == "stream-json",
 		Verbose:         flags.Verbose,
@@ -138,6 +138,7 @@ func run() error {
 		HistoryMessages: historyMessages,
 		IsResume:        flags.SessionResume != "", // True when resuming an existing session via -r
 		MCPConfig:       mcpConfig,
+		ReadFileCache:   tool.NewReadFileCache(),
 	}
 
 	// Run agent

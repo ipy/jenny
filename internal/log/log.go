@@ -42,6 +42,11 @@ func SetOutput(w io.Writer) {
 	resetLogger()
 }
 
+// Output returns the current output writer. Used for testing.
+func Output() io.Writer {
+	return outputWriter
+}
+
 // Debug logs a debug-level message.
 func Debug(msg string, args ...any) {
 	Logger.Debug(msg, args...)

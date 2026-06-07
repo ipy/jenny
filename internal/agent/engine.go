@@ -83,7 +83,7 @@ func NewQueryEngine(cfg StreamConfig, tools []tool.Tool, model string) *QueryEng
 		}
 	}
 
-	return &QueryEngine{
+	engine := &QueryEngine{
 		client:           client,
 		sessionManager:   cfg.SessionManager,
 		costState:        costState,
@@ -95,6 +95,33 @@ func NewQueryEngine(cfg StreamConfig, tools []tool.Tool, model string) *QueryEng
 		maxTurns:         0, // 0 means unlimited
 		compactConfig:    newCompactConfig(),
 		compactFailCount: compactFailCount,
+	}
+
+	// Wire ReadFileCache from StreamConfig into tools that support it
+	engine.WireReadFileCache()
+
+	return engine
+}
+
+// WireReadFileCache injects the ReadFileCache from StreamConfig into tools
+// that support read-before-write enforcement (Read, Write, Edit, NotebookEdit).
+// This enables the engine to own the cache lifecycle.
+func (e *QueryEngine) WireReadFileCache() {
+	if e.streamCfg.ReadFileCache == nil {
+		return
+	}
+	cache := e.streamCfg.ReadFileCache
+	for _, t := range e.tools {
+		switch t := t.(type) {
+		case *tool.ReadTool:
+			t.WithReadFileCache(cache)
+		case *tool.WriteTool:
+			t.WithReadFileCache(cache)
+		case *tool.EditTool:
+			t.WithReadFileCache(cache)
+		case *tool.NotebookEditTool:
+			t.WithReadFileCache(cache)
+		}
 	}
 }
 

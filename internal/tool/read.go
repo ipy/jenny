@@ -27,6 +27,12 @@ func (t *ReadTool) Name() string {
 	return "read"
 }
 
+// WithReadFileCache sets the read cache for read-before-write validation.
+func (t *ReadTool) WithReadFileCache(cache *ReadFileCache) *ReadTool {
+	t.readCache = cache
+	return t
+}
+
 // Description returns a description of the tool.
 func (t *ReadTool) Description() string {
 	return "Read the contents of a file. Use this to view files with line numbers for reference."

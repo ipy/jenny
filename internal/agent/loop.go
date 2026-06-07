@@ -13,6 +13,9 @@ import (
 	"github.com/ipy/jenny/internal/tool"
 )
 
+// Ensure ReadFileCache type is used (via StreamConfig field)
+var _ *tool.ReadFileCache
+
 // RebuildMessages converts transcript entries to API messages for resume.
 // This is used when resuming a session with -r flag to reconstruct the
 // conversation history from the persisted transcript.
@@ -118,6 +121,7 @@ type StreamConfig struct {
 	CustomSystemPrompt   string                      // Custom system prompt; replaces defaults when set
 	AppendSystemPrompt   string                      // Content appended after assembled prompt
 	OverrideSystemPrompt bool                        // When true, suppresses AppendSystemPrompt
+	ReadFileCache        *tool.ReadFileCache         // Cache for read-before-write enforcement
 }
 
 // ToolParam represents a tool parameter for the API.

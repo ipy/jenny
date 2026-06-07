@@ -27,6 +27,12 @@ func (t *NotebookEditTool) Name() string {
 	return "notebook_edit"
 }
 
+// WithReadFileCache sets the read cache for read-before-write validation.
+func (t *NotebookEditTool) WithReadFileCache(cache *ReadFileCache) *NotebookEditTool {
+	t.readCache = cache
+	return t
+}
+
 // Description returns a description of the tool.
 func (t *NotebookEditTool) Description() string {
 	return "Edit Jupyter notebook cells in .ipynb files. Supports replace, insert, and delete operations."

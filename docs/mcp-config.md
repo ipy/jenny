@@ -23,7 +23,7 @@ Jenny loads Model Context Protocol (MCP) server definitions from config files an
 | `--mcp-config <path>…` | One or more JSON file paths or inline JSON strings; repeatable |
 | `--strict-mcp-config` | Use **only** `--mcp-config` servers; ignore user/project/local/plugin sources |
 
-**Gap (Jenny today):** flag is parsed but not wired to runtime.
+**Gap (Jenny today):** flag is wired to runtime (stdio transport only).
 
 ## Config Merge Precedence
 

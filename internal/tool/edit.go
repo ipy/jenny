@@ -25,6 +25,12 @@ func (t *EditTool) Name() string {
 	return "edit"
 }
 
+// WithReadFileCache sets the read cache for read-before-write validation.
+func (t *EditTool) WithReadFileCache(cache *ReadFileCache) *EditTool {
+	t.readCache = cache
+	return t
+}
+
 // Description returns a description of the tool.
 func (t *EditTool) Description() string {
 	return "Replace exact string in a file. Requires prior Read of the same path."

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ipy/jenny/internal/log"
 	"github.com/ipy/jenny/internal/session"
 )
 
@@ -651,8 +652,12 @@ func TestAC3_StreamJsonCallsSetOutput(t *testing.T) {
 	//       log.SetOutput(os.Stderr)
 	//   }
 	//
-	// We verify this by capturing both stdout and stderr during engine execution
-	// and ensuring no log output appears on stdout.
+	// We verify this by:
+	// 1. Saving original stderr and capturing it via pipe
+	// 2. Temporarily setting log output to a bytes.Buffer
+	// 3. Running SubmitMessage with stream-json enabled
+	// 4. Restoring original stderr and checking if log output was redirected to it
+	// 5. Verifying no log output appears on stdout
 
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
@@ -697,6 +702,14 @@ func TestAC3_StreamJsonCallsSetOutput(t *testing.T) {
 	os.Stdout = stdoutW
 	os.Stderr = stderrW
 
+	// Create a buffer to capture log output during the test
+	logCapture := bytes.NewBuffer(nil)
+
+	// Save original log output and set to our capture buffer
+	originalLogOutput := log.Output()
+	log.SetOutput(logCapture)
+	defer log.SetOutput(originalLogOutput)
+
 	cfg := StreamConfig{
 		Enabled:        true, // Stream-json mode enabled - should trigger log.SetOutput(os.Stderr)
 		SessionManager: sessMgr,
@@ -714,7 +727,7 @@ func TestAC3_StreamJsonCallsSetOutput(t *testing.T) {
 	stdoutW.Close()
 	stderrW.Close()
 
-	// Restore original stdout and stderr
+	// Restore original stdout and stderr BEFORE checking log output
 	os.Stdout = oldStdout
 	os.Stderr = oldStderr
 
@@ -727,7 +740,7 @@ func TestAC3_StreamJsonCallsSetOutput(t *testing.T) {
 	io.Copy(&stdoutBuf, stdoutR)
 	stdoutOutput := stdoutBuf.String()
 
-	// Read captured stderr (should contain log output)
+	// Read captured stderr (should contain log output if SetOutput wasn't called)
 	var stderrBuf bytes.Buffer
 	io.Copy(&stderrBuf, stderrR)
 	stderrOutput := stderrBuf.String()

@@ -24,6 +24,12 @@ func (t *WriteTool) Name() string {
 	return "write"
 }
 
+// WithReadFileCache sets the read cache for read-before-write validation.
+func (t *WriteTool) WithReadFileCache(cache *ReadFileCache) *WriteTool {
+	t.readCache = cache
+	return t
+}
+
 // Description returns a description of the tool.
 func (t *WriteTool) Description() string {
 	return "Write content to a file. Requires prior Read of the same path."
