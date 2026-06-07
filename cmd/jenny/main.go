@@ -138,7 +138,6 @@ func run() error {
 		HistoryMessages: historyMessages,
 		IsResume:        flags.SessionResume != "", // True when resuming an existing session via -r
 		MCPConfig:       mcpConfig,
-		ReadFileCache:   readFileCache,
 	}
 
 	// Run agent
