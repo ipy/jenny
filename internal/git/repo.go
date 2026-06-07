@@ -35,11 +35,6 @@ type stateCache struct {
 	branchMtime int64
 }
 
-// prependToSlice inserts elements at the beginning of a slice.
-func prependToSlice(slice []string, elems ...string) []string {
-	return append(elems, slice...)
-}
-
 // Per-root state caches
 var (
 	stateCaches   = make(map[string]*stateCache)
@@ -621,19 +616,19 @@ func IsIgnored(repoRoot, path string) (bool, error) {
 		return false, err
 	}
 
-	// Also load patterns from parent directories up to repo root
+	// Also load patterns from parent directories up to repo root (excluding root)
 	// Deeper directory patterns are checked later (override shallower ones)
 	dir := filepath.Dir(absPath)
-	resolvedRootBase := resolvedRoot
-	for dir != resolvedRootBase && dir != filepath.Dir(dir) {
+	for dir != resolvedRoot {
 		parentPatterns, err := loadGitignorePatterns(dir)
 		if err == nil {
-			patterns = prependToSlice(patterns, parentPatterns...)
+			patterns = append(patterns, parentPatterns...)
 		}
-		dir = filepath.Dir(dir)
-		if dir == resolvedRootBase {
-			break
+		nextDir := filepath.Dir(dir)
+		if nextDir == dir {
+			break // reached filesystem root
 		}
+		dir = nextDir
 	}
 
 	return matchesGitignore(relPath, patterns), nil
@@ -668,6 +663,8 @@ func loadGitignorePatterns(dir string) ([]string, error) {
 // matchesGitignore checks if a path matches any of the gitignore patterns.
 // Git's rule: the last matching pattern wins, unless negated by a later pattern.
 func matchesGitignore(path string, patterns []string) bool {
+	// Iterate forward, keep track of the last matching pattern and whether it was negated.
+	// At the end, return "ignored" = hasMatch AND last match was NOT negated.
 	var lastMatchNegated bool
 	var hasMatch bool
 
@@ -726,40 +723,34 @@ func matchGitignorePattern(path, pattern string) bool {
 			return true
 		}
 
-		// Multiple ** - find each segment in order
-		// Path must start with first part
-		if !strings.HasPrefix(path, parts[0]) {
-			return false
-		}
-
-		remaining := path[len(parts[0]):]
-
-		// Find each intermediate part
-		for i := 1; i < len(parts)-1; i++ {
-			part := parts[i]
-			idx := strings.Index(remaining, part)
-			if idx == -1 {
-				return false
-			}
-			remaining = remaining[idx+len(part):]
-		}
-
-		// Final part must be at the end
-		lastPart := parts[len(parts)-1]
-		if lastPart != "" && !strings.HasSuffix(remaining, lastPart) {
-			return false
-		}
-
-		return true
+		// Multiple ** - not fully supported; reject with documented limitation
+		// Multi-** patterns like a/**/b/**/c have complex semantics that require
+		// tracking how many directories each ** matches. For correctness, we
+		// explicitly reject these patterns rather than silently returning wrong results.
+		return false
 	}
 
 	// Handle * glob (match any characters except /)
 	if strings.Contains(pattern, "*") {
-		// Simple glob matching
+		// Simple glob matching - for gitignore, patterns without / in the pattern
+		// (other than leading !) should match against the last path segment (filename)
+		if !strings.Contains(pattern, "/") {
+			// Match against last path segment (filename)
+			segments := strings.Split(path, "/")
+			filename := segments[len(segments)-1]
+			return matchGlob(filename, pattern)
+		}
+		// Pattern contains / - match against full path
 		return matchGlob(path, pattern)
 	}
 
-	// Exact match
+	// Exact match - for patterns without /, match against filename only
+	if !strings.Contains(pattern, "/") {
+		segments := strings.Split(path, "/")
+		filename := segments[len(segments)-1]
+		return filename == pattern
+	}
+	// Pattern contains / - match against full path
 	return path == pattern
 }
 

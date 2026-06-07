@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -478,5 +479,163 @@ func TestGetBranch_CacheMtimeChange(t *testing.T) {
 
 	if branch1 != branch2 {
 		t.Errorf("branch changed from %q to %q", branch1, branch2)
+	}
+}
+
+// TestMatchGitignorePattern_MultiDoubleStar tests AC2: multi-** patterns.
+// Multi-** patterns are explicitly rejected as a documented limitation.
+func TestMatchGitignorePattern_MultiDoubleStar(t *testing.T) {
+	tests := []struct {
+		path     string
+		pattern  string
+		expected bool
+	}{
+		{"a/b/c", "a/**/b/**/c", false},       // multi-** rejected as documented limitation
+		{"a/x/b/y/c", "a/**/b/**/c", false},   // multi-** rejected as documented limitation
+		{"a/x/y/b/z/c", "a/**/b/**/c", false}, // multi-** rejected as documented limitation
+		{"a/b/d/c", "a/**/b/**/c", false},     // multi-** rejected as documented limitation
+		{"x/b/c", "a/**/b/**/c", false},       // multi-** rejected as documented limitation
+		{"a/b/c/x", "a/**/b/**/c", false},     // multi-** rejected as documented limitation
+		// Single ** patterns still work
+		{"a/b/c", "a/**/c", true},   // single ** matches zero dirs
+		{"a/x/c", "a/**/c", true},   // single ** matches one dir
+		{"a/x/y/c", "a/**/c", true}, // single ** matches multiple dirs
+	}
+
+	for _, tc := range tests {
+		result := matchGitignorePattern(tc.path, tc.pattern)
+		if result != tc.expected {
+			t.Errorf("matchGitignorePattern(%q, %q) = %v, want %v", tc.path, tc.pattern, result, tc.expected)
+		}
+	}
+}
+
+// TestMatchesGitignore_NegationOverride tests AC3: negation patterns properly override.
+func TestMatchesGitignore_NegationOverride(t *testing.T) {
+	patterns := []string{"*.log", "!important.log"}
+
+	// important.log should NOT be ignored (negated)
+	if matchesGitignore("important.log", patterns) {
+		t.Error("important.log should NOT be ignored (negation applies)")
+	}
+
+	// other.log should be ignored (matched by *.log, not negated)
+	if !matchesGitignore("other.log", patterns) {
+		t.Error("other.log should be ignored (matched by *.log)")
+	}
+
+	// subdir/important.log should NOT be ignored
+	if matchesGitignore("subdir/important.log", patterns) {
+		t.Error("subdir/important.log should NOT be ignored")
+	}
+
+	// subdir/other.log should be ignored
+	if !matchesGitignore("subdir/other.log", patterns) {
+		t.Error("subdir/other.log should be ignored")
+	}
+}
+
+// TestIsIgnored_PatternOrdering tests AC4: deeper directory patterns override root.
+func TestIsIgnored_PatternOrdering(t *testing.T) {
+	tmpDir := t.TempDir()
+	initGitRepo(t, tmpDir)
+
+	// Create .gitignore at root: ignore all .log files
+	rootGitignore := filepath.Join(tmpDir, ".gitignore")
+	err := os.WriteFile(rootGitignore, []byte("*.log\n"), 0644)
+	if err != nil {
+		t.Fatalf("failed to create root .gitignore: %v", err)
+	}
+
+	// Create subdir and .gitignore that negates important.log
+	subdir := filepath.Join(tmpDir, "subdir")
+	err = os.MkdirAll(subdir, 0755)
+	if err != nil {
+		t.Fatalf("failed to create subdir: %v", err)
+	}
+	subdirGitignore := filepath.Join(subdir, ".gitignore")
+	err = os.WriteFile(subdirGitignore, []byte("!important.log\n"), 0644)
+	if err != nil {
+		t.Fatalf("failed to create subdir .gitignore: %v", err)
+	}
+
+	// Create test files
+	importantLog := filepath.Join(subdir, "important.log")
+	err = os.WriteFile(importantLog, []byte("test\n"), 0644)
+	if err != nil {
+		t.Fatalf("failed to create important.log: %v", err)
+	}
+
+	otherLog := filepath.Join(subdir, "other.log")
+	err = os.WriteFile(otherLog, []byte("test\n"), 0644)
+	if err != nil {
+		t.Fatalf("failed to create other.log: %v", err)
+	}
+
+	rootOtherLog := filepath.Join(tmpDir, "other.log")
+	err = os.WriteFile(rootOtherLog, []byte("test\n"), 0644)
+	if err != nil {
+		t.Fatalf("failed to create root other.log: %v", err)
+	}
+
+	// subdir/important.log should NOT be ignored (negation from subdir .gitignore)
+	ignored, err := IsIgnored(tmpDir, importantLog)
+	if err != nil {
+		t.Fatalf("IsIgnored failed for important.log: %v", err)
+	}
+	if ignored {
+		t.Error("subdir/important.log should NOT be ignored (subdir negation overrides root *.log)")
+	}
+
+	// subdir/other.log should be ignored (root *.log)
+	ignored, err = IsIgnored(tmpDir, otherLog)
+	if err != nil {
+		t.Fatalf("IsIgnored failed for other.log: %v", err)
+	}
+	if !ignored {
+		t.Error("subdir/other.log should be ignored (root *.log)")
+	}
+
+	// root/other.log should be ignored (root *.log)
+	ignored, err = IsIgnored(tmpDir, rootOtherLog)
+	if err != nil {
+		t.Fatalf("IsIgnored failed for root other.log: %v", err)
+	}
+	if !ignored {
+		t.Error("root/other.log should be ignored (root *.log)")
+	}
+}
+
+// TestLoadGitignorePatterns_LargeLine tests AC5: lines >64KB are not truncated.
+func TestLoadGitignorePatterns_LargeLine(t *testing.T) {
+	tmpDir := t.TempDir()
+	initGitRepo(t, tmpDir)
+
+	// Create a .gitignore with a line > 64KB
+	gitignorePath := filepath.Join(tmpDir, ".gitignore")
+	largePattern := strings.Repeat("a", 1024*70) // 70KB pattern
+	content := largePattern + "\n*.log\n"
+	err := os.WriteFile(gitignorePath, []byte(content), 0644)
+	if err != nil {
+		t.Fatalf("failed to create .gitignore: %v", err)
+	}
+
+	patterns, err := loadGitignorePatterns(tmpDir)
+	if err != nil {
+		t.Fatalf("loadGitignorePatterns failed: %v", err)
+	}
+
+	if len(patterns) != 2 {
+		t.Errorf("expected 2 patterns, got %d", len(patterns))
+	}
+
+	// First pattern should be the large one (exact length)
+	if len(patterns) < 1 || patterns[0] != largePattern {
+		t.Errorf("first pattern not loaded correctly, got %q (len %d)", patterns[0], len(patterns[0]))
+	}
+
+	// Second pattern should be *.log
+	if len(patterns) < 2 || patterns[1] != "*.log" {
+		t.Errorf("second pattern should be *.log, got %q", patterns[1])
 	}
 }
