@@ -9,6 +9,7 @@ import (
 
 	"github.com/ipy/jenny/internal/api"
 	"github.com/ipy/jenny/internal/log"
+	"github.com/ipy/jenny/internal/mcp"
 	"github.com/ipy/jenny/internal/session"
 	"github.com/ipy/jenny/internal/tool"
 )
@@ -110,9 +111,10 @@ type StreamConfig struct {
 	IncludePartial  bool
 	SessionID       string
 	SessionManager  *session.Manager
-	HistoryMessages []api.Message // Messages loaded from transcript for resume
-	IsResume        bool          // True when resuming an existing session (skip duplicate user message persistence)
-	MaxBudgetUSD    float64       // Budget limit in USD (0 = no limit)
+	HistoryMessages []api.Message               // Messages loaded from transcript for resume
+	IsResume        bool                        // True when resuming an existing session (skip duplicate user message persistence)
+	MaxBudgetUSD    float64                     // Budget limit in USD (0 = no limit)
+	MCPConfig       map[string]mcp.MCPServerDef // Loaded MCP server configurations
 }
 
 // ToolParam represents a tool parameter for the API.

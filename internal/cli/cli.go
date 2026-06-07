@@ -20,6 +20,7 @@ type Flags struct {
 	SessionResume          string
 	NoSessionPersistence   bool
 	MCPConfig              []string
+	StrictMCP              bool
 }
 
 // StringSlice implements flag.Value for multiple string values.
@@ -74,6 +75,9 @@ func Parse() (*Flags, error) {
 
 	flags.Var((*StringSlice)(&mcpPaths), "mcp-config", "MCP configuration file path(s) (can be specified multiple times)")
 
+	var strictMCP bool
+	flags.BoolVar(&strictMCP, "strict-mcp-config", false, "Only load MCP servers from --mcp-config files")
+
 	// Parse the flags
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		if err == flag.ErrHelp {
@@ -109,6 +113,7 @@ func Parse() (*Flags, error) {
 		SessionResume:          sessionResume,
 		NoSessionPersistence:   noSessionPersistence,
 		MCPConfig:              mcpPaths,
+		StrictMCP:              strictMCP,
 	}, nil
 }
 
