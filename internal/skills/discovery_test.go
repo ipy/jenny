@@ -3,6 +3,7 @@ package skills
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -143,8 +144,12 @@ func TestDiscover_SetsRootPath(t *testing.T) {
 	for _, s := range skills {
 		if s.Name == "readme-writer" {
 			expected := filepath.Join(dir, "readme-writer")
-			if s.RootPath != expected {
-				t.Errorf("expected root path %q, got %q", expected, s.RootPath)
+			absExpected, err := filepath.Abs(expected)
+			if err != nil {
+				t.Fatalf("failed to get absolute path: %v", err)
+			}
+			if s.RootPath != absExpected {
+				t.Errorf("expected root path %q, got %q", absExpected, s.RootPath)
 			}
 			return
 		}
@@ -197,20 +202,34 @@ func TestSkillsManifest_NonEmpty(t *testing.T) {
 		t.Error("expected non-empty manifest")
 	}
 	// Should contain both skill names and descriptions
-	if !contains(manifest, "skill1") || !contains(manifest, "Description one") {
+	if !strings.Contains(manifest, "skill1") || !strings.Contains(manifest, "Description one") {
 		t.Error("manifest should contain skill name and description")
 	}
 }
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
-}
-
-func containsHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
+func TestDiscover_DeduplicatesSkills(t *testing.T) {
+	// Create a temp directory with a skill
+	tmpDir := t.TempDir()
+	skillDir := filepath.Join(tmpDir, "test-skill")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	return false
+	skillContent := `# Test Skill
+
+A test skill for deduplication.
+`
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillContent), 0644); err != nil {
+		t.Fatalf("failed to write SKILL.md: %v", err)
+	}
+
+	// Pass the same directory twice
+	skills, err := Discover(tmpDir, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should find only 1 skill (not 2 from passing same dir twice)
+	if len(skills) != 1 {
+		t.Errorf("expected 1 skill after dedup, got %d", len(skills))
+	}
 }

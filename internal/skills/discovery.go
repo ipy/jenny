@@ -19,15 +19,25 @@ type Skill struct {
 // Discover scans the given directories for skills.
 // A skill is a directory containing a SKILL.md file.
 // Returns all discovered skills from all directories.
+// Duplicates are removed: if the same skill directory is discovered via multiple
+// root directories (e.g., when project and home resolve to the same path), it
+// appears only once.
 func Discover(dirs ...string) ([]Skill, error) {
 	var skills []Skill
+	seen := make(map[string]bool)
 
 	for _, dir := range dirs {
 		if dir == "" {
 			continue
 		}
 
-		entries, err := os.ReadDir(dir)
+		// Resolve to absolute path for deduplication
+		absDir, err := filepath.Abs(dir)
+		if err != nil {
+			continue
+		}
+
+		entries, err := os.ReadDir(absDir)
 		if err != nil {
 			// Skip directories that don't exist
 			if os.IsNotExist(err) {
@@ -41,8 +51,14 @@ func Discover(dirs ...string) ([]Skill, error) {
 				continue
 			}
 
-			skillPath := filepath.Join(dir, entry.Name())
+			skillPath := filepath.Join(absDir, entry.Name())
 			skillFile := filepath.Join(skillPath, "SKILL.md")
+
+			// Deduplicate by absolute path
+			if seen[skillPath] {
+				continue
+			}
+			seen[skillPath] = true
 
 			info, err := os.Stat(skillFile)
 			if err != nil {

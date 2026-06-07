@@ -120,7 +120,10 @@ func run() error {
 	projectSkillsDir := filepath.Join(cwd, ".jenny", "skills")
 
 	// Bundled default skills directory (user-level)
-	bundledSkillsDir := filepath.Join(os.Getenv("HOME"), ".jenny", "skills")
+	bundledSkillsDir := ""
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		bundledSkillsDir = filepath.Join(homeDir, ".jenny", "skills")
+	}
 
 	// Discover from both directories (AC6: discovery from multiple directories)
 	discoveredSkills, err = skills.Discover(projectSkillsDir, bundledSkillsDir)
