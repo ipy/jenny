@@ -614,3 +614,110 @@ func TestHasChainMessages_MixedWithProgress(t *testing.T) {
 		t.Error("HasChainMessages() = false, want true when at least one chain participant exists")
 	}
 }
+
+// TestHasChainMessages_TableDriven tests AC6: comprehensive table-driven coverage
+func TestHasChainMessages_TableDriven(t *testing.T) {
+	tests := []struct {
+		name    string
+		entries []session.TranscriptEntry
+		want    bool
+	}{
+		{
+			name:    "nil slice",
+			entries: nil,
+			want:    false,
+		},
+		{
+			name:    "empty slice",
+			entries: []session.TranscriptEntry{},
+			want:    false,
+		},
+		{
+			name: "progress only",
+			entries: []session.TranscriptEntry{
+				{Type: "progress", Content: "Thinking..."},
+			},
+			want: false,
+		},
+		{
+			name: "bash_progress only",
+			entries: []session.TranscriptEntry{
+				{Type: "bash_progress", Content: "Running command"},
+			},
+			want: false,
+		},
+		{
+			name: "worktree_state only",
+			entries: []session.TranscriptEntry{
+				{Type: "worktree_state", WorktreePath: "/tmp", WorktreeBranch: "main"},
+			},
+			want: false,
+		},
+		{
+			name: "powershell_progress only",
+			entries: []session.TranscriptEntry{
+				{Type: "powershell_progress", Content: "Running..."},
+			},
+			want: false,
+		},
+		{
+			name: "mcp_progress only",
+			entries: []session.TranscriptEntry{
+				{Type: "mcp_progress", Content: "MCP tool running"},
+			},
+			want: false,
+		},
+		{
+			name: "user only",
+			entries: []session.TranscriptEntry{
+				{Type: "user", Content: "Hello"},
+			},
+			want: true,
+		},
+		{
+			name: "assistant only",
+			entries: []session.TranscriptEntry{
+				{Type: "assistant", Content: "Hi there"},
+			},
+			want: true,
+		},
+		{
+			name: "tool_result only",
+			entries: []session.TranscriptEntry{
+				{Type: "tool_result", ToolID: "tool_1", Content: "result"},
+			},
+			want: true,
+		},
+		{
+			name: "mixed progress and user",
+			entries: []session.TranscriptEntry{
+				{Type: "progress", Content: "Thinking..."},
+				{Type: "user", Content: "Hello"},
+			},
+			want: true,
+		},
+		{
+			name: "mixed assistant and progress",
+			entries: []session.TranscriptEntry{
+				{Type: "assistant", Content: "Hi"},
+				{Type: "progress", Content: "Thinking..."},
+			},
+			want: true,
+		},
+		{
+			name: "unknown type",
+			entries: []session.TranscriptEntry{
+				{Type: "unknown_xyz", Content: "unknown"},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := HasChainMessages(tt.entries); got != tt.want {
+				t.Errorf("HasChainMessages(%v) = %v, want %v", tt.name, got, tt.want)
+			}
+		})
+	}
+}
