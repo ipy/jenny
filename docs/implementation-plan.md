@@ -72,7 +72,7 @@ Implement in this order:
    - Path traversal validation on session IDs
    - _(No separate spec; covered by [session-persistence.md](./session-persistence.md) / [session-resume.md](./session-resume.md))_
 
-2. - [x] CLI (`-p`, `--model`, flags) — partial — [`cli.md`](./cli.md)
+2. - [x] CLI (`-p`, `--model`, flags) — [`cli.md`](./cli.md)
    - No prompt → print usage, exit non-zero
    - Positional prompt and `-p` are mutually exclusive (positional wins when both given)
    - `--model` overrides `ANTHROPIC_MODEL`
@@ -80,7 +80,7 @@ Implement in this order:
    - `--mcp-config` wired (AC2)
    - `--continue` wired (AC1-AC10)
 
-3. - [x] Anthropic API client — partial — [`anthropic-api-client.md`](./anthropic-api-client.md)
+3. - [x] Anthropic API client — [`anthropic-api-client.md`](./anthropic-api-client.md)
    - System prompt is a top-level parameter, not a `role: system` message
    - Assistant messages with `tool_use` must include the full `tool_use` block before tool results
    - Tool results go in user messages as `tool_result` blocks keyed by `tool_use_id`
@@ -102,17 +102,16 @@ Implement in this order:
    - Rebuild message history from transcript ✓
    - **Deferred:** compaction boundaries → P3+
 
-7. - [x] SSE streaming from API — [`sse-streaming.md`](./sse-streaming.md) — partial _(moved from P2)_
+7. - [x] SSE streaming from API — [`sse-streaming.md`](./sse-streaming.md) _(moved from P2)_
    - Stream via server-sent events; yield partial text as it arrives ✓
    - On streaming failure with fallback configured, retry non-streaming ✓
    - Emit `stream_request_start` before each API iteration ✓
 
-8. - [x] Stream-json output (NDJSON) — partial — [`stream-json.md`](./stream-json.md)
+8. - [x] Stream-json output (NDJSON) — [`stream-json.md`](./stream-json.md)
    - One JSON object per line on stdout; debug on stderr
    - Terminal `{ type: "result", session_id, result, usage }` on successful run
    - stdout guard implemented (AC3)
-   - **Deferred:** system/init line → P3+
-
+   
 9. - [x] Cost / token tracking — [`cost-tracking.md`](./cost-tracking.md)
    - Track input/output tokens plus cache read/creation per model
    - Persist cost state keyed to session ID; restore only on matching resume
@@ -157,7 +156,7 @@ Implement in this order:
 8. - [x] Glob — [`glob.md`](./glob.md)
 9. - [x] Grep — [`grep.md`](./grep.md) _(host ripgrep first; sandboxed path in P2)_
 10. - [x] Dangerous command gate — [`dangerous-command-gate.md`](./dangerous-command-gate.md)
-11. - [x] Bash (full) — [`bash.md`](./bash.md) _(includes former read-only baseline — partial)_
+11. - [x] Bash (full) — [`bash.md`](./bash.md) _(includes former read-only baseline)_
     - Classifier + sandbox; output spill; sed simulation; `run_in_background`
 12. - [x] Write — [`write.md`](./write.md)
 13. - [x] Edit — [`edit.md`](./edit.md)
