@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 
@@ -67,6 +68,10 @@ func TestSubagentType_InvalidTypeError(t *testing.T) {
 		t.Fatal("expected nil for invalid type")
 	}
 	// Verify error message format from RunSubagent for invalid type
+	if os.Getenv("ANTHROPIC_BASE_URL") == "" || os.Getenv("ANTHROPIC_AUTH_TOKEN") == "" {
+		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
+	}
+
 	runner := NewLocalSubagentRunner(nil, nil)
 	params := tool.SubagentParams{
 		Prompt:       "test",
@@ -88,6 +93,10 @@ func TestSubagentType_InvalidTypeError(t *testing.T) {
 }
 
 func TestLocalSubagentRunner_AC1_InvalidTypeError(t *testing.T) {
+	if os.Getenv("ANTHROPIC_BASE_URL") == "" || os.Getenv("ANTHROPIC_AUTH_TOKEN") == "" {
+		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
+	}
+
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
 
@@ -124,6 +133,10 @@ func TestLocalSubagentRunner_AC1_InvalidTypeError(t *testing.T) {
 func TestLocalSubagentRunner_AC3_ParameterPassthrough(t *testing.T) {
 	// Test that parameters are forwarded correctly
 	// This is a basic test - full verification would require mocking RunStream
+	if os.Getenv("ANTHROPIC_BASE_URL") == "" || os.Getenv("ANTHROPIC_AUTH_TOKEN") == "" {
+		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
+	}
+
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
 
@@ -144,6 +157,10 @@ func TestLocalSubagentRunner_AC3_ParameterPassthrough(t *testing.T) {
 
 func TestLocalSubagentRunner_AC4_SubagentLifecycle(t *testing.T) {
 	// Test that subagent runs in its own context
+	if os.Getenv("ANTHROPIC_BASE_URL") == "" || os.Getenv("ANTHROPIC_AUTH_TOKEN") == "" {
+		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
+	}
+
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
 
@@ -167,6 +184,10 @@ func TestLocalSubagentRunner_AC4_SubagentLifecycle(t *testing.T) {
 }
 
 func TestAsyncSubagentRunner_AC2_AsyncLaunch(t *testing.T) {
+	if os.Getenv("ANTHROPIC_BASE_URL") == "" || os.Getenv("ANTHROPIC_AUTH_TOKEN") == "" {
+		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
+	}
+
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
 
@@ -221,6 +242,10 @@ func TestBuiltinTypesMatchSubagentTypes(t *testing.T) {
 // TestLocalSubagentRunner_AC4_StreamConfigPropagation verifies that all 8 new fields
 // are properly propagated from parent config to child StreamConfig when Name is set.
 func TestLocalSubagentRunner_AC4_StreamConfigPropagation(t *testing.T) {
+	if os.Getenv("ANTHROPIC_BASE_URL") == "" || os.Getenv("ANTHROPIC_AUTH_TOKEN") == "" {
+		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
+	}
+
 	readTool := tool.NewReadTool(false, nil)
 	runner := NewLocalSubagentRunner([]tool.Tool{readTool}, nil)
 

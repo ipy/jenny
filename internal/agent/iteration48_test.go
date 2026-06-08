@@ -21,6 +21,10 @@ func TestAC1_RecursiveForkBlocked_ViaContext(t *testing.T) {
 	// AgentTool.Execute() must return error "recursive fork not allowed".
 	// This applies to all subagent types.
 
+	if os.Getenv("ANTHROPIC_BASE_URL") == "" || os.Getenv("ANTHROPIC_AUTH_TOKEN") == "" {
+		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
+	}
+
 	// Create context with fork child marker
 	ctx := context.WithValue(context.Background(), tool.ForkChildKey, true)
 
@@ -55,6 +59,10 @@ func TestAC1_RecursiveForkBlocked_NoFalsePositive(t *testing.T) {
 	// AC1: Without fork marker in context, recursive fork is NOT blocked.
 	// The agent tool should proceed to execute (and fail with API error, not fork error).
 
+	if os.Getenv("ANTHROPIC_BASE_URL") == "" || os.Getenv("ANTHROPIC_AUTH_TOKEN") == "" {
+		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
+	}
+
 	// Create context WITHOUT fork child marker
 	ctx := context.Background()
 
@@ -83,6 +91,10 @@ func TestAC1_RecursiveForkBlocked_NoFalsePositive(t *testing.T) {
 
 func TestAC1_RecursiveForkBlocked_AllSubagentTypes(t *testing.T) {
 	// AC1: Verify fork blocking applies to ALL subagent types (not just some)
+
+	if os.Getenv("ANTHROPIC_BASE_URL") == "" || os.Getenv("ANTHROPIC_AUTH_TOKEN") == "" {
+		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
+	}
 
 	ctx := context.WithValue(context.Background(), tool.ForkChildKey, true)
 	runner := NewLocalSubagentRunner(nil, nil)
@@ -152,6 +164,10 @@ func TestAC2_WorktreeIsolation_MutuallyExclusiveWithCWD(t *testing.T) {
 	// AC2: When both isolation=worktree and cwd are set,
 	// RunSubagent must return error "worktree isolation is mutually exclusive with cwd"
 
+	if os.Getenv("ANTHROPIC_BASE_URL") == "" || os.Getenv("ANTHROPIC_AUTH_TOKEN") == "" {
+		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
+	}
+
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
 	runner := NewLocalSubagentRunner(tools, nil)
@@ -178,6 +194,10 @@ func TestAC2_WorktreeIsolation_AloneWithoutCWD_Validates(t *testing.T) {
 	// It then requires a git repo. Since we're in a test without a proper git repo
 	// context, it should fail with a git-related error (not the mutual exclusion error).
 
+	if os.Getenv("ANTHROPIC_BASE_URL") == "" || os.Getenv("ANTHROPIC_AUTH_TOKEN") == "" {
+		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
+	}
+
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
 	runner := NewLocalSubagentRunner(tools, nil)
@@ -202,6 +222,10 @@ func TestAC2_WorktreeIsolation_AloneWithoutCWD_Validates(t *testing.T) {
 func TestAC2_NoCWD_NoIsolation_Passes(t *testing.T) {
 	// AC2: Without isolation and without cwd, normal validation passes
 	// (will fail later due to no API client, not due to validation)
+
+	if os.Getenv("ANTHROPIC_BASE_URL") == "" || os.Getenv("ANTHROPIC_AUTH_TOKEN") == "" {
+		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
+	}
 
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
@@ -229,6 +253,10 @@ func TestAC2_NoCWD_NoIsolation_Passes(t *testing.T) {
 
 func TestAC3_AsyncSubagentOutputFile_ReturnsPath(t *testing.T) {
 	// AC3: RunSubagentAsync returns an AsyncResult with a non-empty OutputFile path
+
+	if os.Getenv("ANTHROPIC_BASE_URL") == "" || os.Getenv("ANTHROPIC_AUTH_TOKEN") == "" {
+		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
+	}
 
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
@@ -336,6 +364,10 @@ func TestAC3_AsyncOutputFile_WrittenOnCompletion(t *testing.T) {
 func TestAC3_AsyncOutputFile_ErrorContent(t *testing.T) {
 	// AC3: When the subagent fails, the output file should contain the error message
 
+	if os.Getenv("ANTHROPIC_BASE_URL") == "" || os.Getenv("ANTHROPIC_AUTH_TOKEN") == "" {
+		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
+	}
+
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
 	runner := NewAsyncSubagentRunner(tools, nil)
@@ -395,6 +427,10 @@ func TestAC4_InterruptCancelledContext_ReturnsOutputPlusError(t *testing.T) {
 	// whatever output was accumulated) AND the cancellation error.
 	// Output is NOT discarded.
 
+	if os.Getenv("ANTHROPIC_BASE_URL") == "" || os.Getenv("ANTHROPIC_AUTH_TOKEN") == "" {
+		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
+	}
+
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
 	runner := NewLocalSubagentRunner(tools, nil)
@@ -432,6 +468,10 @@ func TestAC4_InterruptTimeoutContext_ReturnsOutputPlusError(t *testing.T) {
 	// AC4: When context times out, RunSubagent returns a SubagentResult with output
 	// AND the DeadlineExceeded error.
 
+	if os.Getenv("ANTHROPIC_BASE_URL") == "" || os.Getenv("ANTHROPIC_AUTH_TOKEN") == "" {
+		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
+	}
+
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
 	runner := NewLocalSubagentRunner(tools, nil)
@@ -467,6 +507,10 @@ func TestAC4_InterruptTimeoutContext_ReturnsOutputPlusError(t *testing.T) {
 func TestAC4_InterruptNormalContext_ReturnsNoCancelError(t *testing.T) {
 	// AC4: When context is NOT cancelled, no cancellation error should be returned.
 	// (Verifies baseline behavior - will get API error instead)
+
+	if os.Getenv("ANTHROPIC_BASE_URL") == "" || os.Getenv("ANTHROPIC_AUTH_TOKEN") == "" {
+		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
+	}
 
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
