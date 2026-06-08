@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1325,9 +1326,20 @@ func TestToolCallEvents(t *testing.T) {
 	}
 }
 
-// TestInterruptSyntheticToolResults_AC5 verifies AC5: when context is cancelled
-// during tool execution, tools that didn't complete (empty ToolUseID) receive
-// synthetic error results, while completed tools retain their actual results.
+// TestInterruptSyntheticToolResults_AC5 verifies the full AC matrix for the
+// interrupt synthetic tool_results feature:
+//   - AC1: a tool that didn't complete receives a synthetic "Tool execution
+//     interrupted" result with IsError=true.
+//   - AC2: a tool that completed before cancellation retains its real result
+//     (not replaced with a synthetic).
+//   - AC3: when stop_reason=tool_use the loop continues to the next iteration,
+//     delivering the bundled real + synthetic results to a second API call
+//     instead of returning the context error immediately.
+//   - AC5: a single test exercises both the interrupted and completed branches.
+//
+// To exercise AC3, the mock server returns tool_use on the first call and
+// end_turn on the second; the engine must therefore make two API calls and
+// must not propagate the context cancellation back as the SubmitMessage error.
 func TestInterruptSyntheticToolResults_AC5(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
@@ -1337,15 +1349,54 @@ func TestInterruptSyntheticToolResults_AC5(t *testing.T) {
 
 	sessionID := "sess_interrupt_test"
 
-	// Server that returns tool_use blocks then end_turn
-	server := makeTestMockStreamServer([]string{
+	// Multi-turn mock: first call returns two tool_use blocks with
+	// stop_reason=tool_use (loop must continue); second call returns end_turn.
+	// Tools are categorised "readonly" (Read/Grep) so they run in parallel,
+	// which lets one finish before cancellation reaches the blocker.
+	turn1Events := []string{
 		testSseLine("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"test","stop_reason":null,"usage":{"input_tokens":1,"output_tokens":1}}}`),
-		testSseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"tool_1","name":"bash","input":{}}}`),
-		testSseLine("content_block_start", `{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"tool_2","name":"bash","input":{}}}`),
+		testSseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"tool_fast","name":"read","input":{}}}`),
+		testSseLine("content_block_stop", `{"type":"content_block_stop","index":0}`),
+		testSseLine("content_block_start", `{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"tool_slow","name":"grep","input":{}}}`),
 		testSseLine("content_block_stop", `{"type":"content_block_stop","index":1}`),
+		testSseLine("message_delta", `{"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"input_tokens":1,"output_tokens":1}}`),
+		testSseLine("message_stop", `{"type":"message_stop"}`),
+	}
+	turn2Events := []string{
+		testSseLine("message_start", `{"type":"message_start","message":{"id":"msg_2","type":"message","role":"assistant","content":[],"model":"test","stop_reason":null,"usage":{"input_tokens":1,"output_tokens":1}}}`),
+		testSseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
+		testSseLine("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"done"}}`),
+		testSseLine("content_block_stop", `{"type":"content_block_stop","index":0}`),
 		testSseLine("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":1,"output_tokens":1}}`),
 		testSseLine("message_stop", `{"type":"message_stop"}`),
-	})
+	}
+
+	var apiCallCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.ReadAll(r.Body)
+		r.Body.Close()
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.WriteHeader(http.StatusOK)
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			return
+		}
+		flusher.Flush()
+
+		n := apiCallCount.Add(1)
+		var events []string
+		if n == 1 {
+			events = turn1Events
+		} else {
+			events = turn2Events
+		}
+		for _, e := range events {
+			io.WriteString(w, e)
+			flusher.Flush()
+		}
+	}))
 	defer server.Close()
 
 	origBaseURL := os.Getenv("ANTHROPIC_BASE_URL")
@@ -1357,9 +1408,11 @@ func TestInterruptSyntheticToolResults_AC5(t *testing.T) {
 		os.Setenv("ANTHROPIC_API_KEY", origAPIKey)
 	}()
 
-	// Create a blocking tool that sleeps until context is cancelled
-	blocker := &blockingTool{name: "bash", blockDuration: 5 * time.Second}
-	tools := []tool.Tool{blocker}
+	// One fast tool (completes immediately, exercises AC2) and one blocking
+	// tool that only returns when the context is cancelled (exercises AC1).
+	fast := &fastTool{name: "read", content: "fast-tool-real-content"}
+	slow := &blockingTool{name: "grep", blockDuration: 5 * time.Second}
+	tools := []tool.Tool{fast, slow}
 
 	cfg := StreamConfig{
 		Enabled:        false,
@@ -1369,59 +1422,81 @@ func TestInterruptSyntheticToolResults_AC5(t *testing.T) {
 
 	engine := NewQueryEngine(cfg, tools, "test-model")
 
-	// Use a timeout that allows API call to complete but cancels during tool execution.
-	// The API call returns quickly (~1ms), tools execute in parallel, and context
-	// cancellation fires after tools start but before they complete.
-	// 100ms is long enough for API+SSE, short enough to cancel during tool execution.
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
 	start := time.Now()
 	_, err = engine.SubmitMessage(ctx, "test prompt")
 	elapsed := time.Since(start)
-
-	// We expect an error because context was cancelled
-	// But the key is that synthetic results should have been generated
 	t.Logf("SubmitMessage returned after %v with error: %v", elapsed, err)
 
-	// AC5: Verify the interrupt path was hit (context was cancelled during execution)
-	if ctx.Err() == nil {
-		t.Error("AC5 FAIL: expected context to be cancelled, but it is not")
+	// AC3: SubmitMessage must NOT propagate the context cancellation back as
+	// its error — the engine should detach the loop context after generating
+	// synthetic results so the next iteration can deliver them.
+	if err != nil && (strings.Contains(err.Error(), "context deadline exceeded") ||
+		strings.Contains(err.Error(), "context canceled")) {
+		t.Errorf("AC3 FAIL: SubmitMessage returned context error: %v", err)
 	} else {
-		t.Logf("AC5 PASS: context was cancelled (err=%v) after %v", ctx.Err(), elapsed)
+		t.Logf("AC3 PASS: SubmitMessage did not return a context error (err=%v)", err)
 	}
 
-	// AC1: Verify synthetic error results exist in transcript for cancelled tools
+	// AC3: API must have been called twice — once for the tool_use turn that
+	// generated synthetic results, then again with those results delivered.
+	gotCalls := apiCallCount.Load()
+	if gotCalls < 2 {
+		t.Errorf("AC3 FAIL: expected at least 2 API calls (loop continued), got %d", gotCalls)
+	} else {
+		t.Logf("AC3 PASS: API was called %d times (loop continued past interrupt)", gotCalls)
+	}
+
+	// AC1/AC2: inspect transcript to verify both branches.
 	entries, err := sessMgr.LoadTranscript(sessionID)
 	if err != nil {
 		t.Fatalf("LoadTranscript error: %v", err)
 	}
 
-	// Count tool_result entries with "Tool execution interrupted"
-	interruptCount := 0
-	realResultCount := 0
+	var syntheticForSlow, realForFast bool
 	for _, entry := range entries {
-		if entry.Type == "tool_result" {
-			if entry.IsError && strings.Contains(entry.Content, "Tool execution interrupted") {
-				interruptCount++
-			} else if !entry.IsError || !strings.Contains(entry.Content, "Tool execution interrupted") {
-				realResultCount++
-			}
+		if entry.Type != "tool_result" {
+			continue
+		}
+		if entry.ToolID == "tool_slow" && entry.IsError &&
+			strings.Contains(entry.Content, "Tool execution interrupted") {
+			syntheticForSlow = true
+		}
+		if entry.ToolID == "tool_fast" && !entry.IsError &&
+			entry.Content == "fast-tool-real-content" {
+			realForFast = true
 		}
 	}
 
-	t.Logf("Transcript tool_results: %d interrupted (synthetic), %d real",
-		interruptCount, realResultCount)
-
-	// AC5: Verify at least one synthetic error result was generated
-	if interruptCount == 0 {
-		t.Error("AC5 FAIL: expected at least one synthetic 'Tool execution interrupted' result")
+	if !syntheticForSlow {
+		t.Error("AC1 FAIL: expected synthetic 'Tool execution interrupted' result for blocking tool tool_slow")
 	} else {
-		t.Logf("AC5 PASS: found %d synthetic error result(s)", interruptCount)
+		t.Log("AC1 PASS: blocking tool received synthetic interrupted result")
+	}
+	if !realForFast {
+		t.Error("AC2 FAIL: expected completed tool tool_fast to retain real content 'fast-tool-real-content'")
+	} else {
+		t.Log("AC2 PASS: completed tool retained its real result content")
+	}
+
+	// Also verify there is no duplicate ToolUseID in the transcript — the
+	// dedupe fix must keep exactly one tool_result per tool_use id.
+	seen := make(map[string]int)
+	for _, entry := range entries {
+		if entry.Type == "tool_result" && entry.ToolID != "" {
+			seen[entry.ToolID]++
+		}
+	}
+	for id, n := range seen {
+		if n != 1 {
+			t.Errorf("dedupe FAIL: tool_result for %q appeared %d times in transcript (want 1)", id, n)
+		}
 	}
 }
 
-// blockingTool is a test tool that blocks for a configurable duration.
+// blockingTool is a test tool that blocks until the context is cancelled.
 type blockingTool struct {
 	name          string
 	blockDuration time.Duration
@@ -1433,11 +1508,24 @@ func (b *blockingTool) InputSchema() map[string]any { return map[string]any{} }
 func (b *blockingTool) Execute(ctx context.Context, input map[string]any, cwd string) (*tool.ToolResult, error) {
 	select {
 	case <-ctx.Done():
-		// Context cancelled - return empty result (will have empty ToolUseID in executor)
 		return &tool.ToolResult{Content: "", IsError: false}, ctx.Err()
 	case <-time.After(b.blockDuration):
 		return &tool.ToolResult{Content: "completed", IsError: false}, nil
 	}
+}
+
+// fastTool returns immediately with a fixed content string. Used to verify
+// that completed tools retain their real result alongside interrupted ones.
+type fastTool struct {
+	name    string
+	content string
+}
+
+func (f *fastTool) Name() string                { return f.name }
+func (f *fastTool) Description() string         { return "A fast test tool" }
+func (f *fastTool) InputSchema() map[string]any { return map[string]any{} }
+func (f *fastTool) Execute(ctx context.Context, input map[string]any, cwd string) (*tool.ToolResult, error) {
+	return &tool.ToolResult{Content: f.content, IsError: false}, nil
 }
 
 // TestToolCallEvents_Negative verifies that when stream-json mode is DISABLED

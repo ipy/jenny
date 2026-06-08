@@ -600,26 +600,60 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			return "", fmt.Errorf("executing tools: %w", err)
 		}
 
+		// AC1/AC2: Pre-compute per-tool interrupt status so we can decide whether
+		// to emit the executor's partial result or a synthetic "interrupted"
+		// replacement. We need this decision BEFORE appending to toolResults to
+		// avoid duplicate ToolUseID entries in the user message (fixes
+		// iter88-dup-tool-results).
+		interrupted := make([]bool, len(execResults))
+		if ctx.Err() != nil {
+			for i, res := range execResults {
+				// A tool is interrupted when it has no ToolUseID (never ran) or
+				// the executor marked it as aborted/error due to context cancel.
+				if res.ToolUseID == "" ||
+					strings.Contains(res.Content, "aborted") ||
+					strings.Contains(res.Content, "interrupted") ||
+					strings.Contains(res.Content, "Error executing tool:") {
+					interrupted[i] = true
+				}
+			}
+		}
+
 		// Process results and collect for API response
+		hasSynthetic := false
 		for i, res := range execResults {
 			// AC3: Capture structured output result if StructuredOutput was called
 			if i < len(execBlocks) && execBlocks[i].Name == "StructuredOutput" && !res.IsError {
 				e.structuredOutputResult = res.Content
 			}
 
+			// AC1: For interrupted tools, replace executor's partial result with a
+			// single synthetic "Tool execution interrupted" entry. This both
+			// preserves the model-facing contract (one tool_result per tool_use)
+			// and avoids duplicates in the user message.
+			emitContent := res.Content
+			emitIsError := res.IsError
+			emitToolUseID := res.ToolUseID
+			if interrupted[i] {
+				emitContent = "Tool execution interrupted"
+				emitIsError = true
+				emitToolUseID = execBlocks[i].ID
+				hasSynthetic = true
+			}
+
 			toolResults = append(toolResults, api.ToolResult{
-				ToolUseID: res.ToolUseID,
-				Content:   res.Content,
-				IsError:   res.IsError,
+				ToolUseID: emitToolUseID,
+				Content:   emitContent,
+				IsError:   emitIsError,
 			})
 
 			// Persist tool result to transcript AFTER assistant message
 			if e.sessionManager != nil {
 				if err := e.sessionManager.AppendEntry(sessionID, session.TranscriptEntry{
 					Type:    "tool_result",
-					ToolID:  res.ToolUseID,
-					Content: res.Content,
-					IsError: res.IsError,
+					ToolID:  emitToolUseID,
+					Content: emitContent,
+					IsError: emitIsError,
 				}); err != nil {
 					return "", fmt.Errorf("persisting tool result to transcript: %w", err)
 				}
@@ -630,8 +664,8 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				completedMsg := StreamMessage{
 					Type:       "tool_call",
 					Subtype:    "completed",
-					ToolUseID:  res.ToolUseID,
-					IsError:    res.IsError,
+					ToolUseID:  emitToolUseID,
+					IsError:    emitIsError,
 					SessionID:  sessionID,
 					MessageIdx: currentTurn,
 				}
@@ -642,8 +676,8 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				msg := StreamMessage{
 					Type:       "tool_result",
 					SessionID:  sessionID,
-					Content:    res.Content,
-					IsError:    res.IsError,
+					Content:    emitContent,
+					IsError:    emitIsError,
 					MessageIdx: currentTurn,
 				}
 				data, _ = json.Marshal(msg)
@@ -651,59 +685,13 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			}
 		}
 
-		// AC1: Handle interrupt synthetic tool_results.
-		// After executor returns, check if context was cancelled during tool execution.
-		// For tools that didn't complete normally (either empty ToolUseID or executor
-		// marked them as aborted due to sibling/context cancellation), synthesize
-		// proper error results so the model can see which tools were cancelled and
-		// respond appropriately.
-		if ctx.Err() != nil {
-			for i, res := range execResults {
-				// Check if tool didn't complete: either empty ToolUseID (never ran)
-				// or executor marked it as aborted due to sibling/context cancellation.
-				// The executor sets Content to "Tool execution aborted due to sibling failure"
-				// when ctx is cancelled, but tools may also return "Error executing tool:"
-				// if they checked ctx.Err() and returned an error.
-				interrupted := res.ToolUseID == "" ||
-					strings.Contains(res.Content, "aborted") ||
-					strings.Contains(res.Content, "interrupted") ||
-					strings.Contains(res.Content, "Error executing tool:")
-
-				if interrupted {
-					// Tool didn't complete normally - create/update with proper error result
-					syntheticResult := api.ToolResult{
-						ToolUseID: execBlocks[i].ID,
-						Content:   "Tool execution interrupted",
-						IsError:   true,
-					}
-					toolResults = append(toolResults, syntheticResult)
-
-					// Persist to transcript
-					if e.sessionManager != nil {
-						if err := e.sessionManager.AppendEntry(sessionID, session.TranscriptEntry{
-							Type:    "tool_result",
-							ToolID:  execBlocks[i].ID,
-							Content: "Tool execution interrupted",
-							IsError: true,
-						}); err != nil {
-							return "", fmt.Errorf("persisting synthetic tool result to transcript: %w", err)
-						}
-					}
-
-					// Emit stream-json event if streaming
-					if e.streamCfg.Enabled {
-						msg := StreamMessage{
-							Type:       "tool_result",
-							SessionID:  sessionID,
-							Content:    "Tool execution interrupted",
-							IsError:    true,
-							MessageIdx: currentTurn,
-						}
-						data, _ := json.Marshal(msg)
-						fmt.Fprintln(os.Stdout, string(data))
-					}
-				}
-			}
+		// AC3: When synthetic results were generated, detach the loop context
+		// from cancellation so the next iteration can deliver them to the model
+		// instead of bailing out at the top-of-loop ctx.Err() guard. The model
+		// receives the interrupted tool_results and decides whether to retry,
+		// summarise, or abort. We keep ctx.Err() honoured everywhere else.
+		if hasSynthetic {
+			ctx = context.WithoutCancel(ctx)
 		}
 
 		// Check session memory threshold after each turn
