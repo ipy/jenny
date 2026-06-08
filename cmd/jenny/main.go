@@ -93,6 +93,12 @@ func run() error {
 			return fmt.Errorf("loading transcript: %w", err)
 		}
 
+		// Reject queue-only/empty transcripts: if no chain participant messages
+		// exist after filtering progress types, the session has no conversation to resume.
+		if !agent.HasChainMessages(entries) {
+			return fmt.Errorf("no conversation found in session %s", sessionID)
+		}
+
 		historyMessages = agent.RebuildMessages(entries)
 
 		// Fork session if --fork-session flag is set

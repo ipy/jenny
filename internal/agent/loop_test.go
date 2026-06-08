@@ -540,3 +540,77 @@ func TestResumeWithToolCalls(t *testing.T) {
 		t.Errorf("msgs[3] content = %q, want %q", msgs[3].Content, "I found 2 files: file1.txt and file2.txt")
 	}
 }
+
+func TestHasChainMessages_QueueOnlyTranscript(t *testing.T) {
+	// AC1/AC2: Queue-only transcript (only progress types) has no chain messages
+	entries := []session.TranscriptEntry{
+		{Type: "progress", Content: "Thinking..."},
+		{Type: "bash_progress", Content: "Running command"},
+		{Type: "mcp_progress", Content: "MCP tool running"},
+		{Type: "powershell_progress", Content: "PowerShell running"},
+	}
+	if HasChainMessages(entries) {
+		t.Error("HasChainMessages() = true, want false for queue-only transcript")
+	}
+}
+
+func TestHasChainMessages_EmptyTranscript(t *testing.T) {
+	// AC2: Empty transcript has no chain messages
+	entries := []session.TranscriptEntry{}
+	if HasChainMessages(entries) {
+		t.Error("HasChainMessages() = true, want false for empty transcript")
+	}
+}
+
+func TestHasChainMessages_NormalTranscript(t *testing.T) {
+	// AC3: Normal transcript with user entry has chain messages
+	entries := []session.TranscriptEntry{
+		{Type: "user", Content: "Hello"},
+	}
+	if !HasChainMessages(entries) {
+		t.Error("HasChainMessages() = false, want true for normal transcript with user entry")
+	}
+}
+
+func TestHasChainMessages_WorktreeState(t *testing.T) {
+	// Worktree state entries don't count as chain participants
+	entries := []session.TranscriptEntry{
+		{Type: "worktree_state", WorktreePath: "/tmp/worktree", WorktreeBranch: "main"},
+		{Type: "session_state", CompactFailCount: 0},
+	}
+	if HasChainMessages(entries) {
+		t.Error("HasChainMessages() = true, want false for worktree_state/session_state only")
+	}
+}
+
+func TestHasChainMessages_AssistantOnly(t *testing.T) {
+	// Assistant-only transcript still has chain messages
+	entries := []session.TranscriptEntry{
+		{Type: "assistant", Content: "Hi there"},
+	}
+	if !HasChainMessages(entries) {
+		t.Error("HasChainMessages() = false, want true for assistant-only transcript")
+	}
+}
+
+func TestHasChainMessages_ToolResultOnly(t *testing.T) {
+	// Tool result only still counts as chain participant
+	entries := []session.TranscriptEntry{
+		{Type: "tool_result", ToolID: "tool_1", Content: "result"},
+	}
+	if !HasChainMessages(entries) {
+		t.Error("HasChainMessages() = false, want true for tool_result only")
+	}
+}
+
+func TestHasChainMessages_MixedWithProgress(t *testing.T) {
+	// Mix of progress types and chain participants - chain participants make it true
+	entries := []session.TranscriptEntry{
+		{Type: "progress", Content: "Thinking..."},
+		{Type: "user", Content: "Hello"},
+		{Type: "bash_progress", Content: "Running"},
+	}
+	if !HasChainMessages(entries) {
+		t.Error("HasChainMessages() = false, want true when at least one chain participant exists")
+	}
+}

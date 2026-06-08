@@ -18,6 +18,26 @@ import (
 // Ensure ReadFileCache type is used (via StreamConfig field)
 var _ *tool.ReadFileCache
 
+// chainParticipantTypes are entry types that produce chain participant messages
+// in RebuildMessages. These are the types that generate non-empty API messages.
+var chainParticipantTypes = map[string]bool{
+	"user":        true,
+	"assistant":   true,
+	"tool_result": true,
+}
+
+// HasChainMessages reports whether at least one entry produces a chain participant
+// message (user, assistant, tool_result) after filtering progress/ephemeral types.
+// This is used to reject queue-only/empty transcripts during resume.
+func HasChainMessages(entries []session.TranscriptEntry) bool {
+	for _, entry := range entries {
+		if chainParticipantTypes[entry.Type] {
+			return true
+		}
+	}
+	return false
+}
+
 // RebuildMessages converts transcript entries to API messages for resume.
 // This is used when resuming a session with -r flag to reconstruct the
 // conversation history from the persisted transcript.

@@ -7,7 +7,6 @@ spec: complete
 code: partial
 package: internal/agent, internal/session
 gaps:
-  - Queue-only filtering missing
   - Compaction boundaries missing
 defer_to: P3
 depends_on:
@@ -54,6 +53,8 @@ Continue with user prompt
 ## Queue-Only Filtering
 
 If a transcript contains only `queue-operation` entries and zero chain messages, treat as **no conversation found** — return error, do not start empty chain silently.
+
+> **Note:** The check is implemented at the CLI resume entrypoint (`cmd/jenny/main.go`) after `LoadTranscript` returns. It validates that at least one chain-participant entry (`user`, `assistant`, `tool_result`) exists before proceeding. Progress/ephemeral types (`progress`, `bash_progress`, `mcp_progress`, `powershell_progress`) and state types (`worktree_state`, `session_state`) do not count as chain participants. This rule supersedes the literal "queue-operation" wording in the spec — any session whose rebuilt message history would be empty is rejected.
 
 ## readFileState Restoration
 

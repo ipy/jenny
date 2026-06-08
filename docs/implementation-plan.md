@@ -100,7 +100,7 @@ Implement in this order:
 
 6. - [x] Session resume (`-r`) — partial — [`session-resume.md`](./session-resume.md)
    - Rebuild message history from transcript ✓
-   - **Deferred:** queue-only filtering, compaction boundaries → P3+
+   - **Deferred:** compaction boundaries → P3+
 
 7. - [x] SSE streaming from API — [`sse-streaming.md`](./sse-streaming.md) — partial _(moved from P2)_
    - Stream via server-sent events; yield partial text as it arrives ✓
