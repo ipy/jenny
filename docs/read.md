@@ -7,7 +7,6 @@ spec: complete
 code: partial
 package: internal/tool
 gaps:
-  - Naive line scan
   - No images/PDF/notebooks
 defer_to: P3
 depends_on:

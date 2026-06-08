@@ -231,6 +231,9 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 	// Read and process the file
 	scanner := bufio.NewScanner(file)
 	var lines []string
+	if limit > 0 {
+		lines = make([]string, 0, limit)
+	}
 	lineNum := 0
 
 	for scanner.Scan() {
