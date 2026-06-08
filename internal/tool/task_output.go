@@ -14,9 +14,9 @@ import (
 // Returns default of 30s if not provided or if timeout <= 0, caps at 600s maximum.
 func parseTimeoutSeconds(input map[string]any) float64 {
 	timeoutSecondsFloat := 30.0
-	if t, ok := input["timeout"].(float64); ok {
-		if t > 0 {
-			timeoutSecondsFloat = math.Min(t, 600.0)
+	if timeoutVal, ok := input["timeout"].(float64); ok {
+		if timeoutVal > 0 {
+			timeoutSecondsFloat = math.Min(timeoutVal, 600.0)
 		}
 	}
 	return timeoutSecondsFloat

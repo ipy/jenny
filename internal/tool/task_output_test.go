@@ -324,12 +324,12 @@ func TestTaskOutputTool_Execute_MaxTimeout(t *testing.T) {
 	tool := NewTaskOutputTool(tm)
 	ctx := context.Background()
 
-	// Test that timeout > 600 gets capped to 600
-	// Use a very short effective timeout (0.1s) to confirm behavior quickly
+	// Use a short timeout (0.1s) to confirm timeout behavior without waiting long
+	// The 600s cap is verified by TestParseTimeoutSeconds (700 -> 600)
 	start := time.Now()
 	result, err := tool.Execute(ctx, map[string]any{
 		"task_id": "test-task-never-completes",
-		"timeout": 700, // > 600 max, should be capped
+		"timeout": 0.1, // 100ms timeout
 	}, "/tmp")
 	elapsed := time.Since(start)
 
@@ -339,16 +339,13 @@ func TestTaskOutputTool_Execute_MaxTimeout(t *testing.T) {
 	if !result.IsError {
 		t.Errorf("Execute() should return error on timeout")
 	}
-	// Verify timeout was capped at 600s - elapsed should be close to 600s
-	// (We use a running task so it waits for timeout, not completes early)
-	// But since we can't wait 600s in a test, we verify the error message shows timeout
 	if result.Content != "timeout waiting for task test-task-never-completes" {
 		t.Errorf("Execute() content = %v, want timeout message", result.Content)
 	}
-	// Verify the capped behavior: 700 was capped to 600, so we waited ~600s
-	// Elapsed should be close to 600s (allow some margin for test execution)
-	if elapsed < 500*time.Millisecond {
-		t.Errorf("Execute() returned too quickly (elapsed=%v), expected ~600s cap", elapsed)
+	// Verify elapsed is close to the short timeout (100ms)
+	// Allow range: >= 50ms (some time passed) and < 2s (reasonable bound)
+	if elapsed < 50*time.Millisecond || elapsed >= 2*time.Second {
+		t.Errorf("Execute() elapsed=%v, expected ~100ms (50ms-2s range)", elapsed)
 	}
 }
 
