@@ -251,6 +251,9 @@ func (r *Registry) Build() []Tool {
 			if r.taskCreateEnabled {
 				r.taskStore = NewTaskStore()
 				r.baseTools = append(r.baseTools, NewTaskCreateTool(r.taskStore))
+				r.baseTools = append(r.baseTools, NewTaskGetTool(r.taskStore))
+				r.baseTools = append(r.baseTools, NewTaskListTool(r.taskStore))
+				r.baseTools = append(r.baseTools, NewTaskUpdateTool(r.taskStore))
 			}
 		} else if r.todoWriteEnabled {
 			r.baseTools = append(r.baseTools, NewTodoWriteTool())

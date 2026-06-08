@@ -422,3 +422,58 @@ func TestAC3_TodoWriteAppearsWithoutTodoV2Enabled(t *testing.T) {
 
 	t.Log("AC3 PASS: TodoWrite appears normally without TodoV2Enabled")
 }
+
+// TestAC10_TaskGetListUpdateAppearWhenTodoV2Enabled verifies that when
+// TodoV2Enabled is true and TaskCreateEnabled is true, TaskGet, TaskList, and
+// TaskUpdate tools appear in the registry.
+func TestAC10_TaskGetListUpdateAppearWhenTodoV2Enabled(t *testing.T) {
+	tools := NewRegistry().
+		WithBaseTools().
+		WithTodoV2Enabled(true).
+		WithTaskCreateEnabled(true).
+		Build()
+
+	names := make(map[string]bool)
+	for _, t := range tools {
+		names[t.Name()] = true
+	}
+
+	if !names["TaskGet"] {
+		t.Error("expected 'TaskGet' tool when TodoV2Enabled and TaskCreateEnabled")
+	}
+	if !names["TaskList"] {
+		t.Error("expected 'TaskList' tool when TodoV2Enabled and TaskCreateEnabled")
+	}
+	if !names["TaskUpdate"] {
+		t.Error("expected 'TaskUpdate' tool when TodoV2Enabled and TaskCreateEnabled")
+	}
+
+	t.Log("AC10 PASS: TaskGet, TaskList, TaskUpdate appear when TodoV2Enabled and TaskCreateEnabled")
+}
+
+// TestAC10_TaskGetListUpdateNotAppearsWithoutTaskCreateEnabled verifies that
+// TaskGet, TaskList, TaskUpdate do not appear when TaskCreateEnabled is false.
+func TestAC10_TaskGetListUpdateNotAppearsWithoutTaskCreateEnabled(t *testing.T) {
+	tools := NewRegistry().
+		WithBaseTools().
+		WithTodoV2Enabled(true).
+		// TaskCreateEnabled is false
+		Build()
+
+	names := make(map[string]bool)
+	for _, t := range tools {
+		names[t.Name()] = true
+	}
+
+	if names["TaskGet"] {
+		t.Error("'TaskGet' should not appear when TaskCreateEnabled is false")
+	}
+	if names["TaskList"] {
+		t.Error("'TaskList' should not appear when TaskCreateEnabled is false")
+	}
+	if names["TaskUpdate"] {
+		t.Error("'TaskUpdate' should not appear when TaskCreateEnabled is false")
+	}
+
+	t.Log("AC10 PASS: TaskGet, TaskList, TaskUpdate do not appear without TaskCreateEnabled")
+}

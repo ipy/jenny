@@ -26,6 +26,8 @@ type Task struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	Metadata    map[string]any
+	Blocks      []string // Task IDs this task blocks
+	BlockedBy   []string // Task IDs this task is blocked by
 }
 
 // TaskFilter contains optional filters for listing tasks.
@@ -129,6 +131,27 @@ func (s *TaskStore) Update(id string, fields map[string]any) *Task {
 	}
 	if metadata, ok := fields["metadata"].(map[string]any); ok {
 		task.Metadata = metadata
+	}
+	task.UpdatedAt = time.Now()
+
+	return task
+}
+
+// AddDependencies adds blocks/blockedBy relationships to a task.
+func (s *TaskStore) AddDependencies(id string, blocks, blockedBy []string) *Task {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	task, ok := s.tasks[id]
+	if !ok {
+		return nil
+	}
+
+	if len(blocks) > 0 {
+		task.Blocks = append(task.Blocks, blocks...)
+	}
+	if len(blockedBy) > 0 {
+		task.BlockedBy = append(task.BlockedBy, blockedBy...)
 	}
 	task.UpdatedAt = time.Now()
 
