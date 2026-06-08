@@ -179,7 +179,7 @@ Four properties are checked:
    named `"Bash"` and `"Read"`, which are required for agentic
    compatibility.
 
-### Non-streaming `max_tokens` clamp
+### Non-streaming `max_tokens` and the SDK 10-minute guard
 
 The Anthropic Go SDK enforces a hard constraint in
 `CalculateNonStreamingTimeout`: any non-streaming request whose
@@ -189,15 +189,17 @@ made. For a 64000-token budget that is ~30 minutes, so the SDK
 returns `"streaming is required for operations that may take longer
 than 10 minutes"`.
 
-Because the streaming fallback path (`client.SendMessage`) goes
-through the same SDK guard, the non-streaming code path in
-`internal/api/client.go` (`doSendMessage`) clamps `maxTokens` to
-`20000` (≈9.4 minutes) when the caller requests more. The caller may
-still set the universal `64000` default — the clamp is the last
-step before the SDK call. AC9 above measures the *outbound* streaming
-request only, where the 64000 budget is unconstrained; the clamp
-only affects the non-streaming fallback path and short internal
-requests (memory extraction, summarisation).
+The streaming fallback path (`client.SendMessage`) goes through the
+same SDK guard, so we bypass it at the client level by passing
+`option.WithRequestTimeout(1*time.Hour)` to `anthropic.NewClient` in
+`NewClientWithModel`. The SDK's `CalculateNonStreamingTimeout` short-
+circuits to the caller-supplied `RequestTimeout` when one is set, so
+the 10-minute guard is skipped. The streaming path is unaffected
+(it has no such guard); the timeout simply caps the per-attempt
+wall time. The non-streaming code path in
+`internal/api/client.go` (`doSendMessage`) therefore emits
+`max_tokens == 64000` on the wire on both the streaming and
+fallback paths, satisfying AC1's literal requirement.
 
 ## Running the Suite
 

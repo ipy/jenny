@@ -633,3 +633,45 @@ func TestStreamingMultipleContentBlocks(t *testing.T) {
 		t.Errorf("block 2: expected bash tool with command 'ls', got %v", blocks[2].Block)
 	}
 }
+
+// TestFallback_NonStreamingMaxTokens64000 is the AC1 conformance test for
+// the non-streaming fallback path: when no override is set, the
+// non-streaming /v1/messages request must carry max_tokens == 64000
+// (the universal default). The 20000 clamp that previously lived in
+// doSendMessage is gone; the SDK's 10-minute guard is bypassed at the
+// client level via option.WithRequestTimeout(1*time.Hour).
+func TestFallback_NonStreamingMaxTokens64000(t *testing.T) {
+	var capturedBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedBody, _ = io.ReadAll(r.Body)
+		r.Body.Close()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		resp := `{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"Hello"}],"model":"m","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}}`
+		w.Write([]byte(resp))
+	}))
+	defer server.Close()
+	defer setTestEnv(t, server.URL)()
+
+	client, _ := NewClientWithModel("m")
+	// No SetMaxTokensOverride — must use the universal 64000 default.
+	if _, err := client.SendMessage(context.Background(), nil, nil, nil, ""); err != nil {
+		t.Fatalf("SendMessage error = %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(capturedBody, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal request body: %v", err)
+	}
+	raw, present := parsed["max_tokens"]
+	if !present {
+		t.Fatalf("max_tokens missing from non-streaming request body")
+	}
+	num, ok := raw.(float64)
+	if !ok {
+		t.Fatalf("max_tokens is not a number; got %T (%v)", raw, raw)
+	}
+	if int(num) != 64000 {
+		t.Errorf("AC1 FAIL: non-streaming max_tokens = %d; want 64000", int(num))
+	}
+}

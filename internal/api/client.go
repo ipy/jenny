@@ -59,9 +59,19 @@ func NewClientWithModel(model string) (*Client, error) {
 		model = defaultModel
 	}
 
-	// SDK's NewClient already reads ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN
+	// SDK's NewClient already reads ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN.
+	//
+	// WithRequestTimeout(1h) bypasses the SDK's
+	// CalculateNonStreamingTimeout 10-minute guard, which would otherwise
+	// reject any non-streaming request whose expected wall-time
+	// (maxTokens * 1h / 128000) exceeds 10 minutes. For our universal
+	// 64000-token budget that is ~30 minutes, so without this override
+	// the streaming fallback path would never complete. The streaming
+	// path has no such guard; the request timeout only caps the
+	// per-attempt wall time.
 	client := anthropic.NewClient(
 		option.WithHeader("anthropic-beta", string(anthropic.AnthropicBetaPromptCaching2024_07_31)),
+		option.WithRequestTimeout(1*time.Hour),
 	)
 
 	return &Client{
@@ -476,22 +486,9 @@ func (c *Client) doSendMessage(ctx context.Context, messages []Message, tools []
 	}
 
 	// Build request
-	//
-	// The Anthropic SDK requires streaming for any request whose
-	// expected wall-time exceeds 10 minutes
-	// (maxTokens * 1h / 128000 > 10m). For a 64000-token budget that
-	// is ~30 minutes, which the SDK rejects for non-streaming calls.
-	// The non-streaming path is reserved for short internal requests
-	// (memory extraction, summarisation, fallback), where 64000 is
-	// the reference parity target. We clamp to 20000 here to avoid
-	// SDK rejection while allowing the caller to use the universal
-	// 64000 default.
 	maxTokens := 64000
 	if c.maxTokensOverride > 0 {
 		maxTokens = c.maxTokensOverride
-	}
-	if maxTokens > 20000 {
-		maxTokens = 20000
 	}
 	body := anthropic.MessageNewParams{
 		Model:     anthropic.Model(c.model),
