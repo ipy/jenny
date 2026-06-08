@@ -217,3 +217,90 @@ func TestBuiltinTypesMatchSubagentTypes(t *testing.T) {
 		}
 	}
 }
+
+// TestLocalSubagentRunner_AC4_StreamConfigPropagation verifies that all 8 new fields
+// are properly propagated from parent config to child StreamConfig when Name is set.
+func TestLocalSubagentRunner_AC4_StreamConfigPropagation(t *testing.T) {
+	readTool := tool.NewReadTool(false, nil)
+	runner := NewLocalSubagentRunner([]tool.Tool{readTool}, nil)
+
+	// Set up parent config with all 8 new fields
+	parentCfg := StreamConfig{
+		MaxBudgetUSD:         1.50,
+		MaxBudgetCNY:         10.0,
+		MaxTurns:             5,
+		CustomSystemPrompt:   "custom prompt",
+		AppendSystemPrompt:   "append prompt",
+		OverrideSystemPrompt: true,
+		StructuredSchema:     map[string]any{"type": "object"},
+		StructuredDenyRules:  []string{"Bash"},
+	}
+	runner.SetParentConfig(parentCfg)
+
+	// Call RunSubagent with Name="worker1"
+	params := tool.SubagentParams{
+		Prompt:       "test prompt",
+		SubagentType: "explore",
+		Name:         "worker1",
+	}
+	_, _ = runner.RunSubagent(context.Background(), params)
+
+	// Get the captured stream config
+	capturedCfg := runner.GetCapturedStreamConfig()
+
+	// Verify IsNamedAgent is true
+	if !capturedCfg.IsNamedAgent {
+		t.Error("AC4 FAIL: IsNamedAgent should be true for named agent")
+	} else {
+		t.Log("AC4 PASS: IsNamedAgent is true")
+	}
+
+	// Verify all 8 inherited fields
+	if capturedCfg.MaxBudgetUSD != parentCfg.MaxBudgetUSD {
+		t.Errorf("AC4 FAIL: MaxBudgetUSD not inherited, got %v want %v", capturedCfg.MaxBudgetUSD, parentCfg.MaxBudgetUSD)
+	} else {
+		t.Log("AC4 PASS: MaxBudgetUSD inherited")
+	}
+
+	if capturedCfg.MaxBudgetCNY != parentCfg.MaxBudgetCNY {
+		t.Errorf("AC4 FAIL: MaxBudgetCNY not inherited, got %v want %v", capturedCfg.MaxBudgetCNY, parentCfg.MaxBudgetCNY)
+	} else {
+		t.Log("AC4 PASS: MaxBudgetCNY inherited")
+	}
+
+	if capturedCfg.MaxTurns != parentCfg.MaxTurns {
+		t.Errorf("AC4 FAIL: MaxTurns not inherited, got %v want %v", capturedCfg.MaxTurns, parentCfg.MaxTurns)
+	} else {
+		t.Log("AC4 PASS: MaxTurns inherited")
+	}
+
+	if capturedCfg.CustomSystemPrompt != parentCfg.CustomSystemPrompt {
+		t.Errorf("AC4 FAIL: CustomSystemPrompt not inherited, got %q want %q", capturedCfg.CustomSystemPrompt, parentCfg.CustomSystemPrompt)
+	} else {
+		t.Log("AC4 PASS: CustomSystemPrompt inherited")
+	}
+
+	if capturedCfg.AppendSystemPrompt != parentCfg.AppendSystemPrompt {
+		t.Errorf("AC4 FAIL: AppendSystemPrompt not inherited, got %q want %q", capturedCfg.AppendSystemPrompt, parentCfg.AppendSystemPrompt)
+	} else {
+		t.Log("AC4 PASS: AppendSystemPrompt inherited")
+	}
+
+	if capturedCfg.OverrideSystemPrompt != parentCfg.OverrideSystemPrompt {
+		t.Errorf("AC4 FAIL: OverrideSystemPrompt not inherited, got %v want %v", capturedCfg.OverrideSystemPrompt, parentCfg.OverrideSystemPrompt)
+	} else {
+		t.Log("AC4 PASS: OverrideSystemPrompt inherited")
+	}
+
+	if capturedCfg.StructuredSchema == nil {
+		t.Error("AC4 FAIL: StructuredSchema not inherited, got nil")
+	} else {
+		t.Log("AC4 PASS: StructuredSchema inherited")
+	}
+
+	if len(capturedCfg.StructuredDenyRules) != len(parentCfg.StructuredDenyRules) {
+		t.Errorf("AC4 FAIL: StructuredDenyRules not inherited, got %v want %v", capturedCfg.StructuredDenyRules, parentCfg.StructuredDenyRules)
+	} else {
+		t.Log("AC4 PASS: StructuredDenyRules inherited")
+	}
+}
