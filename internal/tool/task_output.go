@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"time"
 )
@@ -69,9 +70,9 @@ func (t *TaskOutputTool) Execute(ctx context.Context, input map[string]any, cwd 
 	}
 
 	// Get timeout parameter (default: 30s, max: 600s)
-	timeoutSeconds := 30
+	timeoutSecondsFloat := 30.0
 	if t, ok := input["timeout"].(float64); ok {
-		timeoutSeconds = min(int(t), 600)
+		timeoutSecondsFloat = math.Min(t, 600.0)
 	}
 
 	if t.taskManager == nil {
@@ -110,7 +111,7 @@ func (t *TaskOutputTool) Execute(ctx context.Context, input map[string]any, cwd 
 	}
 
 	// Blocking: wait for completion or timeout
-	deadline := time.Now().Add(time.Duration(timeoutSeconds) * time.Second)
+	deadline := time.Now().Add(time.Duration(timeoutSecondsFloat * float64(time.Second)))
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
