@@ -46,11 +46,47 @@ func TestSystemPromptCwd(t *testing.T) {
 	}
 }
 
-// TestSystemPromptSubstantial verifies AC6.
+// TestSystemPromptSubstantial verifies AC2.
 func TestSystemPromptSubstantial(t *testing.T) {
 	res := runPrintSystemPrompt(t)
 	text := strings.Join(res.Lines, "\n")
-	if len(text) < 500 {
-		t.Errorf("system prompt length %d < 500", len(text))
+	if len(text) < 1000 {
+		t.Errorf("system prompt length %d < 1000", len(text))
+	}
+}
+
+// TestSystemPromptIdentity verifies AC1.
+func TestSystemPromptIdentity(t *testing.T) {
+	res := runPrintSystemPrompt(t)
+	text := strings.Join(res.Lines, "\n")
+	if !strings.Contains(text, "You are Claude Code") {
+		t.Error("system prompt does not contain 'You are Claude Code'")
+	}
+}
+
+// TestSystemPromptBashSafety verifies AC3.
+func TestSystemPromptBashSafety(t *testing.T) {
+	res := runPrintSystemPrompt(t)
+	text := strings.Join(res.Lines, "\n")
+	if !strings.Contains(text, "destructive") && !strings.Contains(text, "rm -rf") {
+		t.Error("system prompt does not contain bash safety guidance ('destructive' or 'rm -rf')")
+	}
+}
+
+// TestSystemPromptSearchToolGuidance verifies AC4.
+func TestSystemPromptSearchToolGuidance(t *testing.T) {
+	res := runPrintSystemPrompt(t)
+	text := strings.Join(res.Lines, "\n")
+	if !strings.Contains(text, "Glob") || !strings.Contains(text, "Grep") {
+		t.Error("system prompt does not contain 'Glob' and 'Grep' guidance")
+	}
+}
+
+// TestSystemPromptNoTemplatePlaceholders verifies AC5.
+func TestSystemPromptNoTemplatePlaceholders(t *testing.T) {
+	res := runPrintSystemPrompt(t)
+	text := strings.Join(res.Lines, "\n")
+	if strings.Contains(text, "{{") || strings.Contains(text, "}}") {
+		t.Error("system prompt contains template placeholders ('{{' or '}}')")
 	}
 }

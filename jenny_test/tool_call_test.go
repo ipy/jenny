@@ -119,7 +119,7 @@ func TestToolCallToolUseIdConsistency(t *testing.T) {
 	// the min length is robust to additional completed events emitted
 	// for tool_error paths etc. (out of scope here, but cheap to handle).
 	n := min(len(completed), len(started))
-	for i := 0; i < n; i++ {
+	for i := range n {
 		sID, _ := started[i]["tool_use_id"].(string)
 		cID, _ := completed[i]["tool_use_id"].(string)
 		if sID == "" || cID == "" {
