@@ -332,7 +332,7 @@ func TestParseMCPConfigNoFlag(t *testing.T) {
 	}
 }
 
-func TestStreamMessageToolInputUsesParametersKey(t *testing.T) {
+func TestStreamMessageToolInputUsesInputKey(t *testing.T) {
 	msg := StreamMessage{
 		Type:     "tool_use",
 		ToolName: "Read",
@@ -351,14 +351,14 @@ func TestStreamMessageToolInputUsesParametersKey(t *testing.T) {
 		t.Fatalf("json.Unmarshal failed: %v", err)
 	}
 
-	if _, ok := parsed["parameters"]; !ok {
-		t.Errorf("expected 'parameters' key in JSON output, got: %s", string(data))
+	if _, ok := parsed["input"]; !ok {
+		t.Errorf("expected 'input' key in JSON output, got: %s", string(data))
 	}
-	if _, ok := parsed["tool_input"]; ok {
-		t.Errorf("unexpected 'tool_input' key found in JSON output: %s", string(data))
+	if _, ok := parsed["parameters"]; ok {
+		t.Errorf("unexpected 'parameters' key found in JSON output: %s", string(data))
 	}
 
-	if !strings.Contains(string(data), `"parameters"`) {
-		t.Errorf("JSON output does not contain 'parameters' key: %s", string(data))
+	if !strings.Contains(string(data), `"input"`) {
+		t.Errorf("JSON output does not contain 'input' key: %s", string(data))
 	}
 }

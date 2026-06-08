@@ -569,6 +569,53 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			Model:      streamResult.Model,
 		}
 
+		// Fallback block processing: if blocksChan was empty but streamResult.Blocks has content
+		if textOutput.Len() == 0 && len(toolUseBlocks) == 0 && len(streamResult.Blocks) > 0 {
+			for _, block := range streamResult.Blocks {
+				switch block.Type {
+				case "text":
+					textOutput.WriteString(block.Text)
+				case "thinking":
+					textOutput.WriteString(block.Thinking)
+				case "tool_use":
+					// Collect tool_use blocks for the assistant message
+					toolUseBlocks = append(toolUseBlocks, api.ToolUseBlock{
+						ID:    block.ToolID,
+						Name:  block.ToolName,
+						Input: block.ToolInput,
+					})
+
+					if e.streamCfg.Enabled {
+						// AC4: assistant and user message wrapper lines are emitted in fallback scenario
+						assistantContent := []map[string]any{
+							{"type": "tool_use", "id": block.ToolID, "name": block.ToolName, "input": block.ToolInput},
+						}
+						// If there's preceding text, prepend it
+						if textOutput.Len() > 0 {
+							assistantContent = append([]map[string]any{{"type": "text", "text": textOutput.String()}}, assistantContent...)
+						}
+						msg := StreamMessage{
+							Type:      "assistant",
+							SessionID: sessionID,
+							Uuid:      GenerateUUID(),
+							Message:   map[string]any{"role": "assistant", "content": assistantContent},
+						}
+						data, _ := json.Marshal(msg)
+						fmt.Fprintln(os.Stdout, string(data))
+					}
+				case "web_search_tool_result":
+					// AC5: Process web search results and surface error codes in fallback
+					if block.WebSearchResult != nil && block.WebSearchResult.IsError {
+						toolResults = append(toolResults, api.ToolResult{
+							ToolUseID: block.WebSearchResult.ToolUseID,
+							Content:   fmt.Sprintf("web search error: %s", block.WebSearchResult.ErrorCode),
+							IsError:   true,
+						})
+					}
+				}
+			}
+		}
+
 		// Accumulate cost for this turn
 		if resp.Model != "" {
 			AccumulateUsage(e.costState, resp.Model, resp.Usage)
