@@ -5,21 +5,24 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
-	"sync"
 
 	"github.com/ipy/jenny/internal/git"
 )
 
 // ExitWorktreeTool provides the ability to exit a git worktree session.
 type ExitWorktreeTool struct {
-	mu          sync.Mutex
-	inWorktree  bool
-	worktreeDir string
+	session *WorktreeSession
 }
 
 // NewExitWorktreeTool creates a new ExitWorktreeTool.
 func NewExitWorktreeTool() *ExitWorktreeTool {
 	return &ExitWorktreeTool{}
+}
+
+// WithWorktreeSession sets the shared worktree session for the tool.
+func (t *ExitWorktreeTool) WithWorktreeSession(session *WorktreeSession) *ExitWorktreeTool {
+	t.session = session
+	return t
 }
 
 // Name returns the tool name.
@@ -53,11 +56,8 @@ func (t *ExitWorktreeTool) InputSchema() map[string]any {
 
 // Execute exits a git worktree session.
 func (t *ExitWorktreeTool) Execute(ctx context.Context, input map[string]any, cwd string) (*ToolResult, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	// Check if in a worktree session
-	if !t.inWorktree {
+	if t.session == nil || !t.session.IsInWorktree() {
 		return &ToolResult{
 			Content: "not currently in a worktree session",
 			IsError: true,
@@ -80,7 +80,7 @@ func (t *ExitWorktreeTool) Execute(ctx context.Context, input map[string]any, cw
 		}, nil
 	}
 
-	worktreePath := t.worktreeDir
+	worktreePath := t.session.WorktreeDir()
 
 	// For remove action, check if worktree is dirty
 	if action == "remove" {
@@ -112,8 +112,7 @@ func (t *ExitWorktreeTool) Execute(ctx context.Context, input map[string]any, cw
 		}
 
 		// Clear worktree state
-		t.inWorktree = false
-		t.worktreeDir = ""
+		t.session.ClearWorktree()
 
 		return &ToolResult{
 			Content: fmt.Sprintf("worktree removed: %s", worktreePath),
@@ -122,8 +121,7 @@ func (t *ExitWorktreeTool) Execute(ctx context.Context, input map[string]any, cw
 	}
 
 	// Keep action - just exit the session, leave worktree intact
-	t.inWorktree = false
-	t.worktreeDir = ""
+	t.session.ClearWorktree()
 
 	return &ToolResult{
 		Content: fmt.Sprintf("exited worktree session: %s (worktree preserved)", worktreePath),

@@ -78,9 +78,10 @@ func TestExitWorktreeTool_Execute_MissingAction(t *testing.T) {
 	tool := NewExitWorktreeTool()
 	ctx := context.Background()
 
-	// Manually set inWorktree state
-	tool.inWorktree = true
-	tool.worktreeDir = "/some/path"
+	// Set up shared session
+	session := &WorktreeSession{}
+	session.SetWorktree("/some/path")
+	tool.WithWorktreeSession(session)
 
 	result, err := tool.Execute(ctx, map[string]any{}, "/tmp")
 	if err != nil {
@@ -98,9 +99,10 @@ func TestExitWorktreeTool_Execute_InvalidAction(t *testing.T) {
 	tool := NewExitWorktreeTool()
 	ctx := context.Background()
 
-	// Manually set inWorktree state
-	tool.inWorktree = true
-	tool.worktreeDir = "/some/path"
+	// Set up shared session
+	session := &WorktreeSession{}
+	session.SetWorktree("/some/path")
+	tool.WithWorktreeSession(session)
 
 	result, err := tool.Execute(ctx, map[string]any{"action": "delete"}, "/tmp")
 	if err != nil {
@@ -124,9 +126,10 @@ func TestExitWorktreeTool_Execute_KeepAction(t *testing.T) {
 	tool := NewExitWorktreeTool()
 	ctx := context.Background()
 
-	// Manually set inWorktree state
-	tool.inWorktree = true
-	tool.worktreeDir = worktreePath
+	// Set up shared session
+	session := &WorktreeSession{}
+	session.SetWorktree(worktreePath)
+	tool.WithWorktreeSession(session)
 
 	result, err := tool.Execute(ctx, map[string]any{"action": "keep"}, tmpDir)
 	if err != nil {
@@ -152,9 +155,10 @@ func TestExitWorktreeTool_Execute_CleanRemove(t *testing.T) {
 	tool := NewExitWorktreeTool()
 	ctx := context.Background()
 
-	// Manually set inWorktree state
-	tool.inWorktree = true
-	tool.worktreeDir = worktreePath
+	// Set up shared session
+	session := &WorktreeSession{}
+	session.SetWorktree(worktreePath)
+	tool.WithWorktreeSession(session)
 
 	result, err := tool.Execute(ctx, map[string]any{"action": "remove"}, tmpDir)
 	if err != nil {
@@ -187,9 +191,10 @@ func TestExitWorktreeTool_Execute_DirtyRemoveWithoutDiscard(t *testing.T) {
 	tool := NewExitWorktreeTool()
 	ctx := context.Background()
 
-	// Manually set inWorktree state
-	tool.inWorktree = true
-	tool.worktreeDir = worktreePath
+	// Set up shared session
+	session := &WorktreeSession{}
+	session.SetWorktree(worktreePath)
+	tool.WithWorktreeSession(session)
 
 	result, err := tool.Execute(ctx, map[string]any{"action": "remove"}, tmpDir)
 	if err != nil {
@@ -223,9 +228,10 @@ func TestExitWorktreeTool_Execute_DirtyRemoveWithDiscard(t *testing.T) {
 	tool := NewExitWorktreeTool()
 	ctx := context.Background()
 
-	// Manually set inWorktree state
-	tool.inWorktree = true
-	tool.worktreeDir = worktreePath
+	// Set up shared session
+	session := &WorktreeSession{}
+	session.SetWorktree(worktreePath)
+	tool.WithWorktreeSession(session)
 
 	result, err := tool.Execute(ctx, map[string]any{"action": "remove", "discard_changes": true}, tmpDir)
 	if err != nil {

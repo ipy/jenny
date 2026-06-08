@@ -46,6 +46,10 @@ func TestEnterWorktreeTool_Execute_DoubleEntry(t *testing.T) {
 	tool := NewEnterWorktreeTool()
 	ctx := context.Background()
 
+	// Inject shared session
+	session := &WorktreeSession{}
+	tool.WithWorktreeSession(session)
+
 	// First entry should succeed
 	result, err := tool.Execute(ctx, map[string]any{}, tmpDir)
 	if err != nil {
@@ -260,4 +264,47 @@ func CreateWorktreeForTest(t *testing.T, repoRoot, branch string) string {
 	}
 
 	return worktreePath
+}
+
+func TestEnterWorktreeTool_Execute_ThenExit(t *testing.T) {
+	// Integration test: EnterWorktree followed by ExitWorktree using shared session
+	tmpDir := t.TempDir()
+	initGitRepoForTest(t, tmpDir)
+
+	// Create shared session and both tools
+	session := &WorktreeSession{}
+	enterTool := NewEnterWorktreeTool()
+	enterTool.WithWorktreeSession(session)
+	exitTool := NewExitWorktreeTool()
+	exitTool.WithWorktreeSession(session)
+
+	ctx := context.Background()
+
+	// Enter worktree
+	result, err := enterTool.Execute(ctx, map[string]any{"name": "integration-test"}, tmpDir)
+	if err != nil {
+		t.Fatalf("EnterWorktree Execute() error = %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("EnterWorktree Execute() IsError = true, want false: %s", result.Content)
+	}
+
+	// Verify session is in worktree
+	if !session.IsInWorktree() {
+		t.Fatal("session should be in worktree after EnterWorktree")
+	}
+
+	// Exit with keep action
+	result, err = exitTool.Execute(ctx, map[string]any{"action": "keep"}, tmpDir)
+	if err != nil {
+		t.Fatalf("ExitWorktree Execute() error = %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("ExitWorktree Execute() IsError = true, want false: %s", result.Content)
+	}
+
+	// Verify session is no longer in worktree
+	if session.IsInWorktree() {
+		t.Fatal("session should not be in worktree after ExitWorktree")
+	}
 }

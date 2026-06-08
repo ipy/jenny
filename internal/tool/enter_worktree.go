@@ -6,21 +6,24 @@ import (
 	"crypto/rand"
 	"fmt"
 	"regexp"
-	"sync"
 
 	"github.com/ipy/jenny/internal/git"
 )
 
 // EnterWorktreeTool provides the ability to create isolated git worktree sessions.
 type EnterWorktreeTool struct {
-	mu          sync.Mutex
-	inWorktree  bool
-	worktreeDir string
+	session *WorktreeSession
 }
 
 // NewEnterWorktreeTool creates a new EnterWorktreeTool.
 func NewEnterWorktreeTool() *EnterWorktreeTool {
 	return &EnterWorktreeTool{}
+}
+
+// WithWorktreeSession sets the shared worktree session for the tool.
+func (t *EnterWorktreeTool) WithWorktreeSession(session *WorktreeSession) *EnterWorktreeTool {
+	t.session = session
+	return t
 }
 
 // Name returns the tool name.
@@ -48,11 +51,8 @@ func (t *EnterWorktreeTool) InputSchema() map[string]any {
 
 // Execute creates a new git worktree session.
 func (t *EnterWorktreeTool) Execute(ctx context.Context, input map[string]any, cwd string) (*ToolResult, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	// Check if already in a worktree session
-	if t.inWorktree {
+	if t.session != nil && t.session.IsInWorktree() {
 		return &ToolResult{
 			Content: "already in a worktree session. Use ExitWorktree first.",
 			IsError: true,
@@ -100,8 +100,9 @@ func (t *EnterWorktreeTool) Execute(ctx context.Context, input map[string]any, c
 	}
 
 	// Mark as in worktree session
-	t.inWorktree = true
-	t.worktreeDir = worktreePath
+	if t.session != nil {
+		t.session.SetWorktree(worktreePath)
+	}
 
 	return &ToolResult{
 		Content: fmt.Sprintf(`{"path": %q, "branch": %q}`, worktreePath, branch),

@@ -256,11 +256,18 @@ func (r *Registry) Build() []Tool {
 		}
 
 		// Add EnterWorktree and ExitWorktree tools if enabled (P4).
-		if r.enterWorktreeEnabled {
-			r.baseTools = append(r.baseTools, NewEnterWorktreeTool())
-		}
-		if r.exitWorktreeEnabled {
-			r.baseTools = append(r.baseTools, NewExitWorktreeTool())
+		if r.enterWorktreeEnabled || r.exitWorktreeEnabled {
+			session := &WorktreeSession{}
+			if r.enterWorktreeEnabled {
+				enterTool := NewEnterWorktreeTool()
+				enterTool.WithWorktreeSession(session)
+				r.baseTools = append(r.baseTools, enterTool)
+			}
+			if r.exitWorktreeEnabled {
+				exitTool := NewExitWorktreeTool()
+				exitTool.WithWorktreeSession(session)
+				r.baseTools = append(r.baseTools, exitTool)
+			}
 		}
 	}
 
