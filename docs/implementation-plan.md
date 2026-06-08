@@ -106,7 +106,7 @@ Implement in this order:
    - Stream via server-sent events; yield partial text as it arrives ✓
    - On streaming failure with fallback configured, retry non-streaming ✓
    - Emit `stream_request_start` before each API iteration ✓
-   
+
 8. - [x] Stream-json output (NDJSON) — partial — [`stream-json.md`](./stream-json.md)
    - One JSON object per line on stdout; debug on stderr
    - Terminal `{ type: "result", session_id, result, usage }` on successful run
