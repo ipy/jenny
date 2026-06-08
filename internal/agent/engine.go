@@ -802,6 +802,11 @@ func (e *QueryEngine) TurnCount() int {
 	return e.turnCount
 }
 
+// Model returns the resolved model name (from flags or ANTHROPIC_MODEL env var).
+func (e *QueryEngine) Model() string {
+	return e.model
+}
+
 // resetCompactFailCount resets the compaction failure counter on successful API response.
 // AC2: Circuit breaker resets on success.
 func (e *QueryEngine) resetCompactFailCount() {

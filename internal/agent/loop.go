@@ -381,7 +381,7 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 			Type:      "system",
 			Subtype:   "init",
 			SessionID: sessionID,
-			Model:     model,
+			Model:     engine.Model(),
 			CWD:       cwd,
 			Tools:     toolNames,
 		}
