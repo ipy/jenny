@@ -92,24 +92,9 @@ func (t *TaskOutputTool) Execute(ctx context.Context, input map[string]any, cwd 
 	}
 
 	// Try to get output from completion queue first (in-memory result)
-	// Drain all completions, extract matching, re-enqueue non-matching
-	all := t.taskManager.DrainCompletions()
-	var match *TaskCompletion
-	var nonMatching []TaskCompletion
-	for _, c := range all {
-		if c.TaskID == taskID {
-			match = &c
-		} else {
-			nonMatching = append(nonMatching, c)
-		}
-	}
-	// Re-enqueue non-matching completions
-	for _, c := range nonMatching {
-		t.taskManager.EnqueueCompletion(c)
-	}
-	if match != nil {
+	if c := t.taskManager.DrainCompletion(taskID); c != nil {
 		return &ToolResult{
-			Content: match.Output,
+			Content: c.Output,
 			IsError: false,
 		}, nil
 	}
@@ -145,24 +130,9 @@ func (t *TaskOutputTool) Execute(ctx context.Context, input map[string]any, cwd 
 			}, nil
 		case <-ticker.C:
 			// Check completion queue first (early exit)
-			// Drain all completions, extract matching, re-enqueue non-matching
-			all := t.taskManager.DrainCompletions()
-			var match *TaskCompletion
-			var nonMatching []TaskCompletion
-			for _, c := range all {
-				if c.TaskID == taskID {
-					match = &c
-				} else {
-					nonMatching = append(nonMatching, c)
-				}
-			}
-			// Re-enqueue non-matching completions
-			for _, c := range nonMatching {
-				t.taskManager.EnqueueCompletion(c)
-			}
-			if match != nil {
+			if c := t.taskManager.DrainCompletion(taskID); c != nil {
 				return &ToolResult{
-					Content: match.Output,
+					Content: c.Output,
 					IsError: false,
 				}, nil
 			}

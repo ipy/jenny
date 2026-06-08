@@ -222,6 +222,30 @@ func (tm *TaskManager) DrainCompletions() []TaskCompletion {
 	return completions
 }
 
+// DrainCompletion atomically drains all pending completions, searches for a match
+// by taskID, re-enqueues all non-matching completions on the same queue, and
+// returns the matching completion (or nil if not found). Lock is acquired once.
+func (tm *TaskManager) DrainCompletion(taskID string) *TaskCompletion {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	// Capture and clear the queue
+	all := tm.completionQueue
+	tm.completionQueue = nil
+
+	// Find matching completion and collect non-matching
+	var match *TaskCompletion
+	for _, c := range all {
+		if c.TaskID == taskID {
+			match = &c
+		} else {
+			tm.completionQueue = append(tm.completionQueue, c)
+		}
+	}
+
+	return match
+}
+
 // WriteTaskResult writes a task result to the output file as JSONL.
 func (tm *TaskManager) WriteTaskResult(taskID string, output string, exitCode int, durationSeconds float64) error {
 	path, err := tm.TaskOutputPath(taskID)
