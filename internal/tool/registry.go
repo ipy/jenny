@@ -24,6 +24,8 @@ type Registry struct {
 	model                  string
 	skills                 []skills.Skill
 	taskStopEnabled        bool
+	todoWriteEnabled       bool
+	taskOutputEnabled      bool
 	skillsFrameworkEnabled bool
 	skillActivator         SkillActivator
 }
@@ -139,6 +141,18 @@ func (r *Registry) WithTaskStopEnabled(enabled bool) *Registry {
 	return r
 }
 
+// WithTodoWriteEnabled enables the TodoWrite tool for in-session todo tracking.
+func (r *Registry) WithTodoWriteEnabled(enabled bool) *Registry {
+	r.todoWriteEnabled = enabled
+	return r
+}
+
+// WithTaskOutputEnabled enables the TaskOutput tool for retrieving background task output.
+func (r *Registry) WithTaskOutputEnabled(enabled bool) *Registry {
+	r.taskOutputEnabled = enabled
+	return r
+}
+
 // Build returns the final ordered tool list.
 // Built-in tools appear first, then MCP tools. Deny rules and enabled flags
 // filter the output. On name collision, the built-in tool wins.
@@ -185,8 +199,8 @@ func (r *Registry) Build() []Tool {
 			}
 		}
 
-		// Wire TaskManager to BashTool and add TaskStop tool if enabled
-		if r.taskStopEnabled {
+		// Wire TaskManager to BashTool and add TaskStop/TaskOutput tools if enabled
+		if r.taskStopEnabled || r.taskOutputEnabled {
 			taskManager := NewTaskManager()
 			for _, t := range r.baseTools {
 				if bt, ok := t.(*BashTool); ok {
@@ -194,7 +208,17 @@ func (r *Registry) Build() []Tool {
 					break
 				}
 			}
-			r.baseTools = append(r.baseTools, NewTaskStopTool(taskManager))
+			if r.taskStopEnabled {
+				r.baseTools = append(r.baseTools, NewTaskStopTool(taskManager))
+			}
+			if r.taskOutputEnabled {
+				r.baseTools = append(r.baseTools, NewTaskOutputTool(taskManager))
+			}
+		}
+
+		// Add TodoWrite tool if enabled (P4).
+		if r.todoWriteEnabled {
+			r.baseTools = append(r.baseTools, NewTodoWriteTool())
 		}
 
 		// Add WebFetch tool if enabled (P3).
