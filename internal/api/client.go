@@ -483,10 +483,15 @@ func (c *Client) doSendMessage(ctx context.Context, messages []Message, tools []
 	// is ~30 minutes, which the SDK rejects for non-streaming calls.
 	// The non-streaming path is reserved for short internal requests
 	// (memory extraction, summarisation, fallback), where 64000 is
-	// the reference parity target.
+	// the reference parity target. We clamp to 20000 here to avoid
+	// SDK rejection while allowing the caller to use the universal
+	// 64000 default.
 	maxTokens := 64000
 	if c.maxTokensOverride > 0 {
 		maxTokens = c.maxTokensOverride
+	}
+	if maxTokens > 20000 {
+		maxTokens = 20000
 	}
 	body := anthropic.MessageNewParams{
 		Model:     anthropic.Model(c.model),

@@ -26,6 +26,8 @@ type RunResult struct {
 	// ExitCode is the process exit code. 0 on success; non-zero on
 	// failure (e.g. 2 for usage errors, 1 for runtime errors).
 	ExitCode int
+	// Dir is the working directory of the jenny process.
+	Dir string
 }
 
 var (
@@ -44,6 +46,12 @@ var (
 // call. If the source has changed since the previous build, delete
 // os.TempDir()/jenny_test_e2e to force a rebuild.
 func RunJenny(t testing.TB, env []string, args ...string) RunResult {
+	return RunJennyInDir(t, "", env, args...)
+}
+
+// RunJennyInDir runs the jenny binary in the specified directory. If dir is
+// empty, it defaults to the repo root.
+func RunJennyInDir(t testing.TB, dir string, env []string, args ...string) RunResult {
 	t.Helper()
 
 	bin, err := buildBinary()
@@ -51,8 +59,17 @@ func RunJenny(t testing.TB, env []string, args ...string) RunResult {
 		t.Fatalf("build jenny: %v", err)
 	}
 
+	if dir == "" {
+		repoRoot, err := findRepoRoot()
+		if err != nil {
+			t.Fatalf("find repo root: %v", err)
+		}
+		dir = repoRoot
+	}
+
 	cmd := exec.Command(bin, args...)
 	cmd.Env = append(os.Environ(), env...)
+	cmd.Dir = dir
 
 	var stdoutBuf, stderrBuf strings.Builder
 	cmd.Stdout = &stdoutBuf
@@ -97,6 +114,7 @@ func RunJenny(t testing.TB, env []string, args ...string) RunResult {
 		Parsed:   parsed,
 		Stderr:   stderrBuf.String(),
 		ExitCode: exitCode,
+		Dir:      cmd.Dir,
 	}
 }
 

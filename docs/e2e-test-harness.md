@@ -118,6 +118,7 @@ type RunResult struct {
     Parsed   []map[string]any // lines parsed as JSON (blanks skipped)
     Stderr   string           // captured stderr
     ExitCode int              // process exit code
+    Dir      string           // working directory of the process
 }
 ```
 
@@ -132,6 +133,10 @@ The runner captures stdout and stderr separately, splits stdout into
 lines, and parses each non-blank line as JSON into `Parsed`. Parse
 errors are kept on the line (not removed); tests are responsible for
 asserting that emission is well-formed.
+
+The `Dir` field reflects the actual directory the jenny subprocess was
+launched from. If no directory was explicitly requested by the test, it
+defaults to the repository root.
 
 ## Cassette URL Routing (no jenny changes required)
 
@@ -160,7 +165,7 @@ the test scenario.
 Four properties are checked:
 
 1. **`max_tokens`** — the top-level `max_tokens` numeric field equals
-   `64000`. The lower default of 8192 caused silent truncation of long
+   `64000`. The lower default caused silent truncation of long
    agent responses; 64000 is the reference parity target.
 2. **`system` prompt** — the top-level `system` field is present
    (string or array), its concatenated text is at least 500 characters,
@@ -224,7 +229,7 @@ inspected.
 
 - **AC9 — `max_tokens` is 64000:** the captured request has a numeric
   `max_tokens` field equal to 64000. (Out of parity when set lower; the
-  lower default of 8192 caused silent truncation of long responses.)
+  lower default caused silent truncation of long responses.)
 - **AC10 — `system` field is present and substantial:** the request body
   has a top-level `system` field. When it is a string, length ≥ 500
   characters. When it is an array, the array is non-empty and the
@@ -232,8 +237,8 @@ inspected.
 - **AC11 — `system` prompt includes the working directory:** the system
   prompt content (string or concatenated block text) contains the
   absolute path of the directory from which the jenny subprocess is
-  spawned. The harness inherits the test process cwd, so `os.Getwd()`
-  in the test yields the expected path.
+  spawned. The harness ensures the subprocess `Dir` is correctly set
+  and passed to the test for assertion, robust to macOS symlinks.
 - **AC12 — `tools` array is present and non-empty:** the request body
   has a `tools` key whose value is a JSON array with at least one
   element.

@@ -2,7 +2,7 @@ package e2e_test
 
 import (
 	"fmt"
-	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -15,7 +15,7 @@ import (
 // real-world tasks. The reference implementation uses 64000; jenny must
 // match.
 func TestAPIProtocolMaxTokens(t *testing.T) {
-	body := captureRequestBody(t)
+	body, _ := captureRequestBody(t)
 
 	const want = 64000
 	raw, present := body["max_tokens"]
@@ -37,7 +37,7 @@ func TestAPIProtocolMaxTokens(t *testing.T) {
 // at least 500 characters and contains the absolute path of the
 // directory from which the jenny subprocess was spawned.
 func TestAPIProtocolSystemPrompt(t *testing.T) {
-	body := captureRequestBody(t)
+	body, runDir := captureRequestBody(t)
 
 	raw, present := body["system"]
 	if !present {
@@ -55,12 +55,14 @@ func TestAPIProtocolSystemPrompt(t *testing.T) {
 	}
 
 	// AC11: contains the working directory.
-	cwd, err := os.Getwd()
+	// Use the jenny subprocess's Dir (set by the harness) rather than os.Getwd()
+	// to avoid symlink mismatches on macOS (/private/tmp vs /tmp, etc.).
+	expectedDir, err := filepath.EvalSymlinks(runDir)
 	if err != nil {
-		t.Fatalf("AC11: getwd: %v", err)
+		expectedDir = runDir
 	}
-	if !strings.Contains(text, cwd) {
-		t.Errorf("AC11: system prompt does not contain cwd %q (length=%d)", cwd, len(text))
+	if !strings.Contains(text, expectedDir) {
+		t.Errorf("AC11: system prompt does not contain jenny cwd %q (length=%d)", expectedDir, len(text))
 	}
 }
 
@@ -71,7 +73,7 @@ func TestAPIProtocolSystemPrompt(t *testing.T) {
 // well-formed; and the array must include tools named "Bash" and
 // "Read" (matching the reference implementation capitalization).
 func TestAPIProtocolToolsArray(t *testing.T) {
-	body := captureRequestBody(t)
+	body, _ := captureRequestBody(t)
 
 	raw, present := body["tools"]
 	if !present {
@@ -134,9 +136,9 @@ func TestAPIProtocolToolsArray(t *testing.T) {
 
 // captureRequestBody runs a single jenny invocation against the
 // echo-hello cassette and returns the JSON-decoded body of the captured
-// /v1/messages request. It fails the test if zero or more than one
-// request was captured.
-func captureRequestBody(t *testing.T) map[string]any {
+// /v1/messages request and the directory it was run in. It fails the test
+// if zero or more than one request was captured.
+func captureRequestBody(t *testing.T) (map[string]any, string) {
 	t.Helper()
 
 	mock := harness.NewMockServer(cassettesDir)
@@ -150,7 +152,7 @@ func captureRequestBody(t *testing.T) map[string]any {
 		"ANTHROPIC_MODEL=",
 	}
 
-	_ = harness.RunJenny(t, env, "--output-format", "stream-json", "-p", "echo hello")
+	res := harness.RunJenny(t, env, "--output-format", "stream-json", "-p", "echo hello")
 
 	reqs := mock.Requests()
 	if len(reqs) == 0 {
@@ -159,7 +161,7 @@ func captureRequestBody(t *testing.T) map[string]any {
 	// Use the first request — jenny may issue follow-up requests in some
 	// scenarios, but the conformance properties (max_tokens, system,
 	// tools) are stable across the session.
-	return reqs[0].Body
+	return reqs[0].Body, res.Dir
 }
 
 // extractSystemText returns the concatenated text of a "system" field.
@@ -177,10 +179,12 @@ func extractSystemText(raw any) (string, error) {
 			if !ok {
 				return "", fmt.Errorf("system block is not an object: %T", block)
 			}
-			// Skip non-text blocks (e.g. tool_result references) silently.
-			if t, _ := m["type"].(string); t != "" && t != "text" {
-				continue
+			blockType, _ := m["type"].(string)
+			if blockType != "text" && blockType != "" {
+				continue // skip blocks of known non-text type
 			}
+			// blockType == "text" or blockType == "" (empty-type treated as text for safety).
+			// Empty type is unusual; include defensively since the API always populates it.
 			text, _ := m["text"].(string)
 			b.WriteString(text)
 		}
