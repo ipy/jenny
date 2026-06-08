@@ -7,7 +7,6 @@ spec: complete
 code: partial
 package: internal/api
 gaps:
-  - Non-streaming only
   - No image count validation
   - No oversize media error mapping
   - No cache control headers
