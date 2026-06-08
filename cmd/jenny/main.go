@@ -40,6 +40,18 @@ func run() error {
 		return nil
 	}
 
+	// --print-system-prompt: print the assembled system prompt and exit.
+	if flags.PrintSystemPrompt {
+		cwd, err := os.Getwd()
+		if err != nil {
+			cwd = "/"
+		}
+		tools := buildPrintTools(flags)
+		cfg := agent.StreamConfig{}
+		fmt.Print(agent.AssembleSystemPrompt(cfg, tools, cwd))
+		return nil
+	}
+
 	// Enable verbose mode if JENNY_DEBUG env var is set
 	if os.Getenv("JENNY_DEBUG") != "" {
 		flags.Verbose = true
@@ -242,4 +254,30 @@ func run() error {
 	// Print result
 	fmt.Print(result)
 	return nil
+}
+
+// buildPrintTools returns the default set of tools for system prompt printing.
+// It skips MCP tool discovery and full skill discovery to remain offline.
+func buildPrintTools(flags *cli.Flags) []tool.Tool {
+	registry := tool.NewRegistry().
+		WithBaseTools().
+		WithWebFetchEnabled(true).
+		WithWebSearchEnabled(true).
+		WithModel(flags.Model).
+		WithDenyRules(flags.DeniedTools).
+		WithSkipPermissions(flags.SkipPermissions).
+		WithSkillsFrameworkEnabled(!flags.Bare, nil)
+	tools := registry.Build()
+
+	// Create subagent runners and AgentTool
+	denyRulesMap := make(map[string]bool)
+	for _, name := range flags.DeniedTools {
+		denyRulesMap[name] = true
+	}
+	localRunner := agent.NewLocalSubagentRunner(tools, denyRulesMap)
+	asyncRunner := agent.NewAsyncSubagentRunner(tools, denyRulesMap)
+	agentTool := tool.NewAgentToolWithSwarms(localRunner, asyncRunner, flags.SwarmsEnabled)
+	tools = append(tools, agentTool)
+
+	return tools
 }

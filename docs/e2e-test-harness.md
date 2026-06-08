@@ -45,6 +45,14 @@ no production code. The `harness/` subpackage is imported as a test
 dependency. The mock server, cassette, and binary-spawn helpers all live
 there so individual test files stay focused on assertions.
 
+## System Prompt Verification
+
+The `--print-system-prompt` flag allows verifying the assembled system prompt
+without making any API calls. This is used by `jenny_test/system_prompt_test.go`
+to assert on the presence of core tools, platform context, and overall
+structure. This flag runs entirely offline and exits before any network or
+session initialization.
+
 ## Cassette File Format
 
 Cassettes are plain SSE text files. One file per API exchange. The mock

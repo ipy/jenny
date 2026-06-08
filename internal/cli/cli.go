@@ -27,6 +27,7 @@ type Flags struct {
 	Bare                   bool
 	SwarmsEnabled          bool // When true, enables named agent delegation (swarm mode)
 	Version                bool // --version / -v: print version and exit
+	PrintSystemPrompt      bool // --print-system-prompt: print the assembled system prompt and exit
 }
 
 // StringSlice implements flag.Value for multiple string values.
@@ -41,17 +42,15 @@ func (s *StringSlice) String() string {
 	return strings.Join(*s, ",")
 }
 
-// Usage outputs usage information to stderr.
-func Usage() {
-	fmt.Fprintln(flag.CommandLine.Output(), "Usage: jenny [-p <prompt>] [--model <model>] [--output-format <format>] [-r <session_id>]")
-}
-
 // Parse parses command-line flags.
 // Returns an error if parsing fails or if no prompt is provided.
 func Parse() (*Flags, error) {
 	flags := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
-	flags.Usage = func() {} // We handle usage ourselves
+	flags.Usage = func() {
+		fmt.Fprintf(flags.Output(), "Usage: %s [-p <prompt>] [--model <model>] [--output-format <format>] [-r <session_id>]\n", os.Args[0])
+		flags.PrintDefaults()
+	}
 
 	var prompt string
 	flags.StringVar(&prompt, "p", "", "Prompt to send")
@@ -103,10 +102,13 @@ func Parse() (*Flags, error) {
 	flags.BoolVar(&version, "version", false, "Print version and exit")
 	flags.BoolVar(&version, "v", false, "Print version and exit (alias)")
 
+	var psp bool
+	flags.BoolVar(&psp, "print-system-prompt", false, "Print the assembled system prompt and exit")
+
 	// Parse the flags
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		if err == flag.ErrHelp {
-			Usage()
+			flags.Usage()
 			os.Exit(0)
 		}
 		return nil, err
@@ -122,9 +124,9 @@ func Parse() (*Flags, error) {
 		}
 	}
 
-	// --version / -v: caller will print the version and exit before any
+	// --version / --print-system-prompt: caller will print and exit before any
 	// session or API initialisation, so a prompt is not required.
-	if version {
+	if version || psp {
 		return &Flags{
 			OutputFormat:           outputFormat,
 			Verbose:                verbose,
@@ -133,13 +135,14 @@ func Parse() (*Flags, error) {
 			NoSessionPersistence:   noSessionPersistence,
 			Bare:                   bare,
 			SwarmsEnabled:          swarmsEnabled,
-			Version:                true,
+			Version:                version,
+			PrintSystemPrompt:      psp,
 		}, nil
 	}
 
 	// Validate: require a prompt
 	if prompt == "" {
-		Usage()
+		flags.Usage()
 		return nil, fmt.Errorf("no prompt provided")
 	}
 
@@ -175,6 +178,7 @@ func Parse() (*Flags, error) {
 		Bare:                   bare,
 		SwarmsEnabled:          swarmsEnabled,
 		Version:                version,
+		PrintSystemPrompt:      psp,
 	}, nil
 }
 

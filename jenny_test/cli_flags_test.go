@@ -65,4 +65,8 @@ func TestHelpFlag(t *testing.T) {
 			combined,
 		)
 	}
+
+	if !strings.Contains(combined, "print-system-prompt") {
+		t.Errorf("--help output does not mention 'print-system-prompt'")
+	}
 }
