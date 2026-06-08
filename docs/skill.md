@@ -76,7 +76,7 @@ To prevent losing skill context during [Context Compaction](context-compaction.m
 
 ### 6. Security (`allowed-tools`)
 - **Format:** Space-separated list of tool patterns (e.g., `Read`, `Bash(git:*)`, `Glob`).
-- **Enforcement:** 
+- **Enforcement:**
   - **Soft:** Included in the skill instructions for the agent to follow.
   - **Hard (Optional):** If a subagent is spawned, the `Task` tool should filter the toolset based on this list.
 
