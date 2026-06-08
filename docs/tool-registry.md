@@ -2,9 +2,9 @@
 title: Tool Registry and Presets
 slug: tool-registry
 priority: P1
-status: partial
+status: done
 spec: complete
-code: partial
+code: done
 package: internal/tool
 gaps: []
 depends_on:
