@@ -2,6 +2,7 @@ package tool
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -228,12 +229,18 @@ func TestGenerateRandomSlug(t *testing.T) {
 }
 
 func TestGenerateRandomSlug_EntropyFailure(t *testing.T) {
-	// Test that generateRandomSlug handles errors properly
-	// We can't easily simulate entropy failure, but we verify the function signature
+	// Test that generateRandomSlug handles entropy errors properly.
+	// Inject a failing randRead to verify error path is exercised.
+	origRandRead := randRead
+	t.Cleanup(func() { randRead = origRandRead })
+
+	randRead = func(b []byte) (int, error) {
+		return 0, fmt.Errorf("entropy unavailable")
+	}
+
 	_, err := generateRandomSlug()
-	if err != nil {
-		// On a正常工作 system this should not fail, but error handling must work
-		t.Logf("generateRandomSlug() returned error (expected on some systems): %v", err)
+	if err == nil {
+		t.Error("generateRandomSlug() with injected error should return error, got nil")
 	}
 }
 

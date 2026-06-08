@@ -151,10 +151,13 @@ func validateSlug(slug string) error {
 	return nil
 }
 
+// randRead is a seam for testing entropy failures.
+var randRead = rand.Read
+
 // generateRandomSlug generates a random 8-character hex string.
 func generateRandomSlug() (string, error) {
 	b := make([]byte, 4)
-	_, err := rand.Read(b)
+	_, err := randRead(b)
 	if err != nil {
 		return "", fmt.Errorf("generating slug: %w", err)
 	}
