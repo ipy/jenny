@@ -272,7 +272,10 @@ func (c *Client) doSendMessage(ctx context.Context, messages []Message, tools []
 	}
 	body.Messages = sdkMessages
 	if systemPrompt != "" {
-		body.System = []anthropic.TextBlockParam{{Text: systemPrompt}}
+		body.System = []anthropic.TextBlockParam{{
+			Text:         systemPrompt,
+			CacheControl: anthropic.NewCacheControlEphemeralParam(),
+		}}
 	}
 	if len(sdkTools) > 0 {
 		body.Tools = sdkTools
