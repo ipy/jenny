@@ -2,9 +2,9 @@
 title: TaskGet Tool
 slug: task-get
 priority: P4
-status: not_started
+status: done
 spec: complete
-code: not_started
+code: done
 package: internal/tool
 gaps:
   []
@@ -24,4 +24,4 @@ Return `task: null` gracefully → tool result "Task not found" (not hard error)
 ## Acceptance Criteria
 
 - **AC1:** Missing task returns null gracefully.
-- **AC2:** Found task returns full record.
+- **AC2:** Found task returns full record including `id`, `subject`, `description`, `active_form`, `status`, `created_at`, `updated_at`, `metadata`, `blocks`, and `blocked_by`.

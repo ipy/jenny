@@ -2,9 +2,9 @@
 title: TaskUpdate Tool
 slug: task-update
 priority: P4
-status: not_started
+status: done
 spec: complete
-code: not_started
+code: done
 package: internal/tool
 gaps:
   []
@@ -17,12 +17,22 @@ depends_on:
 
 Updates task fields, status, and dependency graph.
 
-## Features
+## Parameters
 
-- `deleted` status support
-- `addBlocks` / `addBlockedBy` for dependencies
-- Metadata merge: null value deletes key
-- Optional verification nudge
+| Param | Description |
+|-------|-------------|
+| `task_id` | Required task identifier |
+| `subject` | New subject |
+| `description` | New description |
+| `active_form` | New active form |
+| `status` | New status (`pending`, `in_progress`, `completed`, `deleted`) |
+| `metadata` | Metadata object (merge on update, null value deletes key) |
+| `add_blocks` | Array of task IDs this task blocks |
+| `add_blocked_by` | Array of task IDs this task is blocked by |
+
+## Output
+
+Returns updated task with `blocks` and `blocked_by` arrays.
 
 ## Acceptance Criteria
 

@@ -305,7 +305,7 @@ func TestTaskUpdateTool_Execute(t *testing.T) {
 			},
 			wantErr: true,
 			checkFn: func(r *ToolResult) bool {
-				return r != nil && r.IsError && r.Content != "" && r.Content != "task_id is required"
+				return r != nil && r.IsError && r.Content == "invalid status: invalid_status (must be pending, in_progress, completed, or deleted)"
 			},
 		},
 	}

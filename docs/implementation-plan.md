@@ -220,13 +220,13 @@ Implement in this order:
 #### Tools
 
 - [x] TodoWrite — [`todo-write.md`](./todo-write.md)
-- [ ] TaskCreate — [`task-create.md`](./task-create.md)
-- [ ] TaskGet — [`task-get.md`](./task-get.md)
-- [ ] TaskList — [`task-list.md`](./task-list.md)
-- [ ] TaskUpdate — [`task-update.md`](./task-update.md)
+- [x] TaskCreate — [`task-create.md`](./task-create.md)
+- [x] TaskGet — [`task-get.md`](./task-get.md)
+- [x] TaskList — [`task-list.md`](./task-list.md)
+- [x] TaskUpdate — [`task-update.md`](./task-update.md)
 - [x] TaskStop — [`task-stop.md`](./task-stop.md)
 - [x] TaskOutput — [`task-output.md`](./task-output.md)
-- [ ] EnterWorktree / ExitWorktree — [`enter-worktree.md`](./enter-worktree.md), [`exit-worktree.md`](./exit-worktree.md)
+- [x] EnterWorktree / ExitWorktree — [`enter-worktree.md`](./enter-worktree.md), [`exit-worktree.md`](./exit-worktree.md)
 
 ---
 

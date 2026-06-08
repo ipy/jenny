@@ -55,7 +55,7 @@ func TestTaskListTool_Execute(t *testing.T) {
 				if err := json.Unmarshal([]byte(r.Content), &result); err != nil {
 					return false
 				}
-				return len(result) >= 0 // empty is ok, just means no tasks
+				return len(result) == 0 // empty is ok, just means no tasks
 			},
 		},
 		{

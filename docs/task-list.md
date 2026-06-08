@@ -2,9 +2,9 @@
 title: TaskList Tool
 slug: task-list
 priority: P4
-status: not_started
+status: done
 spec: complete
-code: not_started
+code: done
 package: internal/tool
 gaps:
   []
@@ -20,7 +20,8 @@ Lists tasks with optional filters.
 ## Behavior
 
 - Filter `_internal` metadata from output
-- Strip resolved blockers from `blockedBy` arrays
+- Output includes `blocks` and `blocked_by` arrays for each task
+- Strip resolved blockers from `blocked_by` arrays
 
 ## Acceptance Criteria
 

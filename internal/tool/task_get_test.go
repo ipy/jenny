@@ -80,7 +80,8 @@ func TestTaskGetTool_Execute(t *testing.T) {
 					result["active_form"] == "doing stuff" &&
 					result["status"] == "pending" &&
 					result["created_at"] != nil &&
-					result["updated_at"] != nil
+					result["updated_at"] != nil &&
+					result["metadata"] != nil
 			},
 		},
 		{
