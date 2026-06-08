@@ -207,6 +207,75 @@ func TestParseDoubleDash(t *testing.T) {
 	}
 }
 
+func TestParseContinueFlag(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "--continue", "-p", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !flags.Continue {
+		t.Error("expected continue to be true")
+	}
+}
+
+func TestParseContinueMutuallyExclusiveWithResume(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "--continue", "-r", "sess_12345", "-p", "hello"}
+
+	_, err := Parse()
+	if err == nil {
+		t.Error("expected error for --continue with -r")
+	}
+}
+
+func TestParseContinueMutuallyExclusiveWithNoSessionPersistence(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "--continue", "--no-session-persistence", "-p", "hello"}
+
+	_, err := Parse()
+	if err == nil {
+		t.Error("expected error for --continue with --no-session-persistence")
+	}
+}
+
+func TestParseForkSessionRequiresResume(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "--fork-session", "-p", "hello"}
+
+	_, err := Parse()
+	if err == nil {
+		t.Error("expected error for --fork-session without -r")
+	}
+}
+
+func TestParseForkSessionWithResume(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "--fork-session", "-r", "sess_12345", "-p", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !flags.ForkSession {
+		t.Error("expected fork-session to be true")
+	}
+	if flags.SessionResume != "sess_12345" {
+		t.Errorf("expected session-resume 'sess_12345', got %q", flags.SessionResume)
+	}
+}
+
 func TestParseMCPConfigSingleFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()

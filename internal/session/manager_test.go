@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/ipy/jenny/internal/constants"
 )
@@ -550,6 +551,127 @@ func TestManager_LoadTranscript_SkipsMalformedLines(t *testing.T) {
 
 	if len(loaded) != 2 {
 		t.Errorf("LoadTranscript() returned %d entries, want 2 (malformed line skipped)", len(loaded))
+	}
+}
+
+func TestManager_ListSessions_EmptyDir(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp() error = %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	m, err := NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	sessions, err := m.ListSessions()
+	if err != nil {
+		t.Fatalf("ListSessions() error = %v", err)
+	}
+	if sessions != nil {
+		t.Errorf("ListSessions() = %v, want nil for empty dir", sessions)
+	}
+}
+
+func TestManager_ListSessions_NonExistentDir(t *testing.T) {
+	m, err := NewManager("/tmp/jenny-nonexistent-xxxxxx", false)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	sessions, err := m.ListSessions()
+	if err != nil {
+		t.Fatalf("ListSessions() error = %v", err)
+	}
+	if sessions != nil {
+		t.Errorf("ListSessions() = %v, want nil for nonexistent dir", sessions)
+	}
+}
+
+func TestManager_ListSessions_Ordering(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp() error = %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	m, err := NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	// Create sessions with deterministically different mtimes
+	sessionIDs := []string{"sess_oldest", "sess_middle", "sess_newest"}
+	for _, id := range sessionIDs {
+		if err := m.AppendEntry(id, TranscriptEntry{Type: "user", Content: "test"}); err != nil {
+			t.Fatalf("AppendEntry(%s) error = %v", id, err)
+		}
+		// Ensure distinct mtimes by sleeping
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	sessions, err := m.ListSessions()
+	if err != nil {
+		t.Fatalf("ListSessions() error = %v", err)
+	}
+
+	if len(sessions) != 3 {
+		t.Fatalf("ListSessions() returned %d sessions, want 3", len(sessions))
+	}
+
+	// Most recent first
+	if sessions[0] != "sess_newest" {
+		t.Errorf("ListSessions()[0] = %s, want sess_newest (most recent first)", sessions[0])
+	}
+	if sessions[1] != "sess_middle" {
+		t.Errorf("ListSessions()[1] = %s, want sess_middle", sessions[1])
+	}
+	if sessions[2] != "sess_oldest" {
+		t.Errorf("ListSessions()[2] = %s, want sess_oldest", sessions[2])
+	}
+}
+
+func TestManager_ListSessions_FiltersNonJsonl(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp() error = %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	m, err := NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	// Create a valid session
+	if err := m.AppendEntry("sess_valid", TranscriptEntry{Type: "user", Content: "test"}); err != nil {
+		t.Fatalf("AppendEntry() error = %v", err)
+	}
+
+	// Create a non-jsonl file in the transcript dir
+	nonJSONLPath := filepath.Join(tmpDir, "sess_notjson.txt")
+	if err := os.WriteFile(nonJSONLPath, []byte("not a session"), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	// Create a subdirectory (should be skipped)
+	subDir := filepath.Join(tmpDir, "sess_subdir")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+
+	sessions, err := m.ListSessions()
+	if err != nil {
+		t.Fatalf("ListSessions() error = %v", err)
+	}
+
+	if len(sessions) != 1 {
+		t.Errorf("ListSessions() returned %d sessions, want 1 (filtered non-.jsonl and dirs)", len(sessions))
+	}
+	if sessions[0] != "sess_valid" {
+		t.Errorf("ListSessions()[0] = %s, want sess_valid", sessions[0])
 	}
 }
 

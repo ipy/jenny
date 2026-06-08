@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -354,13 +355,15 @@ func (m *Manager) RegisterShutdownFlush() {
 	}()
 }
 
+// sessionEntry is an intermediate type used by ListSessions for sorting.
+type sessionEntry struct {
+	id        string
+	mtimeNano int64
+}
+
 // ListSessions returns session IDs sorted by modification time (most recent first).
 // Only returns sessions with .jsonl transcript files.
 func (m *Manager) ListSessions() ([]string, error) {
-	if m.Disabled {
-		return nil, fmt.Errorf("session persistence is disabled")
-	}
-
 	entries, err := os.ReadDir(m.transcriptDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -369,10 +372,7 @@ func (m *Manager) ListSessions() ([]string, error) {
 		return nil, fmt.Errorf("reading transcript directory: %w", err)
 	}
 
-	var sessions []struct {
-		id        string
-		mtimeNano int64
-	}
+	var sessions []sessionEntry
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -385,10 +385,7 @@ func (m *Manager) ListSessions() ([]string, error) {
 			continue
 		}
 		sessionID := strings.TrimSuffix(entry.Name(), ".jsonl")
-		sessions = append(sessions, struct {
-			id        string
-			mtimeNano int64
-		}{
+		sessions = append(sessions, sessionEntry{
 			id:        sessionID,
 			mtimeNano: info.ModTime().UnixNano(),
 		})
@@ -399,13 +396,9 @@ func (m *Manager) ListSessions() ([]string, error) {
 	}
 
 	// Sort by mtime descending (most recent first)
-	for i := 0; i < len(sessions); i++ {
-		for j := i + 1; j < len(sessions); j++ {
-			if sessions[j].mtimeNano > sessions[i].mtimeNano {
-				sessions[i], sessions[j] = sessions[j], sessions[i]
-			}
-		}
-	}
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].mtimeNano > sessions[j].mtimeNano
+	})
 
 	ids := make([]string, len(sessions))
 	for i, s := range sessions {
