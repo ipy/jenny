@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 
@@ -42,7 +43,8 @@ type QueryEngine struct {
 	memExtractor *MemoryExtractor
 
 	// Structured output (AC3)
-	structuredOutputTool *tool.StructuredOutputTool
+	structuredOutputTool   *tool.StructuredOutputTool
+	structuredOutputResult string // Captured result from StructuredOutput tool call
 }
 
 // NewQueryEngine creates a new QueryEngine with the given configuration.
@@ -56,6 +58,11 @@ func NewQueryEngine(cfg StreamConfig, tools []tool.Tool, model string) *QueryEng
 	// AC1/AC4: Inject StructuredOutputTool for non-interactive sessions with schema
 	var structuredTool *tool.StructuredOutputTool
 	if cfg.StructuredSchema != nil && cfg.Enabled {
+		// AC1: Check deny rules - if StructuredOutput is explicitly denied, return error
+		if slices.Contains(cfg.StructuredDenyRules, "StructuredOutput") {
+			log.Error("StructuredOutput tool denied but schema is configured")
+			return nil
+		}
 		// Create the structured output tool
 		structuredTool = tool.NewStructuredOutputTool(cfg.StructuredSchema)
 		tools = append(tools, structuredTool)
@@ -574,8 +581,19 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			return "", fmt.Errorf("executing tools: %w", err)
 		}
 
+		// Build map of tool use ID to block name for correlation
+		toolUseIDToName := make(map[string]string)
+		for _, tb := range toolUseBlocks {
+			toolUseIDToName[tb.ID] = tb.Name
+		}
+
 		// Process results and collect for API response
-		for _, res := range execResults {
+		for i, res := range execResults {
+			// AC3: Capture structured output result if StructuredOutput was called
+			if i < len(execBlocks) && execBlocks[i].Name == "StructuredOutput" && !res.IsError {
+				e.structuredOutputResult = res.Content
+			}
+
 			toolResults = append(toolResults, api.ToolResult{
 				ToolUseID: res.ToolUseID,
 				Content:   res.Content,
@@ -634,6 +652,11 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			if e.structuredOutputTool != nil && !e.structuredOutputTool.IsEmitted() {
 				return "", fmt.Errorf("structured output not emitted")
 			}
+			// AC3: Determine final result - use structured output if available
+			finalResult := textOutput.String()
+			if e.structuredOutputTool != nil && e.structuredOutputTool.IsEmitted() && e.structuredOutputResult != "" {
+				finalResult = e.structuredOutputResult
+			}
 			if len(toolResults) > 0 {
 				// Send tool results back to model before ending
 				userMsg := api.Message{
@@ -662,7 +685,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					}
 					msg := StreamMessage{
 						Type:      "result",
-						Result:    textOutput.String(),
+						Result:    finalResult,
 						SessionID: sessionID,
 						Model:     resp.Model,
 						Usage:     usage,
@@ -672,7 +695,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				}
 				// AC2: Reset compaction failure counter on successful API response
 				e.resetCompactFailCount()
-				return textOutput.String(), nil
+				return finalResult, nil
 			}
 			// Output final result
 			if e.streamCfg.Enabled {
@@ -688,7 +711,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				}
 				msg := StreamMessage{
 					Type:      "result",
-					Result:    textOutput.String(),
+					Result:    finalResult,
 					SessionID: sessionID,
 					Model:     resp.Model,
 					Usage:     usage,
@@ -709,7 +732,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				})
 			}
 
-			return textOutput.String(), nil
+			return finalResult, nil
 
 		case api.StopReasonToolUse:
 			// Continue the loop to let the model process tool results

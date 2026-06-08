@@ -4,6 +4,7 @@ package agent
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -996,5 +997,217 @@ func TestAC1_MemdirCreatedAtPromptBuild(t *testing.T) {
 		t.Errorf("AC1 FAIL: MEMORY.md index was not created: %v", err)
 	} else {
 		t.Logf("AC1 PASS: MEMORY.md created at %q", indexPath)
+	}
+}
+
+// TestAC1_DenyRuleStructuredOutput tests that when StructuredOutput is denied
+// via StructuredDenyRules but a schema is configured, NewQueryEngine returns nil.
+// This verifies the startup error for AC1 deny-rule checking.
+func TestAC1_DenyRuleStructuredOutput(t *testing.T) {
+	cfg := StreamConfig{
+		Enabled:             true,
+		StructuredSchema:    map[string]any{"type": "object"},
+		StructuredDenyRules: []string{"StructuredOutput"},
+	}
+
+	engine := NewQueryEngine(cfg, nil, "test-model")
+	if engine != nil {
+		t.Error("AC1 FAIL: engine should be nil when StructuredOutput is denied but schema is set")
+	} else {
+		t.Log("AC1 PASS: engine correctly returns nil when StructuredOutput is denied")
+	}
+}
+
+// TestAC4_InteractiveModeNoStructuredOutput tests that when Enabled=false
+// (interactive mode), the StructuredOutput tool is not registered even
+// if a schema is configured. This verifies AC4 non-interactive detection.
+func TestAC4_InteractiveModeNoStructuredOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	sessMgr, err := session.NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager error: %v", err)
+	}
+
+	cfg := StreamConfig{
+		Enabled:          false, // Interactive mode
+		StructuredSchema: map[string]any{"type": "object"},
+		SessionManager:   sessMgr,
+		SessionID:        "test-session-interactive",
+	}
+
+	engine := NewQueryEngine(cfg, nil, "test-model")
+	if engine == nil {
+		t.Fatal("NewQueryEngine returned nil unexpectedly")
+	}
+
+	// AC4: StructuredOutput tool should NOT be registered in interactive mode
+	if engine.structuredOutputTool != nil {
+		t.Error("AC4 FAIL: structuredOutputTool should be nil in interactive mode (Enabled=false)")
+	} else {
+		t.Log("AC4 PASS: structuredOutputTool is nil in interactive mode")
+	}
+}
+
+// TestAC4_NonInteractiveModeHasStructuredOutput tests that when Enabled=true
+// (non-interactive/stream-json mode), the StructuredOutput tool IS registered
+// if a schema is configured. This verifies AC4 non-interactive detection.
+func TestAC4_NonInteractiveModeHasStructuredOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	sessMgr, err := session.NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager error: %v", err)
+	}
+
+	cfg := StreamConfig{
+		Enabled:          true, // Non-interactive mode
+		StructuredSchema: map[string]any{"type": "object"},
+		SessionManager:   sessMgr,
+		SessionID:        "test-session-noninteractive",
+	}
+
+	engine := NewQueryEngine(cfg, nil, "test-model")
+	if engine == nil {
+		t.Fatal("NewQueryEngine returned nil unexpectedly")
+	}
+
+	// AC4: StructuredOutput tool should be registered in non-interactive mode
+	if engine.structuredOutputTool == nil {
+		t.Error("AC4 FAIL: structuredOutputTool should NOT be nil in non-interactive mode (Enabled=true)")
+	} else {
+		t.Log("AC4 PASS: structuredOutputTool is not nil in non-interactive mode")
+	}
+}
+
+// TestAC3_NotEmittedError tests that when StructuredOutput is configured but
+// not called during the turn, the engine returns error "structured output not emitted".
+// This verifies AC3 enforcement at the engine level.
+func TestAC3_NotEmittedError(t *testing.T) {
+	tmpDir := t.TempDir()
+	sessMgr, err := session.NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager error: %v", err)
+	}
+
+	sessionID := "test-session-not-emitted"
+
+	server := makeTestMockStreamServer([]string{
+		// Assistant responds with just text, no StructuredOutput call
+		testSseLine("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"test","stop_reason":null,"usage":{"input_tokens":1,"output_tokens":1}}}`),
+		testSseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":"Hello"}}`),
+		testSseLine("content_block_stop", `{"type":"content_block_stop","index":0}`),
+		testSseLine("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":1,"output_tokens":2}}`),
+		testSseLine("message_stop", `{"type":"message_stop"}`),
+	})
+	defer server.Close()
+
+	origBaseURL := os.Getenv("ANTHROPIC_BASE_URL")
+	origAPIKey := os.Getenv("ANTHROPIC_API_KEY")
+	os.Setenv("ANTHROPIC_BASE_URL", server.URL)
+	os.Setenv("ANTHROPIC_API_KEY", "test-key")
+	defer func() {
+		os.Setenv("ANTHROPIC_BASE_URL", origBaseURL)
+		os.Setenv("ANTHROPIC_API_KEY", origAPIKey)
+	}()
+
+	cfg := StreamConfig{
+		Enabled:          true,
+		StructuredSchema: map[string]any{"type": "object"},
+		SessionManager:   sessMgr,
+		SessionID:        sessionID,
+	}
+
+	engine := NewQueryEngine(cfg, nil, "test-model")
+	if engine == nil {
+		t.Fatal("NewQueryEngine returned nil unexpectedly")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err = engine.SubmitMessage(ctx, "test prompt")
+	if err == nil {
+		t.Error("AC3 FAIL: expected error 'structured output not emitted' but got nil")
+	} else if !strings.Contains(err.Error(), "structured output not emitted") {
+		t.Errorf("AC3 FAIL: expected error 'structured output not emitted', got: %v", err)
+	} else {
+		t.Log("AC3 PASS: got expected 'structured output not emitted' error")
+	}
+}
+
+// TestAC3_ResultExtraction tests that when StructuredOutput IS called,
+// the engine returns the JSON content from the StructuredOutput tool call
+// rather than the text output. This verifies AC3 result extraction.
+func TestAC3_ResultExtraction(t *testing.T) {
+	tmpDir := t.TempDir()
+	sessMgr, err := session.NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager error: %v", err)
+	}
+
+	sessionID := "test-session-result-extraction"
+	structuredJSON := `{"result":"success","data":[1,2,3]}`
+
+	server := makeTestMockStreamServer([]string{
+		// Assistant calls StructuredOutput tool
+		testSseLine("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"test","stop_reason":null,"usage":{"input_tokens":1,"output_tokens":1}}}`),
+		testSseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
+		testSseLine("content_block_start", `{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"tool_1","name":"StructuredOutput"}}`),
+		testSseLine("content_block_delta", `{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"value\":{\"result\":\"success\",\"data\":[1,2,3]},\"format\":\"json\"}"}}`),
+		testSseLine("content_block_stop", `{"type":"content_block_stop","index":1}`),
+		testSseLine("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":1,"output_tokens":2}}`),
+		testSseLine("message_stop", `{"type":"message_stop"}`),
+		// Tool result for StructuredOutput - returns the validated JSON
+		testSseLine("message_start", `{"type":"message_start","message":{"id":"msg_2","type":"message","role":"user","content":[],"model":"test","stop_reason":null,"usage":{"input_tokens":1,"output_tokens":1}}}`),
+		testSseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"tool_result","id":"tool_1","content":"{\"result\":\"success\",\"data\":[1,2,3]}","is_error":false}}`),
+		testSseLine("content_block_stop", `{"type":"content_block_stop","index":0}`),
+		testSseLine("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":1,"output_tokens":2}}`),
+		testSseLine("message_stop", `{"type":"message_stop"}`),
+	})
+	defer server.Close()
+
+	origBaseURL := os.Getenv("ANTHROPIC_BASE_URL")
+	origAPIKey := os.Getenv("ANTHROPIC_API_KEY")
+	os.Setenv("ANTHROPIC_BASE_URL", server.URL)
+	os.Setenv("ANTHROPIC_API_KEY", "test-key")
+	defer func() {
+		os.Setenv("ANTHROPIC_BASE_URL", origBaseURL)
+		os.Setenv("ANTHROPIC_API_KEY", origAPIKey)
+	}()
+
+	cfg := StreamConfig{
+		Enabled:          true,
+		StructuredSchema: map[string]any{"type": "object"},
+		SessionManager:   sessMgr,
+		SessionID:        sessionID,
+	}
+
+	engine := NewQueryEngine(cfg, nil, "test-model")
+	if engine == nil {
+		t.Fatal("NewQueryEngine returned nil unexpectedly")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result, err := engine.SubmitMessage(ctx, "test prompt")
+	if err != nil {
+		t.Fatalf("SubmitMessage returned error: %v", err)
+	}
+
+	// AC3: Result should be the structured JSON from the StructuredOutput call
+	// Parse both JSONs to compare values (key order may differ)
+	if result == "" {
+		t.Error("AC3 FAIL: expected non-empty result")
+	} else {
+		var resultVal, expectedVal any
+		if err := json.Unmarshal([]byte(result), &resultVal); err != nil {
+			t.Errorf("AC3 FAIL: result is not valid JSON: %v", err)
+		} else if err := json.Unmarshal([]byte(structuredJSON), &expectedVal); err != nil {
+			t.Errorf("AC3 FAIL: expected result is not valid JSON: %v", err)
+		} else if fmt.Sprintf("%v", resultVal) != fmt.Sprintf("%v", expectedVal) {
+			t.Errorf("AC3 FAIL: expected result %v, got %v", expectedVal, resultVal)
+		} else {
+			t.Log("AC3 PASS: result correctly extracted from StructuredOutput call")
+		}
 	}
 }

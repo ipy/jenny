@@ -123,6 +123,56 @@ func TestAC1_StructuredOutputTool_InputSchema(t *testing.T) {
 	}
 }
 
+func TestAC1_InputSchema_DynamicUserSchema(t *testing.T) {
+	// AC1: InputSchema should dynamically incorporate user schema properties
+	userSchema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name": map[string]any{"type": "string"},
+			"age":  map[string]any{"type": "number"},
+		},
+		"required": []any{"name"},
+	}
+	tool := NewStructuredOutputTool(userSchema)
+	inputSchema := tool.InputSchema()
+
+	props, ok := inputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("expected properties in input schema")
+	}
+
+	valueProp, ok := props["value"].(map[string]any)
+	if !ok {
+		t.Fatal("expected 'value' property to be a map")
+	}
+
+	// AC1: The value property should have the user schema's properties
+	// Check that 'properties' from user schema is in the value property
+	valueProps, ok := valueProp["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("expected 'properties' in value property")
+	}
+
+	if _, ok := valueProps["name"]; !ok {
+		t.Error("AC1 FAIL: 'value.properties' should include 'name' from user schema")
+	} else {
+		t.Log("AC1 PASS: 'value.properties' includes 'name' from user schema")
+	}
+
+	if _, ok := valueProps["age"]; !ok {
+		t.Error("AC1 FAIL: 'value.properties' should include 'age' from user schema")
+	} else {
+		t.Log("AC1 PASS: 'value.properties' includes 'age' from user schema")
+	}
+
+	// AC1: The value property should have type "object" (inherited from user schema)
+	if valueProp["type"] != "object" {
+		t.Errorf("AC1 FAIL: 'value' property should have type 'object', got %v", valueProp["type"])
+	} else {
+		t.Log("AC1 PASS: 'value' property has type 'object'")
+	}
+}
+
 func TestAC1_StructuredOutputTool_Reset(t *testing.T) {
 	schema := map[string]any{"type": "object"}
 	tool := NewStructuredOutputTool(schema)

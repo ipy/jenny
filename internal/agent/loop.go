@@ -129,6 +129,7 @@ type StreamConfig struct {
 	Skills               []skills.Skill              // Discovered skills for manifest
 	IsForkChild          bool                        // True when this session is a fork child (subagent spawned another agent)
 	StructuredSchema     map[string]any              // JSON schema for structured output (AC1, AC4: non-interactive only)
+	StructuredDenyRules  []string                    // Tool names to deny; checked by engine to enforce AC1
 }
 
 // ToolParam represents a tool parameter for the API.

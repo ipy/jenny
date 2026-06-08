@@ -48,14 +48,25 @@ func (t *StructuredOutputTool) Description() string {
 // The input is wrapped in an envelope with a "value" field containing the user schema
 // and a "format" field indicating "json" or "text".
 func (t *StructuredOutputTool) InputSchema() map[string]any {
+	// AC1: Dynamically incorporate user schema into the "value" property
+	valueSchema := map[string]any{
+		"description": "The structured output value conforming to the schema",
+	}
+	// Copy user schema properties into value schema
+	for k, v := range t.schema {
+		if k != "type" && k != "description" {
+			valueSchema[k] = v
+		}
+	}
+	// Ensure type is object if user didn't specify
+	if _, hasType := valueSchema["type"]; !hasType {
+		valueSchema["type"] = "object"
+	}
+
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"value": map[string]any{
-				"type":        "object",
-				"description": "The structured output value conforming to the schema",
-				// Dynamically incorporate user schema properties
-			},
+			"value": valueSchema,
 			"format": map[string]any{
 				"type":        "string",
 				"description": "Output format: 'json' for JSON, 'text' for plain text",
