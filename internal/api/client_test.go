@@ -430,11 +430,17 @@ func TestValidateMessagesMedia_RawBase64Headers(t *testing.T) {
 
 func TestValidateMessagesMedia_ProseTextWithMagicBytes(t *testing.T) {
 	// AC1: Prose text containing a raw image header sequence followed by
-	// alphanumeric text does NOT produce a false positive error
+	// alphanumeric text does NOT produce a false positive error.
+	// Prose must be in ToolResultBlock.Content to reach countMediaInContent.
 	messages := []Message{
 		{
-			Role:    "user",
-			Content: "Please analyze the image at /9j/4AAQSkZJR and tell me what it shows",
+			Role: "user",
+			ToolResults: []ToolResultBlock{
+				{
+					ToolUseID: "toolu_1",
+					Content:   "Please analyze the image at /9j/4AAQSkZJR and tell me what it shows",
+				},
+			},
 		},
 	}
 	err := ValidateMessagesMedia(messages)

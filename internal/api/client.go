@@ -297,8 +297,9 @@ func countMediaInContent(content string) (count int, largestSize int, err error)
 		payloadEnd := payloadStart + base64EndInPayload
 
 		if base64EndInPayload > 0 {
-			decoded := make([]byte, base64.StdEncoding.DecodedLen(base64EndInPayload))
-			_, decodeErr := base64.StdEncoding.Decode(decoded, []byte(payload[:base64EndInPayload]))
+			cleaned := cleanBase64Fragment(payload[:base64EndInPayload])
+			decoded := make([]byte, base64.StdEncoding.DecodedLen(len(cleaned)))
+			_, decodeErr := base64.StdEncoding.Decode(decoded, []byte(cleaned))
 			if decodeErr == nil && len(decoded) > largestSize {
 				largestSize = len(decoded)
 			}
@@ -344,17 +345,18 @@ func countMediaInContent(content string) (count int, largestSize int, err error)
 			}
 
 			if base64End >= 20 {
-				decoded := make([]byte, base64.StdEncoding.DecodedLen(base64End))
-				_, decodeErr := base64.StdEncoding.Decode(decoded, []byte(after[:base64End]))
+				cleaned := cleanBase64Fragment(after[:base64End])
+				decoded := make([]byte, base64.StdEncoding.DecodedLen(len(cleaned)))
+				_, decodeErr := base64.StdEncoding.Decode(decoded, []byte(cleaned))
 				if decodeErr == nil {
 					count++
 					if len(decoded) > largestSize {
 						largestSize = len(decoded)
 					}
-				} else if base64End > 20 {
+				} else if len(cleaned) > 20 {
 					// Decode failed but we have a substantial base64 fragment.
 					// Estimate size: each base64 char encodes 6 bits; 4 chars encode 3 bytes.
-					estimatedSize := (base64End * 3) / 4
+					estimatedSize := (len(cleaned) * 3) / 4
 					if estimatedSize > largestSize {
 						largestSize = estimatedSize
 					}
@@ -366,6 +368,22 @@ func countMediaInContent(content string) (count int, largestSize int, err error)
 	}
 
 	return count, largestSize, nil
+}
+
+// cleanBase64Fragment builds a whitespace-stripped base64 string for decoding.
+// It iterates through s and collects only base64 chars (not \n, \r, \t, space).
+func cleanBase64Fragment(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, c := range s {
+		if c == '\n' || c == '\r' || c == '\t' || c == ' ' {
+			continue
+		}
+		if isBase64Char(c) {
+			b.WriteRune(c)
+		}
+	}
+	return b.String()
 }
 
 func isBase64Char(c rune) bool {
