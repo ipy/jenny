@@ -117,18 +117,22 @@ func run() error {
 
 	// Discover skills from project .jenny/skills/ directory and bundled default directory
 	var discoveredSkills []skills.Skill
-	projectSkillsDir := filepath.Join(cwd, ".jenny", "skills")
 
-	// Bundled default skills directory (user-level)
-	bundledSkillsDir := ""
-	if homeDir, err := os.UserHomeDir(); err == nil {
-		bundledSkillsDir = filepath.Join(homeDir, ".jenny", "skills")
-	}
+	// AC4: Bare mode skips all skill discovery
+	if !flags.Bare {
+		projectSkillsDir := filepath.Join(cwd, ".jenny", "skills")
 
-	// Discover from both directories (AC6: discovery from multiple directories)
-	discoveredSkills, err = skills.Discover(projectSkillsDir, bundledSkillsDir)
-	if err != nil {
-		return fmt.Errorf("discovering skills: %w", err)
+		// Bundled default skills directory (user-level)
+		bundledSkillsDir := ""
+		if homeDir, err := os.UserHomeDir(); err == nil {
+			bundledSkillsDir = filepath.Join(homeDir, ".jenny", "skills")
+		}
+
+		// Discover from both directories (AC6: discovery from multiple directories)
+		discoveredSkills, err = skills.Discover(projectSkillsDir, bundledSkillsDir)
+		if err != nil {
+			return fmt.Errorf("discovering skills: %w", err)
+		}
 	}
 
 	var tools []tool.Tool
@@ -141,7 +145,7 @@ func run() error {
 		WithMCPTools(mcpTools).
 		WithDenyRules(flags.DeniedTools).
 		WithSkipPermissions(flags.SkipPermissions).
-		WithSkills(discoveredSkills)
+		WithSkillsFrameworkEnabled(!flags.Bare, discoveredSkills)
 	tools = registry.Build()
 
 	// Create subagent runners and AgentTool

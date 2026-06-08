@@ -10,10 +10,104 @@ import (
 
 // Skill represents a discovered skill with its metadata and content.
 type Skill struct {
-	Name        string
-	Description string
-	RootPath    string
-	Content     string
+	Name           string
+	Description    string
+	RootPath       string
+	Content        string
+	ActivationGlob string // glob pattern for automatic activation (e.g., "**/*.go")
+}
+
+// MatchesPath checks if the given path matches this skill's activation criteria.
+// Returns true if:
+// - The path is within the skill's RootPath directory, OR
+// - The skill has an ActivationGlob that matches the path via glob-style matching
+func (s *Skill) MatchesPath(path string) bool {
+	// Check if path is within the skill's root directory
+	if strings.HasPrefix(path, s.RootPath+string(filepath.Separator)) || path == s.RootPath {
+		return true
+	}
+
+	// Check activation glob if set
+	if s.ActivationGlob == "" {
+		return false
+	}
+
+	// Use glob-style pattern matching (supports **)
+	return matchActivationGlob(filepath.ToSlash(path), filepath.ToSlash(s.ActivationGlob))
+}
+
+// matchActivationGlob matches a path against a glob pattern with ** support.
+// Handles ** meaning "match any number of directories".
+func matchActivationGlob(path, pattern string) bool {
+	// Handle ** in pattern
+	if strings.Contains(pattern, "**") {
+		return matchDoubleStar(path, pattern)
+	}
+	// Simple glob match using filepath.Match
+	matched, _ := filepath.Match(pattern, path)
+	return matched
+}
+
+// matchDoubleStar handles ** in glob patterns.
+func matchDoubleStar(path, pattern string) bool {
+	// Handle leading **/
+	if after, ok := strings.CutPrefix(pattern, "**/"); ok {
+		remaining := after
+		// Try matching from any position in the path
+		for i := 0; i <= len(path); i++ {
+			if i < len(path) && path[i] != '/' {
+				continue
+			}
+			// Strip leading / from suffix
+			suffix := strings.TrimPrefix(path[i:], "/")
+			if suffix == "" {
+				continue
+			}
+			if matchDoubleStar(suffix, remaining) {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Handle trailing /**
+	if before, ok := strings.CutSuffix(pattern, "/**"); ok {
+		prefix := before
+		return strings.HasPrefix(path, prefix)
+	}
+
+	// Handle ** in middle or end
+	parts := strings.Split(pattern, "**")
+	if len(parts) == 2 {
+		prefix := parts[0]
+		suffix := parts[1]
+
+		// Prefix must match (if non-empty)
+		if prefix != "" && !strings.HasPrefix(path, prefix) {
+			return false
+		}
+
+		// Suffix must match at the end
+		if suffix != "" {
+			suffix = strings.TrimPrefix(suffix, "/")
+			// For suffix matching, use glob matching on the filename
+			filename := path
+			if idx := strings.LastIndex(filename, "/"); idx >= 0 {
+				filename = filename[idx+1:]
+			}
+			matched, _ := filepath.Match(suffix, filename)
+			return matched
+		}
+		return true
+	}
+
+	// No ** in pattern - use regular glob matching on filename
+	filename := path
+	if idx := strings.LastIndex(filename, "/"); idx >= 0 {
+		filename = filename[idx+1:]
+	}
+	matched, _ := filepath.Match(pattern, filename)
+	return matched
 }
 
 // Discover scans the given directories for skills.
@@ -78,15 +172,16 @@ func Discover(dirs ...string) ([]Skill, error) {
 				continue
 			}
 
-			// Extract name and description from the skill
+			// Extract name and metadata from the skill
 			name := entry.Name()
-			description := extractDescription(content)
+			description, activationGlob := parseSkillMetadata(content)
 
 			skills = append(skills, Skill{
-				Name:        name,
-				Description: description,
-				RootPath:    skillPath,
-				Content:     string(content),
+				Name:           name,
+				Description:    description,
+				RootPath:       skillPath,
+				Content:        string(content),
+				ActivationGlob: activationGlob,
 			})
 		}
 	}
@@ -94,26 +189,30 @@ func Discover(dirs ...string) ([]Skill, error) {
 	return skills, nil
 }
 
-// extractDescription extracts the description from SKILL.md content.
-// It first looks for YAML frontmatter description field, then falls back
-// to the first line of the file.
-func extractDescription(content []byte) string {
+// parseSkillMetadata extracts metadata (description, activation_glob) from SKILL.md content.
+// It first looks for YAML frontmatter fields, then falls back to the first line for description.
+func parseSkillMetadata(content []byte) (description string, activationGlob string) {
 	// Check for YAML frontmatter
 	contentStr := string(content)
 
-	// Look for description in frontmatter
+	// Look for description and activation_glob in frontmatter
 	if strings.HasPrefix(contentStr, "---\n") || strings.HasPrefix(contentStr, "---\r\n") {
 		parts := strings.SplitN(contentStr[4:], "\n---", 2)
 		if len(parts) >= 2 {
 			frontmatter := parts[0]
-			// Look for description: in frontmatter
 			for line := range strings.SplitSeq(frontmatter, "\n") {
 				if desc, ok := strings.CutPrefix(line, "description:"); ok {
 					desc = strings.TrimSpace(desc)
-					// Remove quotes if present
 					desc = strings.Trim(desc, "\"'")
 					if desc != "" {
-						return desc
+						description = desc
+					}
+				}
+				if glob, ok := strings.CutPrefix(line, "activation_glob:"); ok {
+					glob = strings.TrimSpace(glob)
+					glob = strings.Trim(glob, "\"'")
+					if glob != "" {
+						activationGlob = glob
 					}
 				}
 			}
@@ -126,24 +225,25 @@ func extractDescription(content []byte) string {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		// Remove markdown headers
 		if line, ok := strings.CutPrefix(line, "# "); ok {
-			// continue
 		} else if line, ok = strings.CutPrefix(line, "## "); ok {
-			// continue
 		} else if line, ok = strings.CutPrefix(line, "### "); ok {
-			// continue
 		}
 		if line != "" {
-			// Truncate to a reasonable description length
-			if len(line) > 100 {
-				line = line[:97] + "..."
+			if description == "" {
+				if len(line) > 100 {
+					line = line[:97] + "..."
+				}
+				description = line
 			}
-			return line
+			break
 		}
 	}
 
-	return "No description available"
+	if description == "" {
+		description = "No description available"
+	}
+	return description, activationGlob
 }
 
 // ReadSkillContent reads the full content of a SKILL.md file.

@@ -22,6 +22,7 @@ type Flags struct {
 	MCPConfig              []string
 	StrictMCP              bool
 	DeniedTools            []string
+	Bare                   bool
 }
 
 // StringSlice implements flag.Value for multiple string values.
@@ -82,6 +83,9 @@ func Parse() (*Flags, error) {
 	var deniedTools = []string{}
 	flags.Var((*StringSlice)(&deniedTools), "deny-tool", "Tool name to deny (can be specified multiple times)")
 
+	var bare bool
+	flags.BoolVar(&bare, "bare", false, "Disable skill discovery for minimal environments")
+
 	// Parse the flags
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		if err == flag.ErrHelp {
@@ -119,6 +123,7 @@ func Parse() (*Flags, error) {
 		MCPConfig:              mcpPaths,
 		StrictMCP:              strictMCP,
 		DeniedTools:            deniedTools,
+		Bare:                   bare,
 	}, nil
 }
 

@@ -15,6 +15,7 @@ import (
 type ReadTool struct {
 	skipPermissions bool
 	readCache       *ReadFileCache
+	activator       SkillActivator
 }
 
 // NewReadTool creates a new ReadTool.
@@ -30,6 +31,12 @@ func (t *ReadTool) Name() string {
 // WithReadFileCache sets the read cache for read-before-write validation.
 func (t *ReadTool) WithReadFileCache(cache *ReadFileCache) *ReadTool {
 	t.readCache = cache
+	return t
+}
+
+// WithSkillActivator sets the skill activator for path-triggered activation.
+func (t *ReadTool) WithSkillActivator(activator SkillActivator) *ReadTool {
+	t.activator = activator
 	return t
 }
 
@@ -111,6 +118,11 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 			Content: fmt.Sprintf("Error: Access to '%s' is not allowed. File path would traverse outside working directory.", filePath),
 			IsError: true,
 		}, nil
+	}
+
+	// Trigger skill activation based on path access (after path validation, before file I/O)
+	if t.activator != nil {
+		t.activator.ActivateForPath(absFilePathClean)
 	}
 
 	// Check if file exists

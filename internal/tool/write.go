@@ -13,6 +13,7 @@ import (
 type WriteTool struct {
 	readCache    *ReadFileCache
 	allowedPaths []string // If set, writes are restricted to these paths only
+	activator    SkillActivator
 }
 
 // NewWriteTool creates a new WriteTool.
@@ -35,6 +36,12 @@ func (t *WriteTool) Name() string {
 // WithReadFileCache sets the read cache for read-before-write validation.
 func (t *WriteTool) WithReadFileCache(cache *ReadFileCache) *WriteTool {
 	t.readCache = cache
+	return t
+}
+
+// WithSkillActivator sets the skill activator for path-triggered activation.
+func (t *WriteTool) WithSkillActivator(activator SkillActivator) *WriteTool {
+	t.activator = activator
 	return t
 }
 
@@ -115,6 +122,11 @@ func (t *WriteTool) Execute(ctx context.Context, input map[string]any, cwd strin
 				IsError: true,
 			}, nil
 		}
+	}
+
+	// Trigger skill activation based on path access (after path validation, before file I/O)
+	if t.activator != nil {
+		t.activator.ActivateForPath(filePath)
 	}
 
 	// AC1: Check readFileState cache for the path

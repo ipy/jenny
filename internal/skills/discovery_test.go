@@ -233,3 +233,116 @@ A test skill for deduplication.
 		t.Errorf("expected 1 skill after dedup, got %d", len(skills))
 	}
 }
+
+func TestSkill_MatchesPath_WithinRoot(t *testing.T) {
+	skill := Skill{
+		Name:     "test-skill",
+		RootPath: "/Users/sin/work/agents/jenny/.jenny/skills/test-skill",
+	}
+
+	// Path within skill root should match
+	if !skill.MatchesPath("/Users/sin/work/agents/jenny/.jenny/skills/test-skill/SKILL.md") {
+		t.Error("expected path within skill root to match")
+	}
+
+	// Path outside skill root should not match
+	if skill.MatchesPath("/Users/sin/work/agents/jenny/other/path.go") {
+		t.Error("expected path outside skill root to not match")
+	}
+}
+
+func TestSkill_MatchesPath_WithActivationGlob(t *testing.T) {
+	skill := Skill{
+		Name:           "go-helper",
+		RootPath:       "/Users/sin/work/agents/jenny/.jenny/skills/go-helper",
+		ActivationGlob: "**/*.go",
+	}
+
+	// Path matching the glob should match even if outside root
+	if !skill.MatchesPath("/Users/sin/work/agents/jenny/other/path.go") {
+		t.Error("expected path matching activation_glob to match")
+	}
+
+	// Path not matching the glob should not match
+	if skill.MatchesPath("/Users/sin/work/agents/jenny/other/path.md") {
+		t.Error("expected path not matching activation_glob to not match")
+	}
+}
+
+func TestSkill_MatchesPath_NoActivationGlob(t *testing.T) {
+	skill := Skill{
+		Name:     "no-glob-skill",
+		RootPath: "/Users/sin/work/agents/jenny/.jenny/skills/no-glob-skill",
+		// No ActivationGlob set
+	}
+
+	// Path outside root should not match when no activation glob
+	if skill.MatchesPath("/Users/sin/work/agents/jenny/other/path.go") {
+		t.Error("expected path outside skill root to not match when no activation_glob")
+	}
+}
+
+func TestDiscover_ExtractsActivationGlob(t *testing.T) {
+	// Create a temp directory with a skill that has activation_glob in frontmatter
+	tmpDir := t.TempDir()
+	skillDir := filepath.Join(tmpDir, "markdown-helper")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	skillContent := `---
+description: Assists with Markdown editing
+activation_glob: "**/*.md"
+---
+
+# Markdown Helper
+
+This skill helps with Markdown files.
+`
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillContent), 0644); err != nil {
+		t.Fatalf("failed to write SKILL.md: %v", err)
+	}
+
+	skills, err := Discover(tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(skills) != 1 {
+		t.Fatalf("expected 1 skill, got %d", len(skills))
+	}
+
+	if skills[0].ActivationGlob != "**/*.md" {
+		t.Errorf("expected activation_glob '**/*.md', got %q", skills[0].ActivationGlob)
+	}
+}
+
+func TestParseSkillMetadata_WithActivationGlob(t *testing.T) {
+	content := []byte(`---
+description: Test skill
+activation_glob: "**/*.go"
+---
+
+# Test
+`)
+	description, activationGlob := parseSkillMetadata(content)
+	if description != "Test skill" {
+		t.Errorf("expected description 'Test skill', got %q", description)
+	}
+	if activationGlob != "**/*.go" {
+		t.Errorf("expected activation_glob '**/*.go', got %q", activationGlob)
+	}
+}
+
+func TestParseSkillMetadata_WithoutActivationGlob(t *testing.T) {
+	content := []byte(`# Just a heading
+
+Some content.
+`)
+	description, activationGlob := parseSkillMetadata(content)
+	if description == "" {
+		t.Error("expected non-empty description")
+	}
+	if activationGlob != "" {
+		t.Errorf("expected empty activation_glob, got %q", activationGlob)
+	}
+}

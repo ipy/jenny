@@ -9,21 +9,23 @@ import (
 
 // Registry builds a filtered, ordered list of tools.
 type Registry struct {
-	baseTools        []Tool
-	mcpTools         []Tool
-	denyRules        map[string]bool
-	enabled          map[string]bool
-	skipPermissions  bool
-	hasBaseTools     bool
-	readCache        *ReadFileCache
-	sandbox          sandbox.SandboxManager
-	webFetchEnabled  bool
-	webSearchEnabled bool
-	lspEnabled       bool
-	lspClient        *lsp.Client
-	model            string
-	skills           []skills.Skill
-	taskStopEnabled  bool
+	baseTools              []Tool
+	mcpTools               []Tool
+	denyRules              map[string]bool
+	enabled                map[string]bool
+	skipPermissions        bool
+	hasBaseTools           bool
+	readCache              *ReadFileCache
+	sandbox                sandbox.SandboxManager
+	webFetchEnabled        bool
+	webSearchEnabled       bool
+	lspEnabled             bool
+	lspClient              *lsp.Client
+	model                  string
+	skills                 []skills.Skill
+	taskStopEnabled        bool
+	skillsFrameworkEnabled bool
+	skillActivator         SkillActivator
 }
 
 // NewRegistry creates a new Registry.
@@ -119,6 +121,18 @@ func (r *Registry) WithSkills(skills []skills.Skill) *Registry {
 	return r
 }
 
+// WithSkillsFrameworkEnabled enables the skills framework with path-triggered activation.
+// When enabled, Read/Write/Edit tools will automatically activate skills based on file paths.
+// The activator is wired into Read/Write/Edit tools, and the Skill tool is registered.
+func (r *Registry) WithSkillsFrameworkEnabled(enabled bool, skillList []skills.Skill) *Registry {
+	r.skillsFrameworkEnabled = enabled
+	if enabled && len(skillList) > 0 {
+		r.skills = skillList
+		r.skillActivator = skills.NewPathSkillActivator(skillList)
+	}
+	return r
+}
+
 // WithTaskStopEnabled enables the TaskStop tool for canceling background tasks.
 func (r *Registry) WithTaskStopEnabled(enabled bool) *Registry {
 	r.taskStopEnabled = enabled
@@ -153,6 +167,20 @@ func (r *Registry) Build() []Tool {
 					tool.WithSandbox(r.sandbox)
 				case *GrepTool:
 					tool.WithSandbox(r.sandbox)
+				}
+			}
+		}
+
+		// Wire skill activator to Read/Write/Edit tools if skills framework is enabled
+		if r.skillsFrameworkEnabled && r.skillActivator != nil {
+			for _, t := range r.baseTools {
+				switch tool := t.(type) {
+				case *ReadTool:
+					tool.WithSkillActivator(r.skillActivator)
+				case *WriteTool:
+					tool.WithSkillActivator(r.skillActivator)
+				case *EditTool:
+					tool.WithSkillActivator(r.skillActivator)
 				}
 			}
 		}

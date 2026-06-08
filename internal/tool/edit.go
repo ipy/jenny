@@ -14,6 +14,7 @@ import (
 type EditTool struct {
 	readCache    *ReadFileCache
 	allowedPaths []string // If set, edits are restricted to these paths only
+	activator    SkillActivator
 }
 
 // NewEditTool creates a new EditTool.
@@ -36,6 +37,12 @@ func (t *EditTool) Name() string {
 // WithReadFileCache sets the read cache for read-before-write validation.
 func (t *EditTool) WithReadFileCache(cache *ReadFileCache) *EditTool {
 	t.readCache = cache
+	return t
+}
+
+// WithSkillActivator sets the skill activator for path-triggered activation.
+func (t *EditTool) WithSkillActivator(activator SkillActivator) *EditTool {
+	t.activator = activator
 	return t
 }
 
@@ -133,6 +140,11 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 				IsError: true,
 			}, nil
 		}
+	}
+
+	// Trigger skill activation based on path access (after path validation, before file I/O)
+	if t.activator != nil {
+		t.activator.ActivateForPath(filePath)
 	}
 
 	// AC5: Check .ipynb extension
