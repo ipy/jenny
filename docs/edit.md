@@ -2,9 +2,9 @@
 title: Edit Tool
 slug: edit
 priority: P1
-status: complete
+status: done
 spec: complete
-code: complete
+code: done
 package: internal/tool
 gaps:
   []
