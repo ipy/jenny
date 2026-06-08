@@ -460,21 +460,26 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 
 		// Process blocks as they arrive
 		for block := range blocksChan {
+			// Handle raw stream_event passthrough
+			if block.Type == "stream_event" && e.streamCfg.Enabled && e.streamCfg.IncludePartial {
+				// Emit spec-compliant stream_event wire shape
+				wireEvent := struct {
+					Type  string `json:"type"`
+					Event any    `json:"event"`
+				}{
+					Type:  "stream_event",
+					Event: block.RawEvent,
+				}
+				data, err := json.Marshal(wireEvent)
+				if err == nil {
+					fmt.Fprintln(os.Stdout, string(data))
+				}
+				continue
+			}
+
 			switch block.Block.Type {
 			case "text":
 				textOutput.WriteString(block.Block.Text)
-				if e.streamCfg.Enabled && e.streamCfg.IncludePartial {
-					// Output partial text as we receive it
-					msg := StreamMessage{
-						Type:       "message",
-						Content:    block.Block.Text,
-						SessionID:  sessionID,
-						IsPartial:  true,
-						MessageIdx: currentTurn,
-					}
-					data, _ := json.Marshal(msg)
-					fmt.Fprintln(os.Stdout, string(data))
-				}
 			case "tool_use":
 				// Collect tool_use blocks for the assistant message
 				toolUseBlocks = append(toolUseBlocks, api.ToolUseBlock{

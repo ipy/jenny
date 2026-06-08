@@ -681,9 +681,12 @@ func (acc *streamAccumulator) getBlocks() []ContentBlock {
 }
 
 // StreamContentBlock represents a completed content block from streaming.
+// It can also carry raw SSE events for passthrough when IncludePartial is enabled.
 type StreamContentBlock struct {
-	Index int
-	Block ContentBlock
+	Index    int
+	Block    ContentBlock
+	Type     string // "stream_event" for passthrough events
+	RawEvent any    // the raw SDK event for passthrough
 }
 
 // StreamResult represents the result of a streaming session.
@@ -893,11 +896,15 @@ func (c *Client) SendMessageStream(
 			variant := event.AsAny()
 			switch e := variant.(type) {
 			case anthropic.MessageStartEvent:
+				// Passthrough raw event for IncludePartial consumers
+				blocksChan <- StreamContentBlock{Type: "stream_event", RawEvent: e}
 				hasMessageStart = true
 				acc.setModel(string(e.Message.Model))
 				log.Debug("Stream: message_start")
 
 			case anthropic.ContentBlockStartEvent:
+				// Passthrough raw event for IncludePartial consumers
+				blocksChan <- StreamContentBlock{Type: "stream_event", RawEvent: e}
 				index := int(e.Index)
 				log.Debug("Stream: content_block_start", "index", index, "type", e.ContentBlock.Type)
 				// Determine block type from content_block.Type
@@ -915,6 +922,8 @@ func (c *Client) SendMessageStream(
 				}
 
 			case anthropic.ContentBlockDeltaEvent:
+				// Passthrough raw event for IncludePartial consumers
+				blocksChan <- StreamContentBlock{Type: "stream_event", RawEvent: e}
 				index := int(e.Index)
 				delta := e.Delta
 				// Only append text for text blocks; tool_use blocks should use PartialJSON
@@ -929,6 +938,8 @@ func (c *Client) SendMessageStream(
 				log.Debug("Stream: content_block_delta", "index", index, "text", delta.Text)
 
 			case anthropic.ContentBlockStopEvent:
+				// Passthrough raw event for IncludePartial consumers
+				blocksChan <- StreamContentBlock{Type: "stream_event", RawEvent: e}
 				index := int(e.Index)
 				log.Debug("Stream: content_block_stop", "index", index)
 				// Parse accumulated tool input JSON into ToolInput
@@ -938,6 +949,8 @@ func (c *Client) SendMessageStream(
 				pendingBlocks = append(pendingBlocks, StreamContentBlock{Index: index, Block: acc.blocks[index]})
 
 			case anthropic.MessageDeltaEvent:
+				// Passthrough raw event for IncludePartial consumers
+				blocksChan <- StreamContentBlock{Type: "stream_event", RawEvent: e}
 				if e.Usage.InputTokens > 0 || e.Usage.OutputTokens > 0 {
 					acc.setUsage(Usage{
 						InputTokens:              int(e.Usage.InputTokens),
@@ -952,6 +965,8 @@ func (c *Client) SendMessageStream(
 				log.Debug("Stream: message_delta")
 
 			case anthropic.MessageStopEvent:
+				// Passthrough raw event for IncludePartial consumers
+				blocksChan <- StreamContentBlock{Type: "stream_event", RawEvent: e}
 				hasMessageStop = true
 				log.Debug("Stream: message_stop")
 			}

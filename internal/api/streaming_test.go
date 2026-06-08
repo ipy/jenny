@@ -65,6 +65,10 @@ func readAllBlocks(t *testing.T, blocksChan <-chan StreamContentBlock) []StreamC
 	t.Helper()
 	var blocks []StreamContentBlock
 	for b := range blocksChan {
+		// Filter out stream_event passthrough blocks - these are for IncludePartial consumers only
+		if b.Type == "stream_event" {
+			continue
+		}
 		blocks = append(blocks, b)
 	}
 	return blocks

@@ -2,13 +2,13 @@
 title: Stream-JSON Output Protocol
 slug: stream-json
 priority: P0
-status: partial
+status: done
 spec: complete
-code: partial
+code: done
 defer_to: P3
 package: internal/cli, internal/agent
 gaps:
-  - Simplified event shape vs SDK
+  []
 depends_on:
   - cli
   - agent-loop
