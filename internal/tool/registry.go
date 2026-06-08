@@ -26,6 +26,9 @@ type Registry struct {
 	taskStopEnabled        bool
 	todoWriteEnabled       bool
 	taskOutputEnabled      bool
+	todoV2Enabled          bool
+	taskCreateEnabled      bool
+	taskStore              *TaskStore
 	skillsFrameworkEnabled bool
 	skillActivator         SkillActivator
 	enterWorktreeEnabled   bool
@@ -155,6 +158,19 @@ func (r *Registry) WithTaskOutputEnabled(enabled bool) *Registry {
 	return r
 }
 
+// WithTodoV2Enabled enables the Todo v2 system. When enabled, TaskCreate is available
+// and TodoWrite is disabled.
+func (r *Registry) WithTodoV2Enabled(enabled bool) *Registry {
+	r.todoV2Enabled = enabled
+	return r
+}
+
+// WithTaskCreateEnabled enables the TaskCreate tool. Requires TodoV2Enabled to be set.
+func (r *Registry) WithTaskCreateEnabled(enabled bool) *Registry {
+	r.taskCreateEnabled = enabled
+	return r
+}
+
 // WithEnterWorktreeEnabled enables the EnterWorktree tool for creating isolated git worktree sessions.
 func (r *Registry) WithEnterWorktreeEnabled(enabled bool) *Registry {
 	r.enterWorktreeEnabled = enabled
@@ -230,8 +246,13 @@ func (r *Registry) Build() []Tool {
 			}
 		}
 
-		// Add TodoWrite tool if enabled (P4).
-		if r.todoWriteEnabled {
+		// Add TodoWrite tool if enabled (P4). Disabled when Todo v2 is enabled.
+		if r.todoV2Enabled {
+			if r.taskCreateEnabled {
+				r.taskStore = NewTaskStore()
+				r.baseTools = append(r.baseTools, NewTaskCreateTool(r.taskStore))
+			}
+		} else if r.todoWriteEnabled {
 			r.baseTools = append(r.baseTools, NewTodoWriteTool())
 		}
 
