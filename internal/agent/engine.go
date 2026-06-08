@@ -513,25 +513,6 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					Name:  block.Block.ToolName,
 					Input: block.Block.ToolInput,
 				})
-
-				if e.streamCfg.Enabled {
-					// Output assistant message wrapper for the tool use (AC2)
-					assistantContent := []map[string]any{
-						{"type": "tool_use", "id": block.Block.ToolID, "name": block.Block.ToolName, "input": block.Block.ToolInput},
-					}
-					// If there's preceding text, prepend it
-					if textOutput.Len() > 0 {
-						assistantContent = append([]map[string]any{{"type": "text", "text": textOutput.String()}}, assistantContent...)
-					}
-					msg := StreamMessage{
-						Type:      "assistant",
-						SessionID: sessionID,
-						Uuid:      GenerateUUID(),
-						Message:   map[string]any{"role": "assistant", "content": assistantContent},
-					}
-					data, _ := json.Marshal(msg)
-					fmt.Fprintln(os.Stdout, string(data))
-				}
 			case "web_search_tool_result":
 				// AC5: Process web search results and surface error codes
 				if block.Block.WebSearchResult != nil && block.Block.WebSearchResult.IsError {
@@ -543,6 +524,26 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					})
 				}
 			}
+		}
+
+		// Emit ONE consolidated assistant message for all collected content from streaming
+		// (AC1-AC4: one assistant event per API turn, not per tool_use block)
+		if e.streamCfg.Enabled && (textOutput.Len() > 0 || len(toolUseBlocks) > 0) {
+			assistantContent := []map[string]any{}
+			if textOutput.Len() > 0 {
+				assistantContent = append(assistantContent, map[string]any{"type": "text", "text": textOutput.String()})
+			}
+			for _, tb := range toolUseBlocks {
+				assistantContent = append(assistantContent, map[string]any{"type": "tool_use", "id": tb.ID, "name": tb.Name, "input": tb.Input})
+			}
+			msg := StreamMessage{
+				Type:      "assistant",
+				SessionID: sessionID,
+				Uuid:      GenerateUUID(),
+				Message:   map[string]any{"role": "assistant", "content": assistantContent},
+			}
+			data, _ := json.Marshal(msg)
+			fmt.Fprintln(os.Stdout, string(data))
 		}
 
 		// Check if streaming completed with error

@@ -549,3 +549,69 @@ func TestStreamEvent_ThinkingAndSignature(t *testing.T) {
 		t.Errorf("AC5 FAIL: expected result %q, got %q", expectedResult, result)
 	}
 }
+
+// TestStreamingFallbackParityPreserved verifies AC5: when streaming channel yields
+// nothing but streamResult.Blocks is populated (fallback path), exactly one assistant
+// event is emitted.
+func TestStreamingFallbackParityPreserved(t *testing.T) {
+	// Server that fails streaming but returns content via fallback
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.ReadAll(r.Body)
+		r.Body.Close()
+
+		if r.URL.Query().Get("stream") == "true" {
+			// Fail streaming
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+
+		// Fallback: non-streaming with text + tool_use
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		resp := `{"id":"msg_fb","type":"message","role":"assistant","content":[{"type":"text","text":"Fallback text"},{"type":"tool_use","id":"fb1","name":"Read","input":{"file_path":"fallback.go"}}],"model":"test","stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":3}}`
+		w.Write([]byte(resp))
+	}))
+	defer server.Close()
+
+	t.Setenv("ANTHROPIC_BASE_URL", server.URL)
+	t.Setenv("ANTHROPIC_API_KEY", "test-key-00000")
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	errCh := make(chan error, 1)
+	go func() {
+		tmpDir := t.TempDir()
+		sessMgr, _ := session.NewManager(tmpDir, false)
+		cfg := StreamConfig{Enabled: true, SessionManager: sessMgr}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_, _, err := RunStream(ctx, "test", nil, tmpDir, cfg, "test-model")
+		errCh <- err
+	}()
+
+	err := <-errCh
+	w.Close()
+	os.Stdout = oldStdout
+
+	var outputBuf bytes.Buffer
+	io.Copy(&outputBuf, r)
+	output := outputBuf.String()
+
+	t.Logf("RunStream completed with: %v", err)
+	t.Logf("Fallback output:\n%s", output)
+
+	// AC5: Exactly one assistant line on fallback path
+	assistantCount := 0
+	for line := range strings.SplitSeq(output, "\n") {
+		if strings.Contains(line, `"type":"assistant"`) && strings.Contains(line, `"Fallback text"`) {
+			assistantCount++
+		}
+	}
+	if assistantCount != 1 {
+		t.Errorf("AC5 FAIL: fallback path should emit 1 assistant, got %d", assistantCount)
+	} else {
+		t.Log("AC5 PASS: fallback path emits one assistant")
+	}
+}

@@ -48,6 +48,27 @@ Emitted when the user provides input or a **tool returns a result**. Tool result
 ### 3.2 Assistant Message (`type: "assistant"`)
 Emitted when an assistant turn completes. Contains the full history of thinking, text, and tool calls for that turn.
 
+**One event per API turn**: Exactly ONE `assistant` event is emitted per API turn. Its `message.content` array contains ALL content blocks for that turn in order (thinking, text, tool_use). Implementations MUST NOT emit one `assistant` event per tool_use block.
+
+**Correct pattern (one event):**
+```json
+{
+  "type": "assistant",
+  "session_id": "...",
+  "uuid": "...",
+  "message": {
+    "role": "assistant",
+    "content": [
+      { "type": "text", "text": "Hello" },
+      { "type": "tool_use", "id": "t1", "name": "Read", "input": { "file_path": "foo" } },
+      { "type": "tool_use", "id": "t2", "name": "Bash", "input": { "command": "ls" } }
+    ]
+  }
+}
+```
+
+**Incorrect pattern (duplication — do not use):** Emitting one `assistant` per `tool_use` causes text to be repeated across events when a turn contains text followed by multiple tool calls. The above turn must produce exactly ONE `assistant` line.
+
 ```json
 {
   "type": "assistant",
