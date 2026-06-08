@@ -84,7 +84,7 @@ Implement in this order:
    - System prompt is a top-level parameter, not a `role: system` message
    - Assistant messages with `tool_use` must include the full `tool_use` block before tool results
    - Tool results go in user messages as `tool_result` blocks keyed by `tool_use_id`
-   - **Deferred:** non-streaming only; no image validation; no cache headers → P3+
+   - **Deferred:** non-streaming only; no image validation → P3+
 
 4. - [x] Core agent loop — partial — [`agent-loop.md`](./agent-loop.md)
    - Basic tool_use → execute → tool_result loop

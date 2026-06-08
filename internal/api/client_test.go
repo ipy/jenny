@@ -1,6 +1,11 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -232,7 +237,7 @@ func TestToolToSDK_WebSearchMaxUses(t *testing.T) {
 		MaxUses: &maxUses,
 	}
 
-	sdkTool := toolToSDK(webSearchTool)
+	sdkTool := toolToSDK(webSearchTool, false)
 
 	// Verify it uses OfWebSearchTool20250305 variant
 	if sdkTool.OfWebSearchTool20250305 == nil {
@@ -260,7 +265,7 @@ func TestToolToSDK_GenericTool(t *testing.T) {
 		},
 	}
 
-	sdkTool := toolToSDK(tool)
+	sdkTool := toolToSDK(tool, false)
 
 	// Verify it uses OfTool variant
 	if sdkTool.OfTool == nil {
@@ -284,7 +289,7 @@ func TestToolToSDK_WebSearchWithoutMaxUses(t *testing.T) {
 		MaxUses: nil,
 	}
 
-	sdkTool := toolToSDK(tool)
+	sdkTool := toolToSDK(tool, false)
 
 	// Verify it uses OfTool variant (not OfWebSearchTool20250305)
 	if sdkTool.OfTool == nil {
@@ -497,5 +502,292 @@ func TestMaxMediaItemsPerRequestConstant(t *testing.T) {
 func TestMaxBase64ImageSizeConstant(t *testing.T) {
 	if MaxBase64ImageSize != 5*1024*1024 {
 		t.Errorf("expected MaxBase64ImageSize to be 5*1024*1024, got %d", MaxBase64ImageSize)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// AC2: Beta header sent on the wire (non-streaming)
+// ---------------------------------------------------------------------------
+
+func TestClient_NonStreaming_SendsPromptCachingBetaHeader(t *testing.T) {
+	var capturedBeta string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedBeta = r.Header.Get("anthropic-beta")
+		io.ReadAll(r.Body)
+		r.Body.Close()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		resp := `{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"Hello"}],"model":"m","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}}`
+		w.Write([]byte(resp))
+	}))
+	defer server.Close()
+
+	origBaseURL := os.Getenv("ANTHROPIC_BASE_URL")
+	origAPIKey := os.Getenv("ANTHROPIC_API_KEY")
+	os.Setenv("ANTHROPIC_BASE_URL", server.URL)
+	os.Setenv("ANTHROPIC_API_KEY", "test-key-0000000000000000")
+	defer func() {
+		os.Setenv("ANTHROPIC_BASE_URL", origBaseURL)
+		os.Setenv("ANTHROPIC_API_KEY", origAPIKey)
+	}()
+
+	client, _ := NewClientWithModel("m")
+	_, err := client.SendMessage(context.Background(), nil, nil, nil, "")
+	if err != nil {
+		t.Fatalf("SendMessage error = %v", err)
+	}
+
+	if !strings.Contains(capturedBeta, "prompt-caching-2024-07-31") {
+		t.Errorf("expected anthropic-beta header to contain 'prompt-caching-2024-07-31', got %q", capturedBeta)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// AC3: Beta header sent on the wire (streaming)
+// ---------------------------------------------------------------------------
+
+func TestClient_Streaming_SendsPromptCachingBetaHeader(t *testing.T) {
+	var capturedBeta string
+	events := []string{
+		"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"m\",\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":5,\"output_tokens\":1}}}\n\n",
+		"event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
+		"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hi\"}}\n\n",
+		"event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+		"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"input_tokens\":5,\"output_tokens\":1}}\n\n",
+		"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedBeta = r.Header.Get("anthropic-beta")
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.WriteHeader(http.StatusOK)
+		for _, e := range events {
+			w.Write([]byte(e))
+		}
+	}))
+	defer server.Close()
+
+	origBaseURL := os.Getenv("ANTHROPIC_BASE_URL")
+	origAPIKey := os.Getenv("ANTHROPIC_API_KEY")
+	os.Setenv("ANTHROPIC_BASE_URL", server.URL)
+	os.Setenv("ANTHROPIC_API_KEY", "test-key-0000000000000000")
+	defer func() {
+		os.Setenv("ANTHROPIC_BASE_URL", origBaseURL)
+		os.Setenv("ANTHROPIC_API_KEY", origAPIKey)
+	}()
+
+	client, _ := NewClientWithModel("m")
+	blocksChan, _ := client.SendMessageStream(context.Background(), nil, nil, nil, "", 5*time.Second, 5*time.Second, nil)
+	for range blocksChan {
+		// drain
+	}
+
+	if !strings.Contains(capturedBeta, "prompt-caching-2024-07-31") {
+		t.Errorf("expected anthropic-beta header to contain 'prompt-caching-2024-07-31', got %q", capturedBeta)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// AC4: System prompt cache_control regression (non-streaming)
+// ---------------------------------------------------------------------------
+
+func TestClient_SystemPrompt_HasCacheControl_Ephemeral(t *testing.T) {
+	var capturedBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedBody, _ = io.ReadAll(r.Body)
+		r.Body.Close()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		resp := `{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"Hello"}],"model":"m","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}}`
+		w.Write([]byte(resp))
+	}))
+	defer server.Close()
+
+	origBaseURL := os.Getenv("ANTHROPIC_BASE_URL")
+	origAPIKey := os.Getenv("ANTHROPIC_API_KEY")
+	os.Setenv("ANTHROPIC_BASE_URL", server.URL)
+	os.Setenv("ANTHROPIC_API_KEY", "test-key-0000000000000000")
+	defer func() {
+		os.Setenv("ANTHROPIC_BASE_URL", origBaseURL)
+		os.Setenv("ANTHROPIC_API_KEY", origAPIKey)
+	}()
+
+	client, _ := NewClientWithModel("m")
+	_, err := client.SendMessage(context.Background(), nil, nil, nil, "system prompt content")
+	if err != nil {
+		t.Fatalf("SendMessage error = %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(capturedBody, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal request body: %v", err)
+	}
+
+	system, ok := parsed["system"].([]any)
+	if !ok || len(system) == 0 {
+		t.Fatal("request body missing or empty system array")
+	}
+	sysBlock, ok := system[0].(map[string]any)
+	if !ok {
+		t.Fatal("system[0] is not a map")
+	}
+	cacheCtrl, ok := sysBlock["cache_control"].(map[string]any)
+	if !ok {
+		t.Fatal("system[0] missing cache_control")
+	}
+	if cacheCtrl["type"] != "ephemeral" {
+		t.Errorf("system[0].cache_control.type = %q, want ephemeral", cacheCtrl["type"])
+	}
+}
+
+// ---------------------------------------------------------------------------
+// AC5: Tools-array cache breakpoint (last entry only)
+// ---------------------------------------------------------------------------
+
+func TestClient_Tools_LastEntryHasCacheControl_Ephemeral(t *testing.T) {
+	var capturedBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedBody, _ = io.ReadAll(r.Body)
+		r.Body.Close()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		resp := `{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"Hello"}],"model":"m","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}}`
+		w.Write([]byte(resp))
+	}))
+	defer server.Close()
+
+	origBaseURL := os.Getenv("ANTHROPIC_BASE_URL")
+	origAPIKey := os.Getenv("ANTHROPIC_API_KEY")
+	os.Setenv("ANTHROPIC_BASE_URL", server.URL)
+	os.Setenv("ANTHROPIC_API_KEY", "test-key-0000000000000000")
+	defer func() {
+		os.Setenv("ANTHROPIC_BASE_URL", origBaseURL)
+		os.Setenv("ANTHROPIC_API_KEY", origAPIKey)
+	}()
+
+	client, _ := NewClientWithModel("m")
+	tools := []ToolParam{
+		{Name: "tool1", Description: "First tool", InputSchema: ToolInputSchema{Type: "object", Properties: map[string]any{}, Required: []string{}}},
+		{Name: "tool2", Description: "Second tool", InputSchema: ToolInputSchema{Type: "object", Properties: map[string]any{}, Required: []string{}}},
+		{Name: "tool3", Description: "Third tool", InputSchema: ToolInputSchema{Type: "object", Properties: map[string]any{}, Required: []string{}}},
+	}
+	_, err := client.SendMessage(context.Background(), nil, tools, nil, "")
+	if err != nil {
+		t.Fatalf("SendMessage error = %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(capturedBody, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal request body: %v", err)
+	}
+
+	toolsArr, ok := parsed["tools"].([]any)
+	if !ok || len(toolsArr) != 3 {
+		t.Fatalf("expected 3 tools, got %v", toolsArr)
+	}
+
+	// tools[0] and tools[1] should NOT have cache_control
+	for i := range 2 {
+		toolBlock, ok := toolsArr[i].(map[string]any)
+		if !ok {
+			t.Fatalf("tools[%d] is not a map", i)
+		}
+		if _, hasCacheCtrl := toolBlock["cache_control"]; hasCacheCtrl {
+			t.Errorf("tools[%d] should NOT have cache_control, but does", i)
+		}
+	}
+
+	// tools[2] (last) SHOULD have cache_control
+	lastTool, ok := toolsArr[2].(map[string]any)
+	if !ok {
+		t.Fatal("tools[2] is not a map")
+	}
+	cacheCtrl, ok := lastTool["cache_control"].(map[string]any)
+	if !ok {
+		t.Fatal("tools[2] missing cache_control")
+	}
+	if cacheCtrl["type"] != "ephemeral" {
+		t.Errorf("tools[2].cache_control.type = %q, want ephemeral", cacheCtrl["type"])
+	}
+}
+
+// ---------------------------------------------------------------------------
+// AC6: Zero tools is safe
+// ---------------------------------------------------------------------------
+
+func TestClient_NoTools_NoToolsCacheControl_NoPanic(t *testing.T) {
+	var capturedBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedBody, _ = io.ReadAll(r.Body)
+		r.Body.Close()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		resp := `{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"Hello"}],"model":"m","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}}`
+		w.Write([]byte(resp))
+	}))
+	defer server.Close()
+
+	origBaseURL := os.Getenv("ANTHROPIC_BASE_URL")
+	origAPIKey := os.Getenv("ANTHROPIC_API_KEY")
+	os.Setenv("ANTHROPIC_BASE_URL", server.URL)
+	os.Setenv("ANTHROPIC_API_KEY", "test-key-0000000000000000")
+	defer func() {
+		os.Setenv("ANTHROPIC_BASE_URL", origBaseURL)
+		os.Setenv("ANTHROPIC_API_KEY", origAPIKey)
+	}()
+
+	client, _ := NewClientWithModel("m")
+	// Empty tools slice
+	_, err := client.SendMessage(context.Background(), nil, []ToolParam{}, nil, "")
+	if err != nil {
+		t.Fatalf("SendMessage error = %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(capturedBody, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal request body: %v", err)
+	}
+
+	// tools key should not exist or be empty
+	if toolsArr, ok := parsed["tools"].([]any); ok && len(toolsArr) > 0 {
+		t.Errorf("expected no tools in request body, got %d tools", len(toolsArr))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// AC7: Usage tokens regression (cache_read and cache_creation)
+// ---------------------------------------------------------------------------
+
+func TestClient_NonStreaming_UsageTokensRegression(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.ReadAll(r.Body)
+		r.Body.Close()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		resp := `{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"Hello"}],"model":"m","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5,"cache_read_input_tokens":500,"cache_creation_input_tokens":100}}`
+		w.Write([]byte(resp))
+	}))
+	defer server.Close()
+
+	origBaseURL := os.Getenv("ANTHROPIC_BASE_URL")
+	origAPIKey := os.Getenv("ANTHROPIC_API_KEY")
+	os.Setenv("ANTHROPIC_BASE_URL", server.URL)
+	os.Setenv("ANTHROPIC_API_KEY", "test-key-0000000000000000")
+	defer func() {
+		os.Setenv("ANTHROPIC_BASE_URL", origBaseURL)
+		os.Setenv("ANTHROPIC_API_KEY", origAPIKey)
+	}()
+
+	client, _ := NewClientWithModel("m")
+	resp, err := client.SendMessage(context.Background(), nil, nil, nil, "")
+	if err != nil {
+		t.Fatalf("SendMessage error = %v", err)
+	}
+
+	if resp.Usage.CacheReadInputTokens != 500 {
+		t.Errorf("CacheReadInputTokens = %d, want 500", resp.Usage.CacheReadInputTokens)
+	}
+	if resp.Usage.CacheCreationInputTokens != 100 {
+		t.Errorf("CacheCreationInputTokens = %d, want 100", resp.Usage.CacheCreationInputTokens)
 	}
 }

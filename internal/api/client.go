@@ -14,6 +14,7 @@ import (
 	"github.com/ipy/jenny/internal/log"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
 	"github.com/anthropics/anthropic-sdk-go/shared/constant"
 )
@@ -59,7 +60,9 @@ func NewClientWithModel(model string) (*Client, error) {
 	}
 
 	// SDK's NewClient already reads ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN
-	client := anthropic.NewClient()
+	client := anthropic.NewClient(
+		option.WithHeader("anthropic-beta", string(anthropic.AnthropicBetaPromptCaching2024_07_31)),
+	)
 
 	return &Client{
 		client:      client,
@@ -466,8 +469,8 @@ func (c *Client) doSendMessage(ctx context.Context, messages []Message, tools []
 
 	// Convert tools to SDK format
 	sdkTools := make([]anthropic.ToolUnionParam, 0, len(tools))
-	for _, t := range tools {
-		sdkTools = append(sdkTools, toolToSDK(t))
+	for i, t := range tools {
+		sdkTools = append(sdkTools, toolToSDK(t, i == len(tools)-1))
 	}
 
 	// Build request
@@ -778,8 +781,8 @@ func (c *Client) SendMessageStream(
 
 		// Convert tools to SDK format
 		sdkTools := make([]anthropic.ToolUnionParam, 0, len(tools))
-		for _, t := range tools {
-			sdkTools = append(sdkTools, toolToSDK(t))
+		for i, t := range tools {
+			sdkTools = append(sdkTools, toolToSDK(t, i == len(tools)-1))
 		}
 
 		// Build request
@@ -1014,13 +1017,18 @@ type ToolInputSchema struct {
 // toolToSDK converts a ToolParam to an SDK ToolUnionParam.
 // For web_search with MaxUses set, uses the specific WebSearchTool20250305Param
 // to support definition-level max_uses enforcement.
-func toolToSDK(t ToolParam) anthropic.ToolUnionParam {
+// When isLast is true, cache_control is set on the tool to mark it as a cache breakpoint.
+func toolToSDK(t ToolParam, isLast bool) anthropic.ToolUnionParam {
 	if t.Name == "web_search" && t.MaxUses != nil {
-		return anthropic.ToolUnionParam{OfWebSearchTool20250305: &anthropic.WebSearchTool20250305Param{
+		tool := &anthropic.WebSearchTool20250305Param{
 			MaxUses: param.NewOpt(*t.MaxUses),
-		}}
+		}
+		if isLast {
+			tool.CacheControl = anthropic.NewCacheControlEphemeralParam()
+		}
+		return anthropic.ToolUnionParam{OfWebSearchTool20250305: tool}
 	}
-	return anthropic.ToolUnionParam{OfTool: &anthropic.ToolParam{
+	tool := &anthropic.ToolParam{
 		Name:        t.Name,
 		Description: anthropic.String(t.Description),
 		InputSchema: anthropic.ToolInputSchemaParam{
@@ -1028,5 +1036,9 @@ func toolToSDK(t ToolParam) anthropic.ToolUnionParam {
 			Properties: t.InputSchema.Properties,
 			Required:   t.InputSchema.Required,
 		},
-	}}
+	}
+	if isLast {
+		tool.CacheControl = anthropic.NewCacheControlEphemeralParam()
+	}
+	return anthropic.ToolUnionParam{OfTool: tool}
 }

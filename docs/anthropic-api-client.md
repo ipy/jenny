@@ -87,6 +87,8 @@ Jenny gap: non-streaming only today.
 
 Prompt cache: optional cache control breakpoints on system blocks and stable prefixes. Track `cache_read_input_tokens` and `cache_creation_input_tokens` in usage.
 
+The `anthropic-beta: prompt-caching-2024-07-31` header is sent on all requests. The tool definitions array is cached as a stable prefix by setting `cache_control` on the last tool entry.
+
 ## Edge Cases
 
 | Case | Expected behavior |
