@@ -486,6 +486,8 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			switch block.Block.Type {
 			case "text":
 				textOutput.WriteString(block.Block.Text)
+			case "thinking":
+				textOutput.WriteString(block.Block.Thinking)
 			case "tool_use":
 				// Collect tool_use blocks for the assistant message
 				toolUseBlocks = append(toolUseBlocks, api.ToolUseBlock{

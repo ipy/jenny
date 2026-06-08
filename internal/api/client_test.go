@@ -575,6 +575,58 @@ func TestClient_Streaming_SendsPromptCachingBetaHeader(t *testing.T) {
 	}
 }
 
+func TestClient_Streaming_ThinkingAccumulation(t *testing.T) {
+	events := []string{
+		"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"m\",\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":5,\"output_tokens\":1}}}\n\n",
+		"event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}\n\n",
+		"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"thinking \"}}\n\n",
+		"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"hard\"}}\n\n",
+		"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"sig-123\"}}\n\n",
+		"event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+		"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"input_tokens\":5,\"output_tokens\":1}}\n\n",
+		"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.WriteHeader(http.StatusOK)
+		for _, e := range events {
+			w.Write([]byte(e))
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("ANTHROPIC_BASE_URL", server.URL)
+	t.Setenv("ANTHROPIC_API_KEY", "test-key-0000000000000000")
+
+	client, _ := NewClientWithModel("m")
+	blocksChan, result := client.SendMessageStream(context.Background(), nil, nil, nil, "", 5*time.Second, 5*time.Second, nil)
+	var blocks []StreamContentBlock
+	for b := range blocksChan {
+		if b.Type != "stream_event" {
+			blocks = append(blocks, b)
+		}
+	}
+
+	if len(blocks) != 1 {
+		t.Fatalf("expected 1 block, got %d", len(blocks))
+	}
+
+	if blocks[0].Block.Type != "thinking" {
+		t.Errorf("expected block type 'thinking', got %q", blocks[0].Block.Type)
+	}
+	if blocks[0].Block.Thinking != "thinking hard" {
+		t.Errorf("expected thinking content 'thinking hard', got %q", blocks[0].Block.Thinking)
+	}
+	if blocks[0].Block.Signature != "sig-123" {
+		t.Errorf("expected signature 'sig-123', got %q", blocks[0].Block.Signature)
+	}
+
+	if result.Blocks[0].Thinking != "thinking hard" {
+		t.Errorf("expected result thinking content 'thinking hard', got %q", result.Blocks[0].Thinking)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // AC4: System prompt cache_control regression (non-streaming)
 // ---------------------------------------------------------------------------

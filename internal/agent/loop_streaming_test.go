@@ -453,3 +453,99 @@ func TestStreamEvent_NotEmittedOnFallback(t *testing.T) {
 	}
 	t.Log("AC5 PASS: no stream_event on fallback")
 }
+
+func TestStreamEvent_ThinkingAndSignature(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.ReadAll(r.Body)
+		r.Body.Close()
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.WriteHeader(http.StatusOK)
+
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			return
+		}
+		flusher.Flush()
+
+		// Send thinking block followed by text block
+		events := []string{
+			sseLine("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"test-model","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":1,"output_tokens":1}}}`),
+			// Thinking block (index 0)
+			sseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}`),
+			sseLine("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"thinking about it"}}`),
+			sseLine("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig-123"}}`),
+			sseLine("content_block_stop", `{"type":"content_block_stop","index":0}`),
+			// Text block (index 1)
+			sseLine("content_block_start", `{"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}`),
+			sseLine("content_block_delta", `{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Hello"}}`),
+			sseLine("content_block_stop", `{"type":"content_block_stop","index":1}`),
+			sseLine("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":1,"output_tokens":10}}`),
+			sseLine("message_stop", `{"type":"message_stop"}`),
+		}
+		for _, e := range events {
+			io.WriteString(w, e)
+			flusher.Flush()
+		}
+	}))
+	defer server.Close()
+
+	origBaseURL := os.Getenv("ANTHROPIC_BASE_URL")
+	origAPIKey := os.Getenv("ANTHROPIC_API_KEY")
+	os.Setenv("ANTHROPIC_BASE_URL", server.URL)
+	os.Setenv("ANTHROPIC_API_KEY", "test-key")
+	defer func() {
+		os.Setenv("ANTHROPIC_BASE_URL", origBaseURL)
+		os.Setenv("ANTHROPIC_API_KEY", origAPIKey)
+	}()
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	tmpDir := t.TempDir()
+	sessMgr, _ := session.NewManager(tmpDir, false)
+	cfg := StreamConfig{
+		Enabled:        true,
+		IncludePartial: true,
+		SessionManager: sessMgr,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result, _, err := RunStream(ctx, "hello", nil, tmpDir, cfg, "test-model")
+	if err != nil {
+		t.Fatalf("RunStream error: %v", err)
+	}
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var outputBuf bytes.Buffer
+	io.Copy(&outputBuf, r)
+	output := outputBuf.String()
+
+	// AC1: check thinking_delta in stream_event
+	if !strings.Contains(output, `"type":"thinking_delta"`) {
+		t.Error("AC1 FAIL: thinking_delta not found in stream_event output")
+	}
+	if !strings.Contains(output, `"thinking":"thinking about it"`) {
+		t.Error("AC1 FAIL: thinking content not found in stream_event output")
+	}
+
+	// AC2: check signature_delta in stream_event
+	if !strings.Contains(output, `"type":"signature_delta"`) {
+		t.Error("AC2 FAIL: signature_delta not found in stream_event output")
+	}
+	if !strings.Contains(output, `"signature":"sig-123"`) {
+		t.Error("AC2 FAIL: signature content not found in stream_event output")
+	}
+
+	// AC5: engine loop should include thinking content in assistant message result
+	// The result text should be concatenation of thinking + text
+	expectedResult := "thinking about itHello"
+	if result != expectedResult {
+		t.Errorf("AC5 FAIL: expected result %q, got %q", expectedResult, result)
+	}
+}

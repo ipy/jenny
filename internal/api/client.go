@@ -165,6 +165,8 @@ type Response struct {
 type ContentBlock struct {
 	Type      string
 	Text      string
+	Thinking  string
+	Signature string
 	ToolUse   *ToolUse
 	ToolID    string
 	ToolName  string
@@ -602,6 +604,8 @@ func wrapSDKError(err error) error {
 type streamAccumulator struct {
 	blocks        []ContentBlock // Content blocks by index
 	texts         []string       // Accumulated text per block index
+	thinking      []string       // Accumulated thinking per block index
+	signatures    []string       // Accumulated signature per block index
 	toolInputJSON map[int]string // Accumulated partial JSON for tool_use blocks
 	model         string
 	usage         Usage
@@ -613,6 +617,8 @@ func newStreamAccumulator() *streamAccumulator {
 	return &streamAccumulator{
 		blocks:        make([]ContentBlock, 0),
 		texts:         make([]string, 0),
+		thinking:      make([]string, 0),
+		signatures:    make([]string, 0),
 		toolInputJSON: make(map[int]string),
 	}
 }
@@ -622,6 +628,8 @@ func (acc *streamAccumulator) ensureBlock(index int) {
 	for len(acc.blocks) <= index {
 		acc.blocks = append(acc.blocks, ContentBlock{})
 		acc.texts = append(acc.texts, "")
+		acc.thinking = append(acc.thinking, "")
+		acc.signatures = append(acc.signatures, "")
 	}
 }
 
@@ -630,6 +638,20 @@ func (acc *streamAccumulator) appendText(index int, text string) {
 	acc.ensureBlock(index)
 	acc.texts[index] += text
 	acc.blocks[index].Text = acc.texts[index]
+}
+
+// appendThinking appends thinking text to the block at the given index.
+func (acc *streamAccumulator) appendThinking(index int, thinking string) {
+	acc.ensureBlock(index)
+	acc.thinking[index] += thinking
+	acc.blocks[index].Thinking = acc.thinking[index]
+}
+
+// appendSignature appends signature text to the block at the given index.
+func (acc *streamAccumulator) appendSignature(index int, signature string) {
+	acc.ensureBlock(index)
+	acc.signatures[index] += signature
+	acc.blocks[index].Signature = acc.signatures[index]
 }
 
 // setBlockType sets the type of a block at the given index.
@@ -929,6 +951,12 @@ func (c *Client) SendMessageStream(
 				// Only append text for text blocks; tool_use blocks should use PartialJSON
 				if delta.Text != "" && acc.blocks[index].Type == "text" {
 					acc.appendText(index, delta.Text)
+				}
+				if delta.Thinking != "" {
+					acc.appendThinking(index, delta.Thinking)
+				}
+				if delta.Signature != "" {
+					acc.appendSignature(index, delta.Signature)
 				}
 				// Always process partial JSON for tool input accumulation
 				if delta.PartialJSON != "" {
