@@ -41,7 +41,7 @@ type Client struct {
 }
 
 // defaultModel is the default model used when ANTHROPIC_MODEL is not set.
-const defaultModel = "deepseek-v4-flash"
+const defaultModel = "claude-opus-4-5-20251101"
 
 // NewClient creates a new API client.
 func NewClient() (*Client, error) {

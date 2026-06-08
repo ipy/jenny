@@ -2,13 +2,10 @@
 title: E2E Test Harness
 slug: e2e-test-harness
 priority: P0
-status: in_progress
+status: complete
 spec: complete
 code: complete
 package: jenny_test
-gaps:
-  - --version flag is not yet supported by jenny CLI; AC2 test will skip until added
-defer_to: P1
 depends_on:
   - cli.md
   - stream-json-spec.md
@@ -169,10 +166,10 @@ explicitly with its own opt-in path; none exist today.
 - **AC1 — No live API required:** `go test ./jenny_test/...` compiles
   and every test passes with `ANTHROPIC_AUTH_TOKEN` and
   `ANTHROPIC_BASE_URL` unset.
-- **AC2 — Version flag smoke:** jenny `--version` exits 0; stdout
-  matches `\d+\.\d+\.\d+`. The harness test currently detects the gap
-  and skips with a clear message; the assertion becomes active once
-  the binary supports `--version`.
+- **AC2 — Version flag smoke:** jenny `--version` (and the `-v` alias)
+  exits 0; the first stdout line matches `\d+\.\d+\.\d+`. `--version`
+  exits before any session or API initialisation, so no network call
+  is made.
 - **AC3 — Help flag smoke:** jenny `--help` exits 0; combined
   stdout+stderr contains `Usage` (case-insensitive).
 - **AC4 — Basic stream-json smoke with cassette:** jenny
@@ -183,7 +180,9 @@ explicitly with its own opt-in path; none exist today.
 - **AC5 — Outbound request shape verified:** The mock server captures
   exactly one POST to `/v1/messages`. `model` starts with `"claude-"`,
   `stream == true`, and `messages[0].role == "user"` with content
-  containing `"echo hello"`.
+  containing `"echo hello"`. The test environment does not need to
+  pin `ANTHROPIC_MODEL`; the jenny binary's built-in default model
+  is a `claude-` prefixed identifier that satisfies this assertion.
 - **AC6 — Cassette replay is deterministic:** Two consecutive runs of
   the AC4 test produce identical line counts and identical `"type"`
   sequences in the NDJSON output.

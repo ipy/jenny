@@ -14,6 +14,11 @@ import (
 	"github.com/ipy/jenny/internal/tool"
 )
 
+// version is the jenny release identifier. It is overridable at build
+// time via `-ldflags '-X main.version=<value>'`; the default "0.0.0"
+// is used for plain `go build` invocations (e.g. the e2e harness).
+var version = "0.0.0"
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -26,6 +31,13 @@ func run() error {
 	flags, err := cli.Parse()
 	if err != nil {
 		return err
+	}
+
+	// --version / -v: print the version and exit before any session,
+	// API client, or MCP setup so no network call is made.
+	if flags.Version {
+		fmt.Println(version)
+		return nil
 	}
 
 	// Enable verbose mode if JENNY_DEBUG env var is set

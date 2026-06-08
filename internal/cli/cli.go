@@ -26,6 +26,7 @@ type Flags struct {
 	DeniedTools            []string
 	Bare                   bool
 	SwarmsEnabled          bool // When true, enables named agent delegation (swarm mode)
+	Version                bool // --version / -v: print version and exit
 }
 
 // StringSlice implements flag.Value for multiple string values.
@@ -98,6 +99,10 @@ func Parse() (*Flags, error) {
 	var swarmsEnabled bool
 	flags.BoolVar(&swarmsEnabled, "swarm", false, "Enable swarm mode for named agent delegation")
 
+	var version bool
+	flags.BoolVar(&version, "version", false, "Print version and exit")
+	flags.BoolVar(&version, "v", false, "Print version and exit (alias)")
+
 	// Parse the flags
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		if err == flag.ErrHelp {
@@ -115,6 +120,21 @@ func Parse() (*Flags, error) {
 		if prompt == "" {
 			prompt = strings.Join(args, " ")
 		}
+	}
+
+	// --version / -v: caller will print the version and exit before any
+	// session or API initialisation, so a prompt is not required.
+	if version {
+		return &Flags{
+			OutputFormat:           outputFormat,
+			Verbose:                verbose,
+			IncludePartialMessages: includePartial,
+			SkipPermissions:        skipPerms,
+			NoSessionPersistence:   noSessionPersistence,
+			Bare:                   bare,
+			SwarmsEnabled:          swarmsEnabled,
+			Version:                true,
+		}, nil
 	}
 
 	// Validate: require a prompt
@@ -154,6 +174,7 @@ func Parse() (*Flags, error) {
 		DeniedTools:            deniedTools,
 		Bare:                   bare,
 		SwarmsEnabled:          swarmsEnabled,
+		Version:                version,
 	}, nil
 }
 

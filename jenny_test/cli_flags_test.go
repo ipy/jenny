@@ -16,28 +16,37 @@ import (
 // versionRe matches a semver-like version string X.Y.Z.
 var versionRe = regexp.MustCompile(`\d+\.\d+\.\d+`)
 
-// TestVersionFlag is the AC2 smoke test for the `--version` flag.
-//
-// As of iteration 109 the jenny CLI does not yet recognise `--version`;
-// the harness treats that gap as a soft skip (with a clear message) so
-// the suite stays green. When `--version` is added to the binary, the
-// skip disappears and the AC2 assertions below activate automatically.
+// TestVersionFlag is the AC2 smoke test for the `--version` flag and
+// its `-v` short alias. Both must exit 0 and emit a line matching the
+// semver pattern on stdout; the binary exits before any session or
+// API setup, so no network call is made.
 func TestVersionFlag(t *testing.T) {
-	res := harness.RunJenny(t, nil, "--version")
-
-	if res.ExitCode != 0 {
-		t.Skipf(
-			"--version flag not yet supported by jenny (exit %d, stderr: %q); "+
-				"AC2 is pending version-flag support in the binary",
-			res.ExitCode, strings.TrimSpace(res.Stderr),
-		)
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{name: "long", args: []string{"--version"}},
+		{name: "short", args: []string{"-v"}},
 	}
 
-	if len(res.Lines) == 0 {
-		t.Fatalf("expected at least one line of stdout from --version; got 0; stderr=%q", res.Stderr)
-	}
-	if !versionRe.MatchString(res.Lines[0]) {
-		t.Errorf("first stdout line %q does not match version pattern %q", res.Lines[0], versionRe)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res := harness.RunJenny(t, nil, tc.args...)
+
+			if res.ExitCode != 0 {
+				t.Fatalf("%s: expected exit 0, got %d; stderr=%q", tc.args[0], res.ExitCode, res.Stderr)
+			}
+
+			if len(res.Lines) == 0 {
+				t.Fatalf("%s: expected at least one line of stdout; got 0; stderr=%q", tc.args[0], res.Stderr)
+			}
+			if !versionRe.MatchString(res.Lines[0]) {
+				t.Errorf(
+					"%s: first stdout line %q does not match version pattern %q",
+					tc.args[0], res.Lines[0], versionRe,
+				)
+			}
+		})
 	}
 }
 

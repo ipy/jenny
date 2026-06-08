@@ -102,8 +102,8 @@ func TestDefaultModelConstant(t *testing.T) {
 		t.Error("defaultModel should not be empty")
 	}
 	// Verify it matches the expected model string
-	if defaultModel != "deepseek-v4-flash" {
-		t.Errorf("expected defaultModel 'deepseek-v4-flash', got %q", defaultModel)
+	if defaultModel != "claude-opus-4-5-20251101" {
+		t.Errorf("expected defaultModel 'claude-opus-4-5-20251101', got %q", defaultModel)
 	}
 }
 

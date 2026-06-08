@@ -35,10 +35,14 @@ func TestBasicStreamJsonSmoke(t *testing.T) {
 	env := []string{
 		"ANTHROPIC_BASE_URL=" + mock.URL() + "/cassette/" + echoHelloCassette,
 		"ANTHROPIC_AUTH_TOKEN=test-token",
-		// AC5 asserts the outbound model starts with "claude-". The
-		// default model in jenny is "deepseek-v4-flash" which would
-		// fail that check, so we pin a Claude model here.
-		"ANTHROPIC_MODEL=claude-haiku-4-5-20251001",
+		// Explicitly clear any ANTHROPIC_MODEL inherited from the parent
+		// environment so the binary's built-in default model is what gets
+		// sent on the wire. The earlier pin
+		// (ANTHROPIC_MODEL=claude-haiku-4-5-20251001) was a workaround
+		// for the non-claude default; now that the default starts with
+		// "claude-", the empty value lets NewClientWithModel fall
+		// through to the const.
+		"ANTHROPIC_MODEL=",
 	}
 
 	// --- First run --------------------------------------------------------
