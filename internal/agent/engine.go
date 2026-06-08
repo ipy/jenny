@@ -651,6 +651,61 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			}
 		}
 
+		// AC1: Handle interrupt synthetic tool_results.
+		// After executor returns, check if context was cancelled during tool execution.
+		// For tools that didn't complete normally (either empty ToolUseID or executor
+		// marked them as aborted due to sibling/context cancellation), synthesize
+		// proper error results so the model can see which tools were cancelled and
+		// respond appropriately.
+		if ctx.Err() != nil {
+			for i, res := range execResults {
+				// Check if tool didn't complete: either empty ToolUseID (never ran)
+				// or executor marked it as aborted due to sibling/context cancellation.
+				// The executor sets Content to "Tool execution aborted due to sibling failure"
+				// when ctx is cancelled, but tools may also return "Error executing tool:"
+				// if they checked ctx.Err() and returned an error.
+				interrupted := res.ToolUseID == "" ||
+					strings.Contains(res.Content, "aborted") ||
+					strings.Contains(res.Content, "interrupted") ||
+					strings.Contains(res.Content, "Error executing tool:")
+
+				if interrupted {
+					// Tool didn't complete normally - create/update with proper error result
+					syntheticResult := api.ToolResult{
+						ToolUseID: execBlocks[i].ID,
+						Content:   "Tool execution interrupted",
+						IsError:   true,
+					}
+					toolResults = append(toolResults, syntheticResult)
+
+					// Persist to transcript
+					if e.sessionManager != nil {
+						if err := e.sessionManager.AppendEntry(sessionID, session.TranscriptEntry{
+							Type:    "tool_result",
+							ToolID:  execBlocks[i].ID,
+							Content: "Tool execution interrupted",
+							IsError: true,
+						}); err != nil {
+							return "", fmt.Errorf("persisting synthetic tool result to transcript: %w", err)
+						}
+					}
+
+					// Emit stream-json event if streaming
+					if e.streamCfg.Enabled {
+						msg := StreamMessage{
+							Type:       "tool_result",
+							SessionID:  sessionID,
+							Content:    "Tool execution interrupted",
+							IsError:    true,
+							MessageIdx: currentTurn,
+						}
+						data, _ := json.Marshal(msg)
+						fmt.Fprintln(os.Stdout, string(data))
+					}
+				}
+			}
+		}
+
 		// Check session memory threshold after each turn
 		if e.sessionMemory != nil {
 			turnTokens := resp.Usage.InputTokens + resp.Usage.OutputTokens +
