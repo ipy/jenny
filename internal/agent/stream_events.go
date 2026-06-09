@@ -74,7 +74,7 @@ type MinimalDelta struct {
 	PartialJSON string
 	Signature   string
 	StopReason  string
-	StopSeq     string
+	StopSeq     *string // Use *string so it can marshal as null when empty
 	Text        string
 }
 
@@ -114,8 +114,8 @@ func (m MinimalDelta) MarshalJSON() ([]byte, error) {
 		} else {
 			fields = append(fields, `"stop_reason":null`)
 		}
-		if m.StopSeq != "" {
-			fields = append(fields, `"stop_sequence":`+encodeString(m.StopSeq))
+		if m.StopSeq != nil {
+			fields = append(fields, `"stop_sequence":`+encodeString(*m.StopSeq))
 		} else {
 			fields = append(fields, `"stop_sequence":null`)
 		}
@@ -366,8 +366,9 @@ func transformMessageDelta(e anthropic.MessageDeltaEvent) (json.RawMessage, erro
 	if e.Delta.StopReason != "" {
 		delta.StopReason = string(e.Delta.StopReason)
 	}
+	// Use pointer for StopSeq so it marshals as null when empty
 	if e.Delta.StopSequence != "" {
-		delta.StopSeq = e.Delta.StopSequence
+		delta.StopSeq = &e.Delta.StopSequence
 	}
 
 	msg := struct {
