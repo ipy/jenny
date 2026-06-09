@@ -16,6 +16,17 @@ depends_on:
 
 Jenny persists conversation state as append-only JSONL transcripts under the project directory. Transcripts are the source of truth for resume, cost restoration, and headless consumers that round-trip `session_id`.
 
+## Envelope Fields
+
+Every line in a transcript JSONL file carries two mandatory envelope fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `session_id` | string | Session ID; equal to the JSONL filename stem (filename without `.jsonl`) |
+| `uuid` | string | Lowercase UUID v4 matching `^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$` |
+
+Both fields must be non-empty on every line. The `session_id` value is consistent across all lines within one session run.
+
 ## Transcript Location
 
 ```

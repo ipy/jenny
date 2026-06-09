@@ -108,6 +108,161 @@ func TestNoSessionPersistenceSuppressesFile(t *testing.T) {
 	}
 }
 
+// TestTranscriptEntriesHaveSessionID verifies that every non-empty line in
+// the transcript carries a non-empty session_id field (AC1).
+func TestTranscriptEntriesHaveSessionID(t *testing.T) {
+	mock := harness.NewMockServer(cassettesDir)
+	t.Cleanup(mock.Close)
+	dir := t.TempDir()
+
+	res := harness.RunJenny(t, transcriptEnv(mock.URL(), dir),
+		"--output-format", "stream-json", "-p", "hi")
+	if res.ExitCode != 0 {
+		t.Fatalf("AC1: jenny exited %d; stderr=%q", res.ExitCode, res.Stderr)
+	}
+
+	files := findJSONLFiles(t, dir)
+	if len(files) == 0 {
+		t.Fatal("AC1: no transcript file found")
+	}
+	data, err := os.ReadFile(files[0])
+	if err != nil {
+		t.Fatalf("AC1: reading transcript: %v", err)
+	}
+	for i, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		if line == "" {
+			continue
+		}
+		var obj map[string]any
+		if err := json.Unmarshal([]byte(line), &obj); err != nil {
+			t.Errorf("AC1: line %d not valid JSON: %v", i, err)
+			continue
+		}
+		sid, _ := obj["session_id"].(string)
+		if sid == "" {
+			t.Errorf("AC1: line %d missing non-empty session_id; got %v", i, obj)
+		}
+	}
+}
+
+// TestTranscriptEntriesHaveUUIDv4 verifies that every non-empty line carries
+// a uuid field that is a valid lowercase UUID v4 (AC2).
+func TestTranscriptEntriesHaveUUIDv4(t *testing.T) {
+	mock := harness.NewMockServer(cassettesDir)
+	t.Cleanup(mock.Close)
+	dir := t.TempDir()
+
+	res := harness.RunJenny(t, transcriptEnv(mock.URL(), dir),
+		"--output-format", "stream-json", "-p", "hi")
+	if res.ExitCode != 0 {
+		t.Fatalf("AC2: jenny exited %d; stderr=%q", res.ExitCode, res.Stderr)
+	}
+
+	files := findJSONLFiles(t, dir)
+	if len(files) == 0 {
+		t.Fatal("AC2: no transcript file found")
+	}
+	data, err := os.ReadFile(files[0])
+	if err != nil {
+		t.Fatalf("AC2: reading transcript: %v", err)
+	}
+	for i, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		if line == "" {
+			continue
+		}
+		var obj map[string]any
+		if err := json.Unmarshal([]byte(line), &obj); err != nil {
+			t.Errorf("AC2: line %d not valid JSON: %v", i, err)
+			continue
+		}
+		uuid, _ := obj["uuid"].(string)
+		if !isValidUUID(uuid) {
+			t.Errorf("AC2: line %d uuid %q is not a valid UUID v4", i, uuid)
+		}
+	}
+}
+
+// TestTranscriptSessionIDIsConsistent verifies that all session_id values
+// within one run are the same string (AC3).
+func TestTranscriptSessionIDIsConsistent(t *testing.T) {
+	mock := harness.NewMockServer(cassettesDir)
+	t.Cleanup(mock.Close)
+	dir := t.TempDir()
+
+	res := harness.RunJenny(t, transcriptEnv(mock.URL(), dir),
+		"--output-format", "stream-json", "-p", "hi")
+	if res.ExitCode != 0 {
+		t.Fatalf("AC3: jenny exited %d; stderr=%q", res.ExitCode, res.Stderr)
+	}
+
+	files := findJSONLFiles(t, dir)
+	if len(files) == 0 {
+		t.Fatal("AC3: no transcript file found")
+	}
+	data, err := os.ReadFile(files[0])
+	if err != nil {
+		t.Fatalf("AC3: reading transcript: %v", err)
+	}
+
+	seen := map[string]bool{}
+	for i, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		if line == "" {
+			continue
+		}
+		var obj map[string]any
+		if err := json.Unmarshal([]byte(line), &obj); err != nil {
+			t.Errorf("AC3: line %d not valid JSON: %v", i, err)
+			continue
+		}
+		if sid, _ := obj["session_id"].(string); sid != "" {
+			seen[sid] = true
+		}
+	}
+	if len(seen) != 1 {
+		t.Errorf("AC3: expected exactly 1 distinct session_id, got %d: %v", len(seen), seen)
+	}
+}
+
+// TestTranscriptSessionIDMatchesFilename verifies that the session_id in
+// entries equals the stem of the .jsonl file (AC4).
+func TestTranscriptSessionIDMatchesFilename(t *testing.T) {
+	mock := harness.NewMockServer(cassettesDir)
+	t.Cleanup(mock.Close)
+	dir := t.TempDir()
+
+	res := harness.RunJenny(t, transcriptEnv(mock.URL(), dir),
+		"--output-format", "stream-json", "-p", "hi")
+	if res.ExitCode != 0 {
+		t.Fatalf("AC4: jenny exited %d; stderr=%q", res.ExitCode, res.Stderr)
+	}
+
+	files := findJSONLFiles(t, dir)
+	if len(files) == 0 {
+		t.Fatal("AC4: no transcript file found")
+	}
+	for _, path := range files {
+		stem := strings.TrimSuffix(filepath.Base(path), ".jsonl")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("AC4: reading %q: %v", path, err)
+		}
+		for i, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+			if line == "" {
+				continue
+			}
+			var obj map[string]any
+			if err := json.Unmarshal([]byte(line), &obj); err != nil {
+				t.Errorf("AC4: line %d not valid JSON: %v", i, err)
+				continue
+			}
+			sid, _ := obj["session_id"].(string)
+			if sid != stem {
+				t.Errorf("AC4: line %d session_id=%q, want filename stem %q", i, sid, stem)
+			}
+		}
+	}
+}
+
 // TestTranscriptHasUserAndAssistantEntries verifies AC4 and AC5.
 func TestTranscriptHasUserAndAssistantEntries(t *testing.T) {
 	mock := harness.NewMockServer(cassettesDir)
