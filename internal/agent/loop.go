@@ -632,11 +632,13 @@ func TimestampNow() string {
 }
 
 // Usage represents token usage information for streaming output.
+// Field order matches the reference format for result events:
+// input_tokens, cache_creation_input_tokens, cache_read_input_tokens, output_tokens.
 type Usage struct {
 	InputTokens              int            `json:"input_tokens"`
+	CacheCreationInputTokens int            `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int            `json:"cache_read_input_tokens"`
 	OutputTokens             int            `json:"output_tokens"`
-	CacheReadInputTokens     int            `json:"cache_read_input_tokens,omitempty"`
-	CacheCreationInputTokens int            `json:"cache_creation_input_tokens,omitempty"`
 	ServerToolUse            *ServerToolUse `json:"server_tool_use"`
 	ServiceTier              string         `json:"service_tier,omitempty"`
 	CacheCreation            *CacheCreation `json:"cache_creation"`

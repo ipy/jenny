@@ -178,11 +178,13 @@ func (m MinimalMessage) MarshalJSON() ([]byte, error) {
 }
 
 // StreamUsage represents a minimal usage object for stream events.
+// Field order matches the reference format: input_tokens, cache_creation_input_tokens,
+// cache_read_input_tokens, output_tokens, service_tier.
 type StreamUsage struct {
 	InputTokens              int    `json:"input_tokens"`
-	OutputTokens             int    `json:"output_tokens"`
-	CacheReadInputTokens     int    `json:"cache_read_input_tokens"`
 	CacheCreationInputTokens int    `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int    `json:"cache_read_input_tokens"`
+	OutputTokens             int    `json:"output_tokens"`
 	ServiceTier              string `json:"service_tier"`
 }
 
@@ -239,11 +241,12 @@ func TransformStreamEvent(event any) (json.RawMessage, error) {
 func transformMessageStart(e anthropic.MessageStartEvent) (json.RawMessage, error) {
 	// Build minimal message using proper struct with MarshalJSON
 	// Always populate all usage fields (even with 0 values) per reference format
+	// Field order: input_tokens, cache_creation_input_tokens, cache_read_input_tokens, output_tokens
 	usage := &StreamUsage{
 		InputTokens:              int(e.Message.Usage.InputTokens),
-		OutputTokens:             int(e.Message.Usage.OutputTokens),
-		CacheReadInputTokens:     int(e.Message.Usage.CacheReadInputTokens),
 		CacheCreationInputTokens: int(e.Message.Usage.CacheCreationInputTokens),
+		CacheReadInputTokens:     int(e.Message.Usage.CacheReadInputTokens),
+		OutputTokens:             int(e.Message.Usage.OutputTokens),
 		ServiceTier:              "standard",
 	}
 
@@ -377,13 +380,14 @@ func transformMessageDelta(e anthropic.MessageDeltaEvent) (json.RawMessage, erro
 	}
 
 	// Add usage if present
+	// Field order: input_tokens, cache_creation_input_tokens, cache_read_input_tokens, output_tokens
 	if e.Usage.InputTokens > 0 || e.Usage.OutputTokens > 0 ||
 		e.Usage.CacheReadInputTokens > 0 || e.Usage.CacheCreationInputTokens > 0 {
 		msg.Usage = &StreamUsage{
 			InputTokens:              int(e.Usage.InputTokens),
-			OutputTokens:             int(e.Usage.OutputTokens),
-			CacheReadInputTokens:     int(e.Usage.CacheReadInputTokens),
 			CacheCreationInputTokens: int(e.Usage.CacheCreationInputTokens),
+			CacheReadInputTokens:     int(e.Usage.CacheReadInputTokens),
+			OutputTokens:             int(e.Usage.OutputTokens),
 			ServiceTier:              "standard",
 		}
 	}
