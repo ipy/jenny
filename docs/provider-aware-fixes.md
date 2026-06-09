@@ -1,50 +1,40 @@
 ---
 status: done
-code: n/a
+code: done
 ---
-# Provider-Aware Fixes
+# Provider-Aware Fixes → Universal Normalization
 
 ## Context
 
-Jenny is an independent Go reimplementation of a headless coding agent. It is not a fork of the Claude Code binary, nor a wrapper around it. Jenny speaks the Anthropic Messages API directly — the same wire protocol used by Claude Code and official SDKs.
+This document previously described provider-specific shims gated on URL-based provider detection. The architecture has since been refactored to use **universal normalization** — all fixes now apply unconditionally to every provider, eliminating provider-specific code paths.
 
-Each API provider that implements the Anthropic Messages API has actual conformance gaps relative to the published spec. These gaps cause real production errors: `error 2013` from MiniMax, 400 rejections from DeepSeek, and so on.
+See [`universal-normalization-architecture.md`](./universal-normalization-architecture.md) for the current architecture.
 
-Claude Code may paper over these gaps via its own private provider-routing code, which is inside the Claude Code binary and not accessible to external tools. Jenny does not have access to that routing layer. When a provider deviates from the spec, jenny must carry its own explicit shim to remain compatible.
+## Normalization Pass Map
 
-## Decision
+The following passes were previously provider-aware but are now universal:
 
-Carry provider-specific shims in jenny's API client layer, gated on explicit provider detection via `ANTHROPIC_BASE_URL`. Each shim is isolated, documented, and tied to the commit that introduced it.
+| Pass | Trigger | Commit | Notes |
+|------|---------|--------|-------|
+| Tool Result Dedup | Every `tool_result` block | a154210 | Deduplicated by `tool_use_id` (last-writer-wins). Now universal via `NormalizeMessages`. |
+| Empty Schema Placeholder | Tools with empty `input_schema.properties` | 127a1b5 | Injects `__arg__: {type: string}` placeholder. Now universal via `NormalizeMessages`. |
 
-This is not a design flaw — it is the correct trade-off for a multi-provider headless agent. Removing these shims would mean dropping provider support or shipping known breakage.
+## Why Universal?
 
-## Provider-Fix Map
+The previous URL-based detection (`providerFromBaseURL()`) was fragile — it relied on substring matching in the base URL and required separate code paths for each provider. The universal approach:
 
-| Provider | Symptom | Fix | Trigger commit |
-|----------|---------|-----|----------------|
-| DeepSeek | server rejects request when two `tool_result` blocks share a `tool_use_id` | deduplicate `tool_result`s by `tool_use_id` (last-writer-wins) in `mergeConsecutiveSameRole` and in `api.SendMessage` serialization | a154210 |
-| MiniMax | error 2013 when a tool has empty `input_schema.properties` | inject a `__arg__: {type: string}` placeholder property when serializing | 127a1b5 |
+1. Applies fixes unconditionally to all outgoing payloads
+2. Eliminates provider-specific branching in the serialization path
+3. Guarantees compatibility across all API providers without detection
 
-Both shims are provider-aware: they apply only when `ANTHROPIC_BASE_URL` contains a known provider substring. For the standard Anthropic endpoint, tool serialization is unchanged.
+## Migration Notes
 
-See [`anthropic-api-client.md`](./anthropic-api-client.md) (Provider Compatibility section) for the full technical detail on each fix.
+- `providerFromBaseURL()` has been removed
+- Tool serialization no longer branches on provider type
+- `NormalizeMessages` in `internal/api/` is the single gateway before JSON serialization
+- All existing tests pass without modification
 
-## Alternatives Considered
+## References
 
-### (a) Rely on Anthropic-format-only and drop non-Anthropic providers
-
-**Rejected.** The project's goal is multi-provider support. Dropping providers to simplify the wire format would contradict that goal. Users who run against DeepSeek or MiniMax need working integrations, not error messages telling them to switch back to Anthropic.
-
-### (b) Shell out to the Claude Code binary as a library
-
-**Rejected.** Claude Code is a separate product with a different scope — it is an interactive TUI with IDE integrations. Depending on it as a library would invert jenny's "headless Go agent" premise and introduce an unwanted runtime dependency on a UI-oriented binary. Additionally, Claude Code does not expose a stable library API for headless use.
-
-### (c) Upstream the fixes into the providers themselves
-
-**Deferred.** Filing provider conformance bugs is the right long-term move, but it is not actionable inside jenny's release cadence. Provider teams may or may not act on the feedback in time for users who need working integrations today. Carrying the shim is the pragmatic path until providers close the gap.
-
-## Consequences
-
-- **(i)** jenny's API client must carry provider detection logic — currently URL-based via `ANTHROPIC_BASE_URL`, gated in `providerFromBaseURL()`.
-- **(ii)** every new provider integration may surface new shims — this is expected and should be documented in this file when it happens.
-- **(iii)** shims are an ongoing maintenance cost but are strictly cheaper than dropping provider support — the alternative is worse.
+- [`universal-normalization-architecture.md`](./universal-normalization-architecture.md) — Current architecture source of truth
+- [`anthropic-api-client.md`](./anthropic-api-client.md) — Provider Compatibility section updated

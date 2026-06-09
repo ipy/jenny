@@ -16,7 +16,6 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
-	"github.com/anthropics/anthropic-sdk-go/packages/param"
 	"github.com/anthropics/anthropic-sdk-go/shared/constant"
 )
 
@@ -479,6 +478,9 @@ func (c *Client) doSendMessage(ctx context.Context, messages []Message, tools []
 		return nil, err
 	}
 
+	// Universal normalization gateway: normalize messages and tools before serialization
+	messages, tools, _ = NormalizeMessages(messages, tools, Capabilities{SupportsPromptCaching: true})
+
 	// Convert messages to SDK format
 	sdkMessages := make([]anthropic.MessageParam, 0, len(messages))
 	for _, msg := range messages {
@@ -502,9 +504,8 @@ func (c *Client) doSendMessage(ctx context.Context, messages []Message, tools []
 			})
 		}
 
-		// Add tool_result blocks if present (deduplicated as safety net for DeepSeek)
-		dedupedResults := deduplicateToolResults(msg.ToolResults)
-		for _, tr := range dedupedResults {
+		// Add tool_result blocks if present (already deduplicated in NormalizeMessages)
+		for _, tr := range msg.ToolResults {
 			contentBlocks = append(contentBlocks, anthropic.ContentBlockParamUnion{
 				OfToolResult: &anthropic.ToolResultBlockParam{
 					ToolUseID: tr.ToolUseID,
@@ -542,9 +543,8 @@ func (c *Client) doSendMessage(ctx context.Context, messages []Message, tools []
 
 	// Convert tools to SDK format
 	sdkTools := make([]anthropic.ToolUnionParam, 0, len(tools))
-	baseURL := os.Getenv("ANTHROPIC_BASE_URL")
 	for i, t := range tools {
-		sdkTools = append(sdkTools, toolToSDK(t, i == len(tools)-1, baseURL))
+		sdkTools = append(sdkTools, toolToSDK(t, i == len(tools)-1))
 	}
 
 	// Build request
@@ -848,6 +848,9 @@ func (c *Client) SendMessageStream(
 			return
 		}
 
+		// Universal normalization gateway: normalize messages and tools before serialization
+		messages, tools, _ = NormalizeMessages(messages, tools, Capabilities{SupportsPromptCaching: true})
+
 		// Convert messages to SDK format (same as SendMessage)
 		sdkMessages := make([]anthropic.MessageParam, 0, len(messages))
 		for _, msg := range messages {
@@ -869,9 +872,8 @@ func (c *Client) SendMessageStream(
 				})
 			}
 
-			// Add tool_result blocks if present (deduplicated as safety net for DeepSeek)
-			dedupedResults := deduplicateToolResults(msg.ToolResults)
-			for _, tr := range dedupedResults {
+			// Add tool_result blocks if present (already deduplicated in NormalizeMessages)
+			for _, tr := range msg.ToolResults {
 				contentBlocks = append(contentBlocks, anthropic.ContentBlockParamUnion{
 					OfToolResult: &anthropic.ToolResultBlockParam{
 						ToolUseID: tr.ToolUseID,
@@ -909,9 +911,8 @@ func (c *Client) SendMessageStream(
 
 		// Convert tools to SDK format
 		sdkTools := make([]anthropic.ToolUnionParam, 0, len(tools))
-		baseURL := os.Getenv("ANTHROPIC_BASE_URL")
 		for i, t := range tools {
-			sdkTools = append(sdkTools, toolToSDK(t, i == len(tools)-1, baseURL))
+			sdkTools = append(sdkTools, toolToSDK(t, i == len(tools)-1))
 		}
 
 		// Build request
@@ -1192,55 +1193,18 @@ type ToolInputSchema struct {
 }
 
 // toolToSDK converts a ToolParam to an SDK ToolUnionParam.
-// For web_search with MaxUses set, uses the specific WebSearchTool20250305Param
-// to support definition-level max_uses enforcement (except for MiniMax).
 // When isLast is true, cache_control is set on the tool to mark it as a cache breakpoint.
-// baseURL is used for provider detection to apply MiniMax compatibility fix only when needed.
-func toolToSDK(t ToolParam, isLast bool, baseURL string) anthropic.ToolUnionParam {
-	provider := providerFromBaseURL(baseURL)
-
-	// MiniMax compatibility: for MiniMax provider, web_search must use ToolParam
-	// with input_schema, because WebSearchTool20250305Param has no input_schema
-	// and MiniMax rejects tools with missing input_schema (error 2013).
-	// AC3: Provider-aware: only use this path when provider is "minimax".
-	if t.Name == "web_search" && provider == "minimax" {
-		props := map[string]any{"query": map[string]any{"type": "string"}}
-		inputSchema := anthropic.ToolInputSchemaParam{
-			Type:       constant.Object("object"),
-			Properties: props,
-			Required:   []string{"query"},
-		}
-		tool := &anthropic.ToolParam{
-			Name:        t.Name,
-			Description: anthropic.String(t.Description),
-			InputSchema: inputSchema,
-		}
-		if isLast {
-			tool.CacheControl = anthropic.NewCacheControlEphemeralParam()
-		}
-		return anthropic.ToolUnionParam{OfTool: tool}
-	}
-
-	// Standard path: WebSearchTool20250305Param when MaxUses is set (non-MiniMax only).
-	if t.Name == "web_search" && t.MaxUses != nil {
-		tool := &anthropic.WebSearchTool20250305Param{
-			MaxUses: param.NewOpt(*t.MaxUses),
-		}
-		if isLast {
-			tool.CacheControl = anthropic.NewCacheControlEphemeralParam()
-		}
-		return anthropic.ToolUnionParam{OfWebSearchTool20250305: tool}
-	}
-
-	// MiniMax compatibility: add placeholder property only for MiniMax provider.
-	// MiniMax rejects tools with empty properties object: "function name or parameters is empty (2013)".
-	// AC2: Provider-aware: only add __arg__ when provider is "minimax".
+// Tool normalization (including __arg__ placeholder for empty properties) is handled
+// by NormalizeMessages before this function is called.
+//
+// Note: web_search always uses ToolParam with input_schema to ensure compatibility
+// with all providers (including MiniMax) that require input_schema on all tools.
+// The MaxUses field on web_search is set on the ToolParam if provided.
+func toolToSDK(t ToolParam, isLast bool) anthropic.ToolUnionParam {
+	// Standard path: use ToolParam with input schema (already normalized)
 	props := t.InputSchema.Properties
 	if props == nil {
 		props = make(map[string]any)
-	}
-	if provider == "minimax" && len(props) == 0 {
-		props["__arg__"] = map[string]any{"type": "string", "description": "Placeholder argument for empty schema"}
 	}
 	required := t.InputSchema.Required
 	if required == nil {
@@ -1253,7 +1217,7 @@ func toolToSDK(t ToolParam, isLast bool, baseURL string) anthropic.ToolUnionPara
 		Required:   required,
 	}
 
-	// Pass through extra fields ($defs, etc.) if present (AC3)
+	// Pass through extra fields ($defs, etc.) if present
 	if len(t.InputSchema.ExtraFields) > 0 {
 		inputSchema.ExtraFields = t.InputSchema.ExtraFields
 	}

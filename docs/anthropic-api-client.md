@@ -108,62 +108,21 @@ The `anthropic-beta: prompt-caching-2024-07-31` header is sent on all requests. 
 
 ## Provider Compatibility
 
-Tool serialization is provider-aware to maintain compatibility with alternate API providers that have different validation requirements.
+Tool serialization uses **universal normalization** — all fixes apply unconditionally to every provider, eliminating provider-specific code paths.
 
-### MiniMax Compatibility
+### Universal Normalization
 
-When the provider is detected as MiniMax (see Detection below), tool serialization includes compatibility fixes for MiniMax error code 2013: "function name or parameters is empty".
+The following passes are applied universally via `NormalizeMessages` in `internal/api/normalization.go`:
 
-#### Root Cause: web_search with WebSearchTool20250305Param
+| Pass | Trigger | Description |
+|------|---------|-------------|
+| Empty Schema Placeholder | Tools with empty `input_schema.properties` | Injects `__arg__: {type: string}` placeholder |
+| Tool Result Dedup | Every `tool_result` block | Deduplicates by `tool_use_id` (last-writer-wins) |
 
-The primary issue was the `web_search` tool when serialized with `WebSearchTool20250305Param`. This SDK type has **no `input_schema` field at all**, causing MiniMax to reject it with error 2013.
-
-```json
-// WebSearchTool20250305Param (rejected by MiniMax - missing input_schema):
-{"type": "web_search_20250305", "name": "web_search"}
-
-// ToolParam with input_schema (accepted by MiniMax):
-{"type": "tool", "name": "web_search", "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}}}
-```
-
-**Fix:** For MiniMax provider, `web_search` is serialized as `ToolParam` with a standard `input_schema: {"type": "object", "properties": {"query": {"type": "string"}}}`, regardless of MaxUses. The `WebSearchTool20250305Param` path (which lacks `input_schema`) is only used for non-MiniMax providers.
-
-#### Secondary Fix: __arg__ placeholder for empty properties
-
-For tools with genuinely empty `properties`, a placeholder `__arg__` property is added when provider is MiniMax:
-
-```json
-// Before (rejected by MiniMax):
-{"name": "empty_tool", "input_schema": {"type": "object", "properties": {}}}
-
-// After (accepted by MiniMax):
-{"name": "empty_tool", "input_schema": {"type": "object", "properties": {"__arg__": {"type": "string", "description": "Placeholder argument for empty schema"}}}}
-```
-
-Both fixes are provider-aware: they apply only when `ANTHROPIC_BASE_URL` contains "minimaxi". For non-MiniMax providers (e.g., the standard Anthropic endpoint), tool serialization is unchanged.
-
-### DeepSeek Compatibility
-
-DeepSeek enforces that each `tool_use` must have a single `tool_result`. When duplicate `tool_result` blocks with the same `tool_use_id` are present (e.g., from merging consecutive user messages), DeepSeek returns a 400 error:
-
-```
-messages.2.content.3: each tool_use must have a single result.
-Found multiple `tool_result` blocks with id: call_01_...
-```
-
-**Fix:** Tool results are deduplicated by `tool_use_id` at two layers:
-
-1. **Primary (normalize.go):** `mergeConsecutiveSameRole` deduplicates `ToolResults` when merging consecutive user messages, keeping the last occurrence (last-writer-wins).
-
-2. **Safety net (client.go):** `deduplicateToolResults()` is called during SDK serialization as a defensive measure, ensuring no duplicate `tool_use_id` values reach the API regardless of how the message was constructed.
-
-This fix is provider-agnostic and benefits all providers - DeepSeek is the primary beneficiary since it strictly enforces the uniqueness requirement.
-
-### Detection
-
-Provider detection is based on the `ANTHROPIC_BASE_URL` environment variable via `providerFromBaseURL()`. The function inspects the URL for known alternate provider substrings (currently `"minimaxi"`). If the URL contains a known substring, the MiniMax compatibility fix is applied during tool serialization in `toolToSDK()`. Otherwise, the standard Anthropic tool shape is used unchanged.
+For full details on the normalization architecture, see [`universal-normalization-architecture.md`](./universal-normalization-architecture.md).
 
 ## Related
 
 - Message normalization: [`message-normalization.md`](./message-normalization.md)
+- Universal normalization architecture: [`universal-normalization-architecture.md`](./universal-normalization-architecture.md)
 - Agent loop: [`agent-loop.md`](./agent-loop.md)

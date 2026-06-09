@@ -124,7 +124,7 @@ func TestAC1_NormalizeStripsInternal(t *testing.T) {
 		{Type: "progress", Content: "thinking..."},
 		{Role: "user", Content: "follow up"},
 	}
-	got := normalizeMessages(messages)
+	got := NormalizeMessagesAPI(messages)
 	// After stripping virtual+progress, we have [user "hello", user "follow up"].
 	// Role merging then collapses consecutive same-role messages → 1 message.
 	if len(got) != 1 {
@@ -443,7 +443,7 @@ func TestAC5_FiveStepThinkingNormalizationOrder(t *testing.T) {
 		},
 	}
 
-	result := normalizeMessages(messages)
+	result := NormalizeMessagesAPI(messages)
 
 	// Verify the last assistant does not end with thinking block
 	for i := len(result) - 1; i >= 0; i-- {

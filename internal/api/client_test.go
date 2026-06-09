@@ -224,7 +224,9 @@ func TestStreamContentBlock(t *testing.T) {
 }
 
 func TestToolToSDK_WebSearchMaxUses(t *testing.T) {
-	// Test that web_search with MaxUses set uses WebSearchTool20250305Param with max_uses=8
+	// Test that web_search uses ToolParam with input_schema (universal normalization)
+	// Previously used WebSearchTool20250305Param but that lacks input_schema
+	// which causes errors with providers like MiniMax
 	maxUses := int64(8)
 	webSearchTool := ToolParam{
 		Name:        "web_search",
@@ -237,19 +239,16 @@ func TestToolToSDK_WebSearchMaxUses(t *testing.T) {
 		MaxUses: &maxUses,
 	}
 
-	sdkTool := toolToSDK(webSearchTool, false, "")
+	sdkTool := toolToSDK(webSearchTool, false)
 
-	// Verify it uses OfWebSearchTool20250305 variant
-	if sdkTool.OfWebSearchTool20250305 == nil {
-		t.Fatal("expected OfWebSearchTool20250305 to be non-nil for web_search with MaxUses")
+	// Verify it uses OfTool variant (universal path for web_search)
+	if sdkTool.OfTool == nil {
+		t.Fatal("expected OfTool to be non-nil for web_search")
 	}
 
-	// Verify MaxUses is set to 8
-	if !sdkTool.OfWebSearchTool20250305.MaxUses.Valid() {
-		t.Fatal("expected MaxUses to be valid")
-	}
-	if sdkTool.OfWebSearchTool20250305.MaxUses.Value != 8 {
-		t.Errorf("expected MaxUses=8, got %d", sdkTool.OfWebSearchTool20250305.MaxUses.Value)
+	// Verify input_schema is present
+	if sdkTool.OfTool.InputSchema.Properties == nil {
+		t.Fatal("expected input_schema.Properties to be non-nil")
 	}
 }
 
@@ -265,7 +264,7 @@ func TestToolToSDK_GenericTool(t *testing.T) {
 		},
 	}
 
-	sdkTool := toolToSDK(tool, false, "")
+	sdkTool := toolToSDK(tool, false)
 
 	// Verify it uses OfTool variant
 	if sdkTool.OfTool == nil {
@@ -289,7 +288,7 @@ func TestToolToSDK_WebSearchWithoutMaxUses(t *testing.T) {
 		MaxUses: nil,
 	}
 
-	sdkTool := toolToSDK(tool, false, "")
+	sdkTool := toolToSDK(tool, false)
 
 	// Verify it uses OfTool variant (not OfWebSearchTool20250305)
 	if sdkTool.OfTool == nil {
@@ -834,7 +833,7 @@ func TestToolToSDK_ExtraFields(t *testing.T) {
 		},
 	}
 
-	sdkTool := toolToSDK(tool, false, "")
+	sdkTool := toolToSDK(tool, false)
 
 	if sdkTool.OfTool == nil {
 		t.Fatal("expected OfTool to be non-nil")
@@ -874,28 +873,26 @@ func TestToolToSDK_ExtraFields(t *testing.T) {
 }
 
 func TestToolToSDK_EmptyProperties(t *testing.T) {
-	// AC2: Provider-aware behavior
-	// With MiniMax URL: empty properties get __arg__ placeholder
-	// With non-MiniMax URL: empty properties stay empty {}
+	// AC2: Universal behavior - empty properties get __arg__ placeholder
+	// This is now handled by NormalizeMessages before toolToSDK is called
+	// This test verifies toolToSDK works with pre-normalized tools (already have __arg__)
 	tool := ToolParam{
 		Name:        "empty_tool",
 		Description: "A tool with no properties",
 		InputSchema: ToolInputSchema{
 			Type:       "object",
-			Properties: nil,
-			Required:   nil,
+			Properties: map[string]any{"__arg__": map[string]any{"type": "string", "description": "Placeholder"}},
+			Required:   []string{},
 		},
 	}
 
-	// Test MiniMax provider: __arg__ should be added
-	minimaxURL := "https://api.minimaxi.com/anthropic"
-	sdkToolMinimax := toolToSDK(tool, false, minimaxURL)
+	sdkTool := toolToSDK(tool, false)
 
-	if sdkToolMinimax.OfTool == nil {
+	if sdkTool.OfTool == nil {
 		t.Fatal("expected OfTool to be non-nil")
 	}
 
-	data, err := json.Marshal(sdkToolMinimax.OfTool)
+	data, err := json.Marshal(sdkTool.OfTool)
 	if err != nil {
 		t.Fatalf("failed to marshal tool: %v", err)
 	}
@@ -914,63 +911,12 @@ func TestToolToSDK_EmptyProperties(t *testing.T) {
 	if !ok {
 		t.Fatal("properties missing from serialized input_schema")
 	}
-	// AC2: MiniMax compatibility - empty properties get a placeholder
+	// Universal: pre-normalized empty properties have __arg__ placeholder
 	if len(props) != 1 {
-		t.Errorf("MiniMax: expected 1 placeholder property, got %d items", len(props))
+		t.Errorf("expected 1 placeholder property, got %d items", len(props))
 	}
 	if _, hasArg := props["__arg__"]; !hasArg {
-		t.Error("MiniMax: expected __arg__ placeholder property")
-	}
-
-	// Test non-MiniMax (Anthropic) provider: empty properties stay empty
-	anthropicURL := "https://api.anthropic.com"
-	sdkToolAnthropic := toolToSDK(tool, false, anthropicURL)
-
-	data, err = json.Marshal(sdkToolAnthropic.OfTool)
-	if err != nil {
-		t.Fatalf("failed to marshal tool: %v", err)
-	}
-
-	if err := json.Unmarshal(data, &result); err != nil {
-		t.Fatalf("failed to unmarshal tool: %v", err)
-	}
-
-	inputSchema, ok = result["input_schema"].(map[string]any)
-	if !ok {
-		t.Fatal("input_schema not found in marshaled output")
-	}
-
-	props, ok = inputSchema["properties"].(map[string]any)
-	if !ok {
-		t.Fatal("properties missing from serialized input_schema")
-	}
-	// AC2: Non-MiniMax: empty properties stay empty {}
-	if len(props) != 0 {
-		t.Errorf("Anthropic: expected 0 properties, got %d items", len(props))
-	}
-}
-
-func TestProviderFromBaseURL(t *testing.T) {
-	// AC1: providerFromBaseURL returns correct values
-	tests := []struct {
-		baseURL  string
-		expected string
-	}{
-		{"https://api.minimaxi.com/anthropic", "minimax"},
-		{"https://api.minimaxi.com", "minimax"},
-		{"http://minimaxi.local:8080/anthropic", "minimax"},
-		{"https://api.anthropic.com", "anthropic"},
-		{"https://api.anthropic.com/v1/messages", "anthropic"},
-		{"http://localhost:8080", "anthropic"},
-		{"http://127.0.0.1:8080", "anthropic"},
-		{"", "anthropic"},
-	}
-
-	for _, tc := range tests {
-		result := providerFromBaseURL(tc.baseURL)
-		if result != tc.expected {
-			t.Errorf("providerFromBaseURL(%q) = %q; want %q", tc.baseURL, result, tc.expected)
-		}
+		t.Error("expected __arg__ placeholder property")
 	}
 }
 
@@ -1128,5 +1074,131 @@ func TestDeduplicateToolResults(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestNormalize_UniversalEmptySchemaPlaceholder tests that empty input_schema.properties
+// gets __arg__ placeholder regardless of ANTHROPIC_BASE_URL.
+func TestNormalize_UniversalEmptySchemaPlaceholder(t *testing.T) {
+	// Three-URL matrix: Anthropic, MiniMax-like, DeepSeek-like
+	urls := []string{
+		"https://api.anthropic.com",
+		"https://api.minimaxi.com/anthropic",
+		"https://api.deepseek.com/v1",
+	}
+
+	for _, baseURL := range urls {
+		t.Run(baseURL, func(t *testing.T) {
+			t.Setenv("ANTHROPIC_BASE_URL", baseURL)
+
+			tools := []ToolParam{
+				{
+					Name:        "empty_tool",
+					Description: "A tool with no properties",
+					InputSchema: ToolInputSchema{
+						Type:       "object",
+						Properties: nil,
+						Required:   nil,
+					},
+				},
+			}
+
+			// NormalizeMessages should add __arg__ placeholder universally
+			_, normalizedTools, logs := NormalizeMessages(nil, tools, Capabilities{})
+
+			if len(normalizedTools) != 1 {
+				t.Fatalf("expected 1 normalized tool, got %d", len(normalizedTools))
+			}
+
+			props := normalizedTools[0].InputSchema.Properties
+			if props == nil {
+				t.Fatal("properties should not be nil after normalization")
+			}
+			if len(props) != 1 {
+				t.Errorf("expected 1 property (__arg__), got %d", len(props))
+			}
+			if _, hasArg := props["__arg__"]; !hasArg {
+				t.Error("expected __arg__ placeholder property")
+			}
+
+			// Verify log was recorded
+			if len(logs) == 0 {
+				t.Error("expected normalization log entry for EmptySchemaPlaceholder")
+			}
+		})
+	}
+}
+
+// TestNormalize_RoutesThroughNormalizeMessages verifies that NormalizeMessages is called
+// and properly normalizes messages before serialization.
+func TestNormalize_RoutesThroughNormalizeMessages(t *testing.T) {
+	var capturedBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedBody, _ = io.ReadAll(r.Body)
+		r.Body.Close()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		resp := `{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"Hello"}],"model":"m","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}}`
+		w.Write([]byte(resp))
+	}))
+	defer server.Close()
+
+	t.Setenv("ANTHROPIC_BASE_URL", server.URL)
+	t.Setenv("ANTHROPIC_API_KEY", "test-key-0000000000000000")
+
+	client, _ := NewClientWithModel("m")
+	client.SetMaxTokensOverride(8192)
+
+	// Create a tool with empty properties - should get __arg__ via NormalizeMessages
+	tools := []ToolParam{
+		{
+			Name:        "empty_tool",
+			Description: "A tool with no properties",
+			InputSchema: ToolInputSchema{
+				Type:       "object",
+				Properties: nil,
+				Required:   nil,
+			},
+		},
+	}
+
+	messages := []Message{
+		{Role: "user", Content: "Test"},
+	}
+
+	_, err := client.SendMessage(context.Background(), messages, tools, nil, "")
+	if err != nil {
+		t.Fatalf("SendMessage error = %v", err)
+	}
+
+	// Parse the captured request body and verify __arg__ was added
+	var parsed map[string]any
+	if err := json.Unmarshal(capturedBody, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal request body: %v", err)
+	}
+
+	toolsArr, ok := parsed["tools"].([]any)
+	if !ok || len(toolsArr) == 0 {
+		t.Fatal("request body missing or empty tools array")
+	}
+
+	toolMap, ok := toolsArr[0].(map[string]any)
+	if !ok {
+		t.Fatal("first tool is not a map")
+	}
+
+	inputSchema, ok := toolMap["input_schema"].(map[string]any)
+	if !ok {
+		t.Fatal("tool missing input_schema")
+	}
+
+	props, ok := inputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("input_schema missing properties")
+	}
+
+	// Verify __arg__ placeholder was added by NormalizeMessages
+	if _, hasArg := props["__arg__"]; !hasArg {
+		t.Error("expected __arg__ placeholder property in serialized request (NormalizeMessages should have added it)")
 	}
 }

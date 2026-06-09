@@ -9,11 +9,14 @@ import (
 	"github.com/ipy/jenny/internal/api"
 )
 
-// normalizeMessages normalizes messages for API transmission.
+// NormalizeMessagesAPI normalizes messages for API transmission.
 // It follows the 6-step order: internal filter, orphaned thinking filter,
 // trailing thinking strip, whitespace-only filter, non-empty assistant guard,
 // tool pairing, and role merging.
-func normalizeMessages(messages []api.Message) []api.Message {
+//
+// This function is exported for use by the api package as part of the
+// universal normalization gateway.
+func NormalizeMessagesAPI(messages []api.Message) []api.Message {
 	if len(messages) == 0 {
 		return messages
 	}
