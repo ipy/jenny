@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 )
@@ -372,9 +371,4 @@ func transformMessageStop(e anthropic.MessageStopEvent) (json.RawMessage, error)
 		Type: "message_stop",
 	}
 	return json.Marshal(event)
-}
-
-// TimestampNow returns current timestamp in RFC3339Nano format.
-func TimestampNow() string {
-	return time.Now().UTC().Format(time.RFC3339Nano)
 }
