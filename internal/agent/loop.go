@@ -375,7 +375,7 @@ type StreamMessage struct {
 	ToolName          string                `json:"tool_name,omitempty"`
 	ToolInput         any                   `json:"input,omitempty"`
 	ToolUseID         string                `json:"tool_use_id,omitempty"`
-	IsError           bool                  `json:"is_error,omitempty"`
+	IsError           bool                  `json:"is_error"`
 	IsPartial         bool                  `json:"is_partial,omitempty"`
 	StopReason        string                `json:"stop_reason,omitempty"`
 	DurationMs        int64                 `json:"duration_ms,omitempty"`
@@ -422,9 +422,9 @@ type Usage struct {
 	OutputTokens             int            `json:"output_tokens"`
 	CacheReadInputTokens     int            `json:"cache_read_input_tokens,omitempty"`
 	CacheCreationInputTokens int            `json:"cache_creation_input_tokens,omitempty"`
-	ServerToolUse            *ServerToolUse `json:"server_tool_use,omitempty"`
+	ServerToolUse            *ServerToolUse `json:"server_tool_use"`
 	ServiceTier              string         `json:"service_tier,omitempty"`
-	CacheCreation            *CacheCreation `json:"cache_creation,omitempty"`
+	CacheCreation            *CacheCreation `json:"cache_creation"`
 	InferenceGeo             string         `json:"inference_geo,omitempty"`
 	Iterations               []any          `json:"iterations,omitempty"`
 	Speed                    string         `json:"speed,omitempty"`

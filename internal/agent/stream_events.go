@@ -4,53 +4,20 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
 )
 
-// StreamEvent represents the inner event object in a stream_event envelope.
-// Field order matters for JSON serialization: type must be first.
-type StreamEvent struct {
-	Type string `json:"type"`
-}
-
-// MessageStartEvent represents a message_start stream event with minimal fields.
-type MessageStartEvent struct {
-	Type    string          `json:"type"`
-	Message json.RawMessage `json:"message"`
-}
-
-// ContentBlockStartEvent represents a content_block_start stream event with minimal fields.
-type ContentBlockStartEvent struct {
-	Type         string          `json:"type"`
-	Index        int             `json:"index"`
-	ContentBlock json.RawMessage `json:"content_block"`
-}
-
-// ContentBlockDeltaEvent represents a content_block_delta stream event with minimal fields.
-type ContentBlockDeltaEvent struct {
-	Type  string          `json:"type"`
-	Index int             `json:"index"`
-	Delta json.RawMessage `json:"delta"`
-	Usage *Usage          `json:"usage,omitempty"`
-}
-
-// ContentBlockStopEvent represents a content_block_stop stream event with minimal fields.
-type ContentBlockStopEvent struct {
+// contentBlockStopEvent represents a content_block_stop stream event with minimal fields.
+type contentBlockStopEvent struct {
 	Type  string `json:"type"`
 	Index int    `json:"index"`
 }
 
-// MessageDeltaEvent represents a message_delta stream event with minimal fields.
-type MessageDeltaEvent struct {
-	Type  string          `json:"type"`
-	Delta json.RawMessage `json:"delta"`
-	Usage *Usage          `json:"usage,omitempty"`
-}
-
-// MessageStopEvent represents a message_stop stream event with minimal fields.
-type MessageStopEvent struct {
+// messageStopEvent represents a message_stop stream event with minimal fields.
+type messageStopEvent struct {
 	Type string `json:"type"`
 }
 
@@ -200,14 +167,14 @@ func encodeString(s string) string {
 }
 
 func joinFields(fields []any) string {
-	result := ""
+	var result strings.Builder
 	for i, f := range fields {
 		if i > 0 {
-			result += ","
+			result.WriteString(",")
 		}
-		result += fmt.Sprintf("%v", f)
+		result.WriteString(fmt.Sprintf("%v", f))
 	}
-	return result
+	return result.String()
 }
 
 // TransformStreamEvent transforms an SDK stream event to a minimal JSON representation.
@@ -346,7 +313,7 @@ func transformContentBlockDelta(e anthropic.ContentBlockDeltaEvent) (json.RawMes
 }
 
 func transformContentBlockStop(e anthropic.ContentBlockStopEvent) (json.RawMessage, error) {
-	event := ContentBlockStopEvent{
+	event := contentBlockStopEvent{
 		Type:  "content_block_stop",
 		Index: int(e.Index),
 	}
@@ -391,7 +358,7 @@ func transformMessageDelta(e anthropic.MessageDeltaEvent) (json.RawMessage, erro
 }
 
 func transformMessageStop(e anthropic.MessageStopEvent) (json.RawMessage, error) {
-	event := MessageStopEvent{
+	event := messageStopEvent{
 		Type: "message_stop",
 	}
 	return json.Marshal(event)
