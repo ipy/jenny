@@ -73,6 +73,15 @@ When tool search enabled: omit deferred tool **descriptions** from API schemas (
 | MCP servers connect mid-session | Refresh MCP section next turn |
 | `--bare` mode | Skip skills, memory, non-essential sections |
 
+## Instruction File Loading
+
+Jenny loads project-level instruction files from the working directory in priority order:
+
+1. `<cwd>/CLAUDE.md` — if present, its content is injected as a `<system-reminder>` block at the top of the system prompt.
+2. `<cwd>/AGENTS.md` — loaded only when `CLAUDE.md` is absent.
+
+When neither file exists, no instruction block is injected. Subdirectory instruction files (e.g. `subdir/CLAUDE.md`) are NOT loaded — only the cwd-root file is read.
+
 ## Acceptance Criteria
 
 - **AC1:** Custom system prompt replaces defaults entirely.
@@ -91,3 +100,7 @@ When tool search enabled: omit deferred tool **descriptions** from API schemas (
 - **AC14:** `--print-system-prompt` stdout contains OS/platform info (`"Platform"`, `"darwin"`, `"linux"`, or `"windows"`).
 - **AC15:** When jenny is launched from inside a git repository, `--print-system-prompt` stdout contains the current branch (substring `"Branch"` or `"Git context"`).
 - **AC16:** When jenny is launched from a directory with no git repo, `--print-system-prompt` stdout does NOT contain `"Git context"` or `"Branch:"`.
+- **AC17:** CLAUDE.md content from cwd appears in system prompt as a `<system-reminder>` block.
+- **AC18:** AGENTS.md used as fallback when CLAUDE.md absent.
+- **AC19:** CLAUDE.md takes precedence when both files exist.
+- **AC20:** Subdirectory CLAUDE.md is not loaded.

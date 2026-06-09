@@ -50,6 +50,7 @@ func run() error {
 		cfg := agent.StreamConfig{
 			CustomSystemPrompt: flags.CustomSystemPrompt,
 			AppendSystemPrompt: flags.AppendSystemPrompt,
+			MemoryContent:      agent.LoadInstructionFile(cwd),
 		}
 		fmt.Print(agent.AssembleSystemPrompt(cfg, tools, cwd))
 		return nil
@@ -244,6 +245,7 @@ func run() error {
 		Skills:             discoveredSkills,
 		CustomSystemPrompt: flags.CustomSystemPrompt,
 		AppendSystemPrompt: flags.AppendSystemPrompt,
+		MemoryContent:      agent.LoadInstructionFile(cwd),
 	}
 
 	// AC3-streamconfig-inheritance: Set parent config on runner for named agent inheritance
