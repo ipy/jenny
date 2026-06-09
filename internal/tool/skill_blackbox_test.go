@@ -406,16 +406,9 @@ func TestAC2_SkillWithoutGlob_OnlyActivatesWithinRoot(t *testing.T) {
 // AC3: MCP prompts not invokable as skills
 // ============================================================================
 
-func TestAC3_MCPExclusion_AlreadyCovered(t *testing.T) {
-	// AC3 is already verified by TestSkillTool_MCPExclusion in iteration52_test.go.
-	// The existing test verifies:
-	// 1. MCP tools are NOT in the skills list
-	// 2. Local skills ARE in the skills list
-	// 3. MCP tool names cannot be activated via SkillTool
-	//
-	// This test documents the additional architectural invariant:
+func TestAC3_MCPExclusion_ArchitecturalInvariant(t *testing.T) {
+	// AC3: MCP prompts not invokable as skills (architectural invariant)
 	// MCP prompts don't have SKILL.md files, so skills.Discover() never returns them.
-	t.Log("AC3: Covered by TestSkillTool_MCPExclusion (iteration52_test.go)")
 	t.Log("AC3: Architectural invariant - MCP prompts lack SKILL.md files, Discover() never returns them")
 }
 
@@ -424,12 +417,7 @@ func TestAC3_MCPExclusion_AlreadyCovered(t *testing.T) {
 // ============================================================================
 
 func TestAC4_BareMode_NoSkillTool(t *testing.T) {
-	// Already covered by TestRegistry_BareMode_NoSkills in iteration52_test.go.
-	// Additional verification: WithSkillsFrameworkEnabled(false, nil) produces
-	// a registry with no skill activator and no Skill tool.
-	t.Log("AC4: Covered by TestRegistry_BareMode_NoSkills (iteration52_test.go)")
-
-	// Additional black-box verification:
+	// AC4: Bare mode skips skill discovery
 	// When bare mode is active, no skill_activated events should occur
 	tmpDir := t.TempDir()
 	skillDir := filepath.Join(tmpDir, ".jenny", "skills", "test-skill")
