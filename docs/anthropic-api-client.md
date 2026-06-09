@@ -128,7 +128,7 @@ This fix is applied only to tools that would otherwise have empty `properties` *
 
 ### Detection
 
-Provider detection is based on the `ANTHROPIC_BASE_URL` environment variable via `providerFromBaseURL()`. The function inspects the URL for known alternate provider hosts (currently `minimaxi.com`). If the URL contains a known alternate host, the MiniMax compatibility fix is applied during tool serialization in `toolToSDK()`. Otherwise, the standard Anthropic tool shape is used unchanged.
+Provider detection is based on the `ANTHROPIC_BASE_URL` environment variable via `providerFromBaseURL()`. The function inspects the URL for known alternate provider substrings (currently `"minimaxi"`). If the URL contains a known substring, the MiniMax compatibility fix is applied during tool serialization in `toolToSDK()`. Otherwise, the standard Anthropic tool shape is used unchanged.
 
 ## Related
 

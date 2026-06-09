@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync"
 	"testing"
 
@@ -156,9 +155,10 @@ func TestMinimaxBadRequestReproduced(t *testing.T) {
 	t.Cleanup(mock.Close)
 
 	// AC4: Use a MiniMax-like URL to trigger provider detection.
-	// Transform http://127.0.0.1:PORT to http://minimaxi.127.0.0.1:PORT
-	// so providerFromBaseURL returns "minimax" and __arg__ is added.
-	minimaxURL := strings.Replace(mock.URL, "http://", "http://minimaxi.", 1)
+	// Append /minimaxi to the mock URL so providerFromBaseURL
+	// returns "minimax" and __arg__ is added, while the host
+	// part (127.0.0.1:PORT) resolves correctly via DNS.
+	minimaxURL := mock.URL + "/minimaxi"
 
 	env := []string{
 		"ANTHROPIC_BASE_URL=" + minimaxURL,
@@ -190,7 +190,10 @@ func TestMinimaxToolSerializationPasses(t *testing.T) {
 	t.Cleanup(mock.Close)
 
 	// AC4: Use a MiniMax-like URL to trigger provider detection.
-	minimaxURL := strings.Replace(mock.URL, "http://", "http://minimaxi.", 1)
+	// Append /minimaxi to the mock URL so providerFromBaseURL
+	// returns "minimax" and __arg__ is added, while the host
+	// part (127.0.0.1:PORT) resolves correctly via DNS.
+	minimaxURL := mock.URL + "/minimaxi"
 
 	env := []string{
 		"ANTHROPIC_BASE_URL=" + minimaxURL,
