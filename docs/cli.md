@@ -71,8 +71,8 @@ Help (`-h`) exits 0.
 | Variable | Description |
 |----------|-------------|
 | `ANTHROPIC_BASE_URL` | API endpoint |
-| `ANTHROPIC_AUTH_TOKEN` | Auth token |
-| `ANTHROPIC_MODEL` | Default model |
+| `ANTHROPIC_AUTH_TOKEN` | Auth token — forwarded as `Authorization: Bearer <token>` |
+| `ANTHROPIC_MODEL` | Default model — overridden by `--model` flag when both are set |
 | `JENNY_DEBUG` | Enable debug slog (`1` = DEBUG) |
 
 ## Jenny Gaps vs Target Spec
