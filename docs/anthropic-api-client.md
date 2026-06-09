@@ -112,19 +112,35 @@ Tool serialization is provider-aware to maintain compatibility with alternate AP
 
 ### MiniMax Compatibility
 
-When the provider is detected as MiniMax (see Detection below), tool serialization includes a compatibility fix for MiniMax error code 2013: "function name or parameters is empty".
+When the provider is detected as MiniMax (see Detection below), tool serialization includes compatibility fixes for MiniMax error code 2013: "function name or parameters is empty".
 
-**Rule:** No tool may have an empty `input_schema.properties` object. When a tool's `InputSchema.Properties` would be empty or nil and the provider is MiniMax, a placeholder property `__arg__` is added with `type: "string"` to satisfy MiniMax's validation.
+#### Root Cause: web_search with WebSearchTool20250305Param
+
+The primary issue was the `web_search` tool when serialized with `WebSearchTool20250305Param`. This SDK type has **no `input_schema` field at all**, causing MiniMax to reject it with error 2013.
 
 ```json
-// Before fix (rejected by MiniMax):
+// WebSearchTool20250305Param (rejected by MiniMax - missing input_schema):
+{"type": "web_search_20250305", "name": "web_search"}
+
+// ToolParam with input_schema (accepted by MiniMax):
+{"type": "tool", "name": "web_search", "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}}}
+```
+
+**Fix:** For MiniMax provider, `web_search` is serialized as `ToolParam` with a standard `input_schema: {"type": "object", "properties": {"query": {"type": "string"}}}`, regardless of MaxUses. The `WebSearchTool20250305Param` path (which lacks `input_schema`) is only used for non-MiniMax providers.
+
+#### Secondary Fix: __arg__ placeholder for empty properties
+
+For tools with genuinely empty `properties`, a placeholder `__arg__` property is added when provider is MiniMax:
+
+```json
+// Before (rejected by MiniMax):
 {"name": "empty_tool", "input_schema": {"type": "object", "properties": {}}}
 
-// After fix (accepted by MiniMax):
+// After (accepted by MiniMax):
 {"name": "empty_tool", "input_schema": {"type": "object", "properties": {"__arg__": {"type": "string", "description": "Placeholder argument for empty schema"}}}}
 ```
 
-This fix is applied only to tools that would otherwise have empty `properties` **and only when the provider is detected as MiniMax**. Well-formed tools with non-empty schemas are unchanged. For non-MiniMax providers (e.g., the standard Anthropic endpoint), empty `properties {}` is preserved as-is.
+Both fixes are provider-aware: they apply only when `ANTHROPIC_BASE_URL` contains "minimaxi". For non-MiniMax providers (e.g., the standard Anthropic endpoint), tool serialization is unchanged.
 
 ### Detection
 

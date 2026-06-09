@@ -1106,10 +1106,35 @@ type ToolInputSchema struct {
 
 // toolToSDK converts a ToolParam to an SDK ToolUnionParam.
 // For web_search with MaxUses set, uses the specific WebSearchTool20250305Param
-// to support definition-level max_uses enforcement.
+// to support definition-level max_uses enforcement (except for MiniMax).
 // When isLast is true, cache_control is set on the tool to mark it as a cache breakpoint.
 // baseURL is used for provider detection to apply MiniMax compatibility fix only when needed.
 func toolToSDK(t ToolParam, isLast bool, baseURL string) anthropic.ToolUnionParam {
+	provider := providerFromBaseURL(baseURL)
+
+	// MiniMax compatibility: for MiniMax provider, web_search must use ToolParam
+	// with input_schema, because WebSearchTool20250305Param has no input_schema
+	// and MiniMax rejects tools with missing input_schema (error 2013).
+	// AC3: Provider-aware: only use this path when provider is "minimax".
+	if t.Name == "web_search" && provider == "minimax" {
+		props := map[string]any{"query": map[string]any{"type": "string"}}
+		inputSchema := anthropic.ToolInputSchemaParam{
+			Type:       constant.Object("object"),
+			Properties: props,
+			Required:   []string{"query"},
+		}
+		tool := &anthropic.ToolParam{
+			Name:        t.Name,
+			Description: anthropic.String(t.Description),
+			InputSchema: inputSchema,
+		}
+		if isLast {
+			tool.CacheControl = anthropic.NewCacheControlEphemeralParam()
+		}
+		return anthropic.ToolUnionParam{OfTool: tool}
+	}
+
+	// Standard path: WebSearchTool20250305Param when MaxUses is set (non-MiniMax only).
 	if t.Name == "web_search" && t.MaxUses != nil {
 		tool := &anthropic.WebSearchTool20250305Param{
 			MaxUses: param.NewOpt(*t.MaxUses),
@@ -1123,7 +1148,6 @@ func toolToSDK(t ToolParam, isLast bool, baseURL string) anthropic.ToolUnionPara
 	// MiniMax compatibility: add placeholder property only for MiniMax provider.
 	// MiniMax rejects tools with empty properties object: "function name or parameters is empty (2013)".
 	// AC2: Provider-aware: only add __arg__ when provider is "minimax".
-	provider := providerFromBaseURL(baseURL)
 	props := t.InputSchema.Properties
 	if props == nil {
 		props = make(map[string]any)

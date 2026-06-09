@@ -54,11 +54,6 @@ func (m *minimaxMockServer) handle(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				continue
 			}
-			// Check tool type - web_search uses WebSearchTool20250305Param format
-			// which doesn't have input_schema, so skip it
-			if toolType, ok := tool["type"].(string); ok && (toolType == "web_search" || toolType == "web_search_20250305") {
-				continue
-			}
 			// Check for empty name
 			name, ok := tool["name"].(string)
 			if !ok || name == "" {
