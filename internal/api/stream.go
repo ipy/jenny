@@ -10,6 +10,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 )
+
 // streamAccumulator tracks content blocks during streaming.
 type streamAccumulator struct {
 	blocks        []ContentBlock // Content blocks by index

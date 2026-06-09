@@ -14,6 +14,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/shared/constant"
 )
+
 // SendMessage sends a message to the API and returns the response.
 func (c *Client) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string) (*Response, error) {
 	// Wrap the actual send logic with retry
@@ -21,6 +22,7 @@ func (c *Client) SendMessage(ctx context.Context, messages []Message, tools []To
 		return c.doSendMessage(ctx, messages, tools, toolResults, systemPrompt)
 	}, c.isBackground)
 }
+
 // doSendMessage performs the actual message sending (used by retry logic).
 func (c *Client) doSendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string) (*Response, error) {
 	log.Debug("Sending message", "model", c.model)
@@ -202,6 +204,7 @@ func (c *Client) doSendMessage(ctx context.Context, messages []Message, tools []
 
 	return response, nil
 }
+
 // wrapSDKError wraps SDK errors to extract HTTP status code for retry logic.
 func wrapSDKError(err error) error {
 	if err == nil {
@@ -236,6 +239,7 @@ func wrapSDKError(err error) error {
 	// For unknown errors, return as-is (will be handled as connection errors if retryable)
 	return err
 }
+
 // toolToSDK converts a ToolParam to an SDK ToolUnionParam.
 // When isLast is true, cache_control is set on the tool to mark it as a cache breakpoint.
 // Tool normalization (including __arg__ placeholder for empty properties) is handled
@@ -276,6 +280,7 @@ func toolToSDK(t ToolParam, isLast bool) anthropic.ToolUnionParam {
 	}
 	return anthropic.ToolUnionParam{OfTool: tool}
 }
+
 // modelMaxOutputTokens returns the max output tokens for a given model.
 // This is used to categorize max_tokens errors as output_cap_hit vs context_exhausted.
 func modelMaxOutputTokens(model string) int {
@@ -290,6 +295,7 @@ func modelMaxOutputTokens(model string) int {
 		return 20000
 	}
 }
+
 // categorizeMaxTokensError creates a MaxTokensError from streaming results.
 // It determines the category (output_cap_hit vs context_exhausted) based on whether
 // output_tokens reached the model's max output tokens OR the request was rejected
@@ -329,6 +335,7 @@ func categorizeMaxTokensError(model string, outputTokens int, contextRejected bo
 		MaxOutputTokens: maxOutputTokens,
 	}
 }
+
 // isPromptTooLongError checks if the given error indicates a context exhaustion
 // rejection via HTTP 400 with a prompt_too_long error.
 func isPromptTooLongError(err error) bool {

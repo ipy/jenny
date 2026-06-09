@@ -201,4 +201,3 @@ func cleanBase64Fragment(s string) string {
 func isBase64Char(c rune) bool {
 	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+' || c == '/' || c == '='
 }
-
