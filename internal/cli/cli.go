@@ -25,9 +25,11 @@ type Flags struct {
 	StrictMCP              bool
 	DeniedTools            []string
 	Bare                   bool
-	SwarmsEnabled          bool // When true, enables named agent delegation (swarm mode)
-	Version                bool // --version / -v: print version and exit
-	PrintSystemPrompt      bool // --print-system-prompt: print the assembled system prompt and exit
+	SwarmsEnabled          bool   // When true, enables named agent delegation (swarm mode)
+	Version                bool   // --version / -v: print version and exit
+	PrintSystemPrompt      bool   // --print-system-prompt: print the assembled system prompt and exit
+	CustomSystemPrompt     string // --system-prompt: replaces default system prompt entirely
+	AppendSystemPrompt     string // --append-system-prompt: appended after assembled system prompt
 }
 
 // StringSlice implements flag.Value for multiple string values.
@@ -105,6 +107,12 @@ func Parse() (*Flags, error) {
 	var psp bool
 	flags.BoolVar(&psp, "print-system-prompt", false, "Print the assembled system prompt and exit")
 
+	var customSys string
+	flags.StringVar(&customSys, "system-prompt", "", "Replace the default system prompt")
+
+	var appendSys string
+	flags.StringVar(&appendSys, "append-system-prompt", "", "Append text after the system prompt")
+
 	// Parse the flags
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		if err == flag.ErrHelp {
@@ -137,6 +145,8 @@ func Parse() (*Flags, error) {
 			SwarmsEnabled:          swarmsEnabled,
 			Version:                version,
 			PrintSystemPrompt:      psp,
+			CustomSystemPrompt:     customSys,
+			AppendSystemPrompt:     appendSys,
 		}, nil
 	}
 
@@ -179,6 +189,8 @@ func Parse() (*Flags, error) {
 		SwarmsEnabled:          swarmsEnabled,
 		Version:                version,
 		PrintSystemPrompt:      psp,
+		CustomSystemPrompt:     customSys,
+		AppendSystemPrompt:     appendSys,
 	}, nil
 }
 

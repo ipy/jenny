@@ -47,7 +47,10 @@ func run() error {
 			cwd = "/"
 		}
 		tools := buildPrintTools(flags)
-		cfg := agent.StreamConfig{}
+		cfg := agent.StreamConfig{
+			CustomSystemPrompt: flags.CustomSystemPrompt,
+			AppendSystemPrompt: flags.AppendSystemPrompt,
+		}
 		fmt.Print(agent.AssembleSystemPrompt(cfg, tools, cwd))
 		return nil
 	}
@@ -229,16 +232,18 @@ func run() error {
 	// Build stream config
 	// AC4: Create ReadFileCache and pass it through StreamConfig for engine-level wiring
 	streamCfg := agent.StreamConfig{
-		Enabled:         flags.OutputFormat == "stream-json",
-		Verbose:         flags.Verbose,
-		IncludePartial:  flags.IncludePartialMessages,
-		SessionID:       sessionID,
-		SessionManager:  sessionManager,
-		HistoryMessages: historyMessages,
-		IsResume:        flags.SessionResume != "", // True when resuming an existing session via -r
-		MCPConfig:       mcpConfig,
-		ReadFileCache:   readFileCache,
-		Skills:          discoveredSkills,
+		Enabled:            flags.OutputFormat == "stream-json",
+		Verbose:            flags.Verbose,
+		IncludePartial:     flags.IncludePartialMessages,
+		SessionID:          sessionID,
+		SessionManager:     sessionManager,
+		HistoryMessages:    historyMessages,
+		IsResume:           flags.SessionResume != "", // True when resuming an existing session via -r
+		MCPConfig:          mcpConfig,
+		ReadFileCache:      readFileCache,
+		Skills:             discoveredSkills,
+		CustomSystemPrompt: flags.CustomSystemPrompt,
+		AppendSystemPrompt: flags.AppendSystemPrompt,
 	}
 
 	// AC3-streamconfig-inheritance: Set parent config on runner for named agent inheritance

@@ -41,6 +41,9 @@ jenny -p "prompt text"
 | `--no-session-persistence` | Disable transcript read/write |
 | `--verbose` | Debug logging to stderr |
 | `--dangerously-skip-permissions` | Bypass permission/classifier gates |
+| `--system-prompt <text>` | Replace the default system prompt entirely |
+| `--append-system-prompt <text>` | Append text after the assembled default system prompt |
+| `--print-system-prompt` | Print the assembled system prompt and exit (no API call) |
 
 ## Flag Rules
 
