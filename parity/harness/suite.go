@@ -149,6 +149,9 @@ func (sr *SuiteRunner) buildEnv(tc *TestCase) []string {
 		// URL includes /cassette/<id> prefix so jenny's /v1/messages calls
 		// are routed to /cassette/<id>/v1/messages by the mock server
 		env = append(env, "ANTHROPIC_BASE_URL="+sr.mockServer.URL()+"/cassette/"+tc.Target.Cassette)
+		// Add a dummy auth token so the SDK creates a client.
+		// The mock server does not validate auth.
+		env = append(env, "ANTHROPIC_AUTH_TOKEN=dummy-token")
 	}
 
 	return env
