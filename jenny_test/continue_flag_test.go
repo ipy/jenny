@@ -92,14 +92,20 @@ func TestContinueFlagResumesSession(t *testing.T) {
 
 func TestContinueFlagNoSessionsExitsNonZero(t *testing.T) {
 	emptyDir := t.TempDir()
+	mock := harness.NewMockServer(cassettesDir)
+	t.Cleanup(mock.Close)
 	env := []string{
+		"ANTHROPIC_BASE_URL=" + mock.URL() + "/cassette/" + echoHelloCassette,
 		"ANTHROPIC_AUTH_TOKEN=test-token",
 		"ANTHROPIC_MODEL=",
 		"JENNY_TRANSCRIPT_DIR=" + emptyDir,
 	}
-	// AC6: no mock needed — jenny should fail before making any API call
+	// AC6: jenny should fail before making any API call
 	res := harness.RunJenny(t, env, "--output-format", "stream-json", "--continue", "-p", "any")
 	if res.ExitCode == 0 {
 		t.Error("AC6: expected non-zero exit when no sessions exist, got 0")
+	}
+	if got := len(mock.Requests()); got != 0 {
+		t.Errorf("AC6: expected no API requests, captured %d", got)
 	}
 }
