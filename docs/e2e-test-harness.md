@@ -236,6 +236,17 @@ wall time. The non-streaming code path in
 `max_tokens == 64000` on the wire on both the streaming and
 fallback paths, satisfying AC1's literal requirement.
 
+### Multi-turn request message history (multi_turn_request_test.go)
+
+`jenny_test/multi_turn_request_test.go` verifies that the second `/v1/messages`
+request in a tool-use flow carries the full conversation history. The test
+inspects `mock.Requests()[1].Body["messages"]` directly and asserts:
+
+- At least 3 message entries (user prompt, assistant tool-use, user tool-result).
+- `messages[1].role == "assistant"` with a `tool_use` content block.
+- `messages[2].role == "user"` with a `tool_result` content block.
+- The `tool_use_id` in `messages[2].content[0]` matches the `id` in `messages[1].content`.
+
 ## Stream-json Output Format
 
 `jenny_test/stream_json_format_test.go` is a blackbox conformance suite
