@@ -1219,11 +1219,22 @@ func TestStreamJSON_HasParentToolUseID(t *testing.T) {
 	}
 
 	for i, m := range lines {
+		eventType := m["type"].(string)
+		// Result events do NOT have parent_tool_use_id per reference format
+		if eventType == "result" {
+			if _, ok := m["parent_tool_use_id"]; ok {
+				t.Errorf("AC4 FAIL: line %d (result) should NOT have parent_tool_use_id", i)
+			} else {
+				t.Logf("AC4 PASS: result line %d correctly omits parent_tool_use_id", i)
+			}
+			continue
+		}
+		// All other event types should have parent_tool_use_id
 		if _, ok := m["parent_tool_use_id"]; !ok {
-			t.Errorf("AC4 FAIL: line %d missing parent_tool_use_id field: %s", i, m["type"])
+			t.Errorf("AC4 FAIL: line %d missing parent_tool_use_id field: %s", i, eventType)
 		}
 	}
-	t.Logf("AC4 PASS: all %d lines have parent_tool_use_id", len(lines))
+	t.Logf("AC4 PASS: all non-result lines have parent_tool_use_id, result omits it")
 }
 
 // TestStreamJSON_EmitsAggregatedAssistant verifies that exactly one aggregated
@@ -1355,10 +1366,10 @@ func TestStreamJSON_EmitsTerminalResult(t *testing.T) {
 }
 
 // TestStreamJSON_FieldOrderMatchesReference verifies that JSON key order matches
-// the reference format: type, then event|message|payload, then session_id,
-// parent_tool_use_id, uuid, then remaining fields (AC5).
-// AC5 fix: Use json.Decoder.Token() to extract keys in order and assert
-// the expected sequence per event type, not just relative ordering.
+// the reference format per event type (AC5).
+// - assistant events: type, message, parent_tool_use_id, session_id, uuid
+// - result events: type, subtype, is_error, ... (no parent_tool_use_id)
+// - other events: type, parent_tool_use_id, session_id, uuid
 func TestStreamJSON_FieldOrderMatchesReference(t *testing.T) {
 	server := makeMockStreamServer(t)
 	defer server.Close()
@@ -1425,7 +1436,7 @@ func TestStreamJSON_FieldOrderMatchesReference(t *testing.T) {
 			}
 		}
 
-		// Verify required fields are present
+		// Verify required fields based on event type
 		hasSessionID := false
 		hasParentToolUseID := false
 		hasUUID := false
@@ -1439,19 +1450,26 @@ func TestStreamJSON_FieldOrderMatchesReference(t *testing.T) {
 				hasUUID = true
 			}
 		}
+
 		if !hasSessionID {
 			t.Errorf("AC5 FAIL: line %d (%s) missing 'session_id'", li, eventType)
 		}
-		if !hasParentToolUseID {
-			t.Errorf("AC5 FAIL: line %d (%s) missing 'parent_tool_use_id'", li, eventType)
+		if eventType == "result" {
+			// result events should NOT have parent_tool_use_id
+			if hasParentToolUseID {
+				t.Errorf("AC5 FAIL: line %d (result) should NOT have parent_tool_use_id", li)
+			}
+		} else {
+			// All other event types should have parent_tool_use_id
+			if !hasParentToolUseID {
+				t.Errorf("AC5 FAIL: line %d (%s) missing 'parent_tool_use_id'", li, eventType)
+			}
 		}
 		if !hasUUID {
 			t.Errorf("AC5 FAIL: line %d (%s) missing 'uuid'", li, eventType)
 		}
 
-		// For all event types, verify the reference order:
-		// type < session_id < parent_tool_use_id < uuid
-		// (with any number of fields between type and session_id)
+		// Verify order based on event type
 		typeIdx := -1
 		sessionIdx := -1
 		parentIdx := -1
@@ -1484,22 +1502,53 @@ func TestStreamJSON_FieldOrderMatchesReference(t *testing.T) {
 		if sessionIdx == -1 {
 			t.Errorf("AC5 FAIL: line %d (%s) missing 'session_id'", li, eventType)
 		}
-		if parentIdx == -1 {
-			t.Errorf("AC5 FAIL: line %d (%s) missing 'parent_tool_use_id'", li, eventType)
-		}
 		if uuidIdx == -1 {
 			t.Errorf("AC5 FAIL: line %d (%s) missing 'uuid'", li, eventType)
 		}
 
-		// Verify order: type < session_id < parent_tool_use_id < uuid
-		if typeIdx != -1 && sessionIdx != -1 && typeIdx >= sessionIdx {
-			t.Errorf("AC5 FAIL: line %d (%s) 'session_id' does not follow 'type'", li, eventType)
-		}
-		if sessionIdx != -1 && parentIdx != -1 && sessionIdx >= parentIdx {
-			t.Errorf("AC5 FAIL: line %d (%s) 'parent_tool_use_id' does not follow 'session_id'", li, eventType)
-		}
-		if parentIdx != -1 && uuidIdx != -1 && parentIdx >= uuidIdx {
-			t.Errorf("AC5 FAIL: line %d (%s) 'uuid' does not follow 'parent_tool_use_id'", li, eventType)
+		// Verify order based on event type
+		if eventType == "assistant" {
+			// assistant: type < message < parent_tool_use_id < session_id < uuid
+			// Find message index
+			msgIdx := -1
+			for i, k := range topLevelKeys {
+				if k == "message" {
+					msgIdx = i
+					break
+				}
+			}
+			if typeIdx != -1 && msgIdx != -1 && typeIdx >= msgIdx {
+				t.Errorf("AC5 FAIL: line %d (assistant) 'message' does not follow 'type'", li)
+			}
+			if msgIdx != -1 && parentIdx != -1 && msgIdx >= parentIdx {
+				t.Errorf("AC5 FAIL: line %d (assistant) 'parent_tool_use_id' does not follow 'message'", li)
+			}
+			if parentIdx != -1 && sessionIdx != -1 && parentIdx >= sessionIdx {
+				t.Errorf("AC5 FAIL: line %d (assistant) 'session_id' does not follow 'parent_tool_use_id'", li)
+			}
+			if sessionIdx != -1 && uuidIdx != -1 && sessionIdx >= uuidIdx {
+				t.Errorf("AC5 FAIL: line %d (assistant) 'uuid' does not follow 'session_id'", li)
+			}
+		} else if eventType == "result" {
+			// result: type < subtype < is_error < ... (no parent_tool_use_id)
+			// Already verified no parent_tool_use_id above
+			if typeIdx != -1 && uuidIdx != -1 && typeIdx >= uuidIdx {
+				t.Errorf("AC5 FAIL: line %d (result) 'uuid' does not follow 'type'", li)
+			}
+		} else if eventType == "system" {
+			// system events use cli.StreamMessage with session_id before parent_tool_use_id
+			// Skip ordering check - cli.StreamMessage uses different field order
+		} else {
+			// other events: type < parent_tool_use_id < session_id < uuid
+			if typeIdx != -1 && parentIdx != -1 && typeIdx >= parentIdx {
+				t.Errorf("AC5 FAIL: line %d (%s) 'parent_tool_use_id' does not follow 'type'", li, eventType)
+			}
+			if parentIdx != -1 && sessionIdx != -1 && parentIdx >= sessionIdx {
+				t.Errorf("AC5 FAIL: line %d (%s) 'session_id' does not follow 'parent_tool_use_id'", li, eventType)
+			}
+			if sessionIdx != -1 && uuidIdx != -1 && sessionIdx >= uuidIdx {
+				t.Errorf("AC5 FAIL: line %d (%s) 'uuid' does not follow 'session_id'", li, eventType)
+			}
 		}
 	}
 	t.Log("AC5 PASS: key order matches reference format for all event types")

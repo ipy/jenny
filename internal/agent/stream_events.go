@@ -106,7 +106,7 @@ func (m MinimalDelta) MarshalJSON() ([]byte, error) {
 			fields = append(fields, `"signature":`+encodeString(m.Signature))
 		}
 	case "message_delta":
-		// Reference format: delta has stop_reason/stop_sequence directly, no nested type
+		// Reference format: delta has stop_reason/stop_sequence directly, no nested type field
 		// Always include stop_reason and stop_sequence (possibly null)
 		fields = []any{}
 		if m.StopReason != "" {
@@ -290,9 +290,8 @@ func transformContentBlockStart(e anthropic.ContentBlockStartEvent) (json.RawMes
 		cb.Thinking = e.ContentBlock.Thinking
 		cb.Signature = e.ContentBlock.Signature
 	case "text":
-		if e.ContentBlock.Text != "" {
-			cb.Text = e.ContentBlock.Text
-		}
+		// Always include text field even when empty (per reference format for content_block_start)
+		cb.Text = e.ContentBlock.Text
 	case "tool_use":
 		cb.ID = e.ContentBlock.ID
 		cb.Name = e.ContentBlock.Name

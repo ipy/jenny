@@ -89,7 +89,7 @@ Emitted before each API iteration. **This is a jenny extension** — not part of
 
 ### `assistant` (Aggregated)
 
-Wraps the complete API-shaped assistant message after `content_block_stop`. Emitted **once per turn**, after all content blocks are received:
+Wraps the complete API-shaped assistant message after `content_block_stop`. Emitted **once per turn**, after all content blocks are received. Field order: `type`, `message`, `parent_tool_use_id`, `session_id`, `uuid`:
 
 ```json
 {
@@ -106,7 +106,7 @@ Wraps the complete API-shaped assistant message after `content_block_stop`. Emit
     ],
     "stop_reason": null,
     "stop_sequence": null,
-    "usage": { "input_tokens": 100, "output_tokens": 50, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0, "service_tier": "standard" }
+    "usage": { "input_tokens": 100, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0, "output_tokens": 50, "service_tier": "standard" }
   },
   "parent_tool_use_id": null,
   "session_id": "sess_…",
@@ -114,7 +114,7 @@ Wraps the complete API-shaped assistant message after `content_block_stop`. Emit
 }
 ```
 
-Note: `parent_tool_use_id` comes before `session_id` in field order.
+Note: `parent_tool_use_id` comes before `session_id` in field order. `stop_reason` and `stop_sequence` are always present (null when not set).
 
 ### `user` (Aggregated Tool Results)
 

@@ -1496,10 +1496,10 @@ func (e *QueryEngine) emitConsolidatedAssistant(
 		messageFields = append(messageFields, `"stop_sequence":null`)
 	}
 
-	// Include usage if present
+	// Include usage if present - reference order: input_tokens, cache_creation_input_tokens, cache_read_input_tokens, output_tokens, service_tier
 	if usage != nil {
-		usageJSON := fmt.Sprintf(`{"input_tokens":%d,"output_tokens":%d,"cache_read_input_tokens":%d,"cache_creation_input_tokens":%d,"service_tier":"standard"}`,
-			usage.InputTokens, usage.OutputTokens, usage.CacheReadInputTokens, usage.CacheCreationInputTokens)
+		usageJSON := fmt.Sprintf(`{"input_tokens":%d,"cache_creation_input_tokens":%d,"cache_read_input_tokens":%d,"output_tokens":%d,"service_tier":"standard"}`,
+			usage.InputTokens, usage.CacheCreationInputTokens, usage.CacheReadInputTokens, usage.OutputTokens)
 		messageFields = append(messageFields, `"usage":`+usageJSON)
 	}
 

@@ -371,7 +371,7 @@ type StreamMessage struct {
 	NumTurns          int                `json:"num_turns,omitempty"`
 	Result            string             `json:"result,omitempty"`
 	StopReason        string             `json:"stop_reason,omitempty"`
-	ParentToolUseID   *string            `json:"parent_tool_use_id"`
+	ParentToolUseID   *string            `json:"parent_tool_use_id,omitempty"`
 	SessionID         string             `json:"session_id,omitempty"`
 	TotalCostUSD      float64            `json:"total_cost_usd,omitempty"`
 	TotalCostCNY      float64            `json:"total_cost_cny,omitempty"`
@@ -397,6 +397,7 @@ type StreamMessage struct {
 // MarshalJSON implements custom marshaling for StreamMessage to:
 // - Omit parent_tool_use_id for result events (per reference format)
 // - Maintain correct field ordering for result events
+// - Use reference order for assistant events: type, message, parent_tool_use_id, session_id, uuid
 func (s StreamMessage) MarshalJSON() ([]byte, error) {
 	if s.Type == "result" {
 		// Reference result order: type, subtype, is_error, duration_ms, duration_api_ms,
@@ -459,6 +460,33 @@ func (s StreamMessage) MarshalJSON() ([]byte, error) {
 		return []byte("{" + strings.Join(fields, ",") + "}"), nil
 	}
 
+	// Assistant events: type, message, parent_tool_use_id, session_id, uuid
+	if s.Type == "assistant" {
+		var fields []string
+		fields = append(fields, `"type":`+encodeString(s.Type))
+		if s.Message != nil {
+			switch m := s.Message.(type) {
+			case json.RawMessage:
+				fields = append(fields, `"message":`+string(m))
+			default:
+				msgBytes, _ := json.Marshal(s.Message)
+				fields = append(fields, `"message":`+string(msgBytes))
+			}
+		}
+		if s.ParentToolUseID != nil {
+			fields = append(fields, `"parent_tool_use_id":`+encodeString(*s.ParentToolUseID))
+		} else {
+			fields = append(fields, `"parent_tool_use_id":null`)
+		}
+		if s.SessionID != "" {
+			fields = append(fields, `"session_id":`+encodeString(s.SessionID))
+		}
+		if s.Uuid != "" {
+			fields = append(fields, `"uuid":`+encodeString(s.Uuid))
+		}
+		return []byte("{" + strings.Join(fields, ",") + "}"), nil
+	}
+
 	// Default marshaling for all other event types - build manually to avoid recursion
 	var fields []string
 	fields = append(fields, `"type":`+encodeString(s.Type))
@@ -485,8 +513,7 @@ func (s StreamMessage) MarshalJSON() ([]byte, error) {
 	}
 	if s.ParentToolUseID != nil {
 		fields = append(fields, `"parent_tool_use_id":`+encodeString(*s.ParentToolUseID))
-	} else if s.Type != "result" {
-		// Always include parent_tool_use_id as null for non-result events
+	} else {
 		fields = append(fields, `"parent_tool_use_id":null`)
 	}
 	if s.SessionID != "" {
