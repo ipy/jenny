@@ -2330,9 +2330,9 @@ func TestEngine_OutputCapHit_EmitsStructuredError(t *testing.T) {
 }
 
 // TestEngine_ContextExhausted_EmitsStructuredError verifies that when the streaming
-// API returns stop_reason: "max_tokens" with output_tokens < modelMaxOutputTokens,
-// the engine emits a structured result event with subtype error_max_tokens and
-// category "context_exhausted".
+// API returns HTTP 400 with prompt_too_long error (context rejection), the engine
+// emits a structured result event with subtype error_max_tokens and category
+// "context_exhausted".
 func TestEngine_ContextExhausted_EmitsStructuredError(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
@@ -2342,16 +2342,16 @@ func TestEngine_ContextExhausted_EmitsStructuredError(t *testing.T) {
 
 	sessionID := "sess_context_exhausted_test"
 
-	// Server returns stop_reason: max_tokens with output_tokens = 1000 (< 8192 model max)
-	// This indicates the request was rejected or very limited, not an output cap hit
-	server := makeTestMockStreamServer([]string{
-		testSseLine("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"deepseek-v4-flash","stop_reason":null,"usage":{"input_tokens":100000,"output_tokens":0}}}`),
-		testSseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
-		testSseLine("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Limited"}}`),
-		testSseLine("content_block_stop", `{"type":"content_block_stop","index":0}`),
-		testSseLine("message_delta", `{"type":"message_delta","delta":{"stop_reason":"max_tokens","stop_sequence":null},"usage":{"input_tokens":100000,"output_tokens":1000}}`),
-		testSseLine("message_stop", `{"type":"message_stop"}`),
-	})
+	// Server returns HTTP 400 with prompt_too_long error
+	// This simulates a context exhaustion rejection before streaming begins
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.ReadAll(r.Body)
+		r.Body.Close()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		// Return a prompt_too_long error response
+		w.Write([]byte(`{"error":{"type":"invalid_request_error","message":"prompt_too_long: input too long"}}`))
+	}))
 	defer server.Close()
 
 	origBaseURL := os.Getenv("ANTHROPIC_BASE_URL")

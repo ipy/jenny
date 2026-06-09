@@ -539,6 +539,45 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 
 		// Check if streaming completed with error
 		if streamResult.Error != "" && len(streamResult.Blocks) == 0 {
+			// Check if this is a context_exhausted error from HTTP 400 rejection
+			if streamResult.MaxTokensErr != nil && streamResult.MaxTokensErr.Category == api.CategoryContextExhausted {
+				mte := streamResult.MaxTokensErr
+				// Emit structured error_max_tokens result event for context_exhausted
+				threshold := e.compactConfig.autoCompactThreshold()
+				errMsg := fmt.Sprintf("max tokens reached: %s", mte.Category)
+				msg := StreamMessage{
+					Type:      "result",
+					Subtype:   "error_max_tokens",
+					Result:    errMsg,
+					SessionID: sessionID,
+					Uuid:      GenerateUUID(),
+					Model:     mte.Model,
+					Usage: &Usage{
+						InputTokens:              streamResult.Usage.InputTokens,
+						OutputTokens:             mte.OutputTokens,
+						CacheReadInputTokens:     streamResult.Usage.CacheReadInputTokens,
+						CacheCreationInputTokens: streamResult.Usage.CacheCreationInputTokens,
+					},
+					StopReason:   "max_tokens",
+					DurationMs:   time.Since(e.startTime).Milliseconds(),
+					TotalCostUSD: e.costState.TotalCostUSD,
+					TotalCostCNY: e.costState.TotalCostCNY,
+					ModelUsage:   e.buildModelUsage(),
+					// Additional fields for error_max_tokens
+					ErrorMaxTokens: &ErrorMaxTokensDetail{
+						Category:        string(mte.Category),
+						OutputTokens:    mte.OutputTokens,
+						MaxOutputTokens: mte.MaxOutputTokens,
+						InputTokens:     streamResult.Usage.InputTokens,
+						Threshold:       threshold,
+					},
+				}
+				data, _ := json.Marshal(msg)
+				fmt.Fprintln(os.Stdout, string(data))
+				e.incrementCompactFailCount()
+				return "", fmt.Errorf("max tokens reached: %s", mte.Category)
+			}
+
 			// AC4: Check if this is a media error - if so, strip the offending tool_result and retry
 			var wasMediaError bool
 			messages, wasMediaError = HandleMediaErrorOnRetry(messages, streamResult.Error)

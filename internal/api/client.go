@@ -812,12 +812,13 @@ type StreamContentBlock struct {
 
 // StreamResult represents the result of a streaming session.
 type StreamResult struct {
-	Blocks       []ContentBlock
-	StopReason   StopReason
-	Usage        Usage
-	Error        string
-	Model        string
-	MaxTokensErr *MaxTokensError // Set when stop_reason is "max_tokens"
+	Blocks          []ContentBlock
+	StopReason      StopReason
+	Usage           Usage
+	Error           string
+	Model           string
+	MaxTokensErr    *MaxTokensError // Set when stop_reason is "max_tokens"
+	ContextRejected bool            // True when HTTP 400 / prompt_too_long was received
 }
 
 // SendMessageStream sends a streaming message to the API.
@@ -946,6 +947,13 @@ func (c *Client) SendMessageStream(
 		if stream.Err() != nil {
 			preStreamErr := stream.Err()
 			log.Warn("Stream pre-error detected, falling back", "error", preStreamErr)
+			// Detect HTTP 400 / prompt_too_long for context_exhausted categorization
+			if isPromptTooLongError(preStreamErr) {
+				result.ContextRejected = true
+				// Pre-set MaxTokensErr for context_exhausted before fallback
+				// (in case fallback also fails with same error)
+				result.MaxTokensErr = categorizeMaxTokensError(c.model, 0, true)
+			}
 			// Fall back to non-streaming, which has proper retry logic via sendWithRetry
 			if onStreamingFallback != nil {
 				fallbackCtx, fallbackCancel := context.WithTimeout(context.Background(), fallbackTimeout)
@@ -1114,6 +1122,10 @@ func (c *Client) SendMessageStream(
 		if stream.Err() != nil {
 			log.Warn("Stream error", "error", stream.Err())
 			result.Error = stream.Err().Error()
+			// Detect HTTP 400 / prompt_too_long for context_exhausted categorization
+			if isPromptTooLongError(stream.Err()) {
+				result.ContextRejected = true
+			}
 		}
 
 		// Check if we need fallback
@@ -1148,9 +1160,15 @@ func (c *Client) SendMessageStream(
 		result.Usage = acc.usage
 		result.Model = acc.getModel()
 
-		// Detect and categorize stop_reason: max_tokens
+		// Detect and categorize max_tokens scenarios:
+		// 1. Normal streaming completion with stop_reason: max_tokens
+		// 2. Pre-stream HTTP 400 rejection (ContextRejected flag is set)
 		if result.StopReason == StopReasonMaxTokens && result.Error == "" {
-			result.MaxTokensErr = categorizeMaxTokensError(result.Model, result.Usage.OutputTokens)
+			result.MaxTokensErr = categorizeMaxTokensError(result.Model, result.Usage.OutputTokens, result.ContextRejected)
+		} else if result.ContextRejected && result.Error != "" {
+			// Pre-stream HTTP 400 rejection - set context_exhausted error
+			// even though no streaming response was received
+			result.MaxTokensErr = categorizeMaxTokensError(result.Model, 0, true)
 		}
 	}()
 
@@ -1268,11 +1286,23 @@ func modelMaxOutputTokens(model string) int {
 
 // categorizeMaxTokensError creates a MaxTokensError from streaming results.
 // It determines the category (output_cap_hit vs context_exhausted) based on whether
-// output_tokens reached the model's max output tokens.
-func categorizeMaxTokensError(model string, outputTokens int) *MaxTokensError {
+// output_tokens reached the model's max output tokens OR the request was rejected
+// with a prompt_too_long error.
+func categorizeMaxTokensError(model string, outputTokens int, contextRejected bool) *MaxTokensError {
 	maxOutputTokens := modelMaxOutputTokens(model)
 
-	// Categorize based on whether output hit the model's max
+	// context_exhausted is only set when the request was actually rejected
+	// via HTTP 400 / prompt_too_long - NOT when streaming completed with low output
+	if contextRejected {
+		return &MaxTokensError{
+			Category:        CategoryContextExhausted,
+			Model:           model,
+			OutputTokens:    outputTokens,
+			MaxOutputTokens: 0, // Not applicable for context_exhausted
+		}
+	}
+
+	// output_cap_hit: output reached the model's max (normal output cap hit)
 	if outputTokens >= maxOutputTokens {
 		return &MaxTokensError{
 			Category:        CategoryOutputCapHit,
@@ -1282,15 +1312,41 @@ func categorizeMaxTokensError(model string, outputTokens int) *MaxTokensError {
 		}
 	}
 
-	// If output tokens didn't hit model max, it's context_exhausted
-	// (the request was rejected before generating output, or was very limited)
-	// Note: context_exhausted threshold is computed by the caller (engine.go)
-	// using CompactConfig.autoCompactThreshold().
+	// This case should not occur in normal streaming - if we get here with
+	// stop_reason=max_tokens but no context rejection and low output, it means
+	// the model was limited without hitting the output cap. Treat as output_cap_hit
+	// since context was not exhausted (the request completed successfully).
 	return &MaxTokensError{
-		Category:     CategoryContextExhausted,
-		Model:        model,
-		OutputTokens: outputTokens,
-		// MaxOutputTokens is 0 for context_exhausted since output was limited
-		MaxOutputTokens: 0,
+		Category:        CategoryOutputCapHit,
+		Model:           model,
+		OutputTokens:    outputTokens,
+		MaxOutputTokens: maxOutputTokens,
 	}
+}
+
+// isPromptTooLongError checks if the given error indicates a context exhaustion
+// rejection via HTTP 400 with a prompt_too_long error.
+func isPromptTooLongError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check for SDK error with status code 400
+	var apiErr *anthropic.Error
+	if errors.As(err, &apiErr) && apiErr.StatusCode == 400 {
+		// Check error message for prompt_too_long (provider-specific error text)
+		if strings.Contains(strings.ToLower(err.Error()), "prompt_too_long") {
+			return true
+		}
+	}
+
+	// Also check RetryableHTTPError which wraps SDK errors
+	var retryErr *RetryableHTTPError
+	if errors.As(err, &retryErr) && retryErr.StatusCode == 400 {
+		if strings.Contains(strings.ToLower(retryErr.Message), "prompt_too_long") {
+			return true
+		}
+	}
+
+	return false
 }
