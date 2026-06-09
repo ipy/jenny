@@ -1357,6 +1357,8 @@ func TestStreamJSON_EmitsTerminalResult(t *testing.T) {
 // TestStreamJSON_FieldOrderMatchesReference verifies that JSON key order matches
 // the reference format: type, then event|message|payload, then session_id,
 // parent_tool_use_id, uuid, then remaining fields (AC5).
+// AC5 fix: Use json.Decoder.Token() to extract keys in order and assert
+// the expected sequence per event type, not just relative ordering.
 func TestStreamJSON_FieldOrderMatchesReference(t *testing.T) {
 	server := makeMockStreamServer(t)
 	defer server.Close()
@@ -1383,11 +1385,22 @@ func TestStreamJSON_FieldOrderMatchesReference(t *testing.T) {
 			continue
 		}
 
-		// Use json.Decoder to extract all top-level strings in order
-		// Note: json.Decoder.Token() does NOT return ':' and ',' delimiters.
-		// This gives us all strings at depth1 in order.
+		// Parse the line to get the event type and full key order
+		var msg map[string]any
+		if err := json.Unmarshal([]byte(line), &msg); err != nil {
+			t.Errorf("AC5 FAIL: line %d is not valid JSON: %v", li, err)
+			continue
+		}
+
+		eventType, hasType := msg["type"].(string)
+		if !hasType {
+			t.Errorf("AC5 FAIL: line %d missing 'type' field", li)
+			continue
+		}
+
+		// Use json.Decoder to extract all top-level keys in declaration order
 		decoder := json.NewDecoder(strings.NewReader(line))
-		var topLevelStrings []string
+		var topLevelKeys []string
 		var depth int = 0
 		for {
 			token, err := decoder.Token()
@@ -1404,21 +1417,47 @@ func TestStreamJSON_FieldOrderMatchesReference(t *testing.T) {
 					continue
 				}
 			}
-			// Collect all strings at depth 1 (top level only)
+			// Collect all keys at depth 1 (top level only)
 			if depth == 1 {
 				if s, ok := token.(string); ok {
-					topLevelStrings = append(topLevelStrings, s)
+					topLevelKeys = append(topLevelKeys, s)
 				}
 			}
 		}
 
-		// Find indices of required fields in the string sequence
+		// Verify required fields are present
+		hasSessionID := false
+		hasParentToolUseID := false
+		hasUUID := false
+		for _, k := range topLevelKeys {
+			switch k {
+			case "session_id":
+				hasSessionID = true
+			case "parent_tool_use_id":
+				hasParentToolUseID = true
+			case "uuid":
+				hasUUID = true
+			}
+		}
+		if !hasSessionID {
+			t.Errorf("AC5 FAIL: line %d (%s) missing 'session_id'", li, eventType)
+		}
+		if !hasParentToolUseID {
+			t.Errorf("AC5 FAIL: line %d (%s) missing 'parent_tool_use_id'", li, eventType)
+		}
+		if !hasUUID {
+			t.Errorf("AC5 FAIL: line %d (%s) missing 'uuid'", li, eventType)
+		}
+
+		// For all event types, verify the reference order:
+		// type < session_id < parent_tool_use_id < uuid
+		// (with any number of fields between type and session_id)
 		typeIdx := -1
 		sessionIdx := -1
 		parentIdx := -1
 		uuidIdx := -1
-		for i, s := range topLevelStrings {
-			switch s {
+		for i, k := range topLevelKeys {
+			switch k {
 			case "type":
 				if typeIdx == -1 {
 					typeIdx = i
@@ -1440,31 +1479,30 @@ func TestStreamJSON_FieldOrderMatchesReference(t *testing.T) {
 
 		// Verify all required fields are present
 		if typeIdx == -1 {
-			t.Errorf("AC5 FAIL: line %d missing 'type'", li)
+			t.Errorf("AC5 FAIL: line %d (%s) missing 'type'", li, eventType)
 		}
 		if sessionIdx == -1 {
-			t.Errorf("AC5 FAIL: line %d missing 'session_id'", li)
+			t.Errorf("AC5 FAIL: line %d (%s) missing 'session_id'", li, eventType)
 		}
 		if parentIdx == -1 {
-			t.Errorf("AC5 FAIL: line %d missing 'parent_tool_use_id'", li)
+			t.Errorf("AC5 FAIL: line %d (%s) missing 'parent_tool_use_id'", li, eventType)
 		}
 		if uuidIdx == -1 {
-			t.Errorf("AC5 FAIL: line %d missing 'uuid'", li)
+			t.Errorf("AC5 FAIL: line %d (%s) missing 'uuid'", li, eventType)
 		}
 
 		// Verify order: type < session_id < parent_tool_use_id < uuid
-		// (with possible event|message|payload between type and session_id)
 		if typeIdx != -1 && sessionIdx != -1 && typeIdx >= sessionIdx {
-			t.Errorf("AC5 FAIL: line %d 'session_id' does not follow 'type'", li)
+			t.Errorf("AC5 FAIL: line %d (%s) 'session_id' does not follow 'type'", li, eventType)
 		}
 		if sessionIdx != -1 && parentIdx != -1 && sessionIdx >= parentIdx {
-			t.Errorf("AC5 FAIL: line %d 'parent_tool_use_id' does not follow 'session_id'", li)
+			t.Errorf("AC5 FAIL: line %d (%s) 'parent_tool_use_id' does not follow 'session_id'", li, eventType)
 		}
 		if parentIdx != -1 && uuidIdx != -1 && parentIdx >= uuidIdx {
-			t.Errorf("AC5 FAIL: line %d 'uuid' does not follow 'parent_tool_use_id'", li)
+			t.Errorf("AC5 FAIL: line %d (%s) 'uuid' does not follow 'parent_tool_use_id'", li, eventType)
 		}
 	}
-	t.Log("AC5 PASS: key order matches reference format")
+	t.Log("AC5 PASS: key order matches reference format for all event types")
 }
 
 // TestStreamJSON_CostOnlyOnResult verifies that total_cost_usd appears on
