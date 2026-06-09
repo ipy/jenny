@@ -375,7 +375,7 @@ type StreamMessage struct {
 	TotalCostUSD      float64            `json:"total_cost_usd,omitempty"`
 	TotalCostCNY      float64            `json:"total_cost_cny,omitempty"`
 	Uuid              string             `json:"uuid,omitempty"`
-	Usage             *Usage             `json:"usage"`
+	Usage             *Usage             `json:"usage,omitempty"`
 	ModelUsage        any                `json:"modelUsage,omitempty"`
 	PermissionDenials []PermissionDenial `json:"permission_denials,omitempty"`
 	FastModeState     string             `json:"fast_mode_state,omitempty"`
