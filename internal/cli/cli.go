@@ -195,11 +195,14 @@ func Parse() (*Flags, error) {
 }
 
 // StreamMessage represents a message in the stream-json output.
+// Field order matches the headless-agent reference format: type, then payload,
+// then session_id, parent_tool_use_id, uuid, then remaining fields.
 type StreamMessage struct {
 	Type              string   `json:"type"`
 	Subtype           string   `json:"subtype,omitempty"`
 	Content           string   `json:"content,omitempty"`
 	SessionID         string   `json:"session_id,omitempty"`
+	ParentToolUseID   string   `json:"parent_tool_use_id"`
 	Uuid              string   `json:"uuid,omitempty"`
 	Result            string   `json:"result,omitempty"`
 	Model             string   `json:"model,omitempty"`

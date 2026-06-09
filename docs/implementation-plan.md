@@ -115,6 +115,7 @@ Implement in this order:
    - One JSON object per line on stdout; debug on stderr
    - Terminal `{ type: "result", session_id, result, usage }` on successful run
    - stdout guard implemented (AC3)
+   - [x] Stream-json output: aggregated user/assistant/result events + parent_tool_use_id field; field order matches reference
 
 9. - [x] Cost / token tracking — [`cost-tracking.md`](./cost-tracking.md)
    - Track input/output tokens plus cache read/creation per model

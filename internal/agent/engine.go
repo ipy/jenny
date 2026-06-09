@@ -316,17 +316,18 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			// Emit error result if streaming enabled
 			if e.streamCfg.Enabled {
 				msg := StreamMessage{
-					Type:         "result",
-					Subtype:      "error",
-					Result:       fmt.Sprintf("Maximum number of turns (%d) reached. stopping.", e.maxTurns),
-					SessionID:    sessionID,
-					Uuid:         GenerateUUID(),
-					Model:        e.model,
-					StopReason:   "max_turns",
-					DurationMs:   time.Since(e.startTime).Milliseconds(),
-					TotalCostUSD: e.costState.TotalCostUSD,
-					TotalCostCNY: e.costState.TotalCostCNY,
-					ModelUsage:   e.buildModelUsage(),
+					Type:            "result",
+					Subtype:         "error",
+					Result:          fmt.Sprintf("Maximum number of turns (%d) reached. stopping.", e.maxTurns),
+					SessionID:       sessionID,
+					ParentToolUseID: "",
+					Uuid:            GenerateUUID(),
+					Model:           e.model,
+					StopReason:      "max_turns",
+					DurationMs:      time.Since(e.startTime).Milliseconds(),
+					TotalCostUSD:    e.costState.TotalCostUSD,
+					TotalCostCNY:    e.costState.TotalCostCNY,
+					ModelUsage:      e.buildModelUsage(),
 				}
 				data, _ := json.Marshal(msg)
 				fmt.Fprintln(os.Stdout, string(data))
@@ -351,17 +352,18 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			if exceeded, _ := CheckBudgetExceeded(e.costState, budgetCNY, "CNY"); exceeded {
 				if e.streamCfg.Enabled {
 					msg := StreamMessage{
-						Type:         "result",
-						Subtype:      "error",
-						Result:       fmt.Sprintf("budget exceeded: %.4f CNY > %.4f CNY limit", e.costState.TotalCostCNY, budgetCNY),
-						SessionID:    sessionID,
-						Uuid:         GenerateUUID(),
-						Model:        e.model,
-						StopReason:   "budget_exceeded",
-						DurationMs:   time.Since(e.startTime).Milliseconds(),
-						TotalCostUSD: e.costState.TotalCostUSD,
-						TotalCostCNY: e.costState.TotalCostCNY,
-						ModelUsage:   e.buildModelUsage(),
+						Type:            "result",
+						Subtype:         "error",
+						Result:          fmt.Sprintf("budget exceeded: %.4f CNY > %.4f CNY limit", e.costState.TotalCostCNY, budgetCNY),
+						SessionID:       sessionID,
+						ParentToolUseID: "",
+						Uuid:            GenerateUUID(),
+						Model:           e.model,
+						StopReason:      "budget_exceeded",
+						DurationMs:      time.Since(e.startTime).Milliseconds(),
+						TotalCostUSD:    e.costState.TotalCostUSD,
+						TotalCostCNY:    e.costState.TotalCostCNY,
+						ModelUsage:      e.buildModelUsage(),
 					}
 					data, _ := json.Marshal(msg)
 					fmt.Fprintln(os.Stdout, string(data))
@@ -372,17 +374,18 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			if exceeded, _ := CheckBudgetExceeded(e.costState, budgetUSD, "USD"); exceeded {
 				if e.streamCfg.Enabled {
 					msg := StreamMessage{
-						Type:         "result",
-						Subtype:      "error",
-						Result:       fmt.Sprintf("budget exceeded: %.4f USD > %.4f USD limit", e.costState.TotalCostUSD, budgetUSD),
-						SessionID:    sessionID,
-						Uuid:         GenerateUUID(),
-						Model:        e.model,
-						StopReason:   "budget_exceeded",
-						DurationMs:   time.Since(e.startTime).Milliseconds(),
-						TotalCostUSD: e.costState.TotalCostUSD,
-						TotalCostCNY: e.costState.TotalCostCNY,
-						ModelUsage:   e.buildModelUsage(),
+						Type:            "result",
+						Subtype:         "error",
+						Result:          fmt.Sprintf("budget exceeded: %.4f USD > %.4f USD limit", e.costState.TotalCostUSD, budgetUSD),
+						SessionID:       sessionID,
+						ParentToolUseID: "",
+						Uuid:            GenerateUUID(),
+						Model:           e.model,
+						StopReason:      "budget_exceeded",
+						DurationMs:      time.Since(e.startTime).Milliseconds(),
+						TotalCostUSD:    e.costState.TotalCostUSD,
+						TotalCostCNY:    e.costState.TotalCostCNY,
+						ModelUsage:      e.buildModelUsage(),
 					}
 					data, _ := json.Marshal(msg)
 					fmt.Fprintln(os.Stdout, string(data))
@@ -394,9 +397,10 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		// Emit stream_request_start before each API iteration (AC4)
 		if e.streamCfg.Enabled {
 			msg := StreamMessage{
-				Type:      "stream_request_start",
-				SessionID: sessionID,
-				Uuid:      GenerateUUID(),
+				Type:            "stream_request_start",
+				SessionID:       sessionID,
+				ParentToolUseID: "",
+				Uuid:            GenerateUUID(),
 			}
 			data, _ := json.Marshal(msg)
 			fmt.Fprintln(os.Stdout, string(data))
@@ -496,10 +500,11 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			if block.Type == "stream_event" && e.streamCfg.Enabled && e.streamCfg.IncludePartial {
 				// Emit spec-compliant stream_event wire shape (AC5)
 				msg := StreamMessage{
-					Type:      "stream_event",
-					SessionID: sessionID,
-					Uuid:      GenerateUUID(),
-					Event:     block.RawEvent,
+					Type:            "stream_event",
+					SessionID:       sessionID,
+					ParentToolUseID: "",
+					Uuid:            GenerateUUID(),
+					Event:           block.RawEvent,
 				}
 				data, err := json.Marshal(msg)
 				if err == nil {
@@ -546,12 +551,13 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				threshold := e.compactConfig.autoCompactThreshold()
 				errMsg := fmt.Sprintf("max tokens reached: %s", mte.Category)
 				msg := StreamMessage{
-					Type:      "result",
-					Subtype:   "error_max_tokens",
-					Result:    errMsg,
-					SessionID: sessionID,
-					Uuid:      GenerateUUID(),
-					Model:     mte.Model,
+					Type:            "result",
+					Subtype:         "error_max_tokens",
+					Result:          errMsg,
+					SessionID:       sessionID,
+					ParentToolUseID: "",
+					Uuid:            GenerateUUID(),
+					Model:           mte.Model,
 					Usage: &Usage{
 						InputTokens:              streamResult.Usage.InputTokens,
 						OutputTokens:             mte.OutputTokens,
@@ -650,10 +656,11 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					{"type": "tool_result", "tool_use_id": result.WebSearchResult.ToolUseID, "content": toolResultContent},
 				}
 				userMsg := StreamMessage{
-					Type:      "user",
-					SessionID: sessionID,
-					Uuid:      GenerateUUID(),
-					Message:   map[string]any{"role": "user", "content": userContent},
+					Type:            "user",
+					SessionID:       sessionID,
+					ParentToolUseID: "",
+					Uuid:            GenerateUUID(),
+					Message:         map[string]any{"role": "user", "content": userContent},
 				}
 				data, _ := json.Marshal(userMsg)
 				fmt.Fprintln(os.Stdout, string(data))
@@ -710,12 +717,13 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		if e.streamCfg.Enabled {
 			for _, block := range execBlocks {
 				msg := StreamMessage{
-					Type:      "tool_call",
-					Subtype:   "started",
-					ToolName:  block.Name,
-					ToolUseID: block.ID,
-					SessionID: sessionID,
-					Uuid:      GenerateUUID(),
+					Type:            "tool_call",
+					Subtype:         "started",
+					ToolName:        block.Name,
+					ToolUseID:       block.ID,
+					SessionID:       sessionID,
+					ParentToolUseID: "",
+					Uuid:            GenerateUUID(),
 				}
 				data, _ := json.Marshal(msg)
 				fmt.Fprintln(os.Stdout, string(data))
@@ -785,12 +793,13 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			if e.streamCfg.Enabled {
 				// AC2: Emit tool_call completed event before tool_result wrapper
 				completedMsg := StreamMessage{
-					Type:      "tool_call",
-					Subtype:   "completed",
-					ToolUseID: emitToolUseID,
-					IsError:   emitIsError,
-					SessionID: sessionID,
-					Uuid:      GenerateUUID(),
+					Type:            "tool_call",
+					Subtype:         "completed",
+					ToolUseID:       emitToolUseID,
+					IsError:         emitIsError,
+					SessionID:       sessionID,
+					ParentToolUseID: "",
+					Uuid:            GenerateUUID(),
 				}
 				data, _ := json.Marshal(completedMsg)
 				fmt.Fprintln(os.Stdout, string(data))
@@ -800,10 +809,11 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					{"type": "tool_result", "tool_use_id": emitToolUseID, "content": emitContent, "is_error": emitIsError},
 				}
 				msg := StreamMessage{
-					Type:      "user",
-					SessionID: sessionID,
-					Uuid:      GenerateUUID(),
-					Message:   map[string]any{"role": "user", "content": userContent},
+					Type:            "user",
+					SessionID:       sessionID,
+					ParentToolUseID: "",
+					Uuid:            GenerateUUID(),
+					Message:         map[string]any{"role": "user", "content": userContent},
 				}
 				data, _ = json.Marshal(msg)
 				fmt.Fprintln(os.Stdout, string(data))
@@ -873,19 +883,19 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 						CacheCreationInputTokens: resp.Usage.CacheCreationInputTokens,
 					}
 					msg := StreamMessage{
-						Type:       "result",
-						Subtype:    "success",
-						Result:     finalResult,
-						SessionID:  sessionID,
-						Uuid:       GenerateUUID(),
-						Model:      resp.Model,
-						Usage:      usage,
-						StopReason: string(resp.StopReason),
-						DurationMs: time.Since(e.startTime).Milliseconds(),
-
-						TotalCostUSD: e.costState.TotalCostUSD,
-						TotalCostCNY: e.costState.TotalCostCNY,
-						ModelUsage:   e.buildModelUsage(),
+						Type:            "result",
+						Subtype:         "success",
+						Result:          finalResult,
+						SessionID:       sessionID,
+						ParentToolUseID: "",
+						Uuid:            GenerateUUID(),
+						Model:           resp.Model,
+						Usage:           usage,
+						StopReason:      string(resp.StopReason),
+						DurationMs:      time.Since(e.startTime).Milliseconds(),
+						TotalCostUSD:    e.costState.TotalCostUSD,
+						TotalCostCNY:    e.costState.TotalCostCNY,
+						ModelUsage:      e.buildModelUsage(),
 					}
 					data, _ := json.Marshal(msg)
 					fmt.Fprintln(os.Stdout, string(data))
@@ -903,19 +913,19 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					CacheCreationInputTokens: resp.Usage.CacheCreationInputTokens,
 				}
 				msg := StreamMessage{
-					Type:       "result",
-					Subtype:    "success",
-					Result:     finalResult,
-					SessionID:  sessionID,
-					Uuid:       GenerateUUID(),
-					Model:      resp.Model,
-					Usage:      usage,
-					StopReason: string(resp.StopReason),
-					DurationMs: time.Since(e.startTime).Milliseconds(),
-
-					TotalCostUSD: e.costState.TotalCostUSD,
-					TotalCostCNY: e.costState.TotalCostCNY,
-					ModelUsage:   e.buildModelUsage(),
+					Type:            "result",
+					Subtype:         "success",
+					Result:          finalResult,
+					SessionID:       sessionID,
+					ParentToolUseID: "",
+					Uuid:            GenerateUUID(),
+					Model:           resp.Model,
+					Usage:           usage,
+					StopReason:      string(resp.StopReason),
+					DurationMs:      time.Since(e.startTime).Milliseconds(),
+					TotalCostUSD:    e.costState.TotalCostUSD,
+					TotalCostCNY:    e.costState.TotalCostCNY,
+					ModelUsage:      e.buildModelUsage(),
 				}
 				data, _ := json.Marshal(msg)
 				fmt.Fprintln(os.Stdout, string(data))
@@ -961,12 +971,13 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				threshold := e.compactConfig.autoCompactThreshold()
 				errMsg := fmt.Sprintf("max tokens reached: %s", mte.Category)
 				msg := StreamMessage{
-					Type:      "result",
-					Subtype:   "error_max_tokens",
-					Result:    errMsg,
-					SessionID: sessionID,
-					Uuid:      GenerateUUID(),
-					Model:     mte.Model,
+					Type:            "result",
+					Subtype:         "error_max_tokens",
+					Result:          errMsg,
+					SessionID:       sessionID,
+					ParentToolUseID: "",
+					Uuid:            GenerateUUID(),
+					Model:           mte.Model,
 					Usage: &Usage{
 						InputTokens:              resp.Usage.InputTokens,
 						OutputTokens:             mte.OutputTokens,
@@ -1001,19 +1012,19 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					CacheCreationInputTokens: resp.Usage.CacheCreationInputTokens,
 				}
 				msg := StreamMessage{
-					Type:       "result",
-					Subtype:    "success",
-					Result:     textOutput.String(),
-					SessionID:  sessionID,
-					Uuid:       GenerateUUID(),
-					Model:      resp.Model,
-					Usage:      usage,
-					StopReason: string(resp.StopReason),
-					DurationMs: time.Since(e.startTime).Milliseconds(),
-
-					TotalCostUSD: e.costState.TotalCostUSD,
-					TotalCostCNY: e.costState.TotalCostCNY,
-					ModelUsage:   e.buildModelUsage(),
+					Type:            "result",
+					Subtype:         "success",
+					Result:          textOutput.String(),
+					SessionID:       sessionID,
+					ParentToolUseID: "",
+					Uuid:            GenerateUUID(),
+					Model:           resp.Model,
+					Usage:           usage,
+					StopReason:      string(resp.StopReason),
+					DurationMs:      time.Since(e.startTime).Milliseconds(),
+					TotalCostUSD:    e.costState.TotalCostUSD,
+					TotalCostCNY:    e.costState.TotalCostCNY,
+					ModelUsage:      e.buildModelUsage(),
 				}
 				data, _ := json.Marshal(msg)
 				fmt.Fprintln(os.Stdout, string(data))
@@ -1145,18 +1156,19 @@ func (e *QueryEngine) finalizeAsEndTurn(ctx context.Context, resp *api.Response,
 			CacheCreationInputTokens: resp.Usage.CacheCreationInputTokens,
 		}
 		msg := StreamMessage{
-			Type:         "result",
-			Subtype:      "success",
-			Result:       finalResult,
-			SessionID:    sessionID,
-			Uuid:         GenerateUUID(),
-			Model:        resp.Model,
-			Usage:        usage,
-			StopReason:   string(resp.StopReason),
-			DurationMs:   time.Since(e.startTime).Milliseconds(),
-			TotalCostUSD: e.costState.TotalCostUSD,
-			TotalCostCNY: e.costState.TotalCostCNY,
-			ModelUsage:   e.buildModelUsage(),
+			Type:            "result",
+			Subtype:         "success",
+			Result:          finalResult,
+			SessionID:       sessionID,
+			ParentToolUseID: "",
+			Uuid:            GenerateUUID(),
+			Model:           resp.Model,
+			Usage:           usage,
+			StopReason:      string(resp.StopReason),
+			DurationMs:      time.Since(e.startTime).Milliseconds(),
+			TotalCostUSD:    e.costState.TotalCostUSD,
+			TotalCostCNY:    e.costState.TotalCostCNY,
+			ModelUsage:      e.buildModelUsage(),
 		}
 		data, _ := json.Marshal(msg)
 		fmt.Fprintln(os.Stdout, string(data))
@@ -1346,10 +1358,11 @@ func (e *QueryEngine) emitConsolidatedAssistant(
 	}
 
 	msg := StreamMessage{
-		Type:      "assistant",
-		SessionID: sessionID,
-		Uuid:      GenerateUUID(),
-		Message:   map[string]any{"role": "assistant", "content": assistantContent},
+		Type:            "assistant",
+		SessionID:       sessionID,
+		ParentToolUseID: "",
+		Uuid:            GenerateUUID(),
+		Message:         map[string]any{"role": "assistant", "content": assistantContent},
 	}
 	data, _ := json.Marshal(msg)
 	fmt.Fprintln(os.Stdout, string(data))
