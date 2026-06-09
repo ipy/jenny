@@ -105,7 +105,7 @@ func getGitStatusShort(cwd string) (string, error) {
 	return string(out), nil
 }
 
-// platformSection returns a section with platform and cwd context.
+// platformSection returns a section with platform, date, and cwd context.
 func platformSection(cwd string) (string, bool) {
 	if cwd == "" {
 		cwd, _ = os.Getwd()
@@ -114,7 +114,8 @@ func platformSection(cwd string) (string, bool) {
 		}
 	}
 	platform := fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH)
-	return fmt.Sprintf("Platform: %s\nCwd: %s", platform, cwd), true
+	date := time.Now().Format("2006-01-02")
+	return fmt.Sprintf("Platform: %s\nDate: %s\nCwd: %s", platform, date, cwd), true
 }
 
 // customPromptSection returns the custom system prompt if set.

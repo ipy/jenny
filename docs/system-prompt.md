@@ -44,6 +44,7 @@ Dynamic registry sections (when enabled): memory, environment, MCP status, scrat
 | System context | Git status snapshot | Max 2000 chars |
 | Cwd | Current working directory | Absolute path |
 | Platform | OS, arch | — |
+| Date | time.Now() formatted as "YYYY-MM-DD" | — |
 
 Git status truncated at 2000 characters with ellipsis.
 
@@ -85,3 +86,8 @@ When tool search enabled: omit deferred tool **descriptions** from API schemas (
 - **AC9:** Default prompt names Glob and Grep as search tools
 - **AC10:** No unfilled template placeholders in assembled output
 - **AC11:** AC1–AC5 from iter-115 continue to pass (regression)
+- **AC12:** `--print-system-prompt` stdout contains "date" or "Date" (date is injected into the platform/context section).
+- **AC13:** The injected date reflects the current calendar year.
+- **AC14:** `--print-system-prompt` stdout contains OS/platform info (`"Platform"`, `"darwin"`, `"linux"`, or `"windows"`).
+- **AC15:** When jenny is launched from inside a git repository, `--print-system-prompt` stdout contains the current branch (substring `"Branch"` or `"Git context"`).
+- **AC16:** When jenny is launched from a directory with no git repo, `--print-system-prompt` stdout does NOT contain `"Git context"` or `"Branch:"`.
