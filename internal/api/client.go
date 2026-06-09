@@ -1299,7 +1299,8 @@ func isPromptTooLongError(err error) bool {
 	var apiErr *anthropic.Error
 	if errors.As(err, &apiErr) && apiErr.StatusCode == 400 {
 		// Check error message for prompt_too_long (provider-specific error text)
-		if strings.Contains(strings.ToLower(err.Error()), "prompt_too_long") {
+		errMsg := strings.ToLower(err.Error())
+		if strings.Contains(errMsg, "prompt_too_long") || strings.Contains(errMsg, "context window exceeds limit") {
 			return true
 		}
 	}
@@ -1307,7 +1308,8 @@ func isPromptTooLongError(err error) bool {
 	// Also check RetryableHTTPError which wraps SDK errors
 	var retryErr *RetryableHTTPError
 	if errors.As(err, &retryErr) && retryErr.StatusCode == 400 {
-		if strings.Contains(strings.ToLower(retryErr.Message), "prompt_too_long") {
+		errMsg := strings.ToLower(retryErr.Message)
+		if strings.Contains(errMsg, "prompt_too_long") || strings.Contains(errMsg, "context window exceeds limit") {
 			return true
 		}
 	}

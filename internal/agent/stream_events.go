@@ -243,10 +243,6 @@ func transformMessageStart(e anthropic.MessageStartEvent) (json.RawMessage, erro
 	return json.Marshal(msg)
 }
 
-func stringOrEmpty(s string) string {
-	return s
-}
-
 func transformContentBlockStart(e anthropic.ContentBlockStartEvent) (json.RawMessage, error) {
 	// Build minimal content_block based on type using struct with custom MarshalJSON
 	cb := MinimalContentBlock{Type: string(e.ContentBlock.Type)}

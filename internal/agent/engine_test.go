@@ -2528,3 +2528,83 @@ func TestEngine_AutoCompactFiresAboveThreshold(t *testing.T) {
 
 	t.Log("Test completed - threshold calculation verified")
 }
+
+// TestEngine_ContextExhausted_MiniMax_EmitsStructuredError verifies that when the streaming
+// API returns HTTP 400 with a MiniMax-style context limit error, the engine
+// emits a structured result event with subtype error_max_tokens and category
+// "context_exhausted".
+func TestEngine_ContextExhausted_MiniMax_EmitsStructuredError(t *testing.T) {
+	tmpDir := t.TempDir()
+	sessMgr, err := session.NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager error: %v", err)
+	}
+
+	sessionID := "sess_context_exhausted_minimax_test"
+
+	// Server returns HTTP 400 with MiniMax context limit error
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.ReadAll(r.Body)
+		r.Body.Close()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"type":"error","error":{"type":"invalid_request_error","message":"invalid params, context window exceeds limit (2013)"},"request_id":"06775bac09d2d88c0d5176f10eddc0e4"}`))
+	}))
+	defer server.Close()
+
+	origBaseURL := os.Getenv("ANTHROPIC_BASE_URL")
+	origAPIKey := os.Getenv("ANTHROPIC_API_KEY")
+	os.Setenv("ANTHROPIC_BASE_URL", server.URL)
+	os.Setenv("ANTHROPIC_API_KEY", "test-key")
+	defer func() {
+		os.Setenv("ANTHROPIC_BASE_URL", origBaseURL)
+		os.Setenv("ANTHROPIC_API_KEY", origAPIKey)
+	}()
+
+	cfg := StreamConfig{
+		Enabled:        true,
+		SessionManager: sessMgr,
+		SessionID:      sessionID,
+	}
+
+	engine := NewQueryEngine(cfg, nil, "minimax-m2.7")
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err = engine.SubmitMessage(ctx, "test prompt")
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var output bytes.Buffer
+	io.Copy(&output, r)
+
+	lines := strings.Split(strings.TrimSpace(output.String()), "\n")
+	var foundErrorMaxTokens bool
+	for _, line := range lines {
+		if strings.Contains(line, `"subtype":"error_max_tokens"`) {
+			foundErrorMaxTokens = true
+			if strings.Contains(line, `"category":"context_exhausted"`) {
+				t.Log("PASS: error_max_tokens event with context_exhausted category found")
+			} else if strings.Contains(line, `"category":"output_cap_hit"`) {
+				t.Error("FAIL: expected context_exhausted but got output_cap_hit")
+			}
+			break
+		}
+	}
+
+	if !foundErrorMaxTokens {
+		t.Error("FAIL: error_max_tokens event not found in output")
+	}
+
+	if err == nil {
+		t.Error("FAIL: expected error to be returned")
+	} else if !strings.Contains(err.Error(), "context_exhausted") {
+		t.Errorf("FAIL: expected error to contain 'context_exhausted', got: %v", err)
+	}
+}
