@@ -263,6 +263,68 @@ func TestTranscriptSessionIDMatchesFilename(t *testing.T) {
 	}
 }
 
+// TestStreamJsonSessionIdMatchesTranscriptStem verifies AC6: the session_id in
+// stdout stream-json events matches the stem of the .jsonl transcript file.
+func TestStreamJsonSessionIdMatchesTranscriptStem(t *testing.T) {
+	mock := harness.NewMockServer(cassettesDir)
+	t.Cleanup(mock.Close)
+	dir := t.TempDir()
+
+	res := harness.RunJenny(t, transcriptEnv(mock.URL(), dir),
+		"--output-format", "stream-json", "-p", "hi")
+	if res.ExitCode != 0 {
+		t.Fatalf("jenny exited %d; stderr=%q", res.ExitCode, res.Stderr)
+	}
+
+	var systemSID, resultSID string
+	for _, ev := range res.Parsed {
+		sid, _ := ev["session_id"].(string)
+		switch ev["type"] {
+		case "system":
+			systemSID = sid
+		case "result":
+			resultSID = sid
+		}
+	}
+
+	files := findJSONLFiles(t, dir)
+	if len(files) != 1 {
+		t.Fatalf("expected 1 .jsonl, got %d", len(files))
+	}
+	stem := strings.TrimSuffix(filepath.Base(files[0]), ".jsonl")
+
+	if systemSID == "" {
+		t.Error("AC1: no session_id in system event")
+	}
+	if systemSID != stem {
+		t.Errorf("AC1: stdout system session_id=%q != transcript stem=%q", systemSID, stem)
+	}
+
+	if resultSID == "" {
+		t.Error("AC2: no session_id in result event")
+	}
+	if resultSID != stem {
+		t.Errorf("AC2: stdout result session_id=%q != transcript stem=%q", resultSID, stem)
+	}
+
+	data, err := os.ReadFile(files[0])
+	if err != nil {
+		t.Fatalf("AC3: reading transcript: %v", err)
+	}
+	for i, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		if line == "" {
+			continue
+		}
+		var entry map[string]any
+		if json.Unmarshal([]byte(line), &entry) != nil {
+			continue
+		}
+		if sid, _ := entry["session_id"].(string); sid != stem {
+			t.Errorf("AC3: transcript line %d session_id=%q != stem=%q", i, sid, stem)
+		}
+	}
+}
+
 // TestTranscriptHasUserAndAssistantEntries verifies AC4 and AC5.
 func TestTranscriptHasUserAndAssistantEntries(t *testing.T) {
 	mock := harness.NewMockServer(cassettesDir)

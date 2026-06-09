@@ -104,6 +104,7 @@ When persistence is disabled (e.g. `--no-session-persistence`):
 - **AC3:** Shutdown flush completes before process exit when persistence enabled.
 - **AC4:** With persistence disabled, no files written under `.jenny/transcripts/`.
 - **AC5:** Append-only writes survive normal crash (at most one partial line lost).
+- **AC6:** The `session_id` emitted in the stream-json `system` event and `result` event equals the stem of the `.jsonl` transcript file created in the same run.
 
 ## Related
 
