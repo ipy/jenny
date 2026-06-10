@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/ipy/jenny/internal/mcp"
@@ -96,12 +97,7 @@ func validateURL(url string) error {
 }
 
 func isPluginMarker(name string) bool {
-	for _, m := range pluginDirNames {
-		if name == m {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(pluginDirNames, name)
 }
 
 // hasPluginMarker checks whether dir contains any marker/plugin.json,

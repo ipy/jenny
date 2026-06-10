@@ -35,9 +35,13 @@ var additionalPatterns = []secretPattern{
 	{pattern: regexp.MustCompile(`\b(npm_[A-Za-z0-9]{30,})\b`)},
 	// PyPI token - pypi_ prefix
 	{pattern: regexp.MustCompile(`\b(pypi_[A-Za-z0-9_]{50,})\b`)},
-	// Generic high-entropy string detection (simple heuristic)
-	// Matches sequences of 48+ base64-like characters
-	{pattern: regexp.MustCompile(`\b([A-Za-z0-9/+=]{48,})\b`)},
+	// High-entropy string detection - requires specific secret prefixes
+	// Only matches sequences with known credential prefixes to avoid false positives
+	// Matches: password=, secret=, token=, key=, api_key=, apikey=, auth=, bearer , sk-, ghp_, AKIA
+	{pattern: regexp.MustCompile(`(?i)\b((?:password|secret|token|key|api[_-]?key|auth|bearer)[=:]\s*[A-Za-z0-9/+=]{20,})\b`)},
+	{pattern: regexp.MustCompile(`\b(sk-[A-Za-z0-9]{40,})\b`)},
+	{pattern: regexp.MustCompile(`\b(ghp_[A-Za-z0-9]{36,40})\b`)},
+	{pattern: regexp.MustCompile(`\b(AKIA[A-Za-z0-9]{16})\b`)},
 }
 
 // SecretRedactor detects and redacts secrets in tool results.

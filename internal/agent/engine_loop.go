@@ -369,7 +369,11 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			switch block.Block.Type {
 			case "text":
 				// AC1: Redact secrets from text output before writing
-				textOutput.WriteString(e.secretRedactor.Redact(block.Block.Text))
+				if e.secretRedactor != nil && e.secretRedactor.Enabled() {
+					textOutput.WriteString(e.secretRedactor.Redact(block.Block.Text))
+				} else {
+					textOutput.WriteString(block.Block.Text)
+				}
 			case "thinking":
 				thinkingBlocks = append(thinkingBlocks, thinkingBlock{Text: block.Block.Thinking, Signature: block.Block.Signature})
 			case "tool_use":
@@ -472,7 +476,11 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				switch block.Type {
 				case "text":
 					// AC1: Redact secrets from text output in fallback path
-					textOutput.WriteString(e.secretRedactor.Redact(block.Text))
+					if e.secretRedactor != nil && e.secretRedactor.Enabled() {
+						textOutput.WriteString(e.secretRedactor.Redact(block.Text))
+					} else {
+						textOutput.WriteString(block.Text)
+					}
 				case "thinking":
 					thinkingBlocks = append(thinkingBlocks, thinkingBlock{Text: block.Thinking, Signature: block.Signature})
 				case "tool_use":
@@ -653,8 +661,9 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			}
 
 			// AC1: Redact secrets from tool result content before emitting
-			emitContent = e.secretRedactor.Redact(emitContent)
-
+			if e.secretRedactor != nil && e.secretRedactor.Enabled() {
+				emitContent = e.secretRedactor.Redact(emitContent)
+			}
 			toolResults = append(toolResults, api.ToolResult{
 				ToolUseID: emitToolUseID,
 				Content:   emitContent,
@@ -749,9 +758,17 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				return "", fmt.Errorf("structured output not emitted")
 			}
 			// AC3: Determine final result - use structured output if available
-			finalResult := e.secretRedactor.Recover(textOutput.String())
-			if e.structuredOutputTool != nil && e.structuredOutputTool.IsEmitted() && e.structuredOutputResult != "" {
-				finalResult = e.secretRedactor.Recover(e.structuredOutputResult)
+			var finalResult string
+			if e.secretRedactor != nil && e.secretRedactor.Enabled() {
+				finalResult = e.secretRedactor.Recover(textOutput.String())
+				if e.structuredOutputTool != nil && e.structuredOutputTool.IsEmitted() && e.structuredOutputResult != "" {
+					finalResult = e.secretRedactor.Recover(e.structuredOutputResult)
+				}
+			} else {
+				finalResult = textOutput.String()
+				if e.structuredOutputTool != nil && e.structuredOutputTool.IsEmitted() && e.structuredOutputResult != "" {
+					finalResult = e.structuredOutputResult
+				}
 			}
 			if len(toolResults) > 0 {
 				// Send tool results back to model before ending
@@ -929,7 +946,12 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				msg := StreamMessage{
 					Type:            "result",
 					Subtype:         "success",
-					Result:          e.secretRedactor.Recover(textOutput.String()),
+					Result: func() string {
+						if e.secretRedactor != nil && e.secretRedactor.Enabled() {
+							return e.secretRedactor.Recover(textOutput.String())
+						}
+						return textOutput.String()
+					}(),
 					SessionID:       sessionID,
 					ParentToolUseID: nil,
 					Uuid:            GenerateUUID(),
@@ -961,8 +983,12 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				})
 			}
 
-			return e.secretRedactor.Recover(textOutput.String()), nil
-
+			return func() string {
+				if e.secretRedactor != nil && e.secretRedactor.Enabled() {
+					return e.secretRedactor.Recover(textOutput.String())
+				}
+				return textOutput.String()
+			}(), nil
 		default:
 			// Empty or unrecognized stop_reason: treat as end_turn (terminal).
 			// Defensive: if tool_use blocks are present, continue the loop to keep
