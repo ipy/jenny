@@ -16,7 +16,8 @@ import (
 // captureStdout redirects os.Stdout to a pipe for the duration of fn and
 // returns everything written. Uses a background goroutine to drain the pipe,
 // avoiding deadlocks when fn produces large output.
-func captureStdout(fn func()) string {
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -77,7 +78,7 @@ func TestAC1_ReadTool_ActivatesSkillOnPathAccess(t *testing.T) {
 	readTool.WithSkillActivator(activator)
 
 	// Capture stdout while reading a file inside the skill directory
-	stdout := captureStdout(func() {
+	stdout := captureStdout(t, func() {
 		result, err := readTool.Execute(context.Background(), map[string]any{
 			"file_path": fileInSkillDir,
 		}, tmpDir)
@@ -137,7 +138,7 @@ func TestAC1_WriteTool_ActivatesSkillOnPathAccess(t *testing.T) {
 	writeTool.WithSkillActivator(activator)
 
 	// Capture stdout while writing
-	stdout := captureStdout(func() {
+	stdout := captureStdout(t, func() {
 		result, err := writeTool.Execute(context.Background(), map[string]any{
 			"file_path": fileInSkillDir,
 			"content":   "modified content",
@@ -188,7 +189,7 @@ func TestAC1_EditTool_ActivatesSkillOnPathAccess(t *testing.T) {
 	editTool := NewEditTool(cache)
 	editTool.WithSkillActivator(activator)
 
-	stdout := captureStdout(func() {
+	stdout := captureStdout(t, func() {
 		result, err := editTool.Execute(context.Background(), map[string]any{
 			"file_path":  fileInSkillDir,
 			"old_string": "original",
@@ -263,7 +264,7 @@ Helps with Markdown files.
 	readTool := NewReadTool(true, nil)
 	readTool.WithSkillActivator(activator)
 
-	stdout := captureStdout(func() {
+	stdout := captureStdout(t, func() {
 		result, err := readTool.Execute(context.Background(), map[string]any{
 			"file_path": mdFile,
 		}, tmpDir)
@@ -322,7 +323,7 @@ activation_glob: "**/*.md"
 	readTool := NewReadTool(true, nil)
 	readTool.WithSkillActivator(activator)
 
-	stdout := captureStdout(func() {
+	stdout := captureStdout(t, func() {
 		result, err := readTool.Execute(context.Background(), map[string]any{
 			"file_path": goFile,
 		}, tmpDir)
@@ -373,7 +374,7 @@ func TestAC2_SkillWithoutGlob_OnlyActivatesWithinRoot(t *testing.T) {
 	readTool := NewReadTool(true, nil)
 	readTool.WithSkillActivator(activator)
 
-	stdout := captureStdout(func() {
+	stdout := captureStdout(t, func() {
 		result, err := readTool.Execute(context.Background(), map[string]any{
 			"file_path": fileInSkill,
 		}, tmpDir)
@@ -400,7 +401,7 @@ func TestAC2_SkillWithoutGlob_OnlyActivatesWithinRoot(t *testing.T) {
 		t.Fatalf("failed to write file: %v", err)
 	}
 
-	stdout = captureStdout(func() {
+	stdout = captureStdout(t, func() {
 		readTool.Execute(context.Background(), map[string]any{
 			"file_path": outsideFile,
 		}, tmpDir)
@@ -474,7 +475,7 @@ func TestAC4_BareMode_NoSkillTool(t *testing.T) {
 
 	// Reading a file in a skill dir should NOT emit skill_activated event
 	// because activator is nil in bare mode
-	stdout := captureStdout(func() {
+	stdout := captureStdout(t, func() {
 		result, err := readTool.Execute(context.Background(), map[string]any{
 			"file_path": fileInSkill,
 		}, tmpDir)
