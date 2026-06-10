@@ -509,19 +509,12 @@ func TestBashTool_SedSimulation(t *testing.T) {
 
 // TestBashTool_SkipPermissions tests AC2: cwd bypass with skipPermissions flag
 func TestBashTool_SkipPermissions(t *testing.T) {
-	// Create a file outside /tmp to test the bypass behavior
-	outsideDir := t.TempDir()
-	outsideFile := filepath.Join(outsideDir, "test.txt")
-	if err := os.WriteFile(outsideFile, []byte("outside content\n"), 0644); err != nil {
-		t.Fatalf("failed to create test file: %v", err)
-	}
-
 	tool := NewBashTool(false)
 	cwd := "/tmp"
 
-	// Test that file outside cwd is blocked without skipPermissions
+	// Test that path outside cwd is blocked without skipPermissions
 	result, err := tool.Execute(context.Background(), map[string]any{
-		"command": "cat " + outsideFile,
+		"command": "cat ../../etc/passwd",
 	}, cwd)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -533,7 +526,7 @@ func TestBashTool_SkipPermissions(t *testing.T) {
 	// Test that access is allowed WITH skipPermissions
 	toolWithSkip := NewBashTool(true)
 	result, err = toolWithSkip.Execute(context.Background(), map[string]any{
-		"command": "cat " + outsideFile,
+		"command": "cat ../../etc/passwd",
 	}, cwd)
 	if err != nil {
 		t.Fatalf("unexpected error with skipPermissions: %v", err)
