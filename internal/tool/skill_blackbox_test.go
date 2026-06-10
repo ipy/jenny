@@ -1,9 +1,7 @@
 package tool
 
 import (
-	"bytes"
 	"context"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,33 +9,11 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/skills"
+	"github.com/ipy/jenny/internal/testutil"
 )
 
-// captureStdout redirects os.Stdout to a pipe for the duration of fn and
-// returns everything written. Uses a background goroutine to drain the pipe,
-// avoiding deadlocks when fn produces large output.
-func captureStdout(t *testing.T, fn func()) string {
-	t.Helper()
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		return ""
-	}
-	os.Stdout = w
-
-	done := make(chan struct{})
-	var buf bytes.Buffer
-	go func() {
-		_, _ = io.Copy(&buf, r)
-		close(done)
-	}()
-
-	fn()
-	_ = w.Close()
-	os.Stdout = oldStdout
-	<-done
-	return buf.String()
-}
+// captureStdout delegates to testutil.CaptureStdout for stdout capture.
+var captureStdout = testutil.CaptureStdout
 
 // ============================================================================
 // AC1: Skills discovered on Read/Write/Edit path access

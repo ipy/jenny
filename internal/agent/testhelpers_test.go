@@ -1,47 +1,22 @@
 package agent
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
+
+	"github.com/ipy/jenny/internal/testutil"
 )
 
-// captureStdout redirects os.Stdout to a pipe for the duration of fn and
-// returns everything written. Uses a background goroutine to drain the pipe,
-// avoiding deadlocks when fn produces large output.
-func captureStdout(t *testing.T, fn func()) string {
-	t.Helper()
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe error: %v", err)
-	}
-	os.Stdout = w
+// captureStdout delegates to testutil.CaptureStdout for stdout capture.
+var captureStdout = testutil.CaptureStdout
 
-	done := make(chan struct{})
-	var buf bytes.Buffer
-	go func() {
-		_, _ = io.Copy(&buf, r)
-		close(done)
-	}()
-
-	fn()
-	_ = w.Close()
-	os.Stdout = oldStdout
-	<-done
-	return buf.String()
-}
-
-// sseLine formats an SSE event line in the format "event: <event>\ndata: <data>\n\n".
-func sseLine(event, data string) string {
-	return fmt.Sprintf("event: %s\ndata: %s\n\n", event, data)
-}
+// sseLine delegates to testutil.SSELine for SSE event formatting.
+var sseLine = testutil.SSELine
 
 func makeMockStreamServer(t *testing.T) *httptest.Server {
 	t.Helper()
