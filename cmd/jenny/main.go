@@ -277,6 +277,7 @@ func run() error {
 		AppendSystemPrompt: flags.AppendSystemPrompt,
 		MemoryContent:      agent.LoadInstructionFile(cwd),
 		MaxIterations:      flags.MaxIterations,
+		RedactEnabled:      os.Getenv("JENNY_REDACT_DISABLE") == "",
 	}
 
 	// AC3-streamconfig-inheritance: Set parent config on runner for named agent inheritance

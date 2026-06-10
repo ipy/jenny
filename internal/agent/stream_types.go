@@ -49,6 +49,7 @@ type StreamConfig struct {
 	StructuredDenyRules  []string                    // Tool names to deny; checked by engine to enforce AC1
 	IsNamedAgent         bool                        // True when this session is a named swarm agent
 	MaxIterations        int                         // Maximum loop iterations (0 = unlimited)
+	RedactEnabled        bool                        // Whether secret redaction is enabled
 }
 
 // ToolParam represents a tool parameter for the API.

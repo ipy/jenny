@@ -368,7 +368,8 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 
 			switch block.Block.Type {
 			case "text":
-				textOutput.WriteString(block.Block.Text)
+				// AC1: Redact secrets from text output before writing
+				textOutput.WriteString(e.secretRedactor.Redact(block.Block.Text))
 			case "thinking":
 				thinkingBlocks = append(thinkingBlocks, thinkingBlock{Text: block.Block.Thinking, Signature: block.Block.Signature})
 			case "tool_use":
@@ -470,7 +471,8 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			for _, block := range streamResult.Blocks {
 				switch block.Type {
 				case "text":
-					textOutput.WriteString(block.Text)
+					// AC1: Redact secrets from text output in fallback path
+					textOutput.WriteString(e.secretRedactor.Redact(block.Text))
 				case "thinking":
 					thinkingBlocks = append(thinkingBlocks, thinkingBlock{Text: block.Thinking, Signature: block.Signature})
 				case "tool_use":
@@ -596,6 +598,19 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			}
 		}
 
+		// AC8: Recover secrets from tool inputs before execution
+		if e.secretRedactor != nil && e.secretRedactor.Enabled() {
+			for i, block := range execBlocks {
+				if inputJSON, err := json.Marshal(block.Input); err == nil {
+					recovered := e.secretRedactor.Recover(string(inputJSON))
+					var ri map[string]any
+					if err := json.Unmarshal([]byte(recovered), &ri); err == nil {
+						execBlocks[i].Input = ri
+					}
+				}
+			}
+		}
+
 		// Execute all tools using the parallel executor
 		executor := NewToolExecutor(e.tools, cwd)
 		execResults, err := executor.Execute(ctx, execBlocks)
@@ -636,6 +651,9 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				emitToolUseID = execBlocks[i].ID
 				hasSynthetic = true
 			}
+
+			// AC1: Redact secrets from tool result content before emitting
+			emitContent = e.secretRedactor.Redact(emitContent)
 
 			toolResults = append(toolResults, api.ToolResult{
 				ToolUseID: emitToolUseID,
@@ -731,9 +749,9 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				return "", fmt.Errorf("structured output not emitted")
 			}
 			// AC3: Determine final result - use structured output if available
-			finalResult := textOutput.String()
+			finalResult := e.secretRedactor.Recover(textOutput.String())
 			if e.structuredOutputTool != nil && e.structuredOutputTool.IsEmitted() && e.structuredOutputResult != "" {
-				finalResult = e.structuredOutputResult
+				finalResult = e.secretRedactor.Recover(e.structuredOutputResult)
 			}
 			if len(toolResults) > 0 {
 				// Send tool results back to model before ending
@@ -911,7 +929,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				msg := StreamMessage{
 					Type:            "result",
 					Subtype:         "success",
-					Result:          textOutput.String(),
+					Result:          e.secretRedactor.Recover(textOutput.String()),
 					SessionID:       sessionID,
 					ParentToolUseID: nil,
 					Uuid:            GenerateUUID(),
@@ -943,7 +961,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				})
 			}
 
-			return textOutput.String(), nil
+			return e.secretRedactor.Recover(textOutput.String()), nil
 
 		default:
 			// Empty or unrecognized stop_reason: treat as end_turn (terminal).

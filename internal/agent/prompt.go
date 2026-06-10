@@ -192,5 +192,10 @@ func AssembleSystemPrompt(cfg StreamConfig, tools []tool.Tool, cwd string) strin
 		sections = append(sections, appendContent)
 	}
 
+	// AC9: Redaction instruction in system prompt when enabled
+	if cfg.RedactEnabled {
+		sections = append(sections, "This session has secret redaction enabled. Tool results may contain `[REDACTED:ID_XXXXX]` placeholders. Do not alter, remove, or expand these placeholders.")
+	}
+
 	return strings.Join(sections, "\n\n")
 }

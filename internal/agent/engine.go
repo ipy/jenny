@@ -10,6 +10,7 @@ import (
 
 	"github.com/ipy/jenny/internal/api"
 	"github.com/ipy/jenny/internal/log"
+	"github.com/ipy/jenny/internal/redact"
 	"github.com/ipy/jenny/internal/session"
 	"github.com/ipy/jenny/internal/tool"
 )
@@ -53,6 +54,9 @@ type QueryEngine struct {
 	currentStopReason   string
 	currentStopSequence string
 	currentUsage        api.Usage
+
+	// Secret redaction (AC1: secret redaction)
+	secretRedactor *redact.SecretRedactor
 }
 
 // NewQueryEngine creates a new QueryEngine with the given configuration.
@@ -157,6 +161,7 @@ func NewQueryEngine(cfg StreamConfig, tools []tool.Tool, model string) *QueryEng
 		compactConfig:        newCompactConfigForModel(client.GetModel()),
 		compactFailCount:     compactFailCount,
 		structuredOutputTool: structuredTool,
+		secretRedactor:       redact.NewSecretRedactor(),
 	}
 
 	// Wire ReadFileCache from StreamConfig into tools that support it
