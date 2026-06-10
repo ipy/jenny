@@ -166,7 +166,7 @@ Plugins can bundle skills via the `skills` field:
 
 - Path must be relative starting with `./`
 - Skills are loaded in addition to default skill discovery
-- Integration point: `LoadPluginSkills(pluginRoot)` (future)
+- Integration point: `LoadPluginSkills(p *LoadedPlugin)`
 
 ### MCP Client (`internal/mcp/`)
 
