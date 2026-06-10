@@ -1,4 +1,3 @@
-// Package agent provides the core agent loop and query engine.
 package agent
 
 import (
@@ -29,8 +28,6 @@ func extractTextFromErrorContent(content string) string {
 	// Not JSON or couldn't extract - return original
 	return content
 }
-
-// media error message functions
 
 // getImageTooLargeErrorMessage returns the user-facing message for image too large errors.
 func getImageTooLargeErrorMessage() string {
