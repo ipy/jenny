@@ -1,4 +1,3 @@
-// Package tool provides tool implementations.
 package tool
 
 import (
@@ -8,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ipy/jenny/internal/constants"
 )
 
 // TestEditTool_AC1_NoPriorRead tests that Edit without prior Read fails.
@@ -625,5 +626,53 @@ func TestEditTool_OverlappingMatches(t *testing.T) {
 	// "aaaa" -> "ba" (non-overlapping: first 3 a's become b, last a remains)
 	if string(content) != "ba" {
 		t.Errorf("expected 'ba', got: %s", string(content))
+	}
+}
+
+// TestEditTool_ScratchpadAllowedWithoutPermissions tests that EditTool can edit
+// a file under scratchpad directory even with skipPermissions=false.
+func TestEditTool_ScratchpadAllowedWithoutPermissions(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldHome := constants.JennyHomeDirFunc
+	constants.JennyHomeDirFunc = func() string { return tmpDir }
+	defer func() { constants.JennyHomeDirFunc = oldHome }()
+
+	scratchpadDir := constants.ScratchpadDir()
+	testFile := filepath.Join(scratchpadDir, "scratch-edit.txt")
+	if err := os.MkdirAll(scratchpadDir, 0755); err != nil {
+		t.Fatalf("mkdir scratchpad: %v", err)
+	}
+	if err := os.WriteFile(testFile, []byte("original content\n"), 0644); err != nil {
+		t.Fatalf("write test file: %v", err)
+	}
+
+	readCache := NewReadFileCache()
+
+	// Read first to satisfy read-before-write contract
+	rt := NewReadTool(false, readCache)
+	_, err := rt.Execute(context.Background(), map[string]any{"file_path": testFile}, tmpDir)
+	if err != nil {
+		t.Fatalf("read of scratchpad file should succeed: %v", err)
+	}
+
+	et := NewEditTool(readCache)
+	result, err := et.Execute(context.Background(), map[string]any{
+		"file_path":  testFile,
+		"old_string": "original",
+		"new_string": "edited",
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("edit of scratchpad file should succeed: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("edit should not error: %s", result.Content)
+	}
+
+	data, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatalf("file should exist after edit: %v", err)
+	}
+	if !strings.Contains(string(data), "edited content") {
+		t.Errorf("expected edited content, got: %s", string(data))
 	}
 }

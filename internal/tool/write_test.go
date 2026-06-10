@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ipy/jenny/internal/constants"
 )
 
 // TestWriteTool_AC1_NoPriorRead tests that Write without prior Read fails.
@@ -410,5 +412,54 @@ func TestWriteTool_UnchangedContent(t *testing.T) {
 	// Diff should still be present but might be minimal
 	if !strings.Contains(result.Content, "---") || !strings.Contains(result.Content, "+++") {
 		t.Errorf("expected diff format, got: %s", result.Content)
+	}
+}
+
+// TestWriteTool_ScratchpadAllowedWithoutPermissions tests that WriteTool can write
+// to scratchpad directory even with skipPermissions=false.
+func TestWriteTool_ScratchpadAllowedWithoutPermissions(t *testing.T) {
+	// Override JennyHomeDirFunc for test isolation
+	tmpDir := t.TempDir()
+	oldHome := constants.JennyHomeDirFunc
+	constants.JennyHomeDirFunc = func() string { return tmpDir }
+	defer func() { constants.JennyHomeDirFunc = oldHome }()
+
+	scratchpadDir := constants.ScratchpadDir()
+	if err := os.MkdirAll(scratchpadDir, 0755); err != nil {
+		t.Fatalf("mkdir scratchpad: %v", err)
+	}
+	testFile := filepath.Join(scratchpadDir, "scratch-test.txt")
+	if err := os.WriteFile(testFile, []byte("initial content\n"), 0644); err != nil {
+		t.Fatalf("write test file: %v", err)
+	}
+
+	readCache := NewReadFileCache()
+	wt := NewWriteTool(readCache)
+
+	// Read the scratchpad file first (required by WriteTool contract)
+	rt := NewReadTool(false, readCache)
+	_, err := rt.Execute(context.Background(), map[string]any{"file_path": testFile}, tmpDir)
+	if err != nil {
+		t.Fatalf("read of scratchpad file should succeed: %v", err)
+	}
+
+	result, err := wt.Execute(context.Background(), map[string]any{
+		"file_path": testFile,
+		"content":   "scratchpad content",
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("write to scratchpad should succeed: %s", result.Content)
+	}
+
+	// Verify content was written
+	data, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatalf("file should exist after write: %v", err)
+	}
+	if string(data) != "scratchpad content" {
+		t.Errorf("unexpected content: got %q, want %q", string(data), "scratchpad content")
 	}
 }

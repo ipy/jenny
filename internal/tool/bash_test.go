@@ -28,7 +28,7 @@ func TestBashTool_Execute(t *testing.T) {
 			},
 			wantErr: false,
 			checkFn: func(r *ToolResult) bool {
-				return r != nil && !r.IsError && contains(r.Content, "hello")
+				return r != nil && !r.IsError && strings.Contains(r.Content, "hello")
 			},
 		},
 		{
@@ -138,7 +138,7 @@ func TestBashTool_ReadOnlyEnforcement(t *testing.T) {
 				t.Errorf("unexpected error for %q: %v", cmd, err)
 				return
 			}
-			if result.IsError && contains(result.Content, "not allowed") {
+			if result.IsError && strings.Contains(result.Content, "not allowed") {
 				t.Errorf("command %q should be allowed but got error: %s", cmd, result.Content)
 			}
 		})
@@ -198,7 +198,7 @@ func TestBashTool_Timeout(t *testing.T) {
 	if !result.IsError {
 		t.Error("expected timeout error")
 	}
-	if !contains(result.Content, "timed out") {
+	if !strings.Contains(result.Content, "timed out") {
 		t.Errorf("expected timeout message, got: %s", result.Content)
 	}
 }
@@ -283,7 +283,7 @@ func TestBashTool_AC1_ReadOnlyPipeline(t *testing.T) {
 	if !result.IsError {
 		t.Errorf("expected security error for mutating final segment")
 	}
-	if !contains(result.Content, "Security error") {
+	if !strings.Contains(result.Content, "Security error") {
 		t.Errorf("expected security error message, got: %s", result.Content)
 	}
 
@@ -315,7 +315,7 @@ func TestBashTool_AC2_OutputSpill(t *testing.T) {
 		t.Errorf("expected success, got error: %s", result.Content)
 	}
 	// Should reference a file path
-	if !contains(result.Content, "/tmp/") && !contains(result.Content, "jenny-spill") {
+	if !strings.Contains(result.Content, "/tmp/") && !strings.Contains(result.Content, "jenny-spill") {
 		t.Errorf("expected spill file path in result, got: %s", result.Content)
 	}
 	if !result.Truncated {
@@ -335,7 +335,7 @@ func TestBashTool_AC2_OutputSpill(t *testing.T) {
 	if result.Truncated {
 		t.Errorf("expected truncated=false for small output")
 	}
-	if !contains(result.Content, "small") {
+	if !strings.Contains(result.Content, "small") {
 		t.Errorf("expected 'small' in output, got: %s", result.Content)
 	}
 }
@@ -355,7 +355,7 @@ func TestBashTool_AC3_SleepBlocked(t *testing.T) {
 	if !result.IsError {
 		t.Errorf("expected error for sleep >=2 in foreground")
 	}
-	if !contains(result.Content, "run_in_background") {
+	if !strings.Contains(result.Content, "run_in_background") {
 		t.Errorf("expected error message mentioning run_in_background, got: %s", result.Content)
 	}
 
@@ -370,7 +370,7 @@ func TestBashTool_AC3_SleepBlocked(t *testing.T) {
 	if result.IsError {
 		t.Errorf("expected success for background sleep, got error: %s", result.Content)
 	}
-	if !contains(result.Content, "Background task") {
+	if !strings.Contains(result.Content, "Background task") {
 		t.Errorf("expected background task message, got: %s", result.Content)
 	}
 
@@ -408,7 +408,7 @@ func TestBashTool_AC4_CwdReset(t *testing.T) {
 		t.Errorf("expected success, got error: %s", result.Content)
 	}
 	// The internal cwd should have been reset to projectRoot
-	if !contains(result.Content, projectRoot) && !contains(result.Content, "tmp") {
+	if !strings.Contains(result.Content, projectRoot) && !strings.Contains(result.Content, "tmp") {
 		// The /tmp pwd output is expected, but internal state should be reset
 	}
 
@@ -512,7 +512,7 @@ func TestBashTool_SkipPermissions(t *testing.T) {
 	tool := NewBashTool(false)
 	cwd := "/tmp"
 
-	// Test that /etc/hostname is blocked without skipPermissions
+	// Test that /etc/passwd is blocked without skipPermissions
 	result, err := tool.Execute(context.Background(), map[string]any{
 		"command": "cat /etc/passwd",
 	}, cwd)
@@ -573,7 +573,7 @@ func TestBashTool_ScratchpadAccess(t *testing.T) {
 		t.Errorf("expected scratchpad content, got: %s", result.Content)
 	}
 
-	// Test that /etc/hostname still fails without skipPermissions
+	// Test that /etc/passwd still fails without skipPermissions
 	result, err = tool.Execute(context.Background(), map[string]any{
 		"command": "cat /etc/passwd",
 	}, tmpDir)
@@ -581,6 +581,6 @@ func TestBashTool_ScratchpadAccess(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !result.IsError {
-		t.Error("expected /etc/hostname to be blocked without skipPermissions")
+		t.Error("expected /etc/passwd to be blocked without skipPermissions")
 	}
 }

@@ -41,8 +41,8 @@ func TestReadTool_Execute(t *testing.T) {
 			wantErr: false,
 			checkFn: func(r *ToolResult) bool {
 				return r != nil && !r.IsError &&
-					contains(r.Content, "line 1") &&
-					contains(r.Content, "line 2")
+					strings.Contains(r.Content, "line 1") &&
+					strings.Contains(r.Content, "line 2")
 			},
 		},
 		{
@@ -53,7 +53,7 @@ func TestReadTool_Execute(t *testing.T) {
 			cwd:     tmpDir,
 			wantErr: false,
 			checkFn: func(r *ToolResult) bool {
-				return r != nil && contains(r.Content, "\tline 1\n")
+				return r != nil && strings.Contains(r.Content, "\tline 1\n")
 			},
 		},
 		{
@@ -66,7 +66,7 @@ func TestReadTool_Execute(t *testing.T) {
 			cwd:     tmpDir,
 			wantErr: false,
 			checkFn: func(r *ToolResult) bool {
-				return r != nil && contains(r.Content, "line 2")
+				return r != nil && strings.Contains(r.Content, "line 2")
 			},
 		},
 		{
@@ -77,7 +77,7 @@ func TestReadTool_Execute(t *testing.T) {
 			cwd:     tmpDir,
 			wantErr: false,
 			checkFn: func(r *ToolResult) bool {
-				return r != nil && contains(r.Content, "line 1")
+				return r != nil && strings.Contains(r.Content, "line 1")
 			},
 		},
 		{
@@ -88,7 +88,7 @@ func TestReadTool_Execute(t *testing.T) {
 			cwd:     tmpDir,
 			wantErr: false, // Returns error in content
 			checkFn: func(r *ToolResult) bool {
-				return r != nil && r.IsError && contains(r.Content, "does not exist")
+				return r != nil && r.IsError && strings.Contains(r.Content, "does not exist")
 			},
 		},
 		{
@@ -99,7 +99,7 @@ func TestReadTool_Execute(t *testing.T) {
 			cwd:     tmpDir,
 			wantErr: false,
 			checkFn: func(r *ToolResult) bool {
-				return r != nil && r.IsError && contains(r.Content, "directory")
+				return r != nil && r.IsError && strings.Contains(r.Content, "directory")
 			},
 		},
 	}
@@ -114,7 +114,7 @@ func TestReadTool_Execute(t *testing.T) {
 				return
 			}
 			if tt.wantErr && tt.errMsg != "" {
-				if !contains(result.Content, tt.errMsg) {
+				if !strings.Contains(result.Content, tt.errMsg) {
 					t.Errorf("expected error containing %q, got %q", tt.errMsg, result.Content)
 				}
 				return
@@ -170,7 +170,7 @@ func TestReadTool_PathTraversal(t *testing.T) {
 		{
 			name: "path traversal outside cwd should be blocked",
 			input: map[string]any{
-				"file_path": filepath.Join(tmpDir, "..", "..", "etc", "passwd"),
+				"file_path": filepath.Join(tmpDir, "..", "..", "etc", "hostname"),
 			},
 			cwd:     tmpDir,
 			allowed: false,
@@ -344,7 +344,7 @@ func TestReadTool_SizeLimits(t *testing.T) {
 			if tt.wantErr {
 				if !result.IsError {
 					t.Errorf("expected error containing %q, got success: %q", tt.errContains, result.Content)
-				} else if tt.errContains != "" && !contains(result.Content, tt.errContains) {
+				} else if tt.errContains != "" && !strings.Contains(result.Content, tt.errContains) {
 					t.Errorf("expected error containing %q, got %q", tt.errContains, result.Content)
 				}
 			} else {
@@ -378,7 +378,7 @@ func TestReadTool_Dedup(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("first read should not error: %s", result.Content)
 	}
-	if !contains(result.Content, "line 1") || !contains(result.Content, "line 2") {
+	if !strings.Contains(result.Content, "line 1") || !strings.Contains(result.Content, "line 2") {
 		t.Fatalf("first read should return content, got: %s", result.Content)
 	}
 
@@ -416,7 +416,7 @@ func TestReadTool_Dedup(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("read after modification should not error: %s", result.Content)
 	}
-	if !contains(result.Content, "line 2 modified") {
+	if !strings.Contains(result.Content, "line 2 modified") {
 		t.Fatalf("read after modification should return new content, got: %s", result.Content)
 	}
 
@@ -434,7 +434,7 @@ func TestReadTool_Dedup(t *testing.T) {
 	if result.Content == "file unchanged" {
 		t.Fatalf("different offset should bypass dedup, got stub: %s", result.Content)
 	}
-	if !contains(result.Content, "line 2") {
+	if !strings.Contains(result.Content, "line 2") {
 		t.Fatalf("different offset should return content, got: %s", result.Content)
 	}
 }
@@ -461,7 +461,7 @@ func TestReadTool_BlockDeviceGuard(t *testing.T) {
 		if !result.IsError {
 			t.Fatalf("block device %s should be rejected, got: %s", devPath, result.Content)
 		}
-		if !contains(result.Content, "device") {
+		if !strings.Contains(result.Content, "device") {
 			t.Fatalf("error should mention device, got: %s", result.Content)
 		}
 	}
@@ -483,7 +483,7 @@ func TestReadTool_BlockDeviceGuard(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("regular file should not be rejected: %s", result.Content)
 	}
-	if !contains(result.Content, "regular content") {
+	if !strings.Contains(result.Content, "regular content") {
 		t.Fatalf("regular file should return content, got: %s", result.Content)
 	}
 }
@@ -550,7 +550,7 @@ func TestReadTool_ScratchpadAccess(t *testing.T) {
 	if result.IsError {
 		t.Errorf("scratchpad file should be accessible, got error: %s", result.Content)
 	}
-	if !contains(result.Content, "scratchpad content") {
+	if !strings.Contains(result.Content, "scratchpad content") {
 		t.Errorf("expected scratchpad content, got: %s", result.Content)
 	}
 
@@ -564,17 +564,4 @@ func TestReadTool_ScratchpadAccess(t *testing.T) {
 	if !result.IsError {
 		t.Error("expected /etc/hostname to be blocked without skipPermissions")
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsHelper(s, substr))
-}
-
-func containsHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
