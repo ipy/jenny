@@ -95,7 +95,7 @@ Implement in this order:
    - [x] Tool calls mapping ✓
    - [x] True SSE streaming (no buffering) ✓
 
-   5. - [x] Core agent loop — partial — [`agent-loop.md`](./arch/agent-loop.md)
+   5. - [x] Core agent loop — [`agent-loop.md`](./arch/agent-loop.md)
 
    - Basic tool_use → execute → tool_result loop
    - Unknown tool → immediate error (does not hang)

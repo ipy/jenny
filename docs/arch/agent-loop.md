@@ -79,6 +79,10 @@ Empty or unrecognized `stop_reason` values are treated as `end_turn` (terminal).
 
 If a response carries a `tool_use` block but `stop_reason` is empty (defensive path, should not occur per API contract but may occur with proxies), the loop treats this as `tool_use` and continues to execute the tool to keep the chain valid.
 
+#### Context Cancellation
+
+The loop respects the provided `context.Context`. If the context is cancelled (e.g., via SIGINT or timeout), the loop terminates and returns the context error. This ensures graceful shutdown during long-running operations.
+
 ## Security
 
 ### Path Traversal Prevention
