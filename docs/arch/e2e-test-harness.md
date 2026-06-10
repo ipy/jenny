@@ -440,6 +440,22 @@ inspected.
 - `jenny_test/cases/` subdirectory hierarchy.
 - CI / Makefile / Docker isolation.
 
+## go fix Constraint: parity/harness
+
+`go fix ./parity/harness/...` requires multiple consecutive runs and exits 1.
+The tool applies 2 of 3 fixes per pass and reports "Re-run the command to apply
+more". After 3+ runs it stabilizes. This is a pre-existing condition in the
+test infrastructure (not production code).
+
+**Workaround**: Run `go fix` on internal and cmd packages only:
+
+```bash
+go fix ./internal/... ./cmd/...  # exits 0 cleanly
+```
+
+**Deferred**: Identify which specific fix analyzer causes the non-terminating
+cycle in the harness package.
+
 ## Related
 
 - [`cli.md`](./cli.md) — CLI flag surface tested by `cli_flags_test.go`.
