@@ -1,4 +1,3 @@
-// Package git provides filesystem-based git introspection without spawning git subprocesses.
 package git
 
 import (
