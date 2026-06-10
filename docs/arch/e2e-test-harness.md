@@ -5,7 +5,7 @@ priority: P0
 status: complete
 spec: complete
 code: complete
-package: jenny_test, parity
+package: e2e
 depends_on:
   - cli.md
   - stream-json-spec.md
@@ -18,13 +18,13 @@ depends_on:
 Blackbox end-to-end test suite for jenny. The suite launches the compiled
 `jenny` binary as a subprocess, drives it with CLI flags and stdin, and
 asserts on its stdout, stderr, exit code, and the HTTP traffic it emits
-against an in-process mock server. Tests are organized as plain Go test
-functions under `jenny_test/`. No live API access is required.
+against an in-process mock server. Tests are organized as Go test
+functions under `e2e/`. No live API access is required.
 
 ## Directory Layout
 
 ```
-parity/
+e2e/
 ├── harness/                       # shared test infrastructure
 │   ├── runner.go                  # jenny binary builder + spawner (RunJenny, RunTarget)
 │   ├── mock_api.go                # mock Anthropic API server
@@ -33,44 +33,27 @@ parity/
 │   ├── suite.go                  # declarative SuiteRunner
 │   └── reporter.go              # TextReporter / JSONReporter
 ├── fixtures/cassettes/           # SSE cassette files
-├── cli_test.go                   # CLI flags (declarative)
-├── stream_json_test.go           # stream-json envelope (declarative)
-├── api_protocol_test.go          # API request shape (declarative)
-├── system_prompt_test.go         # system prompt assembly (declarative)
-├── tool_call_test.go             # tool call flows (declarative)
-├── tools_test.go                 # per-tool behavior (declarative)
-├── skill_plugin_test.go          # skills/plugin discovery (declarative)
-├── cost_tracking_test.go         # cost/usage (declarative)
-├── session_test.go               # session persistence (declarative)
-└── normalization_test.go         # message normalization (declarative)
-
-jenny_test/
-├── cli_flags_test.go             # CLI flags (imperative, AC-tagged)
-├── stream_json_test.go           # stream-json smoke (imperative)
-├── stream_json_format_test.go    # NDJSON shape (imperative)
-├── api_protocol_test.go          # API conformance (imperative)
-├── tool_call_test.go             # tool-call events (imperative)
-├── transcript_test.go            # transcript file tests (imperative)
-├── session_resume_test.go        # session resume (imperative)
-├── continue_flag_test.go         # --continue flag (imperative)
-├── override_flags_test.go        # --model, --system-prompt (imperative)
-├── env_vars_test.go              # env var handling (imperative)
-├── system_prompt_test.go         # system prompt (imperative)
-├── memory_test.go                # memdir (imperative)
-├── minimax_test.go               # minimax provider (imperative)
-├── multi_turn_request_test.go    # multi-turn history (imperative)
-└── fixtures/cassettes/           # shared SSE cassettes
+├── cli_test.go                   # CLI flags
+├── stream_json_test.go           # stream-json envelope
+├── api_protocol_test.go          # API request shape
+├── system_prompt_test.go         # system prompt assembly
+├── tool_call_test.go             # tool call flows
+├── tools_test.go                 # per-tool behavior
+├── skill_plugin_test.go          # skills/plugin discovery
+├── cost_tracking_test.go         # cost/usage
+├── session_test.go               # session persistence
+├── normalization_test.go         # message normalization
+├── transcript_test.go            # transcript file tests
+└── minimax_test.go               # minimax provider regression tests
 ```
 
-Both `jenny_test/` and `parity/` import the same harness from
-`parity/harness/`. The `jenny_test/harness/` package has been removed;
-all mock server, runner, and comparison infrastructure is consolidated
-in `parity/harness/`.
+All mock server, runner, and comparison infrastructure is consolidated
+in `e2e/harness/`.
 
 ## System Prompt Verification
 
 The `--print-system-prompt` flag allows verifying the assembled system prompt
-without making any API calls. This is used by `jenny_test/system_prompt_test.go`
+without making any API calls. This is used by `e2e/system_prompt_test.go`
 to assert on the presence of core tools, platform context, and overall
 structure. This flag runs entirely offline and exits before any network or
 session initialization.
@@ -85,50 +68,13 @@ just as they would parse a live Anthropic streaming response.
 Naming convention: `<cassette-id>.sse`, all lowercase, hyphen-separated,
 unique across the suite. The cassette id is the only thing the mock
 server needs to find a file; it is taken from the URL path prefix
-`/cassette/<id>/v1/messages` (see "Mock server" below).
-
-File shape (an example for `echo-hello.sse`):
-
-```
-event: message_start
-data: {"type":"message_start","message":{...}}
-
-event: content_block_start
-data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
-
-event: content_block_delta
-data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello from cassette."}}
-
-event: content_block_stop
-data: {"type":"content_block_stop","index":0}
-
-event: message_delta
-data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":5}}
-
-event: message_stop
-data: {"type":"message_stop"}
-
-```
-
-Cassettes are committed to the repository alongside the tests. They are
-not generated by the suite; recording (capturing cassettes from a live
-API) is out of scope for this iteration.
+`/cassette/<id>/v1/messages`.
 
 ## Mock Server
 
 The mock server is started per-test via `harness.NewMockServer(cassetteDir)`.
 It returns an `*httptest.Server` plus a `*MockServer` handle for inspecting
 captured requests.
-
-Routing:
-
-| Path | Method | Behavior |
-|------|--------|----------|
-| `/cassette/<id>/v1/messages` | POST | Streams `cassetteDir/<id>.sse` with `Content-Type: text/event-stream`. The `/cassette/<id>` prefix is stripped; only the path segment between `/cassette/` and `/v1/messages` is used to locate the cassette. |
-
-If the cassette id is missing or the file does not exist, the server
-returns `HTTP 400` with a JSON body explaining the failure. The test
-then fails loudly rather than silently producing empty output.
 
 Captured requests:
 
@@ -148,318 +94,57 @@ result. The mock server supports this via per-cassette-id sequences:
 mock.SetSequence("tool-use", []string{"tool-use-turn1", "tool-use-turn2"})
 ```
 
-After registration, the first POST to `/cassette/tool-use/v1/messages`
-streams `tool-use-turn1.sse`, the second streams `tool-use-turn2.sse`,
-and any subsequent request returns `HTTP 400` with a JSON error body
-explaining the sequence exhaustion. The mock does not panic, block, or
-loop — exhaustion is terminal for that cassette id.
-
-The same `Requests()` accessor captures every POST in the sequence, so
-tests can assert on multi-turn request shape (e.g. that the second turn
-includes a `tool_result` block) the same way they assert on single-turn
-shape. Single-cassette tests are unaffected: when no sequence is
-registered for a cassette id, the existing one-shot behavior applies.
-
 ## Binary Runner
 
 The runner builds the jenny binary once per `go test` invocation using
 `go build -o <tmpdir>/jenny ./cmd/jenny` and caches the result with
-`sync.Once`. The build directory lives under `os.TempDir()` and is removed
-when the test binary exits.
+`sync.Once`.
 
 `harness.RunJenny(t, env, args...)` returns a `RunResult`:
 
 ```go
 type RunResult struct {
-    Lines    []string         // raw stdout lines (newline-split)
-    Parsed   []map[string]any // lines parsed as JSON (blanks skipped)
-    Stderr   string           // captured stderr
-    ExitCode int              // process exit code
-    Dir      string           // working directory of the process
+    Lines      []string         // raw stdout lines (newline-split)
+    Parsed     []map[string]any // lines parsed as JSON (blanks skipped)
+    Stdout     string           // raw stdout
+    Stderr     string           // captured stderr
+    ExitCode   int              // process exit code
+    Dir        string           // working directory of the process
+    DurationMs int64            // total execution time
 }
 ```
-
-Environment variables passed via `env` are merged with the parent
-process environment. Tests that drive the mock server additionally set:
-
-- `ANTHROPIC_BASE_URL=http://127.0.0.1:<port>/cassette/<id>` — mock URL
-- `ANTHROPIC_AUTH_TOKEN=test-token` — sentinel value; the real token
-  is never used or required
-
-The runner captures stdout and stderr separately, splits stdout into
-lines, and parses each non-blank line as JSON into `Parsed`. Parse
-errors are kept on the line (not removed); tests are responsible for
-asserting that emission is well-formed.
-
-The `Dir` field reflects the actual directory the jenny subprocess was
-launched from. If no directory was explicitly requested by the test, it
-defaults to the repository root.
-
-## Session Transcript Control
-
-Tests that assert on transcript file contents set the `JENNY_TRANSCRIPT_DIR`
-environment variable to `t.TempDir()`. Jenny reads this variable on startup
-and uses it as the transcript directory instead of `~/.jenny/transcripts/`.
-This prevents test runs from polluting the developer's own jenny state.
-
-The transcript directory is also the location passed to
-`session.NewManager(dir, disabled)`. When `--no-session-persistence` is set,
-`disabled=true` and no file is written regardless of `JENNY_TRANSCRIPT_DIR`.
-
-## Cassette URL Routing (no jenny changes required)
-
-The Anthropic SDK client reads `ANTHROPIC_BASE_URL` and appends
-`/v1/messages` to it. The test sets:
-
-```
-ANTHROPIC_BASE_URL=http://127.0.0.1:<port>/cassette/echo-hello
-```
-
-so the SDK issues a POST to
-`http://127.0.0.1:<port>/cassette/echo-hello/v1/messages`. The mock
-server extracts `echo-hello` from the path prefix and streams the
-matching cassette. This requires no changes to jenny's own code; the
-cassette id is encoded entirely in the base URL.
-
-## API Protocol Conformance
-
-`jenny_test/api_protocol_test.go` is a blackbox conformance suite for the
-outbound `/v1/messages` request body. Each test starts the mock server,
-runs jenny with `--output-format stream-json -p "echo hello"` against
-the `echo-hello` cassette, and asserts on the captured request body.
-The response cassette is irrelevant — the request structure is fixed by
-the test scenario.
-
-Four properties are checked:
-
-1. **`max_tokens`** — the top-level `max_tokens` numeric field equals
-   `64000`. The lower default caused silent truncation of long
-   agent responses; 64000 is the reference parity target.
-2. **`system` prompt** — the top-level `system` field is present
-   (string or array), its concatenated text is at least 500 characters,
-   and it contains the absolute path of the jenny subprocess working
-   directory (passed to the test via `RunResult.Dir`, robust to macOS
-   symlinks).
-3. **`tools` array** — the top-level `tools` field is a non-empty JSON
-   array. Each tool has a non-empty `name`, a non-empty `description`,
-   and an `input_schema` object with `"type": "object"`.
-4. **Core tools present** — the `tools` array always includes tools
-   named `"Bash"` and `"Read"`, which are required for agentic
-   compatibility.
-
-### Non-streaming `max_tokens` and the SDK 10-minute guard
-
-The Anthropic Go SDK enforces a hard constraint in
-`CalculateNonStreamingTimeout`: any non-streaming request whose
-expected wall-time exceeds 10 minutes (computed as
-`maxTokens * 1h / 128000 > 10m`) is rejected before the HTTP call is
-made. For a 64000-token budget that is ~30 minutes, so the SDK
-returns `"streaming is required for operations that may take longer
-than 10 minutes"`.
-
-The streaming fallback path (`client.SendMessage`) goes through the
-same SDK guard, so we bypass it at the client level by passing
-`option.WithRequestTimeout(1*time.Hour)` to `anthropic.NewClient` in
-`NewClientWithModel`. The SDK's `CalculateNonStreamingTimeout` short-
-circuits to the caller-supplied `RequestTimeout` when one is set, so
-the 10-minute guard is skipped. The streaming path is unaffected
-(it has no such guard); the timeout simply caps the per-attempt
-wall time. The non-streaming code path in
-`internal/api/client.go` (`doSendMessage`) therefore emits
-`max_tokens == 64000` on the wire on both the streaming and
-fallback paths, satisfying AC1's literal requirement.
-
-### Multi-turn request message history (multi_turn_request_test.go)
-
-`jenny_test/multi_turn_request_test.go` verifies that the second `/v1/messages`
-request in a tool-use flow carries the full conversation history. The test
-inspects `mock.Requests()[1].Body["messages"]` directly and asserts:
-
-- At least 3 message entries (user prompt, assistant tool-use, user tool-result).
-- `messages[1].role == "assistant"` with a `tool_use` content block.
-- `messages[2].role == "user"` with a `tool_result` content block.
-- The `tool_use_id` in `messages[2].content[0]` matches the `id` in `messages[1].content`.
-
-## Stream-json Output Format
-
-`jenny_test/stream_json_format_test.go` is a blackbox conformance suite
-for the NDJSON event shapes that jenny emits in
-`--output-format=stream-json` mode. It reuses the same `echo-hello`
-cassette and the same `harness.NewMockServer` / `harness.RunJenny`
-plumbing as the rest of the suite — no production code changes are
-required to add or run these tests.
-
-Seven properties are checked, each in its own test function:
-
-1. **Every line has a non-empty `type` field** — any JSON line that
-   lacks `"type"`, or has `"type": ""`, fails the test.
-2. **UUIDs are UUID v4** — every top-level `"uuid"` value must match
-   `^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`
-   (lowercase hex, version-4, variant-1).
-3. **`system/init` has envelope fields** — at least one event with
-   `type=system, subtype=init`; it must carry non-empty `session_id`,
-   a v4 `uuid`, and a `tools` field.
-4. **`system/init` `tools` is a non-empty string array** — the array
-   has at least one element, every element is a non-empty string, and
-   the array includes `"Bash"` and `"Read"` (exact case).
-5. **`result/success` has content fields** — at least one event with
-   `type=result, subtype=success`; it must carry a string `result`
-   (empty allowed), a non-empty `stop_reason`, a numeric
-   `duration_ms >= 0`, a non-empty `session_id`, and a v4 `uuid`.
-6. **`session_id` is consistent within a run** — every line that
-   carries `session_id` must carry the same value; exactly one
-   distinct value is allowed per run.
-7. **The first JSON line is a `system` event** — the first
-   JSON-parseable stdout line must have `type=system`.
-
-## Tool-Call Conformance (multi-turn)
-
-`jenny_test/tool_call_test.go` exercises the two-turn tool-use flow
-end-to-end. The mock is configured with a two-cassette sequence (see
-"Cassette sequences" above) so that the first turn streams a
-`stop_reason: "tool_use"` response and the second streams the final
-`end_turn` text. The test then asserts on the NDJSON event shapes that
-the spec (`stream-json-spec.md`, `stream-json.md`) requires a tool-call
-turn to produce:
-
-1. **`tool_call/started`** — at least one `type=tool_call,
-   subtype=started` event with a non-empty `tool_name` (e.g. `"Bash"`),
-   a non-empty `tool_use_id`, and a v4 `uuid`.
-2. **`tool_call/completed`** — at least one `type=tool_call,
-   subtype=completed` event carrying a `tool_use_id` that matches the
-   started event.
-3. **`user` tool_result wrapper** — at least one `type=user` event whose
-   `message.content` is a non-empty array whose first block has
-   `type=tool_result` and a `tool_use_id` matching the started event.
-4. **Two `stream_request_start` markers** — exactly two
-   `type=stream_request_start` lines, one per API turn.
-5. **Final `result/success`** — the last meaningful NDJSON event has
-   `type=result, subtype=success`.
-
-Together with `stream_json_format_test.go`, this brings every event
-type in `stream-json-spec.md` under blackbox conformance coverage.
-No production code (`internal/`, `cmd/`) is touched; the entire surface
-is exercised through the mock server and the existing
-`harness.NewMockServer` / `harness.RunJenny` plumbing.
-
-## Resolved Debt
-
-- `scope-creep-now-disclosed` (deferred from iter-112) — resolved.
-  The scope creep that touched three files (`internal/agent/loop.go`,
-  `internal/api/client.go`, `internal/agent/engine.go`) was disclosed
-  in commit `005a97b` and the corresponding AC1 violation (the
-  non-streaming fallback path emitting `max_tokens != 64000`) was
-  fixed in the same commit. No further action is required.
 
 ## Running the Suite
 
 From the repo root:
 
 ```bash
-go test ./jenny_test/...
+go test ./e2e/...
 ```
 
 The suite is hermetic: with `ANTHROPIC_AUTH_TOKEN` and
 `ANTHROPIC_BASE_URL` unset in the environment, the mock server is the
 sole destination of all HTTP traffic, and no network access is
-required. A test that needs to talk to a real API must be added
-explicitly with its own opt-in path; none exist today.
+required.
 
 ## Acceptance Criteria
 
-- **AC1 — No live API required:** `go test ./jenny_test/...` compiles
-  and every test passes with `ANTHROPIC_AUTH_TOKEN` and
-  `ANTHROPIC_BASE_URL` unset.
-- **AC2 — Version flag smoke:** jenny `--version` (and the `-v` alias)
-  exits 0; the first stdout line matches `\d+\.\d+\.\d+`. `--version`
-  exits before any session or API initialisation, so no network call
-  is made.
-- **AC3 — Help flag smoke:** jenny `--help` exits 0; combined
-  stdout+stderr contains `Usage` (case-insensitive).
-- **AC4 — Basic stream-json smoke with cassette:** jenny
-  `--output-format stream-json -p "echo hello"` against the
-  `echo-hello` cassette exits 0; NDJSON output contains at least one
-  `system` event and at least one `result` event with
-  `subtype == "success"`.
-- **AC5 — Outbound request shape verified:** The mock server captures
-  exactly one POST to `/v1/messages`. `model` starts with `"claude-"`,
-  `stream == true`, and `messages[0].role == "user"` with content
-  containing `"echo hello"`. The test environment does not need to
-  pin `ANTHROPIC_MODEL`; the jenny binary's built-in default model
-  is a `claude-` prefixed identifier that satisfies this assertion.
-- **AC6 — Cassette replay is deterministic:** Two consecutive runs of
-  the AC4 test produce identical line counts and identical `"type"`
-  sequences in the NDJSON output.
-- **AC7 — Cassette stored in repo:** `echo-hello.sse` is committed at
-  `jenny_test/fixtures/cassettes/echo-hello.sse`.
-- **AC8 — Doc present:** This file.
-
 ### API protocol conformance (api_protocol_test.go)
 
-These acceptance criteria are enforced by `jenny_test/api_protocol_test.go`.
-They run against the same `echo-hello` cassette; only the request body is
-inspected.
-
-- **AC9 — `max_tokens` is 64000:** the captured request has a numeric
-  `max_tokens` field equal to 64000. (Out of parity when set lower; the
-  lower default caused silent truncation of long responses.)
-- **AC10 — `system` field is present and substantial:** the request body
-  has a top-level `system` field. When it is a string, length ≥ 500
-  characters. When it is an array, the array is non-empty and the
-  concatenated text of all text-type blocks is ≥ 500 characters.
-- **AC11 — `system` prompt includes the working directory:** the system
-  prompt content (string or concatenated block text) contains the
-  absolute path of the directory from which the jenny subprocess is
-  spawned. The harness ensures the subprocess `Dir` is correctly set
-  and passed to the test for assertion, robust to macOS symlinks.
-- **AC12 — `tools` array is present and non-empty:** the request body
+- **AC1 — `max_tokens` is 64000:** the captured request has a numeric
+  `max_tokens` field equal to 64000.
+- **AC2 — `system` field is present and substantial:** the request body
+  has a top-level `system` field.
+- **AC3 — `system` prompt includes the working directory:** the system
+  prompt content contains the absolute path of the directory from which
+  the jenny subprocess is spawned.
+- **AC4 — `tools` array is present and non-empty:** the request body
   has a `tools` key whose value is a JSON array with at least one
   element.
-- **AC13 — each tool is well-formed:** every tool has a non-empty
-  `name`, a non-empty `description`, and an `input_schema` object with
-  `"type": "object"`.
-- **AC14 — core tools present by name:** the `tools` array always
+- **AC5 — core tools present by name:** the `tools` array always
   includes tools named `"Bash"` and `"Read"`.
 
-## Out of Scope
+## go fix Constraint: e2e/harness
 
-- Recording mode (capturing cassettes from a live API).
-- Sequence reset / replay (calling `SetSequence` a second time, or
-  replaying after exhaustion).
-- Non-Bash tools (Read, Edit, Grep) in cassettes — the single Bash
-  scenario is sufficient for conformance.
-- Permission gate (`control_request`/`control_response`) event testing
-  — requires production-side control protocol support.
-- `--skip-permissions` flag or `--output-format text` mode tool-call
-  behavior.
-- Multi-cassette sequences with more than 2 turns.
-- Parallel tool use (multiple `tool_use` blocks in one assistant turn).
-- Session transcript (`session_id` NDJSON persistence) assertions.
-- Case-loader / case-registry pattern; tests stay as plain
-  `*_test.go` functions.
-- `jenny_test/cases/` subdirectory hierarchy.
-- CI / Makefile / Docker isolation.
-
-## go fix Constraint: parity/harness
-
-`go fix ./parity/harness/...` requires multiple consecutive runs and exits 1.
-The tool applies 2 of 3 fixes per pass and reports "Re-run the command to apply
-more". After 3+ runs it stabilizes. This is a pre-existing condition in the
-test infrastructure (not production code).
-
-**Workaround**: Run `go fix` on internal and cmd packages only:
-
-```bash
-go fix ./internal/... ./cmd/...  # exits 0 cleanly
-```
-
-**Deferred**: Identify which specific fix analyzer causes the non-terminating
-cycle in the harness package.
-
-## Related
-
-- [`cli.md`](./cli.md) — CLI flag surface tested by `cli_flags_test.go`.
-- [`stream-json-spec.md`](./stream-json-spec.md) — NDJSON event format
-  asserted in `stream_json_test.go`.
-- [`anthropic-api-client.md`](./anthropic-api-client.md) — outbound
-  request shape asserted by AC5 and by `api_protocol_test.go`.
+`go fix ./e2e/harness/...` requires multiple consecutive runs and exits 1.
+This is a documented constraint of the test infrastructure.

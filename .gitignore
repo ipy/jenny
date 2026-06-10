@@ -39,7 +39,6 @@ dist/
 /jenny
 /jenny-*
 /jenny_*
-!/jenny_test/
 .jenny/
 **/fake-mcp-server
 
