@@ -7,8 +7,6 @@ import (
 	"strings"
 )
 
-// findGitRoot walks up from startPath looking for .git.
-// Returns the repository root path and an error if not found.
 func findGitRoot(startPath string) (string, error) {
 	absStart, err := filepath.EvalSymlinks(startPath)
 	if err != nil {

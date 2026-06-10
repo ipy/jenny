@@ -8,8 +8,6 @@ import (
 	"strings"
 )
 
-// IsIgnored returns true if the given path is ignored by git.
-// It checks .gitignore patterns from the repository root.
 func IsIgnored(repoRoot, path string) (bool, error) {
 	// Resolve symlinks on repoRoot to ensure consistent path comparison
 	// (on macOS /var/folders is a symlink to /private/var/folders)

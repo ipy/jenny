@@ -8,8 +8,6 @@ import (
 	"strings"
 )
 
-// ValidateWorktreeDir validates a worktree's commondir structure.
-// Returns an error if the worktree appears malicious.
 func ValidateWorktreeDir(worktreePath string) (bool, error) {
 	gitDir, err := resolveGitDir(worktreePath)
 	if err != nil {
