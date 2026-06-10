@@ -11,18 +11,6 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
-// MaxMediaItemsPerRequest is the maximum number of media items allowed per request.
-const MaxMediaItemsPerRequest = 100
-
-// MaxBase64ImageSize is the maximum size in bytes for a base64-encoded image.
-const MaxBase64ImageSize = 5 * 1024 * 1024
-
-// DefaultIdleTimeout is the default timeout for idle watchdog (30 seconds).
-const DefaultIdleTimeout = 30 * time.Second
-
-// DefaultFallbackTimeout is the default timeout for non-streaming fallback (~5 min).
-const DefaultFallbackTimeout = 5 * time.Minute
-
 // Client wraps the Anthropic SDK client.
 // All fields are aligned per gofmt conventions.
 type Client struct {

@@ -11,6 +11,12 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 )
 
+// DefaultIdleTimeout is the default timeout for idle watchdog (30 seconds).
+const DefaultIdleTimeout = 30 * time.Second
+
+// DefaultFallbackTimeout is the default timeout for non-streaming fallback (~5 min).
+const DefaultFallbackTimeout = 5 * time.Minute
+
 // streamAccumulator tracks content blocks during streaming.
 type streamAccumulator struct {
 	blocks        []ContentBlock // Content blocks by index

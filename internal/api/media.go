@@ -6,6 +6,12 @@ import (
 	"strings"
 )
 
+// MaxMediaItemsPerRequest is the maximum number of media items allowed per request.
+const MaxMediaItemsPerRequest = 100
+
+// MaxBase64ImageSize is the maximum size in bytes for a base64-encoded image.
+const MaxBase64ImageSize = 5 * 1024 * 1024
+
 // ValidateMessagesMedia validates media in messages before sending to the API.
 // It checks for data URIs and raw base64 image headers, enforcing:
 // - Maximum100 media items per request
