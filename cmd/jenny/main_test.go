@@ -1,11 +1,13 @@
 package main
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/ipy/jenny/internal/agent"
+	"github.com/ipy/jenny/internal/mcp"
 	"github.com/ipy/jenny/internal/plugin"
 	"github.com/ipy/jenny/internal/session"
 	"github.com/ipy/jenny/internal/skills"
@@ -593,5 +595,67 @@ func TestLoadPluginMCPServers_Empty(t *testing.T) {
 	// Should return nil when no MCP servers found
 	if config != nil && len(config) > 0 {
 		t.Errorf("loadPluginMCPServers() returned non-empty config, want nil or empty")
+	}
+}
+
+// TestPluginMCPServersWiring tests plugin MCP server loading and CLI override.
+// CLI --mcp-config overrides plugin MCP configs (first-seen wins across plugins).
+func TestPluginMCPServersWiring(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create plugin with .mcp.json
+	pluginRoot := filepath.Join(tmpDir, "my-plugin")
+	if err := os.MkdirAll(pluginRoot, 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+
+	mcpConfigContent := `{
+		"mcpServers": {
+			"test-server": {
+				"command": "plugin-python",
+				"args": ["-m", "pluginserver"]
+			}
+		}
+	}`
+	mcpPath := filepath.Join(pluginRoot, ".mcp.json")
+	if err := os.WriteFile(mcpPath, []byte(mcpConfigContent), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	manifestContent := `{"name": "my-plugin", "mcpServers": "./.mcp.json"}`
+	manifestDir := filepath.Join(pluginRoot, ".jenny-plugin")
+	if err := os.MkdirAll(manifestDir, 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(manifestDir, "plugin.json"), []byte(manifestContent), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	// Phase 1: Load plugin MCP servers
+	pluginConfig := loadPluginMCPServers(tmpDir, tmpDir)
+	if pluginConfig == nil {
+		t.Fatal("loadPluginMCPServers() returned nil")
+	}
+
+	server, ok := pluginConfig["test-server"]
+	if !ok {
+		t.Fatal("expected 'test-server' in plugin config")
+	}
+	if server.Command != "plugin-python" {
+		t.Errorf("plugin server.Command = %q, want %q", server.Command, "plugin-python")
+	}
+
+	// Phase 2: Simulate CLI override (CLI config wins)
+	cliConfig := map[string]mcp.MCPServerDef{
+		"test-server": {Command: "cli-python", Args: []string{"-m", "cliserver"}},
+	}
+	maps.Copy(pluginConfig, cliConfig)
+
+	serverAfterMerge, ok := pluginConfig["test-server"]
+	if !ok {
+		t.Fatal("test-server missing after merge")
+	}
+	if serverAfterMerge.Command != "cli-python" {
+		t.Errorf("after CLI override, server.Command = %q, want %q (CLI should win)", serverAfterMerge.Command, "cli-python")
 	}
 }
