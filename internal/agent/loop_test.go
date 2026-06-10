@@ -1577,4 +1577,3 @@ func TestMaxIterations_EngineConfigWired(t *testing.T) {
 		t.Errorf("engine.streamCfg.MaxIterations = %d, want 7", engine.streamCfg.MaxIterations)
 	}
 }
-

@@ -336,7 +336,7 @@ func TestEstimateTokens(t *testing.T) {
 			messages: []api.Message{
 				{Role: "user", Content: "hello world"},
 			},
-			wantMin: 1,  // 11 chars / 4 ≈ 2 tokens
+			wantMin: 1, // 11 chars / 4 ≈ 2 tokens
 			wantMax: 5,
 		},
 		{
@@ -497,7 +497,7 @@ func TestAC6_DeepSeekThresholdMath(t *testing.T) {
 
 func TestAC7_CompactedChainPreservesToolPairs(t *testing.T) {
 	messages := make([]api.Message, 20)
-	for i := 0; i < 18; i++ {
+	for i := range 18 {
 		messages[i] = api.Message{Role: "user", Content: "filler"}
 	}
 	// Last two messages: assistant with tool_use + user with tool_result

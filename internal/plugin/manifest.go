@@ -38,7 +38,7 @@ type PluginManifest struct {
 	Name        string                   `json:"name,omitempty"`
 	Version     string                   `json:"version,omitempty"`
 	Description string                   `json:"description,omitempty"`
-	Author      AuthorInfo               `json:"author,omitempty"`
+	Author      AuthorInfo               `json:"author"`
 	Homepage    string                   `json:"homepage,omitempty"`
 	Repository  string                   `json:"repository,omitempty"`
 	License     string                   `json:"license,omitempty"`

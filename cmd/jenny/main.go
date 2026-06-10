@@ -210,7 +210,7 @@ func run() error {
 		}
 
 		discoveredSkills = discoverAndMergePluginSkills(discoveredSkills, pluginRoots)
-		}
+	}
 
 	var tools []tool.Tool
 	registry := tool.NewRegistry().
