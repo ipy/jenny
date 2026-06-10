@@ -9,7 +9,7 @@ package: internal/mcp
 gaps:
   - "Managed-domains-only mode and enterprise policy enforcement not implemented"
   - "Orphaned plugin cache exclusion from search tools not implemented"
-  - "Strict mode does not yet exclude all non-CLI sources (partially wired)"
+  - "Strict mode excludes plugin sources (enterprise policy enforcement deferred to P4)"
   - "OAuth credentials and OpenID Connect Discovery not supported in server definition"
 defer_to: P4
 depends_on:

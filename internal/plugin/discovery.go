@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ipy/jenny/internal/mcp"
 	"github.com/ipy/jenny/internal/skills"
 )
 
@@ -152,6 +153,25 @@ func (p *LoadedPlugin) SkillsDir() string {
 		return ""
 	}
 	return filepath.Join(p.RootPath, p.Manifest.Skills)
+}
+
+// MCPServersDir returns the absolute path to the plugin's MCP server config file.
+// Returns "" if no mcpServers path is configured.
+func (p *LoadedPlugin) MCPServersDir() string {
+	if p.Manifest == nil || p.Manifest.MCPServers == "" {
+		return ""
+	}
+	return filepath.Join(p.RootPath, p.Manifest.MCPServers)
+}
+
+// LoadPluginMCPServers loads MCP server definitions from a plugin's MCP config file.
+// Returns nil, nil if no mcpServers path is configured.
+func LoadPluginMCPServers(p *LoadedPlugin) (map[string]mcp.MCPServerDef, error) {
+	if p.Manifest == nil || p.Manifest.MCPServers == "" {
+		return nil, nil
+	}
+	configPath := p.MCPServersDir()
+	return mcp.LoadConfig([]string{configPath}, false)
 }
 
 // LoadPluginSkills loads skills from a plugin's skills directory.

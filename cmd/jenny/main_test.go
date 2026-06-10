@@ -403,3 +403,197 @@ A plugin-level shared skill.
 		t.Errorf("expected skill name 'shared-skill', got %q", discoveredSkills[0].Name)
 	}
 }
+
+// TestLoadPluginMCPServers tests plugin MCP server discovery and config loading.
+// The plugin manifest's mcpServers field is a path to a separate MCP config file.
+func TestLoadPluginMCPServers(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create plugin with MCP server config file
+	pluginRoot := filepath.Join(tmpDir, "my-plugin")
+	if err := os.MkdirAll(pluginRoot, 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+
+	// Create MCP config file (referenced by manifest's mcpServers field)
+	mcpConfigContent := `{
+  "mcpServers": {
+    "plugin-server": {
+      "command": "python",
+      "args": ["-m", "myserver"],
+      "env": {
+        "MY_VAR": "value"
+      }
+    }
+  }
+}`
+	mcpConfigPath := filepath.Join(pluginRoot, ".mcp.json")
+	if err := os.WriteFile(mcpConfigPath, []byte(mcpConfigContent), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	// Create plugin manifest pointing to MCP config file
+	manifestContent := `{
+  "name": "my-plugin",
+  "mcpServers": "./.mcp.json"
+}`
+	manifestDir := filepath.Join(pluginRoot, ".codex-plugin")
+	if err := os.MkdirAll(manifestDir, 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(manifestDir, "plugin.json"), []byte(manifestContent), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	// Create plugin 2 with no MCP config (should be ignored)
+	plugin2Root := filepath.Join(tmpDir, "no-mcp-plugin")
+	if err := os.MkdirAll(plugin2Root, 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	manifest2Content := `{
+  "name": "no-mcp-plugin",
+  "skills": "./skills/"
+}`
+	manifest2Dir := filepath.Join(plugin2Root, ".codex-plugin")
+	if err := os.MkdirAll(manifest2Dir, 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(manifest2Dir, "plugin.json"), []byte(manifest2Content), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	// Load plugin MCP servers
+	config := loadPluginMCPServers(tmpDir, tmpDir)
+
+	// Verify plugin-server is loaded
+	if config == nil {
+		t.Fatal("loadPluginMCPServers() returned nil, want non-nil config")
+	}
+
+	server, ok := config["plugin-server"]
+	if !ok {
+		t.Error("expected 'plugin-server' in config")
+	}
+
+	if server.Command != "python" {
+		t.Errorf("server.Command = %q, want %q", server.Command, "python")
+	}
+
+	if len(server.Args) != 2 || server.Args[0] != "-m" || server.Args[1] != "myserver" {
+		t.Errorf("server.Args = %v, want %v", server.Args, []string{"-m", "myserver"})
+	}
+
+	if server.Env == nil || server.Env["MY_VAR"] != "value" {
+		t.Errorf("server.Env = %v, want map with MY_VAR=value", server.Env)
+	}
+
+	// Verify no-mcp-plugin is not present (no MCP config)
+	if _, ok := config["no-mcp-plugin"]; ok {
+		t.Error("expected 'no-mcp-plugin' to NOT be in config (no mcpServers)")
+	}
+}
+
+// TestLoadPluginMCPServers_MultiplePlugins tests that MCP servers from multiple
+// plugins are all loaded and merged.
+func TestLoadPluginMCPServers_MultiplePlugins(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create plugin 1
+	plugin1Root := filepath.Join(tmpDir, "plugin1")
+	if err := os.MkdirAll(plugin1Root, 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	mcpConfig1 := `{
+  "mcpServers": {
+    "server1": {
+      "command": "node",
+      "args": ["server1.js"]
+    }
+  }
+}`
+	if err := os.WriteFile(filepath.Join(plugin1Root, ".mcp.json"), []byte(mcpConfig1), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	manifest1 := `{
+  "name": "plugin1",
+  "mcpServers": "./.mcp.json"
+}`
+	manifest1Dir := filepath.Join(plugin1Root, ".codex-plugin")
+	if err := os.MkdirAll(manifest1Dir, 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(manifest1Dir, "plugin.json"), []byte(manifest1), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	// Create plugin 2
+	plugin2Root := filepath.Join(tmpDir, "plugin2")
+	if err := os.MkdirAll(plugin2Root, 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	mcpConfig2 := `{
+  "mcpServers": {
+    "server2": {
+      "command": "python",
+      "args": ["-m", "server2"]
+    }
+  }
+}`
+	if err := os.WriteFile(filepath.Join(plugin2Root, ".mcp.json"), []byte(mcpConfig2), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	manifest2 := `{
+  "name": "plugin2",
+  "mcpServers": "./.mcp.json"
+}`
+	manifest2Dir := filepath.Join(plugin2Root, ".codex-plugin")
+	if err := os.MkdirAll(manifest2Dir, 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(manifest2Dir, "plugin.json"), []byte(manifest2), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	config := loadPluginMCPServers(tmpDir, tmpDir)
+
+	if config == nil {
+		t.Fatal("loadPluginMCPServers() returned nil")
+	}
+
+	if _, ok := config["server1"]; !ok {
+		t.Error("expected 'server1' in config from plugin1")
+	}
+
+	if _, ok := config["server2"]; !ok {
+		t.Error("expected 'server2' in config from plugin2")
+	}
+}
+
+// TestLoadPluginMCPServers_Empty returns nil when no plugins have MCP servers.
+func TestLoadPluginMCPServers_Empty(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a plugin with no MCP servers
+	pluginRoot := filepath.Join(tmpDir, "no-mcp-plugin")
+	if err := os.MkdirAll(pluginRoot, 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	manifest := `{
+  "name": "no-mcp-plugin",
+  "skills": "./skills/"
+}`
+	manifestDir := filepath.Join(pluginRoot, ".codex-plugin")
+	if err := os.MkdirAll(manifestDir, 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(manifestDir, "plugin.json"), []byte(manifest), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	config := loadPluginMCPServers(tmpDir, tmpDir)
+
+	// Should return nil when no MCP servers found
+	if config != nil && len(config) > 0 {
+		t.Errorf("loadPluginMCPServers() returned non-empty config, want nil or empty")
+	}
+}

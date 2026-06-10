@@ -58,6 +58,11 @@ type TargetInvocation struct {
 	Format string
 	// Cassette for prompt kind.
 	Cassette string
+	// CassetteSequence for multi-turn prompt tests: ordered cassette IDs
+	// served in sequence for the same cassette endpoint.
+	CassetteSequence []string
+	// Env adds per-case environment variables (merged with suite env).
+	Env []string
 	// Name for tool kind.
 	ToolName string
 	// Input for tool kind.
@@ -74,10 +79,62 @@ type ExpectedBehavior struct {
 	Stderr *StderrExpectation
 	// APIRequests are assertions on API requests.
 	APIRequests []APIRequestExpectation
+	// StreamJSON are assertions on parsed NDJSON output events.
+	StreamJSON *StreamJSONExpectation
 	// TranscriptEntries are assertions on transcript entries.
 	TranscriptEntries []TranscriptEntryExpectation
 	// FileSystem are assertions on file system state.
 	FileSystem []FileSystemExpectation
+}
+
+// StreamJSONExpectation specifies assertions on NDJSON output events.
+type StreamJSONExpectation struct {
+	// AllLinesValidJSON asserts every non-empty stdout line is valid JSON.
+	AllLinesValidJSON bool
+	// FirstEvent checks the first NDJSON event.
+	FirstEvent *EventExpectation
+	// LastEvent checks the last NDJSON event.
+	LastEvent *EventExpectation
+	// HasEventTypes asserts these event types appear at least once.
+	HasEventTypes []string
+	// SessionIDConsistent asserts all events share the same session_id.
+	SessionIDConsistent bool
+	// UUIDsUnique asserts every uuid is distinct.
+	UUIDsUnique bool
+	// EventCount specifies expected event count constraints.
+	EventCount *LengthExpectation
+	// EventAssertions are per-event custom assertions (index-based).
+	EventAssertions []IndexedEventExpectation
+}
+
+// EventExpectation specifies assertions on a single NDJSON event.
+type EventExpectation struct {
+	// Type is the expected "type" field.
+	Type string
+	// Subtype is the expected "subtype" field.
+	Subtype string
+	// HasFields asserts these top-level keys exist.
+	HasFields []string
+	// FieldEquals asserts specific field values.
+	FieldEquals map[string]any
+	// FieldContains asserts field value contains substring (string fields only).
+	FieldContains map[string]string
+	// FieldNotEmpty asserts these fields are non-empty.
+	FieldNotEmpty []string
+	// Nested checks a nested object field.
+	Nested map[string]*EventExpectation
+}
+
+// IndexedEventExpectation ties an EventExpectation to an event index or type filter.
+type IndexedEventExpectation struct {
+	// Index is the 0-based event index (-1 means match by Type filter).
+	Index int
+	// TypeFilter matches the first event with this type (used when Index < 0).
+	TypeFilter string
+	// SubtypeFilter narrows TypeFilter matches.
+	SubtypeFilter string
+	// Expect is the assertion.
+	Expect EventExpectation
 }
 
 // StdoutExpectation specifies stdout assertions.

@@ -9,7 +9,6 @@ package: internal/plugin
 gaps:
   - Lifecycle hooks execution
   - Plugin-enabled skill activation
-  - Plugin MCP server launch
   - Plugin enable/disable toggling
 depends_on:
   - mcp-config
@@ -173,7 +172,25 @@ Plugins can include MCP server definitions via `mcpServers`:
 
 - Path must be relative starting with `./`
 - MCP config format: see [`mcp-config.md`](./mcp-config.md)
-- Integration point: `LoadPluginMCPServers(pluginRoot)` (future)
+- Config merge precedence: plugin configs are loaded first (lowest priority), overridden by CLI `--mcp-config`
+
+#### LoadPluginMCPServers API
+
+```go
+// MCPServersDir returns the absolute path to the plugin's MCP server config file.
+// Returns "" if no mcpServers path is configured.
+func (p *LoadedPlugin) MCPServersDir() string
+
+// LoadPluginMCPServers loads MCP server definitions from a plugin's MCP config file.
+// Returns nil, nil if no mcpServers path is configured.
+func LoadPluginMCPServers(p *LoadedPlugin) (map[string]mcp.MCPServerDef, error)
+```
+
+**Behavior:**
+1. Returns `nil, nil` if `Manifest.MCPServers` is empty
+2. Resolves path as `filepath.Join(p.RootPath, p.Manifest.MCPServers)`
+3. Delegates to `mcp.LoadConfig([path], false)` to parse the MCP config file
+4. Returns error for missing file or invalid JSON
 
 ### Hooks (Future)
 
@@ -263,7 +280,7 @@ my-plugin/
 
 ### Phase 3: Integration (Deferred)
 - [ ] Plugin skill activation
-- [ ] Plugin MCP server launch
+- [x] Plugin MCP server launch
 - [ ] Lifecycle hook execution
 - [ ] Plugin enable/disable toggling
 

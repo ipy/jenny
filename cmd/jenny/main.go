@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 
@@ -151,20 +152,38 @@ func run() error {
 		}
 	}
 
-	// Load MCP configuration if paths are provided
+	// Load MCP configuration
 	var mcpConfig map[string]mcp.MCPServerDef
 	var mcpTools []tool.Tool
 
 	// Always add ListMcpResourcesTool - it handles the case of no MCP servers connected
 	mcpTools = append(mcpTools, mcp.NewListMcpResourcesTool())
 
+	// Phase 1: Load plugin MCP servers (lowest priority) if not bare and not strict
+	if !flags.Bare && !flags.StrictMCP {
+		homeDir := ""
+		if hd, err := os.UserHomeDir(); err == nil {
+			homeDir = hd
+		}
+		mcpConfig = loadPluginMCPServers(cwd, homeDir)
+	}
+
+	// Phase 2: Merge CLI MCP config (overrides plugin entries)
 	if len(flags.MCPConfig) > 0 {
-		mcpConfig, err = mcp.LoadConfig(flags.MCPConfig, flags.StrictMCP)
+		cliConfig, err := mcp.LoadConfig(flags.MCPConfig, flags.StrictMCP)
 		if err != nil {
 			return fmt.Errorf("loading MCP config: %w", err)
 		}
+		// Merge CLI config into plugin config (CLI wins on collision)
+		if mcpConfig == nil {
+			mcpConfig = cliConfig
+		} else {
+			maps.Copy(mcpConfig, cliConfig)
+		}
+	}
 
-		// Connect to MCP servers and discover their tools
+	// Phase 3: Connect and discover tools if we have any MCP servers
+	if len(mcpConfig) > 0 {
 		if err := mcp.ConnectAll(mcpConfig); err != nil {
 			return fmt.Errorf("connecting to MCP servers: %w", err)
 		}
@@ -175,6 +194,9 @@ func run() error {
 				mcpTools = append(mcpTools, mcpTool)
 			}
 		}
+
+		// Ensure MCP clients are shut down on exit
+		defer mcp.ShutdownAll()
 	}
 
 	// Build tool registry with skipPermissions flag
@@ -234,11 +256,6 @@ func run() error {
 	asyncRunner := agent.NewAsyncSubagentRunner(tools, denyRulesMap)
 	agentTool := tool.NewAgentToolWithSwarms(localRunner, asyncRunner, flags.SwarmsEnabled)
 	tools = append(tools, agentTool)
-
-	// Ensure MCP clients are shut down on exit
-	if len(flags.MCPConfig) > 0 {
-		defer mcp.ShutdownAll()
-	}
 
 	// Create context
 	ctx := context.Background()

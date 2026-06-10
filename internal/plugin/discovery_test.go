@@ -362,3 +362,190 @@ func TestLoadPluginSkills_SkillsPathIsFile(t *testing.T) {
 		t.Error("expected error for skills path that is a file, got nil")
 	}
 }
+
+func TestLoadedPlugin_MCPServersDir_WithServers(t *testing.T) {
+	p := &LoadedPlugin{
+		RootPath: "/tmp/plugin",
+		Manifest: &PluginManifest{Name: "test", MCPServers: "./.mcp.json"},
+	}
+
+	expected := filepath.Join("/tmp/plugin", "./.mcp.json")
+	if got := p.MCPServersDir(); got != expected {
+		t.Errorf("expected %q, got %q", expected, got)
+	}
+}
+
+func TestLoadedPlugin_MCPServersDir_WithoutServers(t *testing.T) {
+	p := &LoadedPlugin{
+		RootPath: "/tmp/plugin",
+		Manifest: &PluginManifest{Name: "test"},
+	}
+
+	if got := p.MCPServersDir(); got != "" {
+		t.Errorf("expected empty string, got %q", got)
+	}
+}
+
+func TestLoadedPlugin_MCPServersDir_NilManifest(t *testing.T) {
+	p := &LoadedPlugin{
+		RootPath: "/tmp/plugin",
+		Manifest: nil,
+	}
+
+	if got := p.MCPServersDir(); got != "" {
+		t.Errorf("expected empty string for nil manifest, got %q", got)
+	}
+}
+
+func TestLoadPluginMCPServers_ValidConfig(t *testing.T) {
+	// Create a temp directory with a plugin structure
+	tmpDir := t.TempDir()
+
+	// Create .codex-plugin directory and manifest
+	pluginDir := filepath.Join(tmpDir, ".codex-plugin")
+	if err := os.MkdirAll(pluginDir, 0755); err != nil {
+		t.Fatalf("failed to create plugin dir: %v", err)
+	}
+
+	manifest := `{"name": "test-plugin", "mcpServers": "./.mcp.json"}`
+	manifestPath := filepath.Join(pluginDir, "plugin.json")
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0644); err != nil {
+		t.Fatalf("failed to write manifest: %v", err)
+	}
+
+	// Create MCP config file
+	mcpConfig := `{
+		"mcpServers": {
+			"test-server": {
+				"command": "npx",
+				"args": ["-y", "@test/mcp-server"]
+			}
+		}
+	}`
+	mcpPath := filepath.Join(tmpDir, ".mcp.json")
+	if err := os.WriteFile(mcpPath, []byte(mcpConfig), 0644); err != nil {
+		t.Fatalf("failed to write mcp config: %v", err)
+	}
+
+	loadedManifest, err := LoadManifest(manifestPath)
+	if err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
+	}
+
+	p := &LoadedPlugin{
+		RootPath:     tmpDir,
+		Manifest:     loadedManifest,
+		ManifestPath: manifestPath,
+	}
+
+	// Load plugin MCP servers
+	serverDefs, err := LoadPluginMCPServers(p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(serverDefs) != 1 {
+		t.Fatalf("expected 1 server def, got %d", len(serverDefs))
+	}
+
+	def, ok := serverDefs["test-server"]
+	if !ok {
+		t.Fatal("expected 'test-server' in server defs")
+	}
+
+	if def.Command != "npx" {
+		t.Errorf("expected command 'npx', got %q", def.Command)
+	}
+
+	if len(def.Args) != 2 || def.Args[0] != "-y" || def.Args[1] != "@test/mcp-server" {
+		t.Errorf("unexpected args: %v", def.Args)
+	}
+}
+
+func TestLoadPluginMCPServers_NoMCPServersPath(t *testing.T) {
+	p := &LoadedPlugin{
+		RootPath: "/tmp/plugin",
+		Manifest: &PluginManifest{Name: "test-plugin"},
+	}
+
+	serverDefs, err := LoadPluginMCPServers(p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if serverDefs != nil {
+		t.Errorf("expected nil server defs, got %v", serverDefs)
+	}
+}
+
+func TestLoadPluginMCPServers_MissingFile(t *testing.T) {
+	// Create a temp directory with a plugin that points to non-existent MCP config
+	tmpDir := t.TempDir()
+
+	pluginDir := filepath.Join(tmpDir, ".codex-plugin")
+	if err := os.MkdirAll(pluginDir, 0755); err != nil {
+		t.Fatalf("failed to create plugin dir: %v", err)
+	}
+
+	manifest := `{"name": "test-plugin", "mcpServers": "./.mcp.json"}`
+	manifestPath := filepath.Join(pluginDir, "plugin.json")
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0644); err != nil {
+		t.Fatalf("failed to write manifest: %v", err)
+	}
+
+	loadedManifest, err := LoadManifest(manifestPath)
+	if err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
+	}
+
+	p := &LoadedPlugin{
+		RootPath:     tmpDir,
+		Manifest:     loadedManifest,
+		ManifestPath: manifestPath,
+	}
+
+	// Load plugin MCP servers - should return error for non-existent file
+	_, err = LoadPluginMCPServers(p)
+	if err == nil {
+		t.Error("expected error for non-existent MCP config file, got nil")
+	}
+}
+
+func TestLoadPluginMCPServers_InvalidJSON(t *testing.T) {
+	// Create a temp directory with a plugin that has malformed MCP config
+	tmpDir := t.TempDir()
+
+	pluginDir := filepath.Join(tmpDir, ".codex-plugin")
+	if err := os.MkdirAll(pluginDir, 0755); err != nil {
+		t.Fatalf("failed to create plugin dir: %v", err)
+	}
+
+	manifest := `{"name": "test-plugin", "mcpServers": "./.mcp.json"}`
+	manifestPath := filepath.Join(pluginDir, "plugin.json")
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0644); err != nil {
+		t.Fatalf("failed to write manifest: %v", err)
+	}
+
+	// Create malformed MCP config file
+	mcpPath := filepath.Join(tmpDir, ".mcp.json")
+	if err := os.WriteFile(mcpPath, []byte("{ invalid json"), 0644); err != nil {
+		t.Fatalf("failed to write malformed mcp config: %v", err)
+	}
+
+	loadedManifest, err := LoadManifest(manifestPath)
+	if err != nil {
+		t.Fatalf("failed to load manifest: %v", err)
+	}
+
+	p := &LoadedPlugin{
+		RootPath:     tmpDir,
+		Manifest:     loadedManifest,
+		ManifestPath: manifestPath,
+	}
+
+	// Load plugin MCP servers - should return error for invalid JSON
+	_, err = LoadPluginMCPServers(p)
+	if err == nil {
+		t.Error("expected error for malformed MCP config file, got nil")
+	}
+}

@@ -3,6 +3,7 @@ package main
 import (
 	"path/filepath"
 
+	"github.com/ipy/jenny/internal/mcp"
 	"github.com/ipy/jenny/internal/plugin"
 	"github.com/ipy/jenny/internal/skills"
 )
@@ -43,4 +44,49 @@ func discoverAndMergePluginSkills(skillsList []skills.Skill, pluginRoots []strin
 		}
 	}
 	return skillsList
+}
+
+// loadPluginMCPServers discovers plugins from cwd and homeDir, loads their MCP
+// server definitions, and returns them as a map. Only first-seen wins (no
+// overwrites across plugins) to keep behavior deterministic. Plugins with
+// invalid manifests, validation errors, or load errors are silently skipped.
+func loadPluginMCPServers(cwd, homeDir string) map[string]mcp.MCPServerDef {
+	serverDefs := make(map[string]mcp.MCPServerDef)
+
+	roots := plugin.FindPluginRoots(cwd)
+	if homeDir != "" {
+		homePluginRoots := plugin.FindPluginRoots(filepath.Join(homeDir, ".jenny"))
+		roots = append(roots, homePluginRoots...)
+	}
+
+	for _, root := range roots {
+		manifestPath := filepath.Join(root, ".codex-plugin", "plugin.json")
+		manifest, err := plugin.LoadManifest(manifestPath)
+		if err != nil {
+			continue
+		}
+
+		loaded := &plugin.LoadedPlugin{
+			RootPath:     root,
+			Manifest:     manifest,
+			ManifestPath: manifestPath,
+		}
+
+		if err := loaded.Validate(); err != nil {
+			continue
+		}
+
+		pluginDefs, err := plugin.LoadPluginMCPServers(loaded)
+		if err != nil {
+			continue
+		}
+
+		for name, def := range pluginDefs {
+			if _, exists := serverDefs[name]; !exists {
+				serverDefs[name] = def
+			}
+		}
+	}
+
+	return serverDefs
 }
