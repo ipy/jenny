@@ -91,6 +91,11 @@ func (p *anthropicProvider) SetMaxTokensOverride(maxTokens int) {
 	p.maxTokens = maxTokens
 }
 
+// SetRetryConfig sets the retry configuration.
+func (p *anthropicProvider) SetRetryConfig(cfg RetryConfig) {
+	p.retryConfig = cfg
+}
+
 // SendMessage sends a non-streaming message.
 func (p *anthropicProvider) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string) (*Response, error) {
 	// Wrap with retry
@@ -179,11 +184,6 @@ func (p *anthropicProvider) sendWithRetry(ctx context.Context, fn func(context.C
 // doSendMessage performs the actual message sending.
 func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string) (*Response, error) {
 	log.Debug("Sending message", "model", p.model)
-	log.Debug("System prompt", "prompt", systemPrompt)
-	log.Debug("Number of tools", "count", len(tools))
-	for _, t := range tools {
-		log.Debug("Tool registered", "name", t.Name, "description", t.Description)
-	}
 
 	// Validate media before sending
 	if err := ValidateMessagesMedia(messages); err != nil {
@@ -346,8 +346,8 @@ func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Messag
 }
 
 // SendMessageStream sends a streaming message.
-func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string) (<-chan ContentBlock, *StreamResult) {
-	blocksChan := make(chan ContentBlock, 10)
+func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, idleTimeout time.Duration) (<-chan StreamContentBlock, *StreamResult) {
+	blocksChan := make(chan StreamContentBlock, 10)
 	result := &StreamResult{}
 
 	go func() {
@@ -447,6 +447,10 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 
 		log.Debug("Starting streaming request", "model", p.model)
 
+		if idleTimeout <= 0 {
+			idleTimeout = DefaultIdleTimeout
+		}
+
 		// Create stream
 		streamCtx, cancel := context.WithCancel(ctx)
 		defer cancel()
@@ -468,31 +472,48 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 		acc := newStreamAccumulator()
 		hasMessageStart := false
 		hasMessageStop := false
-		var pendingBlocks []ContentBlock
 
-		idleTimer := time.NewTimer(DefaultIdleTimeout)
+		idleTimer := time.NewTimer(idleTimeout)
+		defer idleTimer.Stop()
+
+		watchdogCtx, cancelWatchdog := context.WithCancel(ctx)
+		defer cancelWatchdog()
+
+		go func() {
+			select {
+			case <-idleTimer.C:
+				log.Warn("Idle timeout reached")
+				result.Error = "idle timeout"
+				cancel() // Cancel the stream context
+			case <-watchdogCtx.Done():
+				// Watchdog finished normally
+			}
+		}()
 
 	streamLoop:
 		for {
 			streamReady := stream.Next()
 
-			select {
-			case <-idleTimer.C:
-				log.Warn("Idle timeout reached")
-				cancel()
-				result.Error = "idle timeout"
-				return
-			default:
-				if !streamReady {
-					break streamLoop
-				}
-				if !idleTimer.Stop() {
-					<-idleTimer.C
-				}
-				idleTimer.Reset(DefaultIdleTimeout)
+			if !streamReady {
+				break streamLoop
 			}
 
+			// Reset idle timer on every event
+			if !idleTimer.Stop() {
+				select {
+				case <-idleTimer.C:
+				default:
+				}
+			}
+			idleTimer.Reset(idleTimeout)
+
 			event := stream.Current()
+
+			// Passthrough raw event
+			blocksChan <- StreamContentBlock{
+				Type:     "stream_event",
+				RawEvent: event.AsAny(),
+			}
 
 			variant := event.AsAny()
 			switch e := variant.(type) {
@@ -545,7 +566,8 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 				log.Debug("Stream: content_block_stop", "index", index)
 				acc.finalizeToolInput(index)
 				acc.ensureBlock(index)
-				pendingBlocks = append(pendingBlocks, acc.blocks[index])
+				// Emit the completed block immediately to the channel for incremental processing
+				blocksChan <- StreamContentBlock{Block: acc.blocks[index]}
 
 			case anthropic.MessageDeltaEvent:
 				if e.Usage.InputTokens > 0 || e.Usage.OutputTokens > 0 {
@@ -571,7 +593,9 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 		// Check for stream errors
 		if stream.Err() != nil {
 			log.Warn("Stream error", "error", stream.Err())
-			result.Error = stream.Err().Error()
+			if result.Error == "" {
+				result.Error = stream.Err().Error()
+			}
 			if isPromptTooLongError(stream.Err()) {
 				result.ContextRejected = true
 			}
@@ -581,13 +605,8 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 		shouldFallback := !hasMessageStart || !hasMessageStop || result.Error != ""
 		if shouldFallback {
 			log.Warn("Stream incomplete, triggering fallback", "hasMessageStart", hasMessageStart, "hasMessageStop", hasMessageStop, "error", result.Error)
-			// Fallback is handled by the caller (Client.SendMessageStream)
 		}
 
-		// Send buffered blocks to channel
-		for _, block := range pendingBlocks {
-			blocksChan <- block
-		}
 		result.Blocks = acc.getBlocks()
 		result.StopReason = acc.stopReason
 		result.Usage = acc.usage

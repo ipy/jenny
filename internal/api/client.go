@@ -109,13 +109,32 @@ func (c *Client) SendMessageStream(
 	result := &StreamResult{}
 
 	go func() {
-		// Delegate to provider's streaming method
-		contentChan, providerResult := c.provider.SendMessageStream(ctx, messages, tools, toolResults, systemPrompt)
+		defer close(blocksChan)
 
-		// Buffer blocks until we know if stream completed
-		var pendingBlocks []ContentBlock
+		// Delegate to provider's streaming method
+		contentChan, providerResult := c.provider.SendMessageStream(ctx, messages, tools, toolResults, systemPrompt, idleTimeout)
+
+		// Check for fallback conditions before streaming
+		// If fallback might be needed, buffer content blocks but not stream_event blocks.
+		// This ensures partial content is discarded when fallback is used.
+		shouldFallback := onStreamingFallback != nil
+
+		var pendingIndex int
+		var pendingBlocks []StreamContentBlock // Buffer content blocks until we know stream is complete
+
 		for block := range contentChan {
-			pendingBlocks = append(pendingBlocks, block)
+			if block.Type == "stream_event" {
+				// Always pass through stream_event blocks for IncludePartial consumers
+				blocksChan <- block
+			} else if !shouldFallback {
+				// Stream directly when no fallback will be used
+				blocksChan <- StreamContentBlock{Index: pendingIndex, Block: block.Block}
+				pendingIndex++
+			} else {
+				// Buffer content blocks when fallback might be needed
+				pendingBlocks = append(pendingBlocks, StreamContentBlock{Index: pendingIndex, Block: block.Block})
+				pendingIndex++
+			}
 		}
 
 		// Copy result
@@ -126,35 +145,31 @@ func (c *Client) SendMessageStream(
 		result.Model = providerResult.Model
 		result.MaxTokensErr = providerResult.MaxTokensErr
 		result.ContextRejected = providerResult.ContextRejected
+		result.StreamComplete = providerResult.StreamComplete
 
 		// Check if stream was incomplete (no message_stop event)
 		streamIncomplete := !providerResult.StreamComplete
 		isIdleTimeout := strings.Contains(result.Error, "idle timeout")
 
 		// Handle fallback if needed
-		shouldFallback := streamIncomplete || isIdleTimeout || len(result.Blocks) == 0
-		if shouldFallback && onStreamingFallback != nil {
+		if shouldFallback && (streamIncomplete || isIdleTimeout || len(result.Blocks) == 0) {
+			// Stream was incomplete - discard pending blocks and use fallback
 			fallbackCtx, fallbackCancel := context.WithTimeout(context.Background(), fallbackTimeout)
 			defer fallbackCancel()
 			resp, err := onStreamingFallback(fallbackCtx)
 			if err != nil {
 				result.Error = err.Error()
-				// Close the channel on fallback error
-				close(blocksChan)
 				return
 			}
 			result.Blocks = resp.Content
 			result.StopReason = resp.StopReason
 			result.Usage = resp.Usage
-			// Don't send pending blocks when fallback was used
 		} else {
-			// Stream completed normally - send pending blocks
+			// Stream completed successfully - emit buffered blocks
 			for _, block := range pendingBlocks {
-				blocksChan <- StreamContentBlock{Index: 0, Block: block}
+				blocksChan <- block
 			}
 		}
-
-		close(blocksChan)
 	}()
 
 	return blocksChan, result
