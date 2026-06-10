@@ -2,6 +2,7 @@
 package tool
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -50,7 +51,7 @@ func (t *EditTool) WithSkillActivator(activator SkillActivator) *EditTool {
 
 // Description returns a description of the tool.
 func (t *EditTool) Description() string {
-	return "Replace exact string in a file. Requires prior Read of the same path."
+	return "Replace exact string in a file. Requires prior Read of the same path. Supports scoped edits with start_line/end_line for partial reads."
 }
 
 // InputSchema returns the JSON schema for tool input.
@@ -73,6 +74,18 @@ func (t *EditTool) InputSchema() map[string]any {
 			"replace_all": map[string]any{
 				"type":        "boolean",
 				"description": "Replace all occurrences (required when multiple matches)",
+			},
+			"start_line": map[string]any{
+				"type":        "number",
+				"description": "First line (1-indexed) of scoped replacement range. Required when editing after partial read.",
+			},
+			"end_line": map[string]any{
+				"type":        "number",
+				"description": "Last line (1-indexed, inclusive) of scoped replacement range. Required when start_line is provided.",
+			},
+			"num_expected": map[string]any{
+				"type":        "number",
+				"description": "Expected number of replacements. If actual count differs, the operation is aborted.",
 			},
 		},
 		"required": []string{"file_path", "old_string", "new_string"},
@@ -100,6 +113,32 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 	}
 
 	replaceAll, _ := input["replace_all"].(bool)
+
+	// Parse optional scoped editing parameters
+	startLine := 0
+	if startVal, ok := input["start_line"].(float64); ok {
+		startLine = int(startVal)
+	}
+
+	endLine := 0
+	if endVal, ok := input["end_line"].(float64); ok {
+		endLine = int(endVal)
+	}
+
+	numExpected := 0
+	if numVal, ok := input["num_expected"].(float64); ok {
+		numExpected = int(numVal)
+	}
+
+	// Validate that end_line >= start_line when both provided
+	if startLine > 0 && endLine > 0 && endLine < startLine {
+		return &ToolResult{
+			Content: fmt.Sprintf("end_line (%d) must be >= start_line (%d)", endLine, startLine),
+			IsError: true,
+		}, nil
+	}
+
+	isScoped := startLine > 0 && endLine > 0
 
 	// Resolve relative paths relative to cwd (but preserve tilde for now)
 	resolvedPath := filePath
@@ -178,12 +217,26 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}
 	}
 
-	// AC1 continued: Check if entry was a partial read
+	// AC1 continued: For partial reads, require scoped range contained within read range
 	if !entry.IsFullRead {
-		return &ToolResult{
-			Content: "Cannot edit after partial read. Use Read tool without offset/limit to get the full file first.",
-			IsError: true,
-		}, nil
+		if !isScoped {
+			return &ToolResult{
+				Content: "Cannot edit after partial read without start_line and end_line. " +
+					"Read the full file first, or provide start_line/end_line within the read range.",
+				IsError: true,
+			}, nil
+		}
+		// Validate that the scoped range is contained within the read range
+		// Read range is [offset, offset+limit-1] (1-indexed, inclusive)
+		readStart := entry.Offset
+		readEnd := entry.Offset + entry.Limit - 1
+		if startLine < readStart || endLine > readEnd {
+			return &ToolResult{
+				Content: fmt.Sprintf("Scoped range [%d, %d] is outside read range [%d, %d]. "+
+					"Read the full file first, or adjust start_line/end_line.", startLine, endLine, readStart, readEnd),
+				IsError: true,
+			}, nil
+		}
 	}
 
 	// AC3: Check old === new
@@ -194,47 +247,21 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}, nil
 	}
 
+	// Dispatch: scoped streaming edit vs. global in-memory edit
+	if isScoped {
+		return t.executeScoped(filePath, oldString, newString, replaceAll, startLine, endLine, numExpected, entry)
+	}
+	return t.executeGlobal(filePath, oldString, newString, replaceAll, numExpected, entry, info)
+}
+
+// executeGlobal performs the original in-memory replacement (full file read).
+func (t *EditTool) executeGlobal(filePath, oldString, newString string, replaceAll bool, numExpected int, entry *ReadFileEntry, info os.FileInfo) (*ToolResult, error) {
 	// Read current file content from disk
 	currentContent, err := os.ReadFile(filePath)
 	if err != nil {
 		// File doesn't exist - check if readFileState has entry
 		if os.IsNotExist(err) {
-			// AC1 edge case: file doesn't exist but has read cache entry
-			// Create the file with new_string content if oldString is empty
-			if oldString == "" {
-				// Create parent directories if needed
-				parentDir := filepath.Dir(filePath)
-				if parentDir != "" && parentDir != "." {
-					if mkErr := os.MkdirAll(parentDir, 0755); mkErr != nil {
-						return &ToolResult{
-							Content: fmt.Sprintf("Failed to create parent directory: %v", mkErr),
-							IsError: true,
-						}, nil
-					}
-				}
-				if writeErr := os.WriteFile(filePath, []byte(newString), 0644); writeErr != nil {
-					return &ToolResult{
-						Content: fmt.Sprintf("Failed to create file: %v", writeErr),
-						IsError: true,
-					}, nil
-				}
-				// Get new mtime
-				newInfo, _ := os.Stat(filePath)
-				newMtime := entry.Mtime
-				if newInfo != nil {
-					newMtime = newInfo.ModTime()
-				}
-				// Update cache
-				t.readCache.RecordRead(filePath, newString, newMtime, true, 0, 0)
-				return &ToolResult{
-					Content: fmt.Sprintf("Created file with content: %s", newString),
-					IsError: false,
-				}, nil
-			}
-			return &ToolResult{
-				Content: "Cannot edit without reading first. Use Read tool on this path before Edit.",
-				IsError: true,
-			}, nil
+			return t.handleMissingFile(filePath, oldString, newString, entry)
 		}
 		return &ToolResult{
 			Content: fmt.Sprintf("Failed to read file: %v", err),
@@ -249,35 +276,25 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 	// Count occurrences of old_string in current content
 	count := strings.Count(content, oldString)
 
-	// AC4: Multiple matches require replace_all
-	if count > 1 && !replaceAll {
+	// Check num_expected first (safety guard)
+	if numExpected > 0 && count != numExpected {
 		return &ToolResult{
-			Content: fmt.Sprintf("String found %d times. Set replace_all=true to replace all occurrences.", count),
+			Content: fmt.Sprintf("Expected %d replacement(s) but found %d. Operation aborted.", numExpected, count),
 			IsError: true,
 		}, nil
 	}
 
 	// Zero matches: return specific error with snippet
 	if count == 0 {
-		// Provide context about where the string was expected
-		previewLen := min(len(content), 100)
-		preview := content[:previewLen]
-		if previewLen < len(content) {
-			preview += "..."
-		}
-		preview = strings.ReplaceAll(preview, "\n", "\\n")
-		return &ToolResult{
-			Content: fmt.Sprintf("String not found in file. First 100 chars: %s", preview),
-			IsError: true,
-		}, nil
+		return zeroMatchError(content), nil
 	}
 
-	// Apply replacement
-	var newContent string
-	if replaceAll {
-		newContent = strings.Replace(content, oldString, newString, -1)
-	} else {
-		newContent = strings.Replace(content, oldString, newString, 1)
+	// AC4: Multiple matches require replace_all
+	if count > 1 && !replaceAll {
+		return &ToolResult{
+			Content: fmt.Sprintf("String found %d times. Set replace_all=true to replace all occurrences.", count),
+			IsError: true,
+		}, nil
 	}
 
 	// Check for binary content (null bytes indicate binary)
@@ -296,6 +313,14 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}, nil
 	}
 
+	// Apply replacement
+	var newContent string
+	if replaceAll {
+		newContent = strings.Replace(content, oldString, newString, -1)
+	} else {
+		newContent = strings.Replace(content, oldString, newString, 1)
+	}
+
 	// Write new content
 	if err := os.WriteFile(filePath, []byte(newContent), 0644); err != nil {
 		return &ToolResult{
@@ -304,6 +329,225 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}, nil
 	}
 
+	return t.finalizeEdit(filePath, newContent, entry)
+}
+
+// executeScoped performs a line-by-line streaming edit restricted to a line range.
+func (t *EditTool) executeScoped(filePath, oldString, newString string, replaceAll bool, startLine, endLine, numExpected int, entry *ReadFileEntry) (*ToolResult, error) {
+	// Open the file for streaming
+	file, err := os.Open(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return t.handleMissingFile(filePath, oldString, newString, entry)
+		}
+		return &ToolResult{
+			Content: fmt.Sprintf("Failed to open file: %v", err),
+			IsError: true,
+		}, nil
+	}
+	defer file.Close()
+
+	// Create a temporary file in the same directory for atomic write
+	tmpFile, err := os.CreateTemp(filepath.Dir(filePath), ".edit-*")
+	if err != nil {
+		return &ToolResult{
+			Content: fmt.Sprintf("Failed to create temp file: %v", err),
+			IsError: true,
+		}, nil
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath) // Clean up on any error path
+
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024) // 1MB buffer for large lines
+
+	// Phase 1: Stream lines, categorize into before/scoped/after
+	lineNum := 0
+	var beforeLines []string // Lines before startLine
+	var scopedLines []string // Lines within [startLine, endLine]
+	var afterLines []string  // Lines after endLine
+
+	for scanner.Scan() {
+		lineNum++
+		line := scanner.Text()
+
+		if lineNum < startLine {
+			beforeLines = append(beforeLines, line)
+		} else if lineNum <= endLine {
+			// Within scoped range
+			scopedLines = append(scopedLines, line)
+		} else {
+			// After scoped range
+			afterLines = append(afterLines, line)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		tmpFile.Close()
+		return &ToolResult{
+			Content: fmt.Sprintf("Error reading file: %v", err),
+			IsError: true,
+		}, nil
+	}
+
+	// Phase 2: Apply replacement on the scoped content
+	scopedContent := strings.Join(scopedLines, "\n")
+	scopedContent = normalizeLineEndings(scopedContent)
+
+	// Count matches
+	count := strings.Count(scopedContent, oldString)
+
+	// Check num_expected first (safety guard)
+	if numExpected > 0 && count != numExpected {
+		tmpFile.Close()
+		return &ToolResult{
+			Content: fmt.Sprintf("Expected %d replacement(s) but found %d in scoped range [%d,%d]. Operation aborted.",
+				numExpected, count, startLine, endLine),
+			IsError: true,
+		}, nil
+	}
+
+	// Zero matches: return specific error with snippet
+	if count == 0 {
+		tmpFile.Close()
+		return zeroMatchError(scopedContent), nil
+	}
+
+	// AC4: Multiple matches require replace_all
+	if count > 1 && !replaceAll {
+		tmpFile.Close()
+		return &ToolResult{
+			Content: fmt.Sprintf("String found %d times in scoped range [%d,%d]. Set replace_all=true to replace all occurrences.",
+				count, startLine, endLine),
+			IsError: true,
+		}, nil
+	}
+
+	// Check for binary content in scoped lines
+	scopedJoined := strings.Join(scopedLines, "\n")
+	if isBinary(scopedJoined) {
+		tmpFile.Close()
+		return &ToolResult{
+			Content: "Cannot edit binary files",
+			IsError: true,
+		}, nil
+	}
+
+	// Apply replacement
+	var modifiedScoped string
+	if replaceAll {
+		modifiedScoped = strings.Replace(scopedContent, oldString, newString, -1)
+	} else {
+		modifiedScoped = strings.Replace(scopedContent, oldString, newString, 1)
+	}
+
+	// Phase 3: Write content in correct order: before-range, modified, after-range
+	// Write before-range lines
+	for _, line := range beforeLines {
+		if _, err := fmt.Fprintln(tmpFile, line); err != nil {
+			tmpFile.Close()
+			return &ToolResult{
+				Content: fmt.Sprintf("Failed to write to temp file: %v", err),
+				IsError: true,
+			}, nil
+		}
+	}
+
+	// Write modified scoped content
+	if _, err := fmt.Fprint(tmpFile, modifiedScoped); err != nil {
+		tmpFile.Close()
+		return &ToolResult{
+			Content: fmt.Sprintf("Failed to write modified content: %v", err),
+			IsError: true,
+		}, nil
+	}
+
+	// Ensure there's a newline before after-lines, or at end if original had trailing newline
+	if len(afterLines) > 0 {
+		// Need newline to separate from first after-line
+		if !strings.HasSuffix(modifiedScoped, "\n") {
+			if _, err := fmt.Fprintln(tmpFile); err != nil {
+				tmpFile.Close()
+				return &ToolResult{
+					Content: fmt.Sprintf("Failed to write separator newline: %v", err),
+					IsError: true,
+				}, nil
+			}
+		}
+	} else if len(scopedLines) > 0 && scopedLines[len(scopedLines)-1] == "" {
+		// No after-lines: ensure trailing newline if original had one
+		if !strings.HasSuffix(modifiedScoped, "\n") {
+			if _, err := fmt.Fprintln(tmpFile); err != nil {
+				tmpFile.Close()
+				return &ToolResult{
+					Content: fmt.Sprintf("Failed to write trailing newline: %v", err),
+					IsError: true,
+				}, nil
+			}
+		}
+	}
+
+	// Write after-range lines
+	for _, line := range afterLines {
+		if _, err := fmt.Fprintln(tmpFile, line); err != nil {
+			tmpFile.Close()
+			return &ToolResult{
+				Content: fmt.Sprintf("Failed to write to temp file: %v", err),
+				IsError: true,
+			}, nil
+		}
+	}
+
+	// Close temp file before rename
+	tmpFile.Close()
+
+	// Atomic rename
+	if err := os.Rename(tmpPath, filePath); err != nil {
+		return &ToolResult{
+			Content: fmt.Sprintf("Failed to rename temp file: %v", err),
+			IsError: true,
+		}, nil
+	}
+
+	// Build new content for cache: need full file for diff generation
+	newFullContent, readErr := os.ReadFile(filePath)
+	var newContentStr string
+	if readErr == nil {
+		newContentStr = string(newFullContent)
+	}
+
+	return t.finalizeEdit(filePath, newContentStr, entry)
+}
+
+// handleMissingFile implements the "old_string == '' on missing file" create-semantic.
+func (t *EditTool) handleMissingFile(filePath, oldString, newString string, entry *ReadFileEntry) (*ToolResult, error) {
+	if oldString == "" {
+		// Create parent directories if needed
+		parentDir := filepath.Dir(filePath)
+		if parentDir != "" && parentDir != "." {
+			if mkErr := os.MkdirAll(parentDir, 0755); mkErr != nil {
+				return &ToolResult{
+					Content: fmt.Sprintf("Failed to create parent directory: %v", mkErr),
+					IsError: true,
+				}, nil
+			}
+		}
+		if writeErr := os.WriteFile(filePath, []byte(newString), 0644); writeErr != nil {
+			return &ToolResult{
+				Content: fmt.Sprintf("Failed to create file: %v", writeErr),
+				IsError: true,
+			}, nil
+		}
+		return t.finalizeEdit(filePath, newString, entry)
+	}
+	return &ToolResult{
+		Content: "Cannot edit without reading first. Use Read tool on this path before Edit.",
+		IsError: true,
+	}, nil
+}
+
+// finalizeEdit updates the cache and returns the diff result.
+func (t *EditTool) finalizeEdit(filePath, newContent string, entry *ReadFileEntry) (*ToolResult, error) {
 	// Get new mtime after write
 	newInfo, _ := os.Stat(filePath)
 	newMtime := entry.Mtime
@@ -322,6 +566,20 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 		Content: diff,
 		IsError: false,
 	}, nil
+}
+
+// zeroMatchError creates a helpful error when old_string is not found.
+func zeroMatchError(content string) *ToolResult {
+	previewLen := min(len(content), 100)
+	preview := content[:previewLen]
+	if previewLen < len(content) {
+		preview += "..."
+	}
+	preview = strings.ReplaceAll(preview, "\n", "\\n")
+	return &ToolResult{
+		Content: fmt.Sprintf("String not found in file. First 100 chars: %s", preview),
+		IsError: true,
+	}
 }
 
 // normalizeLineEndings converts CRLF to LF for consistent matching.

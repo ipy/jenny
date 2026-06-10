@@ -676,3 +676,309 @@ func TestEditTool_ScratchpadAllowedWithoutPermissions(t *testing.T) {
 		t.Errorf("expected edited content, got: %s", string(data))
 	}
 }
+
+// TestEditTool_ScopedEditAfterPartialRead tests that editing with
+// start_line/end_line works after a partial read.
+func TestEditTool_ScopedEditAfterPartialRead(t *testing.T) {
+	tmpDir := t.TempDir()
+	readCache := NewReadFileCache()
+	readTool := NewReadTool(false, readCache)
+	editTool := NewEditTool(readCache)
+
+	// Create a multi-line test file
+	testFile := filepath.Join(tmpDir, "test.txt")
+	content := "line 1\nline 2\nline 3\nline 4\nline 5\n"
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	if err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	// Partial read: lines 2-3 (offset=2, limit=2)
+	_, err = readTool.Execute(context.Background(), map[string]any{
+		"file_path": testFile,
+		"offset":    float64(2),
+		"limit":     float64(2),
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error during partial read: %v", err)
+	}
+
+	// Scoped edit within the read range should succeed
+	result, err := editTool.Execute(context.Background(), map[string]any{
+		"file_path":  testFile,
+		"old_string": "line 2",
+		"new_string": "modified line 2",
+		"start_line": float64(2),
+		"end_line":   float64(3),
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("scoped edit after partial read should succeed: %s", result.Content)
+	}
+
+	// Verify the file was correctly edited (only line 2 changed)
+	data, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatalf("failed to read file: %v", err)
+	}
+	expected := "line 1\nmodified line 2\nline 3\nline 4\nline 5\n"
+	if string(data) != expected {
+		t.Errorf("expected %q, got %q", expected, string(data))
+	}
+}
+
+// TestEditTool_ScopedEditOutsideReadRange tests that editing outside
+// the partial read range is rejected.
+func TestEditTool_ScopedEditOutsideReadRange(t *testing.T) {
+	tmpDir := t.TempDir()
+	readCache := NewReadFileCache()
+	readTool := NewReadTool(false, readCache)
+	editTool := NewEditTool(readCache)
+
+	// Create a multi-line test file
+	testFile := filepath.Join(tmpDir, "test.txt")
+	content := "line 1\nline 2\nline 3\nline 4\nline 5\n"
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	if err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	// Partial read: lines 2-3 (offset=2, limit=2)
+	_, err = readTool.Execute(context.Background(), map[string]any{
+		"file_path": testFile,
+		"offset":    float64(2),
+		"limit":     float64(2),
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error during partial read: %v", err)
+	}
+
+	// Scoped edit outside read range should fail
+	result, err := editTool.Execute(context.Background(), map[string]any{
+		"file_path":  testFile,
+		"old_string": "line 4",
+		"new_string": "modified line 4",
+		"start_line": float64(4),
+		"end_line":   float64(4),
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("expected error when scoped edit outside read range")
+	}
+	if !strings.Contains(result.Content, "outside read range") {
+		t.Errorf("expected 'outside read range' error, got: %s", result.Content)
+	}
+}
+
+// TestEditTool_ScopedEditNoStartEnd tests that partial read without
+// start_line/end_line is rejected.
+func TestEditTool_ScopedEditNoStartEnd(t *testing.T) {
+	tmpDir := t.TempDir()
+	readCache := NewReadFileCache()
+	readTool := NewReadTool(false, readCache)
+	editTool := NewEditTool(readCache)
+
+	testFile := filepath.Join(tmpDir, "test.txt")
+	content := "line 1\nline 2\nline 3\nline 4\nline 5\n"
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	if err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	// Partial read: lines 2-3
+	_, err = readTool.Execute(context.Background(), map[string]any{
+		"file_path": testFile,
+		"offset":    float64(2),
+		"limit":     float64(2),
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error during partial read: %v", err)
+	}
+
+	// Edit without start_line/end_line should fail
+	result, err := editTool.Execute(context.Background(), map[string]any{
+		"file_path":  testFile,
+		"old_string": "line 2",
+		"new_string": "modified line 2",
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("expected error when editing after partial read without start_line/end_line")
+	}
+	if !strings.Contains(result.Content, "Cannot edit after partial read without start_line and end_line") {
+		t.Errorf("expected partial read guidance error, got: %s", result.Content)
+	}
+}
+
+// TestEditTool_ScopedEditAfterFullRead tests that scoped edit works
+// even after a full file read (streaming path).
+func TestEditTool_ScopedEditAfterFullRead(t *testing.T) {
+	tmpDir := t.TempDir()
+	readCache := NewReadFileCache()
+	readTool := NewReadTool(false, readCache)
+	editTool := NewEditTool(readCache)
+
+	testFile := filepath.Join(tmpDir, "test.txt")
+	content := "line A\nline B\nline C\nline D\nline E\n"
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	if err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	// Full read
+	_, err = readTool.Execute(context.Background(), map[string]any{
+		"file_path": testFile,
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error during read: %v", err)
+	}
+
+	// Scoped edit on full-read file should still work
+	result, err := editTool.Execute(context.Background(), map[string]any{
+		"file_path":  testFile,
+		"old_string": "line C",
+		"new_string": "modified line C",
+		"start_line": float64(3),
+		"end_line":   float64(3),
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("scoped edit after full read should succeed: %s", result.Content)
+	}
+
+	// Verify only the scoped line changed
+	data, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatalf("failed to read file: %v", err)
+	}
+	expected := "line A\nline B\nmodified line C\nline D\nline E\n"
+	if string(data) != expected {
+		t.Errorf("expected %q, got %q", expected, string(data))
+	}
+}
+
+// TestEditTool_NumExpectedGlobal tests that num_expected aborts when
+// count doesn't match in global mode.
+func TestEditTool_NumExpectedGlobal(t *testing.T) {
+	tmpDir := t.TempDir()
+	readCache := NewReadFileCache()
+	readTool := NewReadTool(false, readCache)
+	editTool := NewEditTool(readCache)
+
+	testFile := filepath.Join(tmpDir, "test.txt")
+	content := "foo foo foo\n"
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	if err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	// Read the file
+	_, err = readTool.Execute(context.Background(), map[string]any{
+		"file_path": testFile,
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error during read: %v", err)
+	}
+
+	// Set num_expected=2 but actual count is 3
+	result, err := editTool.Execute(context.Background(), map[string]any{
+		"file_path":     testFile,
+		"old_string":    "foo",
+		"new_string":    "bar",
+		"num_expected":  float64(2),
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("expected error when num_expected doesn't match")
+	}
+	if !strings.Contains(result.Content, "Expected 2 replacement(s) but found 3") {
+		t.Errorf("unexpected error: %s", result.Content)
+	}
+}
+
+// TestEditTool_NumExpectedScoped tests that num_expected aborts when
+// count doesn't match in scoped mode.
+func TestEditTool_NumExpectedScoped(t *testing.T) {
+	tmpDir := t.TempDir()
+	readCache := NewReadFileCache()
+	readTool := NewReadTool(false, readCache)
+	editTool := NewEditTool(readCache)
+
+	testFile := filepath.Join(tmpDir, "test.txt")
+	content := "line A\none foo\nline B\nfoo bar\nline C\n"
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	if err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	// Full read
+	_, err = readTool.Execute(context.Background(), map[string]any{
+		"file_path": testFile,
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error during read: %v", err)
+	}
+
+	// Scoped edit with num_expected=2 but only 1 in the range
+	result, err := editTool.Execute(context.Background(), map[string]any{
+		"file_path":    testFile,
+		"old_string":   "foo",
+		"new_string":   "bar",
+		"start_line":   float64(1),
+		"end_line":     float64(2),
+		"num_expected": float64(2),
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("expected error when num_expected doesn't match in scoped range")
+	}
+	if !strings.Contains(result.Content, "Expected 2 replacement(s) but found 1") {
+		t.Errorf("unexpected error: %s", result.Content)
+	}
+}
+
+// TestEditTool_EndLineBeforeStartLine tests that end_line < start_line is rejected.
+func TestEditTool_EndLineBeforeStartLine(t *testing.T) {
+	tmpDir := t.TempDir()
+	readCache := NewReadFileCache()
+	editTool := NewEditTool(readCache)
+
+	// Create and read a file
+	testFile := filepath.Join(tmpDir, "test.txt")
+	err := os.WriteFile(testFile, []byte("content\n"), 0644)
+	if err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	readCache.RecordRead(testFile, "content\n", time.Now(), true, 0, 0)
+
+	// end_line < start_line should fail
+	result, err := editTool.Execute(context.Background(), map[string]any{
+		"file_path":  testFile,
+		"old_string": "content",
+		"new_string": "modified",
+		"start_line": float64(5),
+		"end_line":   float64(3),
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("expected error when end_line < start_line")
+	}
+	if !strings.Contains(result.Content, "end_line") || !strings.Contains(result.Content, "must be >= start_line") {
+		t.Errorf("unexpected error: %s", result.Content)
+	}
+}
