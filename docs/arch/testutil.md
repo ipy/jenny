@@ -3,10 +3,9 @@ title: Test Utilities
 slug: testutil
 priority: P3
 status: done
-spec: done
+spec: complete
 code: done
 package: internal/testutil
-gaps: []
 depends_on: []
 ---
 # Test Utilities

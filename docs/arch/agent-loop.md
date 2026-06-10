@@ -2,14 +2,10 @@
 title: Core Agent Loop
 slug: agent-loop
 priority: P0
-status: partial
+status: done
 spec: complete
-code: partial
+code: done
 package: internal/agent
-gaps:
-  - No thinking block handling
-  - No tool result spill to disk
-  - No compaction/retry caps
 defer_to: P3
 depends_on:
   - anthropic-api-client
