@@ -2,6 +2,7 @@ package toolresult
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -63,14 +64,7 @@ func TestToolResult_IsError_Omitempty(t *testing.T) {
 	if string(data) == "" {
 		t.Fatal("marshal produced empty string")
 	}
-	if contains(string(data), "is_error") {
+	if strings.Contains(string(data), "is_error") {
 		t.Errorf("json includes is_error for false value: %s", string(data))
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr ||
-		(len(s) > 0 && len(substr) > 0 && (s[:len(substr)] == substr ||
-			s[len(s)-len(substr):] == substr ||
-			contains(s[1:], substr))))
 }
