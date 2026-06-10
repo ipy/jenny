@@ -1,5 +1,4 @@
 package git
-
 import (
 	"fmt"
 	"os"
