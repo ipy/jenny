@@ -307,36 +307,7 @@ A plugin-level skill.
 	pluginRoots := plugin.FindPluginRoots(tmpDir)
 
 	// Load plugin skills and merge
-	for _, pluginRoot := range pluginRoots {
-		manifestPath := filepath.Join(pluginRoot, ".codex-plugin", "plugin.json")
-		manifest, err := plugin.LoadManifest(manifestPath)
-		if err != nil {
-			continue
-		}
-
-		loadedPlugin := &plugin.LoadedPlugin{
-			RootPath:     pluginRoot,
-			Manifest:     manifest,
-			ManifestPath: manifestPath,
-		}
-
-		if err := loadedPlugin.Validate(); err != nil {
-			continue
-		}
-
-		pluginSkills, err := plugin.LoadPluginSkills(loadedPlugin)
-		if err != nil {
-			continue
-		}
-
-		for _, ps := range pluginSkills {
-			// Skip if a skill with the same normalized name already exists
-			if skills.FindSkillByName(discoveredSkills, ps.Name) != nil {
-				continue
-			}
-			discoveredSkills = append(discoveredSkills, ps)
-		}
-	}
+	discoveredSkills = discoverAndMergePluginSkills(discoveredSkills, pluginRoots)
 
 	// Verify merged list contains both project-skill and plugin-skill
 	if len(discoveredSkills) != 2 {
@@ -421,36 +392,7 @@ A plugin-level shared skill.
 	pluginRoots := plugin.FindPluginRoots(tmpDir)
 
 	// Load plugin skills and merge
-	for _, pluginRoot := range pluginRoots {
-		manifestPath := filepath.Join(pluginRoot, ".codex-plugin", "plugin.json")
-		manifest, err := plugin.LoadManifest(manifestPath)
-		if err != nil {
-			continue
-		}
-
-		loadedPlugin := &plugin.LoadedPlugin{
-			RootPath:     pluginRoot,
-			Manifest:     manifest,
-			ManifestPath: manifestPath,
-		}
-
-		if err := loadedPlugin.Validate(); err != nil {
-			continue
-		}
-
-		pluginSkills, err := plugin.LoadPluginSkills(loadedPlugin)
-		if err != nil {
-			continue
-		}
-
-		for _, ps := range pluginSkills {
-			// Skip if a skill with the same normalized name already exists
-			if skills.FindSkillByName(discoveredSkills, ps.Name) != nil {
-				continue
-			}
-			discoveredSkills = append(discoveredSkills, ps)
-		}
-	}
+	discoveredSkills = discoverAndMergePluginSkills(discoveredSkills, pluginRoots)
 
 	// Verify only 1 skill (project skill takes priority)
 	if len(discoveredSkills) != 1 {
