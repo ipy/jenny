@@ -83,6 +83,10 @@ Help (`-h`) exits 0.
 | `JENNY_DEBUG` | Enable debug slog (`1` = DEBUG) |
 | `JENNY_TRANSCRIPT_DIR` | Override transcript directory (default: `~/.jenny/transcripts`) |
 | `NO_PROXY` | Comma-separated list of domains to bypass proxy for. |
+| `OPENAI_BASE_URL` | Base URL for OpenAI-compatible API (e.g., `https://api.openai.com/v1`). When set, selects the OpenAI provider instead of the default Anthropic provider. |
+| `OPENAI_API_KEY` | API key for OpenAI-compatible backend. Sent as `Authorization: Bearer <key>`. |
+| `OPENAI_DEFAULT_MODEL` | Default model name for OpenAI provider (e.g., `gpt-5.4-nano`). Takes precedence over `ANTHROPIC_MODEL` when OpenAI provider is active. |
+| `OPENAI_WIRE_API` | Wire protocol version for OpenAI API. Supported values: `chat` (default). Set to `responses` to get a startup error (not yet supported). |
 
 ## Jenny Gaps vs Target Spec
 
