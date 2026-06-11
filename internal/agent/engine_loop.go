@@ -306,7 +306,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 
 		// Use streaming API (AC1)
 		// Track API call duration (AC3: duration_api_ms)
-		e.lastAPIStartTime = time.Now()
+		apiStartTime := time.Now()
 		blocksChan, streamResult := e.client.SendMessageStream(
 			ctx,
 			messages,
@@ -317,7 +317,6 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			api.DefaultFallbackTimeout,
 			fallbackFn,
 		)
-		e.totalAPIDurationMs += time.Since(e.lastAPIStartTime).Milliseconds()
 
 		// Process streaming blocks
 		var textOutput strings.Builder
@@ -327,6 +326,9 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 
 		// Process blocks as they arrive
 		for block := range blocksChan {
+			// Reset lastAPIStartTime for each block to track active streaming time?
+			// Actually, totalAPIDurationMs should include the entire time the API is active.
+			// ... (existing block processing)
 			// Handle raw stream_event passthrough
 			if block.Type == "stream_event" && e.streamCfg.Enabled && e.streamCfg.IncludePartial {
 				// Capture message ID from MessageStartEvent
@@ -395,6 +397,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				}
 			}
 		}
+		e.totalAPIDurationMs += time.Since(apiStartTime).Milliseconds()
 
 		// Emit ONE consolidated assistant message for all collected content from streaming
 		// (AC1-AC4: one assistant event per API turn, not per tool_use block)
@@ -443,6 +446,28 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				fmt.Fprintln(os.Stdout, string(data))
 				e.incrementCompactFailCount()
 				return "", fmt.Errorf("max tokens reached: %s", mte.Category)
+			}
+
+			// Emit standard error result for other streaming errors
+			if e.streamCfg.Enabled {
+				msg := StreamMessage{
+					Type:            "result",
+					Subtype:         "error",
+					Result:          fmt.Sprintf("streaming error: %v", streamResult.Error),
+					SessionID:       sessionID,
+					ParentToolUseID: nil,
+					Uuid:            GenerateUUID(),
+					Model:           e.model,
+					IsError:         true,
+					StopReason:      "error",
+					DurationMs:      time.Since(e.startTime).Milliseconds(),
+					DurationAPIMs:   e.totalAPIDurationMs,
+					TotalCostUSD:    e.costState.TotalCostUSD,
+					TotalCostCNY:    e.costState.TotalCostCNY,
+					ModelUsage:      e.buildModelUsage(),
+				}
+				data, _ := json.Marshal(msg)
+				fmt.Fprintln(os.Stdout, string(data))
 			}
 
 			// AC4: Check if this is a media error - if so, strip the offending tool_result and retry

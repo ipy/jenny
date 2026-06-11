@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ipy/jenny/internal/log"
 )
 
 // Client wraps an API provider.
@@ -158,6 +160,7 @@ func (c *Client) SendMessageStream(
 		result.StopReason = providerResult.StopReason
 		result.Usage = providerResult.Usage
 		result.Error = providerResult.Error
+		result.IsPermanent = providerResult.IsPermanent
 		result.Model = providerResult.Model
 		result.MaxTokensErr = providerResult.MaxTokensErr
 		result.ContextRejected = providerResult.ContextRejected
@@ -169,17 +172,24 @@ func (c *Client) SendMessageStream(
 
 		// Handle fallback if needed
 		if shouldFallback && (streamIncomplete || isIdleTimeout || len(result.Blocks) == 0) {
-			// Stream was incomplete - discard pending blocks and use fallback
-			fallbackCtx, fallbackCancel := context.WithTimeout(context.Background(), fallbackTimeout)
-			defer fallbackCancel()
-			resp, err := onStreamingFallback(fallbackCtx)
-			if err != nil {
-				result.Error = err.Error()
-				return
+			if result.IsPermanent {
+				log.Debug("Streaming failed with permanent error, skipping fallback", "error", result.Error)
+			} else {
+				log.Debug("Streaming incomplete or error, attempting fallback", "error", result.Error, "streamIncomplete", streamIncomplete, "isIdleTimeout", isIdleTimeout)
+				// Stream was incomplete - discard pending blocks and use fallback
+				fallbackCtx, fallbackCancel := context.WithTimeout(ctx, fallbackTimeout)
+				defer fallbackCancel()
+				resp, err := onStreamingFallback(fallbackCtx)
+				if err != nil {
+					log.Debug("Streaming fallback failed", "error", err)
+					result.Error = err.Error()
+					return
+				}
+				log.Debug("Streaming fallback succeeded")
+				result.Blocks = resp.Content
+				result.StopReason = resp.StopReason
+				result.Usage = resp.Usage
 			}
-			result.Blocks = resp.Content
-			result.StopReason = resp.StopReason
-			result.Usage = resp.Usage
 		} else {
 			// Stream completed successfully - emit buffered blocks
 			for _, block := range pendingBlocks {

@@ -459,11 +459,14 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 
 		// Check for pre-stream error
 		if stream.Err() != nil {
-			preStreamErr := stream.Err()
+			preStreamErr := wrapSDKError(stream.Err())
 			log.Warn("Stream pre-error detected, falling back", "error", preStreamErr)
 			if isPromptTooLongError(preStreamErr) {
 				result.ContextRejected = true
 				result.MaxTokensErr = categorizeMaxTokensError(p.model, 0, true)
+			}
+			if retryableErr, ok := preStreamErr.(*RetryableHTTPError); ok {
+				result.IsPermanent = retryableErr.IsPermanent
 			}
 			result.Error = preStreamErr.Error()
 			return
