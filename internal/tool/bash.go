@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -529,20 +530,20 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 				// Command completed before either timer fired - no progress event
 				break outer
 			case <-timeoutChan:
-				// Timeout - send SIGTERM first (AC5)
+				// Timeout - use platform-aware signal handling
 				killMu.Lock()
 				if !killSent {
 					killSent = true
 					if cmd.Process != nil {
-						_ = cmd.Process.Signal(syscall.SIGTERM)
+						_ = signalProcess(cmd.Process, runtime.GOOS == "windows")
 					}
-					// Schedule SIGKILL after 5s if process doesn't exit
+					// Schedule escalation after 5s if process doesn't exit
 					go func() {
 						time.Sleep(5 * time.Second)
 						killMu.Lock()
 						defer killMu.Unlock()
 						if cmd.Process != nil {
-							_ = cmd.Process.Signal(syscall.SIGKILL)
+							_ = escalateProcessKill(cmd.Process, runtime.GOOS == "windows")
 						}
 					}()
 				}

@@ -1,7 +1,10 @@
-// Package tool provides the tool interface, implementations, and registry.
+// Package tool provides the tool interface, registry, and platform detection.
 package tool
 
 import (
+	"os/exec"
+	"runtime"
+
 	"github.com/ipy/jenny/internal/lsp"
 	"github.com/ipy/jenny/internal/sandbox"
 	"github.com/ipy/jenny/internal/skills"
@@ -194,10 +197,22 @@ func (r *Registry) Build() []Tool {
 	if r.hasBaseTools {
 		r.baseTools = []Tool{
 			NewReadTool(r.skipPermissions, r.readCache),
-			NewBashTool(r.skipPermissions),
-			NewGlobTool(),
-			NewGrepTool(),
 		}
+
+		// On Windows, register PowerShellTool; on Unix, register BashTool
+		if runtime.GOOS == "windows" {
+			// Register PowerShellTool on Windows
+			r.baseTools = append(r.baseTools, NewPowerShellTool(r.skipPermissions))
+			// Only register BashTool if bash.exe is found in PATH
+			if _, err := exec.LookPath("bash.exe"); err == nil {
+				r.baseTools = append(r.baseTools, NewBashTool(r.skipPermissions))
+			}
+		} else {
+			// On Unix, always register BashTool
+			r.baseTools = append(r.baseTools, NewBashTool(r.skipPermissions))
+		}
+
+		r.baseTools = append(r.baseTools, NewGlobTool(), NewGrepTool())
 		// Add WriteTool and EditTool if readCache is configured
 		if r.readCache != nil {
 			r.baseTools = append(r.baseTools, NewWriteTool(r.readCache), NewEditTool(r.readCache), NewNotebookEditTool(r.readCache))

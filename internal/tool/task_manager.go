@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -169,9 +169,9 @@ func (tm *TaskManager) Stop(taskID string) error {
 		return fmt.Errorf("task not found or already completed")
 	}
 
-	// Use SIGTERM for graceful shutdown first
+	// Use platform-aware signal handling
 	if info.Process != nil {
-		_ = info.Process.Signal(syscall.SIGTERM)
+		_ = signalProcess(info.Process, runtime.GOOS == "windows")
 	}
 
 	// Schedule SIGKILL after 5 seconds if process doesn't exit gracefully.
@@ -182,7 +182,7 @@ func (tm *TaskManager) Stop(taskID string) error {
 		defer tm.mu.Unlock()
 		if info, ok := tm.tasks[taskID]; ok && info.State == TaskStateRunning {
 			if info.Process != nil {
-				_ = info.Process.Signal(syscall.SIGKILL)
+				_ = escalateProcessKill(info.Process, runtime.GOOS == "windows")
 			}
 			info.State = TaskStateStopped
 		}

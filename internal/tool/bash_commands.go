@@ -43,7 +43,10 @@ func parseCdTarget(command string, currentCwd string) string {
 	rest = stripShellOperators(rest)
 
 	if rest == "" || rest == "~" {
-		home := os.Getenv("HOME")
+		home, err := os.UserHomeDir()
+		if err != nil {
+			home = os.Getenv("HOME")
+		}
 		if home != "" {
 			return home
 		}
@@ -52,7 +55,10 @@ func parseCdTarget(command string, currentCwd string) string {
 
 	// Handle tilde expansion
 	if strings.HasPrefix(rest, "~/") {
-		home := os.Getenv("HOME")
+		home, err := os.UserHomeDir()
+		if err != nil {
+			home = os.Getenv("HOME")
+		}
 		if home != "" {
 			return filepath.Join(home, rest[2:])
 		}
@@ -106,7 +112,8 @@ func isCdCommand(command string) bool {
 	return strings.HasPrefix(command, "cd ") || strings.HasPrefix(command, "cd	")
 }
 
-// isPathWithinCwd checks if a path is within the working directory
+// isPathWithinCwd checks if a path is within the working directory.
+// Uses case-insensitive comparison to handle Windows drive letters correctly.
 func isPathWithinCwd(path string, cwd string) bool {
 	if !filepath.IsAbs(path) {
 		if strings.HasPrefix(path, "./") {
@@ -133,7 +140,8 @@ func isPathWithinCwd(path string, cwd string) bool {
 	if absPath == cwdAbs {
 		return true
 	}
-	return strings.HasPrefix(absPath, cwdAbs+string(filepath.Separator))
+	// Use case-insensitive prefix check for cross-platform compatibility (Windows)
+	return strings.HasPrefix(strings.ToLower(absPath), strings.ToLower(cwdAbs+string(filepath.Separator)))
 }
 
 // validateCommandPaths checks if all paths in the command are within cwd or scratchpadDir

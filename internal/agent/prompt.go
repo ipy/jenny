@@ -117,7 +117,14 @@ func platformSection(cwd string) (string, bool) {
 	}
 	platform := fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH)
 	date := time.Now().Format("2006-01-02")
-	return fmt.Sprintf("Platform: %s\nDate: %s\nCwd: %s", platform, date, cwd), true
+	section := fmt.Sprintf("Platform: %s\nDate: %s\nCwd: %s", platform, date, cwd)
+
+	// Add Windows-specific hints when running on Windows
+	if runtime.GOOS == "windows" {
+		section += "\n\nYou are running on Windows. Use the PowerShell tool for system commands. Be aware of Windows file path conventions (e.g., C:\\path\\to\\file)."
+	}
+
+	return section, true
 }
 
 // appendSection returns the append prompt if set and not overridden.
