@@ -2478,3 +2478,46 @@ func TestEngine_ContextExhausted_MiniMax_EmitsStructuredError(t *testing.T) {
 		t.Errorf("FAIL: expected error to contain 'context_exhausted', got: %v", err)
 	}
 }
+
+// TestAC2_PersistCompactBoundary_LogsError verifies that persistCompactBoundary
+// returns an error when AppendEntry fails (instead of swallowing it).
+// This tests AC2: the function now returns the error instead of discarding it.
+func TestAC2_PersistCompactBoundary_LogsError(t *testing.T) {
+	// Create a session manager with a valid tmpDir
+	tmpDir := t.TempDir()
+	sessMgr, err := session.NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager error: %v", err)
+	}
+
+	sessionID := "sess_boundary_error_test"
+
+	cfg := StreamConfig{
+		Enabled:        false,
+		SessionManager: sessMgr,
+		SessionID:      sessionID,
+	}
+
+	engine := NewQueryEngine(cfg, nil, "")
+
+	// Manually call persistCompactBoundary with valid params
+	// First append some entries to have a valid session
+	if err := sessMgr.AppendEntry(sessionID, session.TranscriptEntry{
+		Type:    "user",
+		Content: "test",
+	}); err != nil {
+		t.Fatalf("AppendEntry for setup error: %v", err)
+	}
+
+	// Now make the session directory unreadable by removing it
+	// This will cause AppendEntry to fail when persistCompactBoundary tries to write
+	os.RemoveAll(tmpDir)
+
+	// persistCompactBoundary should return an error (not panic or silently swallow it)
+	err = engine.persistCompactBoundary(5000, 3, "auto")
+	if err == nil {
+		t.Error("AC2 FAIL: expected error from persistCompactBoundary when AppendEntry fails, got nil")
+	} else {
+		t.Logf("AC2 PASS: persistCompactBoundary returned error: %v", err)
+	}
+}

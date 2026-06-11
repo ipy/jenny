@@ -460,66 +460,12 @@ func (m *Manager) LoadPostBoundaryMessages(sessionID string) ([]TranscriptEntry,
 		return nil, fmt.Errorf("reading transcript file: %w", err)
 	}
 
-	// First pass: find the last compaction boundary line index
-	var lastBoundaryLineIdx int = -1
+	// Single pass: build entries slice while tracking the last boundary position.
+	// lastBoundaryIdx tracks the index in the filtered entries slice (not raw line index).
 	lines := splitLines(string(data))
-	for idx, line := range lines {
-		if line == "" {
-			continue
-		}
-		var entry TranscriptEntry
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			continue
-		}
-		if entry.Type == "system" && entry.Subtype == "compact_boundary" {
-			lastBoundaryLineIdx = idx
-		}
-	}
-
-	// If no boundary found, return all entries (current behavior)
-	if lastBoundaryLineIdx == -1 {
-		var entries []TranscriptEntry
-		for _, line := range lines {
-			if line == "" {
-				continue
-			}
-			var entry TranscriptEntry
-			if err := json.Unmarshal([]byte(line), &entry); err != nil {
-				log.Warn("Malformed JSON line in transcript",
-					"session", sessionID,
-					"line", truncateForLog(line, 200),
-					"error", err.Error())
-				continue
-			}
-			if progressTypes[entry.Type] {
-				continue
-			}
-			entries = append(entries, entry)
-		}
-		return entries, nil
-	}
-
-	// Second pass: count non-filtered entries before the boundary
-	filteredBeforeBoundary := 0
-	for idx, line := range lines {
-		if idx >= lastBoundaryLineIdx {
-			break
-		}
-		if line == "" {
-			continue
-		}
-		var entry TranscriptEntry
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			continue
-		}
-		if !progressTypes[entry.Type] {
-			filteredBeforeBoundary++
-		}
-	}
-
-	// Third pass: build entries list, skipping entries before boundary
 	var entries []TranscriptEntry
-	filteredCount := 0
+	var lastBoundaryIdx int = -1
+
 	for _, line := range lines {
 		if line == "" {
 			continue
@@ -535,15 +481,19 @@ func (m *Manager) LoadPostBoundaryMessages(sessionID string) ([]TranscriptEntry,
 		if progressTypes[entry.Type] {
 			continue
 		}
-		filteredCount++
-		// Skip entries before the boundary
-		if filteredCount <= filteredBeforeBoundary {
-			continue
+		if entry.Type == "system" && entry.Subtype == "compact_boundary" {
+			lastBoundaryIdx = len(entries)
 		}
 		entries = append(entries, entry)
 	}
 
-	return entries, nil
+	// If no boundary found, return all entries (current behavior)
+	if lastBoundaryIdx == -1 {
+		return entries, nil
+	}
+
+	// Return entries from the last boundary onwards (boundary is included)
+	return entries[lastBoundaryIdx:], nil
 }
 
 // Flush flushes any pending writes to disk. Since writes are currently

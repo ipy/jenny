@@ -298,7 +298,9 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					// preserved messages, not the boundary marker (which is len-1 of compacted)
 					preservedCount := len(compacted) - 1
 					// Persist compaction boundary to transcript for resume filtering
-					e.persistCompactBoundary(preCompactTokens, preservedCount, "auto")
+					if err := e.persistCompactBoundary(preCompactTokens, preservedCount, "auto"); err != nil {
+						log.Error("Failed to persist compaction boundary", "error", err)
+					}
 					log.Debug("Context compaction succeeded", "newMessageCount", len(messages))
 				} else {
 					// Compaction failed - increment failure counter
