@@ -156,7 +156,6 @@ func TestNormalization_ToolResultFlattening_EdgeCases(t *testing.T) {
 
 	t.Run("AC4: Mock server rejects array content, test passes", func(t *testing.T) {
 		provider, _ := setupProvider(t, "test")
-		mock.ClearRequests()
 
 		// Inspector that rejects array-formatted tool_results
 		mock.SetRequestInspector(func(r mockapi.APIRequest) error {
@@ -175,6 +174,7 @@ func TestNormalization_ToolResultFlattening_EdgeCases(t *testing.T) {
 			}
 			return nil
 		})
+		t.Cleanup(func() { mock.SetRequestInspector(nil) })
 
 		messages := []Message{
 			{
