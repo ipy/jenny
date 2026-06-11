@@ -2,11 +2,70 @@ package redact
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"regexp"
 	"strings"
 	"sync"
 )
+
+// entropyThreshold is the minimum Shannon entropy (bits/char) for a token run to be
+// considered a candidate secret. Matches gitleaks' per-rule default. See
+// docs/arch/secret-redaction.md.
+const entropyThreshold = 4.5
+
+// entropyTokenRegex matches runs of base64/hex-like characters long enough to be
+// potential secrets. Alphanumeric plus URL-safe base64 padding/separator chars.
+var entropyTokenRegex = regexp.MustCompile(`[A-Za-z0-9+/=_\-]{20,}`)
+
+// shannonEntropy computes the Shannon entropy (bits per character) of data.
+// Copied verbatim from github.com/zricethezav/gitleaks/v8/detect/utils.go
+// (gitleaks keeps this helper unexported; we mirror it for entropy-based detection).
+// Kept in sync with upstream so behavior matches gitleaks' own scoring.
+func shannonEntropy(data string) float64 {
+	if data == "" {
+		return 0
+	}
+	charCounts := make(map[rune]int)
+	for _, char := range data {
+		charCounts[char]++
+	}
+	invLength := 1.0 / float64(len(data))
+	var entropy float64
+	for _, count := range charCounts {
+		freq := float64(count) * invLength
+		entropy -= freq * math.Log2(freq)
+	}
+	return entropy
+}
+
+// containsDigit reports whether s has at least one ASCII digit (0-9).
+// Mirrors the digit-requirement gitleaks applies to "generic" rules
+// (see gitleaks/v8/detect/utils.go: containsDigit). Used by the entropy
+// layer to avoid redacting long alphabetic runs that have high entropy
+// but are not secrets (e.g. prose, identifiers, repeated patterns).
+func containsDigit(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; c >= '0' && c <= '9' {
+			return true
+		}
+	}
+	return false
+}
+
+// containsLetter reports whether s has at least one ASCII letter (a-zA-Z).
+// Paired with containsDigit to require the candidate token to mix character
+// classes — most real secrets do, while long base64-style or hex-only runs
+// of a single class are common in non-secret data (paths, hashes, ids).
+func containsLetter(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
+			return true
+		}
+	}
+	return false
+}
 
 // secretPattern represents a regex pattern for detecting secrets.
 type secretPattern struct {
@@ -67,6 +126,12 @@ func (r *SecretRedactor) Enabled() bool {
 
 // Redact scans content for secrets and replaces them with placeholders.
 // Returns the content with all detected secrets replaced.
+//
+// Detection layers (in order):
+//  1. Shannon entropy — catches high-entropy tokens with no known prefix
+//     (gitleaks' algorithm; see shannonEntropy for attribution).
+//  2. Regex patterns — catches structured secrets (OpenAI, GitHub, AWS, etc.)
+//     that entropy may flag inconsistently.
 func (r *SecretRedactor) Redact(content string) string {
 	if !r.enabled {
 		return content
@@ -77,11 +142,65 @@ func (r *SecretRedactor) Redact(content string) string {
 
 	result := content
 
-	// Apply additional regex patterns for secrets not covered by gitleaks default
+	// Layer 1: entropy-based detection. Runs first so prefix-less high-entropy
+	// tokens (custom API keys, random passwords) are caught even when no regex
+	// matches.
+	result = r.replaceWithEntropy(result)
+
+	// Layer 2: regex patterns for structured secret formats.
 	for _, sp := range additionalPatterns {
 		result = r.replaceWithPattern(result, sp.pattern)
 	}
 
+	return result
+}
+
+// replaceWithEntropy scans content for high-entropy token runs and replaces each
+// candidate with a placeholder. A run is a candidate when ALL of the following hold:
+//
+//  1. It is at least 20 characters long (entropyTokenRegex).
+//  2. Its Shannon entropy exceeds entropyThreshold (4.5 bits/char).
+//  3. It contains at least one ASCII digit AND at least one ASCII letter
+//     (the "digit+alpha gate"). This mirrors gitleaks' treatment of
+//     "generic" rules and avoids redacting long alphabetic or numeric
+//     runs that have high entropy but are not secrets — e.g. prose,
+//     identifiers, repeated patterns, hex-only hashes.
+//
+// All three gates must pass. This makes the layer stable against common
+// non-secret content (long identifiers, repeated-char padding) while still
+// catching the typical custom-API-key / random-password case.
+func (r *SecretRedactor) replaceWithEntropy(content string) string {
+	matches := entropyTokenRegex.FindAllStringIndex(content, -1)
+	if len(matches) == 0 {
+		return content
+	}
+
+	result := content
+	// Process matches in reverse order to preserve positions.
+	for i := len(matches) - 1; i >= 0; i-- {
+		match := matches[i]
+		if len(match) < 2 {
+			continue
+		}
+		token := content[match[0]:match[1]]
+		if shannonEntropy(token) <= entropyThreshold {
+			continue
+		}
+		if !containsDigit(token) || !containsLetter(token) {
+			continue
+		}
+
+		var placeholder string
+		if existingID, ok := r.secretToID[token]; ok {
+			placeholder = existingID
+		} else {
+			r.counter++
+			placeholder = fmt.Sprintf("[REDACTED:ID_%05d]", r.counter)
+			r.secretToID[token] = placeholder
+			r.replacements[placeholder] = token
+		}
+		result = result[:match[0]] + placeholder + result[match[1]:]
+	}
 	return result
 }
 

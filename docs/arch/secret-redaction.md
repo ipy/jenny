@@ -13,7 +13,7 @@ gaps: []
 
 ## Overview
 
-Jenny reads files, runs commands, and fetches URLs. Any tool result may contain API keys, tokens, or passwords that should never reach the LLM. This feature adds a runtime redactor (enabled by default) backed by `github.com/zricethezav/gitleaks/v8` that:
+Jenny reads files, runs commands, and fetches URLs. Any tool result may contain API keys, tokens, or passwords that should never reach the LLM. This feature adds a runtime redactor (enabled by default) that **references** `github.com/zricethezav/gitleaks/v8`'s shannon-entropy algorithm and detection conventions — but does **not** import the gitleaks package as a runtime dependency. The formula is mirrored in-package with attribution so the binary stays lean. Specifically:
 
 - Scans tool results for secrets
 - Replaces detected secrets with `[REDACTED:ID_XXXXX]` placeholders
@@ -124,13 +124,64 @@ type StreamConfig struct {
 
 ## Detection Rules
 
-Uses gitleaks default configuration for detecting:
+The redactor uses two complementary detection layers. Both layers follow gitleaks'
+detection conventions without being a runtime import of the gitleaks package.
 
-- OpenAI API keys (`sk-...`)
-- GitHub tokens (`ghp_...`, `github_pat_...`)
-- AWS keys (`AKIA...`)
-- SSH private keys
-- And many other common secret patterns
+### 1. Shannon entropy (gitleaks-referenced)
+
+Tokenizes the content into runs of `[A-Za-z0-9+/=_\-]{20,}` and scores each run
+with the Shannon entropy formula from `github.com/zricethezav/gitleaks/v8/detect/utils.go`.
+The gitleaks package keeps this helper unexported, so the redact package mirrors
+its body verbatim (a ~10-line function) with a `// Copied verbatim from ...`
+attribution comment. This means we **reference** gitleaks' algorithm — we don't
+import it as a dependency.
+
+A run is treated as a candidate secret when **all** of the following hold:
+
+- **Length:** at least 20 characters.
+- **Entropy:** Shannon entropy > `4.5` bits/char (matches gitleaks' per-rule
+  default).
+- **Character class mix:** contains at least one ASCII digit AND at least one
+  ASCII letter. This is the "digit+alpha gate", which mirrors gitleaks'
+  treatment of "generic" rules (see `containsDigit` in gitleaks'
+  `detect/utils.go`). It exists to avoid redacting long alphabetic or
+  numeric-only runs that have high entropy but are not secrets — prose,
+  identifiers, repeated patterns, hex-only hashes, ID sequences.
+
+When all three gates pass, the run is replaced with a `[REDACTED:ID_XXXXX]`
+placeholder and recorded for later recovery.
+
+### 2. Regex patterns (`additionalPatterns`)
+
+A small set of regex patterns runs as the second layer, used as a precise
+fallback for secret prefixes that entropy may miss (short keys, formats with
+hyphens/underscores that don't trip the digit+alpha gate as cleanly):
+
+- OpenAI API key (`sk-...`)
+- GitHub PAT (`ghp_...`, `gho_...`, `ghr_...`, `github_pat_...`)
+- AWS Access Key ID (`AKIA...`)
+- AWS Secret Access Key (40-char context-anchored)
+- Slack token (`xox[baprs]-...`)
+- NPM token (`npm_...`)
+- PyPI token (`pypi_...`)
+- SSH private keys (PEM `BEGIN/END` block)
+
+Regex runs second so structured secrets are caught even if the entropy layer
+flagged the surrounding text differently. Entropy is applied first so long,
+prefix-less secrets are caught even when no regex matches.
+
+### Why reference, not import?
+
+`github.com/zricethezav/gitleaks/v8/detect.shannonEntropy` is **unexported**
+(lowercase 's'), so it cannot be imported directly. The remaining public
+surface — `detect.NewDetectorDefaultConfig()` + `DetectString()` — is
+available, but running the full gitleaks Detector would pull in viper,
+aho-corasick, semgroup, zerolog, lipgloss, charmbracelet, gitdiff and ~30
+transitive dependencies, plus hundreds of source-code-oriented rules we
+don't need. The shannon-entropy function (and the digit+alpha gate
+convention) is the only piece of gitleaks' signal we actually want for
+tool-result redaction. Mirroring keeps the binary lean and the behavior
+auditable.
 
 ## Out of Scope
 
