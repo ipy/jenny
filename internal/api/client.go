@@ -59,9 +59,9 @@ func NewClient() (*Client, error) {
 
 // NewClientWithModel creates a new API client with an optional model override.
 // If model is empty, reads from environment variables.
-// OpenAI provider takes precedence if OPENAI_BASE_URL is set.
+// Provider selection order: OpenAI > Vertex AI > Anthropic.
 func NewClientWithModel(model string) (*Client, error) {
-	// Check for OpenAI provider first (AC5: OPENAI_* takes precedence)
+	// OpenAI provider takes precedence
 	if os.Getenv("OPENAI_BASE_URL") != "" {
 		provider, err := newOpenAIProvider(model)
 		if err != nil {
@@ -73,7 +73,19 @@ func NewClientWithModel(model string) (*Client, error) {
 		}, nil
 	}
 
-	// Use Anthropic provider
+	// Vertex AI provider
+	if os.Getenv("VERTEXAI_BASE_URL") != "" {
+		provider, err := newVertexAIProvider(model)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Vertex AI provider: %w", err)
+		}
+		return &Client{
+			provider:    provider,
+			retryConfig: DefaultRetryConfig(),
+		}, nil
+	}
+
+	// Default: Anthropic provider
 	provider, err := newAnthropicProvider(model)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Anthropic provider: %w", err)
