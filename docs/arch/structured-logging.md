@@ -2,14 +2,11 @@
 title: Structured Logging
 slug: structured-logging
 priority: P3
-status: partial
+status: done
 spec: complete
-code: partial
+code: done
 package: internal/log
-gaps:
-  - No error ring buffer
-  - No last-request capture
-defer_to: P3
+gaps: []
 depends_on:
   []
 ---

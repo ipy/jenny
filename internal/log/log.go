@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
+	"time"
 )
 
 // Logger is the package-level logger instance.
@@ -76,5 +78,89 @@ func Warn(msg string, args ...any) {
 
 // Error logs an error-level message.
 func Error(msg string, args ...any) {
+	errorRing.Append(ErrorEntry{Time: time.Now(), Message: msg, Args: args})
 	Logger.Error(msg, args...)
+}
+
+// ErrorEntry represents a single error entry in the ring buffer.
+type ErrorEntry struct {
+	Time    time.Time
+	Message string
+	Args    []any
+}
+
+// errorRing is the bounded FIFO ring buffer for error entries (capacity 100).
+var errorRing = ringBuffer{capacity: 100}
+
+// ringBuffer implements a bounded FIFO buffer with capacity 100.
+type ringBuffer struct {
+	mu       sync.RWMutex
+	entries  []ErrorEntry
+	capacity int
+}
+
+// newRingBuffer creates a new ring buffer with the given capacity.
+func newRingBuffer(capacity int) *ringBuffer {
+	return &ringBuffer{capacity: capacity}
+}
+
+// Append adds an entry to the ring buffer, evicting the oldest if at capacity.
+func (rb *ringBuffer) Append(entry ErrorEntry) {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+
+	if len(rb.entries) >= rb.capacity {
+		// Evict oldest entry (shift left)
+		rb.entries = rb.entries[1:]
+	}
+	rb.entries = append(rb.entries, entry)
+}
+
+// GetAll returns a copy of all entries in the ring buffer.
+func (rb *ringBuffer) GetAll() []ErrorEntry {
+	rb.mu.RLock()
+	defer rb.mu.RUnlock()
+
+	result := make([]ErrorEntry, len(rb.entries))
+	copy(result, rb.entries)
+	return result
+}
+
+// GetInMemoryErrors returns all error entries from the ring buffer.
+func GetInMemoryErrors() []ErrorEntry {
+	return errorRing.GetAll()
+}
+
+// LastRequest represents the most recent API request parameters.
+type LastRequest struct {
+	Model     string
+	MaxTokens int
+	System    string
+	Tools     []any // Using []any for flexibility; callers cast as needed
+	Messages  []any // Nil by default; only populated for internal debug
+}
+
+// lastRequestStore holds the most recent API request parameters.
+var lastRequestStore *LastRequest
+
+// lastRequestMu protects concurrent access to lastRequestStore.
+var lastRequestMu sync.RWMutex
+
+// SetLastRequest stores the given LastRequest as the most recent API request.
+func SetLastRequest(lr LastRequest) {
+	lastRequestMu.Lock()
+	defer lastRequestMu.Unlock()
+	lastRequestStore = &lr
+}
+
+// GetLastRequest returns the most recent API request parameters, or nil if none.
+func GetLastRequest() *LastRequest {
+	lastRequestMu.RLock()
+	defer lastRequestMu.RUnlock()
+	if lastRequestStore == nil {
+		return nil
+	}
+	// Return a copy to prevent external mutation
+	result := *lastRequestStore
+	return &result
 }
