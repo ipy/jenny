@@ -13,7 +13,7 @@ gaps: []
 
 ## Overview
 
-Jenny reads files, runs commands, and fetches URLs. Any tool result may contain API keys, tokens, or passwords that should never reach the LLM. This feature adds a runtime redactor (enabled by default) that **references** `github.com/zricethezav/gitleaks/v8`'s shannon-entropy algorithm and detection conventions — but does **not** import the gitleaks package as a runtime dependency. The formula is mirrored in-package with attribution so the binary stays lean. Specifically:
+Jenny reads files, runs commands, and fetches URLs. Any tool result may contain API keys, tokens, or passwords that should never reach the LLM. This feature adds a runtime redactor (enabled by default) backed by a **rule-based detector** that mirrors `github.com/zricethezav/gitleaks/v8`'s detection model — rule set, keyword prefilter, per-rule entropy, allowlist, stop words — without taking a runtime dependency on the gitleaks package. Specifically:
 
 - Scans tool results for secrets
 - Replaces detected secrets with `[REDACTED:ID_XXXXX]` placeholders
@@ -124,51 +124,93 @@ type StreamConfig struct {
 
 ## Detection Rules
 
-The redactor uses two complementary detection layers. Both layers follow gitleaks'
-detection conventions without being a runtime import of the gitleaks package.
+The redactor uses a **rule-based detector** that mirrors `gitleaks/v8`'s
+detection model in shape and capability level, without importing the
+gitleaks package. The detector runs each rule from `defaultRules()` against
+the content, gated by keyword prefiltering, per-rule entropy, allowlist, and
+stop words — exactly the same machinery gitleaks uses internally.
 
-### 1. Shannon entropy (gitleaks-referenced)
+### Detector shape (mirrors `gitleaks/v8/detect.Detector`)
 
-Tokenizes the content into runs of `[A-Za-z0-9+/=_\-]{20,}` and scores each run
-with the Shannon entropy formula from `github.com/zricethezav/gitleaks/v8/detect/utils.go`.
-The gitleaks package keeps this helper unexported, so the redact package mirrors
-its body verbatim (a ~10-line function) with a `// Copied verbatim from ...`
-attribution comment. This means we **reference** gitleaks' algorithm — we don't
-import it as a dependency.
+```go
+type Detector struct { rules []Rule }
 
-A run is treated as a candidate secret when **all** of the following hold:
+type Rule struct {
+    ID          string
+    Description string
+    Regex       *regexp.Regexp
+    Entropy     float64         // 0 = no entropy check
+    Keywords    []string        // empty = no prefilter
+    SecretGroup int             // 0 = full match, n = capture group n
+    Allowlist   *Allowlist
+}
 
-- **Length:** at least 20 characters.
-- **Entropy:** Shannon entropy > `4.5` bits/char (matches gitleaks' per-rule
-  default).
-- **Character class mix:** contains at least one ASCII digit AND at least one
-  ASCII letter. This is the "digit+alpha gate", which mirrors gitleaks'
-  treatment of "generic" rules (see `containsDigit` in gitleaks'
-  `detect/utils.go`). It exists to avoid redacting long alphabetic or
-  numeric-only runs that have high entropy but are not secrets — prose,
-  identifiers, repeated patterns, hex-only hashes, ID sequences.
+type Allowlist struct {
+    Regexes   []*regexp.Regexp
+    StopWords []string
+}
+```
 
-When all three gates pass, the run is replaced with a `[REDACTED:ID_XXXXX]`
-placeholder and recorded for later recovery.
+### Default rule set (gitleaks-aligned)
 
-### 2. Regex patterns (`additionalPatterns`)
+`defaultRules()` returns a 25-rule set covering the most common vendor
+tokens plus a generic high-entropy fallback. Each rule mirrors the
+corresponding gitleaks default rule in shape (regex, entropy, keywords,
+allowlist):
 
-A small set of regex patterns runs as the second layer, used as a precise
-fallback for secret prefixes that entropy may miss (short keys, formats with
-hyphens/underscores that don't trip the digit+alpha gate as cleanly):
+**Vendor-specific (high-signal, narrow regex):**
 
-- OpenAI API key (`sk-...`)
-- GitHub PAT (`ghp_...`, `gho_...`, `ghr_...`, `github_pat_...`)
-- AWS Access Key ID (`AKIA...`)
-- AWS Secret Access Key (40-char context-anchored)
-- Slack token (`xox[baprs]-...`)
-- NPM token (`npm_...`)
-- PyPI token (`pypi_...`)
-- SSH private keys (PEM `BEGIN/END` block)
+- `aws-access-token` — `AKIA[0-9A-Z]{16}`
+- `aws-secret-key` — context-anchored `aws_secret_key = "..."` (entropy 3.5)
+- `stripe-access-token` — `sk_live_...` / `sk_test_...` / `rk_live_...`
+- `github-pat`, `github-oauth`, `github-app-token`,
+  `github-fine-grained-pat`, `github-refresh-token` — all `gh*_` variants
+- `gitlab-pat`, `gitlab-runner-token`
+- `slack-token` (`xox[baprs]-`), `slack-webhook`
+- `discord-token`, `discord-webhook`
+- `openai-api-key` (`sk-...`, `sk-proj-...`)
+- `anthropic-api-key` (`sk-ant-...`)
+- `npm-token` (`npm_...`)
+- `pypi-token` (`pypi-AgEIcHlwaS5vcmc...`)
+- `heroku-api-key` — context-anchored UUID
+- `twilio-api-key` (`SK[0-9a-f]{32}`)
+- `sendgrid-api-key` (`SG....`)
+- `mailgun-api-key` (`key-...`)
+- `jwt` — `eyJ...eyJ...` three-segment JWT (entropy 3.5)
+- `ssh-private-key` — PEM `BEGIN/END` block
 
-Regex runs second so structured secrets are caught even if the entropy layer
-flagged the surrounding text differently. Entropy is applied first so long,
-prefix-less secrets are caught even when no regex matches.
+**Generic high-entropy fallback:**
+
+- `generic-api-key` — `(?:^|[^0-9A-Za-z_])([A-Za-z0-9_\-]{32,45})(?:[^0-9A-Za-z_\-]|$)`,
+  entropy 3.5, **keyword-gated** by `key`, `secret`, `token`, `password`,
+  `auth`, `credential`, `bearer`, `api`, `private`, etc. This is the rule
+  that catches tokens the vendor-specific rules miss. The keyword
+  prefilter is what makes it stable — it only fires on text that *looks*
+  like a secret assignment, not on arbitrary high-entropy strings.
+
+### Detection algorithm
+
+For each rule, in order:
+
+1. **Keyword prefilter.** If the rule has keywords, build a set of which
+   keywords appear in the content (lowercased substring search, O(n·k) for
+   small k). Skip the rule if no keyword is present.
+2. **Regex match.** Run the rule's regex against the full content.
+3. **Secret extraction.** Take the full match (SecretGroup=0) or a named
+   capture group (SecretGroup>0).
+4. **Allowlist check.** If the rule has an allowlist and the secret
+   matches an allowlist regex OR contains an allowlist stop word, skip
+   the finding.
+5. **Entropy check.** If the rule has an entropy threshold and the
+   secret's Shannon entropy is ≤ threshold, skip the finding.
+6. **Emit Finding** with RuleID, Secret, Match, Start, End, Entropy.
+
+### Shannon entropy (referenced from gitleaks)
+
+`shannonEntropy(data)` is mirrored verbatim from
+`github.com/zricethezav/gitleaks/v8/detect/utils.go` (gitleaks keeps this
+helper unexported, so the 10-line function is inlined with a `// Copied
+verbatim from ...` comment). All entropy-gated rules call this helper.
 
 ### Why reference, not import?
 
@@ -178,10 +220,9 @@ surface — `detect.NewDetectorDefaultConfig()` + `DetectString()` — is
 available, but running the full gitleaks Detector would pull in viper,
 aho-corasick, semgroup, zerolog, lipgloss, charmbracelet, gitdiff and ~30
 transitive dependencies, plus hundreds of source-code-oriented rules we
-don't need. The shannon-entropy function (and the digit+alpha gate
-convention) is the only piece of gitleaks' signal we actually want for
-tool-result redaction. Mirroring keeps the binary lean and the behavior
-auditable.
+don't need. Reimplementing the rule-based detection model in-package
+keeps the binary lean and the behavior auditable, while matching
+gitleaks' detection capability level.
 
 ## Out of Scope
 
