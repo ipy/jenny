@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -384,5 +385,110 @@ func TestParseTimeoutSeconds(t *testing.T) {
 				t.Errorf("parseTimeoutSeconds(%v) = %v, want %v", tt.input, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestTaskOutputAppend verifies that WriteTaskResult uses append mode
+// (AC6: Task output file uses append mode). Two consecutive writes must
+// produce two JSONL lines in the file.
+func TestTaskOutputAppend(t *testing.T) {
+	tmpDir := t.TempDir()
+	tm := NewTaskManager().WithProjectRoot(tmpDir)
+
+	// First write: should create the file
+	if err := tm.WriteTaskResult("task-append-1", "first output", 0, 1.0); err != nil {
+		t.Fatalf("first WriteTaskResult error = %v", err)
+	}
+
+	// Second write: should append, not truncate
+	if err := tm.WriteTaskResult("task-append-1", "second output", 0, 2.0); err != nil {
+		t.Fatalf("second WriteTaskResult error = %v", err)
+	}
+
+	path, err := tm.TaskOutputPath("task-append-1")
+	if err != nil {
+		t.Fatalf("TaskOutputPath error = %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile error = %v", err)
+	}
+
+	// File should have two JSONL lines, both preserved
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 JSONL lines after two WriteTaskResult calls, got %d: %q", len(lines), string(data))
+	}
+
+	var first, second TaskResultEntry
+	if err := json.Unmarshal([]byte(lines[0]), &first); err != nil {
+		t.Fatalf("Unmarshal first line: %v", err)
+	}
+	if err := json.Unmarshal([]byte(lines[1]), &second); err != nil {
+		t.Fatalf("Unmarshal second line: %v", err)
+	}
+
+	if first.Output != "first output" {
+		t.Errorf("first.Output = %q, want %q", first.Output, "first output")
+	}
+	if first.DurationSeconds != 1.0 {
+		t.Errorf("first.DurationSeconds = %v, want 1.0", first.DurationSeconds)
+	}
+	if second.Output != "second output" {
+		t.Errorf("second.Output = %q, want %q", second.Output, "second output")
+	}
+	if second.DurationSeconds != 2.0 {
+		t.Errorf("second.DurationSeconds = %v, want 2.0", second.DurationSeconds)
+	}
+}
+
+// TestTaskOutputFlushThenWrite verifies that FlushPartialOutput followed by
+// WriteTaskResult preserves both entries (AC6).
+func TestTaskOutputFlushThenWrite(t *testing.T) {
+	tmpDir := t.TempDir()
+	tm := NewTaskManager().WithProjectRoot(tmpDir)
+
+	if err := tm.FlushPartialOutput("task-flush-1", "partial output", 0.5); err != nil {
+		t.Fatalf("FlushPartialOutput error = %v", err)
+	}
+	if err := tm.WriteTaskResult("task-flush-1", "final output", 0, 1.5); err != nil {
+		t.Fatalf("WriteTaskResult error = %v", err)
+	}
+
+	path, err := tm.TaskOutputPath("task-flush-1")
+	if err != nil {
+		t.Fatalf("TaskOutputPath error = %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile error = %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 JSONL lines, got %d: %q", len(lines), string(data))
+	}
+
+	var first, second TaskResultEntry
+	if err := json.Unmarshal([]byte(lines[0]), &first); err != nil {
+		t.Fatalf("Unmarshal first line: %v", err)
+	}
+	if err := json.Unmarshal([]byte(lines[1]), &second); err != nil {
+		t.Fatalf("Unmarshal second line: %v", err)
+	}
+
+	if first.Output != "partial output" {
+		t.Errorf("first.Output = %q, want %q", first.Output, "partial output")
+	}
+	if first.ExitCode != -1 {
+		t.Errorf("first.ExitCode = %d, want -1 (partial)", first.ExitCode)
+	}
+	if second.Output != "final output" {
+		t.Errorf("second.Output = %q, want %q", second.Output, "final output")
+	}
+	if second.ExitCode != 0 {
+		t.Errorf("second.ExitCode = %d, want 0", second.ExitCode)
 	}
 }

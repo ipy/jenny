@@ -1,15 +1,19 @@
 package session
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/ipy/jenny/internal/constants"
+	"github.com/ipy/jenny/internal/log"
 )
 
 var uuidV4Re = regexp.MustCompile(
@@ -827,6 +831,179 @@ func TestManager_AppendSystemPrompt_NilChecks(t *testing.T) {
 		for _, e := range entries {
 			if e.Type == "state" && e.SystemPrompt != "" {
 				t.Errorf("unexpected state entry with system_prompt = %q", e.SystemPrompt)
+			}
+		}
+	}
+}
+
+// TestMalformedJSONLogging verifies that when LoadTranscript encounters a
+// non-JSON line, it emits a structured log.Warn message (visible via log
+// capture) and continues parsing remaining lines (AC7).
+func TestMalformedJSONLogging(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp() error = %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	m, err := NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	sessionID := "sess_malformed_logging"
+
+	// Append a valid entry first
+	if err := m.AppendEntry(sessionID, TranscriptEntry{Type: "user", Content: "valid 1"}); err != nil {
+		t.Fatalf("AppendEntry() error = %v", err)
+	}
+
+	// Manually append a malformed JSON line
+	path := m.transcriptPath(sessionID)
+	malformedLine := `{"type":"user","content":"missing brace"`
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		t.Fatalf("OpenFile() error = %v", err)
+	}
+	if _, err := fmt.Fprintln(f, malformedLine); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	f.Close()
+
+	// Append another valid entry after the malformed one
+	if err := m.AppendEntry(sessionID, TranscriptEntry{Type: "assistant", Content: "valid 2"}); err != nil {
+		t.Fatalf("AppendEntry() error = %v", err)
+	}
+
+	// Capture log output by redirecting the package logger.
+	prevOutput := log.Output()
+	defer log.SetOutput(prevOutput)
+	captureBuf := &bytes.Buffer{}
+	log.SetOutput(captureBuf)
+
+	// LoadTranscript should skip the malformed line and return only valid entries
+	loaded, err := m.LoadTranscript(sessionID)
+	if err != nil {
+		t.Fatalf("LoadTranscript() error = %v", err)
+	}
+	if len(loaded) != 2 {
+		t.Errorf("LoadTranscript() returned %d entries, want 2 (malformed line skipped)", len(loaded))
+	}
+
+	// Verify log capture contains a Warn for the malformed line.
+	captured := captureBuf.String()
+	if !strings.Contains(captured, "WARN") {
+		t.Errorf("expected log capture to contain WARN level, got: %q", captured)
+	}
+	if !strings.Contains(captured, "Malformed JSON line in transcript") {
+		t.Errorf("expected log capture to contain 'Malformed JSON line in transcript', got: %q", captured)
+	}
+	if !strings.Contains(captured, sessionID) {
+		t.Errorf("expected log capture to reference sessionID %q, got: %q", sessionID, captured)
+	}
+}
+
+// TestConcurrency exercises concurrent AppendEntry and LoadTranscript on the
+// same session ID. The locking implementation must (a) report zero data races
+// under -race and (b) ensure that LoadTranscript never returns a truncated
+// JSONL line (an entry that started but did not finish) from an in-progress
+// AppendEntry (AC2).
+func TestConcurrency(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-concurrency-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp() error = %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	m, err := NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	sessionID := "sess_concurrency"
+	const numWriters = 4
+	const writesPerWriter = 25
+
+	// Writers: each one appends N entries concurrently, then signals completion
+	// via the WaitGroup.
+	var writerWG sync.WaitGroup
+	for w := 0; w < numWriters; w++ {
+		writerWG.Add(1)
+		go func(id int) {
+			defer writerWG.Done()
+			for i := 0; i < writesPerWriter; i++ {
+				if err := m.AppendEntry(sessionID, TranscriptEntry{
+					Type:    "user",
+					Content: fmt.Sprintf("writer-%d-entry-%d", id, i),
+				}); err != nil {
+					t.Errorf("AppendEntry writer=%d i=%d error = %v", id, i, err)
+					return
+				}
+			}
+		}(w)
+	}
+
+	// Readers: continuously load the transcript while writers are active.
+	// Each load must return a non-negative number of entries that is always
+	// <= the total number of entries written so far.
+	stopReaders := make(chan struct{})
+	var readerWG sync.WaitGroup
+	const numReaders = 2
+	for r := 0; r < numReaders; r++ {
+		readerWG.Add(1)
+		go func() {
+			defer readerWG.Done()
+			for {
+				select {
+				case <-stopReaders:
+					return
+				default:
+				}
+				loaded, err := m.LoadTranscript(sessionID)
+				if err != nil {
+					// We tolerate the race where the file does not
+					// exist yet on the very first reader load.
+					if !strings.Contains(err.Error(), "session not found") {
+						t.Errorf("LoadTranscript error = %v", err)
+					}
+					continue
+				}
+				// Every loaded entry must have non-empty Content (i.e.
+				// not be a truncated/partial JSONL line that survived
+				// because of a missing newline).
+				for _, e := range loaded {
+					if e.Content == "" {
+						t.Errorf("LoadTranscript returned entry with empty Content (truncated line?)")
+					}
+				}
+			}
+		}()
+	}
+
+	writerWG.Wait()
+	close(stopReaders)
+	readerWG.Wait()
+
+	// Final load should see all writes from all writers.
+	loaded, err := m.LoadTranscript(sessionID)
+	if err != nil {
+		t.Fatalf("LoadTranscript() error = %v", err)
+	}
+	expected := numWriters * writesPerWriter
+	if len(loaded) != expected {
+		t.Errorf("LoadTranscript() returned %d entries, want %d", len(loaded), expected)
+	}
+
+	// Verify all writes are accounted for by content prefix.
+	seen := make(map[string]bool)
+	for _, e := range loaded {
+		seen[e.Content] = true
+	}
+	for w := 0; w < numWriters; w++ {
+		for i := 0; i < writesPerWriter; i++ {
+			key := fmt.Sprintf("writer-%d-entry-%d", w, i)
+			if !seen[key] {
+				t.Errorf("missing entry %q in final transcript", key)
 			}
 		}
 	}

@@ -10,10 +10,12 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/ipy/jenny/internal/constants"
+	"github.com/ipy/jenny/internal/log"
 )
 
 // TranscriptEntry represents a single turn in the conversation transcript.
@@ -49,6 +51,20 @@ type ToolUse struct {
 type Manager struct {
 	transcriptDir string
 	Disabled      bool
+
+	// mu serializes transcript file access per Manager. We use a single
+	// RWMutex rather than per-session locks because transcript files are
+	// inherently a per-session resource and the Manager's working set
+	// (tens of sessions at most) makes per-session locks unnecessary.
+	// Locking table:
+	//   AppendEntry          - Lock  (writes to the file)
+	//   LoadTranscript       - RLock (reads the file)
+	//   LoadCompactFailCount - RLock (reads the file)
+	//   SessionExists        - RLock (reads the file metadata)
+	//   UserMessageExists    - RLock (delegates to LoadTranscript)
+	//   CheckRewriteSize     - RLock (reads the file size)
+	//   AppendSystemPrompt   - Lock  (delegates to AppendEntry)
+	mu sync.RWMutex
 }
 
 // progressTypes are entry types that are not chain participants and should be
@@ -146,6 +162,9 @@ func containsPathTraversal(s string) bool {
 }
 
 // AppendEntry appends a transcript entry to the session's transcript file.
+// The write lock is held for the entire file I/O sequence (OpenFile, Fprintln,
+// Close) so that a concurrent LoadTranscript cannot observe a partial line
+// from an in-progress AppendEntry.
 func (m *Manager) AppendEntry(sessionID string, entry TranscriptEntry) error {
 	if m.Disabled {
 		return nil
@@ -166,6 +185,9 @@ func (m *Manager) AppendEntry(sessionID string, entry TranscriptEntry) error {
 	if err != nil {
 		return fmt.Errorf("marshaling transcript entry: %w", err)
 	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	path := m.transcriptPath(sessionID)
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -204,6 +226,8 @@ func (m *Manager) UserMessageExists(sessionID string, content string) (bool, err
 // LoadTranscript loads all transcript entries for a session.
 // Progress/ephemeral entries (progress, bash_progress, powershell_progress, mcp_progress)
 // are filtered out since they are not chain participants.
+// A read lock is held for the duration of file read + JSON parsing so that
+// no AppendEntry can write a partial line that would be visible to the reader.
 func (m *Manager) LoadTranscript(sessionID string) ([]TranscriptEntry, error) {
 	if sessionID == "" {
 		return nil, fmt.Errorf("session ID is required")
@@ -212,6 +236,9 @@ func (m *Manager) LoadTranscript(sessionID string) ([]TranscriptEntry, error) {
 	if containsPathTraversal(sessionID) {
 		return nil, fmt.Errorf("invalid session ID: path traversal not allowed")
 	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	path := m.transcriptPath(sessionID)
 	data, err := os.ReadFile(path)
@@ -230,7 +257,12 @@ func (m *Manager) LoadTranscript(sessionID string) ([]TranscriptEntry, error) {
 		}
 		var entry TranscriptEntry
 		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			// Skip malformed lines but continue
+			// AC7: Log malformed lines as warnings to aid debugging,
+			// but continue parsing remaining lines.
+			log.Warn("Malformed JSON line in transcript",
+				"session", sessionID,
+				"line", truncateForLog(line, 200),
+				"error", err.Error())
 			continue
 		}
 		// Filter out progress/ephemeral entries
@@ -243,6 +275,15 @@ func (m *Manager) LoadTranscript(sessionID string) ([]TranscriptEntry, error) {
 	return entries, nil
 }
 
+// truncateForLog returns s truncated to at most max bytes, appending an
+// ellipsis marker when truncation occurs.
+func truncateForLog(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
+}
+
 // LoadCompactFailCount loads the most recent compactFailCount from the transcript.
 // Returns 0 if no state entry is found.
 func (m *Manager) LoadCompactFailCount(sessionID string) (int, error) {
@@ -253,6 +294,9 @@ func (m *Manager) LoadCompactFailCount(sessionID string) (int, error) {
 	if containsPathTraversal(sessionID) {
 		return 0, fmt.Errorf("invalid session ID: path traversal not allowed")
 	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	path := m.transcriptPath(sessionID)
 	data, err := os.ReadFile(path)
@@ -309,6 +353,8 @@ func (m *Manager) SessionExists(sessionID string) bool {
 	if containsPathTraversal(sessionID) {
 		return false
 	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	path := m.transcriptPath(sessionID)
 	_, err := os.Stat(path)
 	return err == nil

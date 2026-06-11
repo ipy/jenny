@@ -1092,3 +1092,147 @@ func TestEditTool_ScopedEditLargeAfterSection(t *testing.T) {
 		t.Errorf("line 4 not modified: %q", lines[3])
 	}
 }
+
+// TestEditOOM verifies the AC4 1 GiB size guard. Without the fix, an
+// attempt to edit a file larger than 1 GiB would load the entire file
+// into memory before rejecting it. With the fix, the size check runs
+// before os.ReadFile and the edit returns a clear "File exceeds maximum
+// size of 1 GiB" error.
+//
+// We use a sparse file (sparse on filesystems that support it) to avoid
+// actually writing 1 GiB of data, but we set the size via ftruncate
+// (Seek + Truncate) so os.Stat reports > 1 GiB.
+func TestEditOOM(t *testing.T) {
+	tmpDir := t.TempDir()
+	readCache := NewReadFileCache()
+	editTool := NewEditTool(readCache)
+
+	testFile := filepath.Join(tmpDir, "huge.bin")
+	f, err := os.Create(testFile)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	// 1 GiB + 1 byte, sparse.
+	if _, err := f.Write(make([]byte, 0)); err != nil {
+		f.Close()
+		t.Fatalf("seed write: %v", err)
+	}
+	if _, err := f.Seek(int64(1<<30)+1, 0); err != nil {
+		f.Close()
+		t.Fatalf("seek: %v", err)
+	}
+	if err := f.Truncate(int64(1<<30) + 1); err != nil {
+		f.Close()
+		t.Fatalf("truncate: %v", err)
+	}
+	f.Close()
+
+	info, err := os.Stat(testFile)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if info.Size() <= 1<<30 {
+		t.Fatalf("setup: file size = %d, want > 1 GiB", info.Size())
+	}
+
+	// Pre-populate the read cache so the staleness check passes.
+	readCache.RecordRead(testFile, "anything", info.ModTime(), true, 0, 0)
+
+	result, err := editTool.Execute(context.Background(), map[string]any{
+		"file_path":  testFile,
+		"old_string": "needle",
+		"new_string": "haystack",
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("Execute returned Go error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("AC4 FAIL: expected IsError=true for >1GiB file")
+	}
+	if !strings.Contains(result.Content, "File exceeds maximum size of 1 GiB") {
+		t.Errorf("AC4 FAIL: error message %q does not contain the spec string", result.Content)
+	}
+}
+
+// TestEditAtomic verifies the AC5 atomic edit behavior. We perform a
+// scoped edit on a real file and assert:
+//  1. The edit succeeds (file content reflects the replacement).
+//  2. No leftover .edit-* temp files remain in the file's directory.
+//
+// The EXDEV fallback is harder to exercise on a single filesystem; we
+// directly call copyAndReplace to verify the fallback helper itself
+// behaves correctly.
+func TestEditAtomic(t *testing.T) {
+	tmpDir := t.TempDir()
+	readCache := NewReadFileCache()
+	editTool := NewEditTool(readCache)
+
+	testFile := filepath.Join(tmpDir, "atomic.txt")
+	original := "line 1\nline 2\nline 3\n"
+	if err := os.WriteFile(testFile, []byte(original), 0644); err != nil {
+		t.Fatalf("seed write: %v", err)
+	}
+
+	info, _ := os.Stat(testFile)
+	readCache.RecordRead(testFile, original, info.ModTime(), true, 0, 0)
+
+	result, err := editTool.Execute(context.Background(), map[string]any{
+		"file_path":  testFile,
+		"old_string": "line 2",
+		"new_string": "LINE TWO",
+		"start_line": float64(2),
+		"end_line":   float64(2),
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("AC5 FAIL: edit returned error: %s", result.Content)
+	}
+
+	// Verify file content reflects the edit.
+	got, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatalf("read after edit: %v", err)
+	}
+	want := "line 1\nLINE TWO\nline 3\n"
+	if string(got) != want {
+		t.Errorf("AC5 FAIL: file content = %q, want %q", got, want)
+	}
+
+	// Verify no leftover .edit-* temp files remain.
+	entries, err := os.ReadDir(tmpDir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".edit-") {
+			t.Errorf("AC5 FAIL: leftover temp file %q", e.Name())
+		}
+	}
+
+	// Verify the copyAndReplace fallback: create a temp file, then copy
+	// it onto a destination.
+	src := filepath.Join(tmpDir, "src.txt")
+	dst := filepath.Join(tmpDir, "dst.txt")
+	payload := []byte("cross-device payload\n")
+	if err := os.WriteFile(src, payload, 0644); err != nil {
+		t.Fatalf("seed src: %v", err)
+	}
+	if err := os.WriteFile(dst, []byte("original\n"), 0644); err != nil {
+		t.Fatalf("seed dst: %v", err)
+	}
+	if err := copyAndReplace(src, dst); err != nil {
+		t.Fatalf("copyAndReplace error: %v", err)
+	}
+	got, err = os.ReadFile(dst)
+	if err != nil {
+		t.Fatalf("read dst after copy: %v", err)
+	}
+	if string(got) != string(payload) {
+		t.Errorf("AC5 fallback FAIL: dst = %q, want %q", got, payload)
+	}
+	if _, err := os.Stat(src); !os.IsNotExist(err) {
+		t.Errorf("AC5 fallback FAIL: src should be removed after copy; stat err = %v", err)
+	}
+}

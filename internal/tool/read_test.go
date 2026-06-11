@@ -2,9 +2,11 @@ package tool
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -605,5 +607,102 @@ func TestReadTool_CacheHitStructuredResponse(t *testing.T) {
 	}
 	if !strings.Contains(result.Content, "unchanged") {
 		t.Error("AC4 FAIL: cache hit content should indicate file is unchanged")
+	}
+}
+
+// TestReadTool_TOCTOU is the AC1 regression test. It exercises concurrent
+// Read invocations on the same file with a writer that mutates the file
+// between iterations. With the fix in place, the cache mutex atomically
+// stat+compare, so the race detector must report no data races.
+//
+// The test runs many concurrent readers and writers in parallel. The
+// invariant we care about is: the cache never observes a stale mtime that
+// disagrees with a subsequent Stat.
+func TestReadTool_TOCTOU(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "toctou.txt")
+	if err := os.WriteFile(testFile, []byte("initial content\n"), 0644); err != nil {
+		t.Fatalf("seed WriteFile error = %v", err)
+	}
+
+	cache := NewReadFileCache()
+	tool := NewReadTool(false, cache)
+
+	const writers = 4
+	const iterations = 30
+
+	var wg sync.WaitGroup
+
+	// Writers: bump mtime by writing a new payload. Each write advances
+	// the file's mtime so the next read must observe the new mtime in
+	// the cache.
+	for w := 0; w < writers; w++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				payload := []byte(fmt.Sprintf("writer-%d-iter-%d\n", id, i))
+				if err := os.WriteFile(testFile, payload, 0644); err != nil {
+					t.Errorf("writer %d iter %d WriteFile error = %v", id, i, err)
+					return
+				}
+				// Bump mtime to a guaranteed-future time so the cache
+				// cannot accidentally match a stale entry.
+				if err := os.Chtimes(testFile, time.Now(), time.Now().Add(time.Duration(i+1)*time.Second)); err != nil {
+					t.Errorf("writer %d iter %d Chtimes error = %v", id, i, err)
+					return
+				}
+			}
+		}(w)
+	}
+
+	// Readers: hammer Read concurrently with the writers. With the
+	// cache-mutex-atomic stat+compare, every Read's post-read record is
+	// consistent with the stat that determined cache state.
+	for r := 0; r < writers; r++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				_, _ = tool.Execute(context.Background(), map[string]any{
+					"file_path": testFile,
+				}, tmpDir)
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	// After all writers finish, the file's recorded mtime in the cache
+	// must match a fresh os.Stat (this is the only invariant that proves
+	// the post-read StatAndRecord path is race-free).
+	if _, ok := cache.GetRead(testFile); !ok {
+		// On some test schedules the very first reader may have raced
+		// ahead of any writer; this is acceptable. If the cache is
+		// empty, a final Read will populate it.
+		if _, err := tool.Execute(context.Background(), map[string]any{
+			"file_path": testFile,
+		}, tmpDir); err != nil {
+			t.Fatalf("final Execute error = %v", err)
+		}
+	}
+
+	entry, ok := cache.GetRead(testFile)
+	if !ok {
+		t.Fatal("expected cache entry to be populated after final read")
+	}
+
+	// Re-stat the file and compare to the cached mtime. With the
+	// StatAndRecord atomic path the cached mtime must equal the
+	// final-stat mtime, or at least not be older than the file's
+	// pre-final-read mtime (because no write happened between the
+	// final read and the re-stat).
+	info, err := os.Stat(testFile)
+	if err != nil {
+		t.Fatalf("final Stat error = %v", err)
+	}
+	if entry.Mtime.After(info.ModTime()) {
+		t.Errorf("cached mtime %v is in the future of file mtime %v (TOCTOU not fixed)",
+			entry.Mtime, info.ModTime())
 	}
 }

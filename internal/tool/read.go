@@ -202,17 +202,22 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 
 	isFullRead := !offsetExplicit && !limitExplicit
 
-	// AC1-AC3: Dedup check - return structured cache indicator if same path + mtime unchanged
+	// AC1: TOCTOU eliminated — atomically stat+compare inside the cache mutex.
+	// The early `info` Stat above remains for size validation, but the dedup
+	// decision must be made atomically (stat + cache compare) to prevent a
+	// concurrent writer from sneaking a stale mtime into the cache between
+	// the stat and the record.
 	if t.readCache != nil && isFullRead {
-		if cachedEntry, ok := t.readCache.GetRead(absFilePath); ok {
-			if cachedEntry.Mtime.Equal(info.ModTime()) && cachedEntry.Offset == offset && cachedEntry.Limit == limit {
-				return &ToolResult{
-					Content:  "[file unchanged since last read — cached content is current]",
-					IsError:  false,
-					CacheHit: true,
-				}, nil
-			}
+		hit, statErr := t.readCache.CheckAndRecord(absFilePath, "", isFullRead, offset, limit)
+		if statErr == nil && hit {
+			return &ToolResult{
+				Content:  "[file unchanged since last read — cached content is current]",
+				IsError:  false,
+				CacheHit: true,
+			}, nil
 		}
+		// On statErr (e.g. file vanished between the early stat and now),
+		// fall through and let the actual open below fail with a clear error.
 	}
 
 	// maxSizeBytes check (pre-read, only for full reads)
@@ -301,13 +306,8 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 			fullContentBytes, _ := os.ReadFile(absFilePath)
 			fullContent = string(fullContentBytes)
 		}
-		// Re-stat after read to get accurate mtime (avoids TOCTOU between stat and cache)
-		finalInfo, _ := os.Stat(absFilePath)
-		finalMtime := info.ModTime()
-		if finalInfo != nil {
-			finalMtime = finalInfo.ModTime()
-		}
-		t.readCache.RecordRead(absFilePath, fullContent, finalMtime, isFullRead, offset, limit)
+		// AC1: post-read stat-and-record is atomic in the cache mutex.
+		_, _ = t.readCache.StatAndRecord(absFilePath, fullContent, isFullRead, offset, limit)
 	}
 
 	// Handle empty file content - warning, not error

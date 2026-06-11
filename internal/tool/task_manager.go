@@ -247,6 +247,7 @@ func (tm *TaskManager) DrainCompletion(taskID string) *TaskCompletion {
 }
 
 // WriteTaskResult writes a task result to the output file as JSONL.
+// Uses append mode so subsequent calls preserve prior lines.
 func (tm *TaskManager) WriteTaskResult(taskID string, output string, exitCode int, durationSeconds float64) error {
 	path, err := tm.TaskOutputPath(taskID)
 	if err != nil {
@@ -266,16 +267,13 @@ func (tm *TaskManager) WriteTaskResult(taskID string, output string, exitCode in
 		return fmt.Errorf("marshaling task result: %w", err)
 	}
 
-	if err := os.WriteFile(path, append(data, '\n'), 0644); err != nil {
-		return fmt.Errorf("writing task result: %w", err)
-	}
-
-	return nil
+	return appendJSONLLine(path, data)
 }
 
 // FlushPartialOutput writes accumulated partial output to the task's output file.
 // This is called periodically during task execution to ensure partial output is
-// available if the task is interrupted.
+// available if the task is interrupted. Uses append mode so prior partial
+// lines and any prior WriteTaskResult entries are preserved.
 func (tm *TaskManager) FlushPartialOutput(taskID string, output string, durationSeconds float64) error {
 	path, err := tm.TaskOutputPath(taskID)
 	if err != nil {
@@ -295,10 +293,22 @@ func (tm *TaskManager) FlushPartialOutput(taskID string, output string, duration
 		return fmt.Errorf("marshaling partial result: %w", err)
 	}
 
-	if err := os.WriteFile(path, append(data, '\n'), 0644); err != nil {
-		return fmt.Errorf("writing partial result: %w", err)
-	}
+	return appendJSONLLine(path, data)
+}
 
+// appendJSONLLine appends a single JSONL line (data + '\n') to the file at path,
+// creating it if it does not exist. The file is opened with O_APPEND so concurrent
+// writes are atomic on POSIX when individual writes are <= PIPE_BUF (4 KiB).
+func appendJSONLLine(path string, data []byte) error {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("opening task output file: %w", err)
+	}
+	defer f.Close()
+
+	if _, err := f.Write(append(data, '\n')); err != nil {
+		return fmt.Errorf("writing task output: %w", err)
+	}
 	return nil
 }
 

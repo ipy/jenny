@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -796,4 +797,63 @@ func TestIsUnderAutoMem(t *testing.T) {
 	}
 
 	t.Log("isUnderAutoMem PASS: correctly identifies paths under auto-mem directory")
+}
+
+// TestGoroutineLeak is the AC3 regression test. It exercises the slow-API
+// client + Drain path, then asserts that runtime.NumGoroutine() is at
+// baseline after a 500ms settle. With the waitgroup-aware Drain, every
+// in-flight extraction goroutine (including the trailing run spawned by
+// finalizeExtraction) is tracked and the cleanup is deterministic.
+func TestGoroutineLeak(t *testing.T) {
+	// Settle to a stable baseline before measuring.
+	runtime.GC()
+	time.Sleep(100 * time.Millisecond)
+	baseline := runtime.NumGoroutine()
+
+	cfg := ExtractorConfig{
+		IsSubAgent:         false,
+		ExtractEveryNTurns: 1,
+		AutoMemoryEnabled:  true,
+		ProjectRoot:        "/test/project",
+	}
+
+	mockClient := &mockExtractionAPIClient{
+		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+			// Simulate a slow API call so the extraction goroutine is
+			// still running when Drain is called.
+			time.Sleep(300 * time.Millisecond)
+			return &api.Response{}, nil
+		},
+	}
+
+	me := NewMemoryExtractor(mockClient, cfg).WithMemdir(t.TempDir()).WithTimeout(2 * time.Second)
+
+	turnCtx := TurnContext{
+		StopReason: api.StopReasonEndTurn,
+		AssistantMessage: &api.Message{
+			ID:      "msg_leak",
+			Content: "hello",
+		},
+	}
+
+	me.CheckAndExtract(context.Background(), turnCtx)
+
+	// Drain should wait for the in-flight extraction to complete.
+	drainCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	me.Drain(drainCtx)
+
+	// Settle: allow the runtime to garbage-collect any still-referenced
+	// goroutines, then measure. With the waitgroup-aware Drain, no
+	// goroutine should be leaked above baseline.
+	time.Sleep(500 * time.Millisecond)
+	runtime.GC()
+
+	after := runtime.NumGoroutine()
+	if after > baseline {
+		t.Errorf("AC3 FAIL: goroutine count elevated after Drain: baseline=%d, after=%d (delta=%d)",
+			baseline, after, after-baseline)
+	} else {
+		t.Logf("AC3 PASS: goroutine count at baseline after Drain: baseline=%d, after=%d", baseline, after)
+	}
 }

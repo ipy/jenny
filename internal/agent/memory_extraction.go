@@ -53,6 +53,13 @@ type MemoryExtractor struct {
 	pendingCtx context.Context
 	mu         sync.RWMutex
 
+	// AC3: wg tracks in-flight extraction goroutines so Drain can wait for
+	// them to complete during shutdown. Add(1) is called immediately
+	// before the goroutine is launched; Done() runs via defer inside the
+	// goroutine. Drain waits on this group after the in-progress flag
+	// has flipped back to false.
+	wg sync.WaitGroup
+
 	// Timeout for extraction
 	timeout time.Duration
 }
@@ -154,14 +161,20 @@ func (me *MemoryExtractor) CheckAndExtract(ctx context.Context, turnCtx TurnCont
 		msgID = turnCtx.AssistantMessage.ID
 	}
 
-	// Run extraction synchronously
+	// AC3: capture turnCtx by value so the goroutine does not race on
+	// caller-mutated state (e.g. the AgentLoop reusing the same struct
+	// across turns). wg.Add is called here, immediately before the goroutine
+	// is launched, so Drain.Wait can never miss a still-pending Done.
+	localTurnCtx := turnCtx
+	me.wg.Add(1)
 	go func(msgID string) {
+		defer me.wg.Done()
 		defer me.finalizeExtraction()
 
 		extractCtx, cancel := context.WithTimeout(context.Background(), me.timeout)
 		defer cancel()
 
-		if err := me.extract(extractCtx, turnCtx); err != nil {
+		if err := me.extract(extractCtx, localTurnCtx); err != nil {
 			log.Warn("Memory extraction failed", "error", err)
 			return
 		}
@@ -172,9 +185,9 @@ func (me *MemoryExtractor) CheckAndExtract(ctx context.Context, turnCtx TurnCont
 
 		// Build a TurnContext with the captured message ID for advanceCursor
 		cursorTurnCtx := TurnContext{
-			StopReason:       turnCtx.StopReason,
+			StopReason:       localTurnCtx.StopReason,
 			AssistantMessage: &api.Message{ID: msgID},
-			TotalMessages:    turnCtx.TotalMessages,
+			TotalMessages:    localTurnCtx.TotalMessages,
 		}
 		me.advanceCursor(cursorTurnCtx)
 	}(msgID)
@@ -488,7 +501,13 @@ func (me *MemoryExtractor) finalizeExtraction() {
 
 		// Unlock BEFORE spawning goroutine so it can acquire the lock independently
 		me.mu.Unlock()
+
+		// AC3: register the trailing extraction with the waitgroup so Drain
+		// blocks on it too. The defer wg.Done() in the spawned goroutine
+		// pairs with the Add(1) here.
+		me.wg.Add(1)
 		go func() {
+			defer me.wg.Done()
 			defer me.finalizeExtraction()
 
 			extractCtx, cancel := context.WithTimeout(context.Background(), me.timeout)
@@ -510,31 +529,19 @@ func (me *MemoryExtractor) finalizeExtraction() {
 }
 
 // Drain waits for any in-progress extraction to complete during shutdown.
-// Has a 60-second timeout.
+// AC3: replaced the busy-polling loop with a WaitGroup-aware channel. The
+// wait group covers both the initial extraction goroutine and any trailing
+// run that finalizeExtraction may have spawned. After Drain returns and a
+// brief settle, runtime.NumGoroutine() must be at baseline.
 func (me *MemoryExtractor) Drain(ctx context.Context) {
-	me.mu.Lock()
-	if !me.inProgress {
-		me.mu.Unlock()
-		return
-	}
-	// Create a channel to wait on
-	done := make(chan struct{})
+	ch := make(chan struct{})
 	go func() {
-		for {
-			me.mu.Lock()
-			if !me.inProgress {
-				me.mu.Unlock()
-				close(done)
-				return
-			}
-			me.mu.Unlock()
-			time.Sleep(100 * time.Millisecond)
-		}
+		me.wg.Wait()
+		close(ch)
 	}()
-	me.mu.Unlock()
 
 	select {
-	case <-done:
+	case <-ch:
 		return
 	case <-ctx.Done():
 		log.Warn("Memory extraction drain timed out")

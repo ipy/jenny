@@ -4,11 +4,14 @@ package tool
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 
 	"github.com/ipy/jenny/internal/constants"
 )
@@ -256,6 +259,17 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 
 // executeGlobal performs the original in-memory replacement (full file read).
 func (t *EditTool) executeGlobal(filePath, oldString, newString string, replaceAll bool, numExpected int, entry *ReadFileEntry, info os.FileInfo) (*ToolResult, error) {
+	// AC4: 1 GiB size guard must run before os.ReadFile. The `info` parameter
+	// is non-nil for existing files (see call site at line 254). Without
+	// this guard, a >1GiB file would be loaded into memory before the size
+	// check rejected it, causing an OOM.
+	if info != nil && info.Size() > 1<<30 {
+		return &ToolResult{
+			Content: "File exceeds maximum size of 1 GiB",
+			IsError: true,
+		}, nil
+	}
+
 	// Read current file content from disk
 	currentContent, err := os.ReadFile(filePath)
 	if err != nil {
@@ -301,14 +315,6 @@ func (t *EditTool) executeGlobal(filePath, oldString, newString string, replaceA
 	if isBinary(content) {
 		return &ToolResult{
 			Content: "Cannot edit binary files",
-			IsError: true,
-		}, nil
-	}
-
-	// Max file size check: 1 GiB
-	if info != nil && info.Size() > 1<<30 {
-		return &ToolResult{
-			Content: "File exceeds maximum size of 1 GiB",
 			IsError: true,
 		}, nil
 	}
@@ -495,15 +501,38 @@ func (t *EditTool) executeScoped(filePath, oldString, newString string, replaceA
 		}
 	}
 
-	// Close temp file before rename
-	tmpFile.Close()
-
-	// Atomic rename
-	if err := os.Rename(tmpPath, filePath); err != nil {
+	// AC5: Atomic edit with fsync and cross-device fallback.
+	//
+	// 1. Sync the temp file's contents to disk before closing so the rename
+	//    is durable across power loss / crash. Without Sync, a crash between
+	//    Close and Rename could leave the file with stale or missing
+	//    contents.
+	if err := tmpFile.Sync(); err != nil {
+		tmpFile.Close()
 		return &ToolResult{
-			Content: fmt.Sprintf("Failed to rename temp file: %v", err),
+			Content: fmt.Sprintf("Failed to sync temp file: %v", err),
 			IsError: true,
 		}, nil
+	}
+	tmpFile.Close()
+
+	// 2. Atomic rename. If the rename fails with EXDEV (cross-device link,
+	//    e.g. editing a file on a different mount than the temp file's
+	//    directory), fall back to copy+delete so the edit still succeeds.
+	if err := os.Rename(tmpPath, filePath); err != nil {
+		if isCrossDeviceErr(err) {
+			if fbErr := copyAndReplace(tmpPath, filePath); fbErr != nil {
+				return &ToolResult{
+					Content: fmt.Sprintf("Failed to rename temp file (and EXDEV fallback failed): %v / %v", err, fbErr),
+					IsError: true,
+				}, nil
+			}
+		} else {
+			return &ToolResult{
+				Content: fmt.Sprintf("Failed to rename temp file: %v", err),
+				IsError: true,
+			}, nil
+		}
 	}
 
 	// Build new content for cache: need full file for diff generation
@@ -598,4 +627,47 @@ func normalizeLineEndings(content string) string {
 // isBinary checks if content appears to be binary.
 func isBinary(content string) bool {
 	return slices.Contains([]byte(content), 0)
+}
+
+// isCrossDeviceErr reports whether err is a *os.LinkError whose underlying
+// errno is EXDEV (cross-device link). Used to trigger the EXDEV fallback
+// path in executeScoped.
+func isCrossDeviceErr(err error) bool {
+	var linkErr *os.LinkError
+	if errors.As(err, &linkErr) {
+		return errors.Is(linkErr.Err, syscall.EXDEV)
+	}
+	return false
+}
+
+// copyAndReplace is the EXDEV fallback for executeScoped. It copies the
+// temp file's contents to filePath, deletes the temp file, and returns
+// any error encountered.
+func copyAndReplace(srcPath, dstPath string) error {
+	src, err := os.Open(srcPath)
+	if err != nil {
+		return fmt.Errorf("opening src: %w", err)
+	}
+	defer src.Close()
+
+	// Remove the destination first so OpenFile(dst, O_WRONLY|O_CREATE|O_TRUNC)
+	// is well-defined when dst is on a different filesystem.
+	if err := os.Remove(dstPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("removing dst: %w", err)
+	}
+
+	dst, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return fmt.Errorf("opening dst: %w", err)
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, src); err != nil {
+		return fmt.Errorf("copying contents: %w", err)
+	}
+
+	// Best-effort cleanup of the temp file. A failure here does not
+	// affect the edit's correctness.
+	_ = os.Remove(srcPath)
+	return nil
 }
