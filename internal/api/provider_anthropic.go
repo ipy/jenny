@@ -66,6 +66,67 @@ func newAnthropicProvider(model string) (*anthropicProvider, error) {
 	}, nil
 }
 
+// buildSDKMessagesJSON converts messages and tool results to a format suitable
+// for JSON serialization with flattened tool_result content (DeepSeek compatibility).
+func (p *anthropicProvider) buildSDKMessagesJSON(messages []Message, toolResults []ToolResult) []any {
+	sdkMessages := make([]any, 0, len(messages)+len(toolResults))
+	for _, msg := range messages {
+		contentBlocks := make([]any, 0)
+
+		if msg.Content != "" {
+			contentBlocks = append(contentBlocks, map[string]any{
+				"type": "text",
+				"text": msg.Content,
+			})
+		}
+
+		for _, tu := range msg.ToolUse {
+			contentBlocks = append(contentBlocks, map[string]any{
+				"type":  "tool_use",
+				"id":    tu.ID,
+				"name":  tu.Name,
+				"input": tu.Input,
+			})
+		}
+
+		for _, tr := range msg.ToolResults {
+			// DeepSeek compatibility: tool_result content MUST be a plain string
+			block := map[string]any{
+				"type":        "tool_result",
+				"tool_use_id": tr.ToolUseID,
+				"content":     tr.Content,
+			}
+			if tr.IsError {
+				block["is_error"] = true
+			}
+			contentBlocks = append(contentBlocks, block)
+		}
+
+		sdkMessages = append(sdkMessages, map[string]any{
+			"role":    msg.Role,
+			"content": contentBlocks,
+		})
+	}
+
+	// Add standalone tool results as user messages
+	for _, tr := range toolResults {
+		block := map[string]any{
+			"type":        "tool_result",
+			"tool_use_id": tr.ToolUseID,
+			"content":     tr.Content,
+		}
+		if tr.IsError {
+			block["is_error"] = true
+		}
+		sdkMessages = append(sdkMessages, map[string]any{
+			"role":    "user",
+			"content": []any{block},
+		})
+	}
+
+	return sdkMessages
+}
+
 // Kind returns the provider kind.
 func (p *anthropicProvider) Kind() ProviderKind {
 	return ProviderAnthropic
@@ -193,7 +254,7 @@ func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Messag
 	// Universal normalization gateway
 	messages, tools, _ = NormalizeMessages(messages, tools, Capabilities{SupportsPromptCaching: true})
 
-	// Convert messages to SDK format
+	// Convert messages to SDK format (for baseline)
 	sdkMessages := make([]anthropic.MessageParam, 0, len(messages))
 	for _, msg := range messages {
 		contentBlocks := make([]anthropic.ContentBlockParamUnion, 0)
@@ -250,6 +311,9 @@ func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Messag
 		})
 	}
 
+	// Build JSON-compatible messages for DeepSeek override
+	sdkMessagesJSON := p.buildSDKMessagesJSON(messages, toolResults)
+
 	// Convert tools to SDK format
 	sdkTools := make([]anthropic.ToolUnionParam, 0, len(tools))
 	for i, t := range tools {
@@ -284,8 +348,8 @@ func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Messag
 		body.Tools = sdkTools
 	}
 
-	// Send request
-	resp, err := p.client.Messages.New(ctx, body)
+	// Send request with JSON override for messages to ensure tool_result content is a string
+	resp, err := p.client.Messages.New(ctx, body, option.WithJSONSet("messages", sdkMessagesJSON))
 	if err != nil {
 		wrappedErr := wrapSDKError(err)
 		return nil, wrappedErr
@@ -427,6 +491,9 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 			})
 		}
 
+		// Build JSON-compatible messages for DeepSeek override
+		sdkMessagesJSON := p.buildSDKMessagesJSON(messages, toolResults)
+
 		// Convert tools to SDK format
 		sdkTools := make([]anthropic.ToolUnionParam, 0, len(tools))
 		for i, t := range tools {
@@ -471,7 +538,8 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 		streamCtx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
-		stream := p.client.Messages.NewStreaming(streamCtx, body)
+		// Send request with JSON override for messages to ensure tool_result content is a string
+		stream := p.client.Messages.NewStreaming(streamCtx, body, option.WithJSONSet("messages", sdkMessagesJSON))
 
 		// Check for pre-stream error
 		if stream.Err() != nil {

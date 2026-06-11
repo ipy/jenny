@@ -1146,12 +1146,16 @@ func TestClient_ToolResultDedup(t *testing.T) {
 		if blockMap["type"] == "tool_result" {
 			if tid, ok := blockMap["tool_use_id"].(string); ok && tid == "id_1" {
 				toolResultCount++
-				// Check content - should be the last writer's content
-				contentArr, ok := blockMap["content"].([]any)
-				if ok && len(contentArr) > 0 {
-					if textBlock, ok := contentArr[0].(map[string]any); ok {
-						if text, ok := textBlock["text"].(string); ok {
-							lastContent = text
+				// Check content - handle both flattened string and array for flexibility
+				switch v := blockMap["content"].(type) {
+				case string:
+					lastContent = v
+				case []any:
+					if len(v) > 0 {
+						if textBlock, ok := v[0].(map[string]any); ok {
+							if text, ok := textBlock["text"].(string); ok {
+								lastContent = text
+							}
 						}
 					}
 				}

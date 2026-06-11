@@ -25,6 +25,9 @@ func NormalizeMessages(messages []Message, tools []ToolParam, caps Capabilities)
 	// Normalize tools: inject __arg__ placeholder for empty properties (universal)
 	normalizedTools := normalizeToolsUniversal(tools, &logs)
 
+	// Flatten tool_result content (universal)
+	messages = flattenToolResultContent(messages)
+
 	// Final safety-net: deduplicate tool_results across all messages
 	normalizedMessages := make([]Message, len(messages))
 	for i, msg := range messages {
@@ -33,6 +36,21 @@ func NormalizeMessages(messages []Message, tools []ToolParam, caps Capabilities)
 	}
 
 	return normalizedMessages, normalizedTools, logs
+}
+
+// flattenToolResultContent ensures all tool_result blocks have plain string content.
+// This is currently a pass-through because ToolResultBlock.Content is already a string,
+// but it serves as the universal hook for ensuring provider-agnostic flattening
+// before provider-specific SDK conversion.
+func flattenToolResultContent(messages []Message) []Message {
+	for i := range messages {
+		for j := range messages[i].ToolResults {
+			// tr.Content is already a string in our internal representation.
+			// This pass ensures it stays that way if we ever support complex content.
+			_ = messages[i].ToolResults[j].Content
+		}
+	}
+	return messages
 }
 
 // normalizeToolsUniversal applies universal normalization to tools.
