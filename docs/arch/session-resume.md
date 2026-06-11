@@ -4,11 +4,9 @@ slug: session-resume
 priority: P0
 status: partial
 spec: complete
-code: partial
+code: done
 package: internal/agent, internal/session
-gaps:
-  - Compaction boundaries missing
-defer_to: P3
+gaps: []
 depends_on:
   - session-persistence
   - cli
