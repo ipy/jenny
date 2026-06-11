@@ -59,9 +59,14 @@ func run() error {
 		return nil
 	}
 
-	// Enable verbose mode if JENNY_DEBUG env var is set
+	// Enable verbose/debug mode if JENNY_DEBUG env var is set
 	if os.Getenv("JENNY_DEBUG") != "" {
 		flags.Verbose = true
+	}
+
+	// Propagate --verbose flag to logging via JENNY_VERBOSE env var
+	if flags.Verbose {
+		os.Setenv("JENNY_VERBOSE", "1")
 	}
 
 	// Get working directory

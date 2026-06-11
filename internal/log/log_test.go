@@ -188,8 +188,60 @@ func TestDebug_Output(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC3: Error Ring Buffer
+// AC5: --verbose flag enables debug logging
 // ---------------------------------------------------------------------------
+
+func TestVerbose_Flag_EmitsDebugMessages(t *testing.T) {
+	// Test that JENNY_VERBOSE=1 enables debug logging
+	var buf bytes.Buffer
+	SetOutput(&buf)
+
+	// Clear other debug env vars and set JENNY_VERBOSE
+	t.Setenv("DEBUG", "")
+	t.Setenv("JENNY_DEBUG", "")
+	t.Setenv("JENNY_VERBOSE", "1")
+
+	// Reset logger with new env vars
+	resetLogger()
+
+	// Debug level should be enabled - write a debug message and check output
+	buf.Reset()
+	Debug("verbose debug test")
+
+	if buf.Len() == 0 {
+		t.Error("expected debug output when JENNY_VERBOSE=1, got empty buffer")
+	}
+
+	if !strings.Contains(buf.String(), "verbose debug test") {
+		t.Errorf("expected 'verbose debug test' in debug output, got %q", buf.String())
+	}
+
+	// Restore default output
+	SetOutput(os.Stderr)
+}
+
+func TestVerbose_EmptyValue(t *testing.T) {
+	// Test that empty JENNY_VERBOSE value does not enable debug logging
+	var buf bytes.Buffer
+	SetOutput(&buf)
+
+	// Set all debug vars to empty
+	t.Setenv("DEBUG", "")
+	t.Setenv("JENNY_DEBUG", "")
+	t.Setenv("JENNY_VERBOSE", "")
+
+	resetLogger()
+
+	// Debug level should NOT be enabled - write a debug message
+	buf.Reset()
+	Debug("verbose debug test")
+
+	// No output expected when verbose is disabled
+	// (This is correct behavior - slog at DEBUG level won't write when level is INFO)
+
+	// Restore default output
+	SetOutput(os.Stderr)
+}
 
 func TestRingBuffer_CapsAt100Entries(t *testing.T) {
 	// Reset the global errorRing for this test

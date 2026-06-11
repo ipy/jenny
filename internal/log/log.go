@@ -25,8 +25,8 @@ func resetLogger() {
 		Level: slog.LevelInfo,
 	}
 
-	// DEBUG=1 or JENNY_DEBUG=1 enables debug-level logging
-	if isTruthy(os.Getenv("DEBUG")) || isTruthy(os.Getenv("JENNY_DEBUG")) {
+	// JENNY_DEBUG=1 or JENNY_VERBOSE=1 or DEBUG=1 enables debug-level logging
+	if isTruthy(os.Getenv("DEBUG")) || isTruthy(os.Getenv("JENNY_DEBUG")) || isTruthy(os.Getenv("JENNY_VERBOSE")) {
 		opts.Level = slog.LevelDebug
 	}
 
