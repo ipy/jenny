@@ -117,6 +117,11 @@ func (e *QueryEngine) SubmitMessage(ctx context.Context, prompt string) (string,
 // querySource indicates the origin of the request ("user", "compact", "session_memory").
 func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, sessionID, querySource string) (string, error) {
 	systemPrompt := AssembleSystemPrompt(e.streamCfg, e.tools, cwd)
+	// Freeze the system prompt after first assembly so that subsequent turns
+	// within the same session receive an identical string, protecting prompt caching.
+	if e.streamCfg.CachedSystemPrompt == "" {
+		e.streamCfg.CachedSystemPrompt = systemPrompt
+	}
 
 	// AC3: When stream-json mode is active, redirect debug logs to stderr
 	// to prevent interleaving with NDJSON output on stdout
@@ -295,24 +300,31 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			}
 		}
 
-		// Normalize messages before API request (strip internal fields, enforce tool pairing, etc.)
-		messages = NormalizeMessagesAPI(messages)
+		// Normalize messages before API request (content-level only, no structural transforms).
+		// NormalizeMessagesAPI (which includes mergeConsecutiveSameRole) is intentionally
+		// NOT called here — structural normalization would destroy cache continuity.
+		// It is only used by the compaction path via normalizeCompactedChain.
+		for i := range messages {
+			messages[i] = normalizeNewMessage(messages[i])
+		}
 
 		// Create fallback function for streaming failures (AC3)
 		fallbackFn := func(fallbackCtx context.Context) (*api.Response, error) {
 			e.client.SetMaxTokensOverride(64000)
-			return e.client.SendMessage(fallbackCtx, messages, e.toolParams, nil, systemPrompt)
+			return e.client.SendMessage(fallbackCtx, messages, e.toolParams, nil, systemPrompt, "")
 		}
 
 		// Use streaming API (AC1)
 		// Track API call duration (AC3: duration_api_ms)
 		apiStartTime := time.Now()
+		dynamicSuffix := DynamicSystemSuffix(e.streamCfg, cwd)
 		blocksChan, streamResult := e.client.SendMessageStream(
 			ctx,
 			messages,
 			e.toolParams,
 			nil,
 			systemPrompt,
+			dynamicSuffix,
 			api.DefaultIdleTimeout,
 			api.DefaultFallbackTimeout,
 			fallbackFn,

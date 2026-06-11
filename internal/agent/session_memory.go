@@ -17,7 +17,7 @@ import (
 
 // APIClient defines the interface for making API calls in session memory operations.
 type APIClient interface {
-	SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string) (*api.Response, error)
+	SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error)
 }
 
 // SessionMemory tracks session-level memory for long conversations.
@@ -246,7 +246,7 @@ func (sm *SessionMemory) Update(ctx context.Context) error {
 
 	systemPrompt := "You are a helpful assistant that updates session memory files. You may only use the Edit tool to modify the session memory file. Focus on summarizing recent context and updating the relevant sections."
 
-	resp, err := sm.client.SendMessage(ctx, messages, toolParams, nil, systemPrompt)
+	resp, err := sm.client.SendMessage(ctx, messages, toolParams, nil, systemPrompt, "")
 	if err != nil {
 		// Check if context deadline exceeded
 		if ctx.Err() == context.DeadlineExceeded {

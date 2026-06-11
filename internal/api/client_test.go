@@ -494,7 +494,7 @@ func TestClient_NonStreaming_SendsPromptCachingBetaHeader(t *testing.T) {
 
 	client, _ := NewClientWithModel("m")
 	client.SetMaxTokensOverride(8192)
-	_, err := client.SendMessage(context.Background(), nil, nil, nil, "")
+	_, err := client.SendMessage(context.Background(), nil, nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -541,7 +541,7 @@ func TestClient_ANTHROPIC_BETAS_AdditionalHeaders(t *testing.T) {
 
 	client, _ := NewClientWithModel("m")
 	client.SetMaxTokensOverride(8192)
-	_, err := client.SendMessage(context.Background(), nil, nil, nil, "")
+	_, err := client.SendMessage(context.Background(), nil, nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -597,7 +597,7 @@ func TestClient_ANTHROPIC_BETAS_Streaming(t *testing.T) {
 	t.Setenv("ANTHROPIC_BETAS", "prompt_eval_cache,some_other_beta")
 
 	client, _ := NewClientWithModel("m")
-	blocksChan, _ := client.SendMessageStream(context.Background(), nil, nil, nil, "", 5*time.Second, 5*time.Second, nil)
+	blocksChan, _ := client.SendMessageStream(context.Background(), nil, nil, nil, "", "", 5*time.Second, 5*time.Second, nil)
 	for range blocksChan {
 		// drain
 	}
@@ -719,7 +719,7 @@ func TestClient_Streaming_SendsPromptCachingBetaHeader(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "test-key-0000000000000000")
 
 	client, _ := NewClientWithModel("m")
-	blocksChan, _ := client.SendMessageStream(context.Background(), nil, nil, nil, "", 5*time.Second, 5*time.Second, nil)
+	blocksChan, _ := client.SendMessageStream(context.Background(), nil, nil, nil, "", "", 5*time.Second, 5*time.Second, nil)
 	for range blocksChan {
 		// drain
 	}
@@ -755,7 +755,7 @@ func TestClient_Streaming_ThinkingAccumulation(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "test-key-0000000000000000")
 
 	client, _ := NewClientWithModel("m")
-	blocksChan, result := client.SendMessageStream(context.Background(), nil, nil, nil, "", 5*time.Second, 5*time.Second, nil)
+	blocksChan, result := client.SendMessageStream(context.Background(), nil, nil, nil, "", "", 5*time.Second, 5*time.Second, nil)
 	var blocks []StreamContentBlock
 	for b := range blocksChan {
 		if b.Type != "stream_event" {
@@ -804,7 +804,7 @@ func TestClient_SystemPrompt_HasCacheControl_Ephemeral(t *testing.T) {
 
 	client, _ := NewClientWithModel("m")
 	client.SetMaxTokensOverride(8192)
-	_, err := client.SendMessage(context.Background(), nil, nil, nil, "system prompt content")
+	_, err := client.SendMessage(context.Background(), nil, nil, nil, "system prompt content", "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -858,7 +858,7 @@ func TestClient_Tools_LastEntryHasCacheControl_Ephemeral(t *testing.T) {
 		{Name: "tool3", Description: "Third tool", InputSchema: ToolInputSchema{Type: "object", Properties: map[string]any{}, Required: []string{}}},
 	}
 	client.SetMaxTokensOverride(8192)
-	_, err := client.SendMessage(context.Background(), nil, tools, nil, "")
+	_, err := client.SendMessage(context.Background(), nil, tools, nil, "", "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -921,7 +921,7 @@ func TestClient_NoTools_NoToolsCacheControl_NoPanic(t *testing.T) {
 	client, _ := NewClientWithModel("m")
 	client.SetMaxTokensOverride(8192)
 	// Empty tools slice
-	_, err := client.SendMessage(context.Background(), nil, []ToolParam{}, nil, "")
+	_, err := client.SendMessage(context.Background(), nil, []ToolParam{}, nil, "", "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -958,7 +958,7 @@ func TestClient_NonStreaming_UsageTokensRegression(t *testing.T) {
 
 	client, _ := NewClientWithModel("m")
 	client.SetMaxTokensOverride(8192)
-	resp, err := client.SendMessage(context.Background(), nil, nil, nil, "")
+	resp, err := client.SendMessage(context.Background(), nil, nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -1110,7 +1110,7 @@ func TestClient_ToolResultDedup(t *testing.T) {
 		},
 	}
 
-	_, err := client.SendMessage(context.Background(), messages, nil, nil, "")
+	_, err := client.SendMessage(context.Background(), messages, nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -1327,7 +1327,7 @@ func TestNormalize_RoutesThroughNormalizeMessages(t *testing.T) {
 		{Role: "user", Content: "Test"},
 	}
 
-	_, err := client.SendMessage(context.Background(), messages, tools, nil, "")
+	_, err := client.SendMessage(context.Background(), messages, tools, nil, "", "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}

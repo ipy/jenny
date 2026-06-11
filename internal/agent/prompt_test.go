@@ -359,3 +359,148 @@ func TestAppendSection_Override(t *testing.T) {
 		t.Error("should return false when content is empty")
 	}
 }
+
+func TestAssembleSystemPrompt_FreezeOnCachedSystemPrompt(t *testing.T) {
+	// When CachedSystemPrompt is set, AssembleSystemPrompt returns it verbatim
+	// even if other cfg fields differ (simulating git status change between turns).
+	frozen := "This is the frozen prompt from turn 1."
+	cfg := StreamConfig{
+		CachedSystemPrompt: frozen,
+		MemoryContent:      "new memory that changed", // Would bust cache if used
+	}
+	tools := []tool.Tool{}
+
+	// First call with CachedSystemPrompt set
+	result := AssembleSystemPrompt(cfg, tools, "/tmp")
+	if result != frozen {
+		t.Errorf("expected frozen prompt, got different result:\n%s", result)
+	}
+
+	// Simulate second turn: cfg with different dynamic fields but same CachedSystemPrompt
+	cfg2 := StreamConfig{
+		CachedSystemPrompt: frozen,
+		MemoryContent:      "completely different memory",
+	}
+	result2 := AssembleSystemPrompt(cfg2, tools, "/tmp")
+	if result2 != frozen {
+		t.Errorf("expected frozen prompt on second call, got:\n%s", result2)
+	}
+
+	// Verify the frozen value does NOT contain the new memory content
+	if strings.Contains(result, "new memory that changed") {
+		t.Error("frozen prompt should not contain dynamic memory content")
+	}
+}
+
+func TestBuildSystemPrompt_ContainsAllSections(t *testing.T) {
+	// buildSystemPrompt assembles all sections; used when CachedSystemPrompt is empty.
+	tmpDir := t.TempDir()
+	initTestGitRepo(t, tmpDir)
+
+	cfg := StreamConfig{
+		MemoryContent:    "session memory content",
+		AppendSystemPrompt: "extra appended section",
+	}
+	tools := []tool.Tool{
+		&mockTool{name: "Read", description: "Read files"},
+	}
+
+	result := buildSystemPrompt(cfg, tools, tmpDir)
+
+	// Stable sections (these go into cached block)
+	if !strings.Contains(result, "You are an AI assistant") {
+		t.Error("should contain default intro")
+	}
+	if !strings.Contains(result, "session memory content") {
+		t.Error("should contain memory content")
+	}
+	if !strings.Contains(result, "Available tools: Read") {
+		t.Error("should contain tool list")
+	}
+	if !strings.Contains(result, "extra appended section") {
+		t.Error("should contain append section")
+	}
+
+	// Dynamic sections (these go into uncached suffix)
+	if !strings.Contains(result, "Git context:") {
+		t.Error("should contain git context")
+	}
+	if !strings.Contains(result, "Platform:") {
+		t.Error("should contain platform")
+	}
+}
+
+func TestDynamicSystemSuffix_OnlyGitAndPlatform(t *testing.T) {
+	// DynamicSystemSuffix returns only git status and platform/cwd (no cache control).
+	tmpDir := t.TempDir()
+	initTestGitRepo(t, tmpDir)
+
+	cfg := StreamConfig{
+		MemoryContent: "this should NOT appear",
+	}
+
+	result := DynamicSystemSuffix(cfg, tmpDir)
+
+	// Should contain git context
+	if !strings.Contains(result, "Git context:") {
+		t.Error("dynamic suffix should contain git context")
+	}
+	if !strings.Contains(result, "Branch:") {
+		t.Error("dynamic suffix should contain branch")
+	}
+
+	// Should contain platform and cwd
+	if !strings.Contains(result, "Platform:") {
+		t.Error("dynamic suffix should contain platform")
+	}
+	if !strings.Contains(result, "Cwd:") {
+		t.Error("dynamic suffix should contain cwd")
+	}
+
+	// Should NOT contain stable sections
+	if strings.Contains(result, "You are an AI assistant") {
+		t.Error("dynamic suffix should NOT contain default intro")
+	}
+	if strings.Contains(result, "this should NOT appear") {
+		t.Error("dynamic suffix should NOT contain memory content")
+	}
+	if strings.Contains(result, "Available tools:") {
+		t.Error("dynamic suffix should NOT contain tool list")
+	}
+	if strings.Contains(result, "ShouldNotAppear") {
+		t.Error("dynamic suffix should NOT contain tool names")
+	}
+}
+
+func TestDynamicSystemSuffix_EmptyForCustomPrompt(t *testing.T) {
+	// When CustomSystemPrompt is set, there is no dynamic suffix.
+	cfg := StreamConfig{
+		CustomSystemPrompt: "all custom, no dynamic needed",
+	}
+
+	result := DynamicSystemSuffix(cfg, "/tmp")
+	if result != "" {
+		t.Errorf("dynamic suffix should be empty for custom prompt, got: %s", result)
+	}
+}
+
+func TestDynamicSystemSuffix_EmptyOutsideGitRepo(t *testing.T) {
+	// Outside a git repo, git context is absent; only platform/cwd appears.
+	tmpDir := t.TempDir() // No git init — outside repo
+
+	cfg := StreamConfig{}
+	result := DynamicSystemSuffix(cfg, tmpDir)
+
+	// Should contain platform and cwd
+	if !strings.Contains(result, "Platform:") {
+		t.Error("dynamic suffix should contain platform")
+	}
+	if !strings.Contains(result, "Cwd:") {
+		t.Error("dynamic suffix should contain cwd")
+	}
+
+	// Should NOT contain git context
+	if strings.Contains(result, "Git context:") {
+		t.Error("dynamic suffix should NOT contain git context outside repo")
+	}
+}

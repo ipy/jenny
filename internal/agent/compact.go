@@ -245,7 +245,7 @@ func (e *QueryEngine) forkSummaryAgent(ctx context.Context, messages []api.Messa
 			}
 		}
 
-		resp, err := e.client.SendMessage(ctx, summaryMessages, nil, nil, summarySystemPrompt)
+		resp, err := e.client.SendMessage(ctx, summaryMessages, nil, nil, summarySystemPrompt, "")
 		if err != nil {
 			lastErr = err
 			// Check if it's a prompt-too-long error

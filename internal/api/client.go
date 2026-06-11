@@ -59,7 +59,7 @@ func NewClient() (*Client, error) {
 
 // NewClientWithModel creates a new API client with an optional model override.
 // If model is empty, reads from environment variables.
-// Provider selection order: OpenAI > Vertex AI > Anthropic.
+// Provider selection order: OpenAI > GenAI (Gemini / Vertex AI) > Anthropic.
 func NewClientWithModel(model string) (*Client, error) {
 	// OpenAI provider takes precedence
 	if os.Getenv("OPENAI_BASE_URL") != "" {
@@ -73,11 +73,11 @@ func NewClientWithModel(model string) (*Client, error) {
 		}, nil
 	}
 
-	// Vertex AI provider
-	if os.Getenv("VERTEXAI_BASE_URL") != "" {
-		provider, err := newVertexAIProvider(model)
+	// GenAI provider (Gemini API or Vertex AI)
+	if isGenAIEnvSet() {
+		provider, err := newGenAIProvider(model)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create Vertex AI provider: %w", err)
+			return nil, fmt.Errorf("failed to create GenAI provider: %w", err)
 		}
 		return &Client{
 			provider:    provider,
@@ -94,6 +94,28 @@ func NewClientWithModel(model string) (*Client, error) {
 		provider:    provider,
 		retryConfig: DefaultRetryConfig(),
 	}, nil
+}
+
+// isGenAIEnvSet reports whether any of the genai-related environment
+// variables are set, which would trigger selection of the genai provider.
+func isGenAIEnvSet() bool {
+	if os.Getenv("GENAI_API_KEY") != "" {
+		return true
+	}
+	if os.Getenv("GENAI_BASE_URL") != "" {
+		return true
+	}
+	if os.Getenv("GOOGLE_API_KEY") != "" || os.Getenv("GEMINI_API_KEY") != "" {
+		return true
+	}
+	if os.Getenv("GOOGLE_CLOUD_PROJECT") != "" &&
+		(os.Getenv("GOOGLE_CLOUD_LOCATION") != "" || os.Getenv("GOOGLE_CLOUD_REGION") != "") {
+		return true
+	}
+	if os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") == "1" || os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") == "true" {
+		return true
+	}
+	return false
 }
 
 // SetModel sets the model to use.
@@ -120,8 +142,8 @@ func (c *Client) SetMaxTokensOverride(maxTokens int) {
 }
 
 // SendMessage sends a message to the API and returns the response.
-func (c *Client) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string) (*Response, error) {
-	return c.provider.SendMessage(ctx, messages, tools, toolResults, systemPrompt)
+func (c *Client) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) (*Response, error) {
+	return c.provider.SendMessage(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix)
 }
 
 // SendMessageStream sends a streaming message to the API.
@@ -131,6 +153,7 @@ func (c *Client) SendMessageStream(
 	tools []ToolParam,
 	toolResults []ToolResult,
 	systemPrompt string,
+	systemPromptSuffix string,
 	idleTimeout time.Duration,
 	fallbackTimeout time.Duration,
 	onStreamingFallback func(context.Context) (*Response, error),
@@ -142,7 +165,7 @@ func (c *Client) SendMessageStream(
 		defer close(blocksChan)
 
 		// Delegate to provider's streaming method
-		contentChan, providerResult := c.provider.SendMessageStream(ctx, messages, tools, toolResults, systemPrompt, idleTimeout)
+		contentChan, providerResult := c.provider.SendMessageStream(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix, idleTimeout)
 
 		// Check for fallback conditions before streaming
 		// If fallback might be needed, buffer content blocks but not stream_event blocks.

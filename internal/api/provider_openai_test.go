@@ -87,7 +87,7 @@ func TestOpenAIProvider_ChatBasic(t *testing.T) {
 		t.Errorf("expected model 'gpt-5.4-nano', got %q", client.GetModel())
 	}
 
-	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Hi"}}, nil, nil, "")
+	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Hi"}}, nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -184,7 +184,7 @@ func TestOpenAIProvider_ChatWithTools(t *testing.T) {
 		{ToolUseID: "call_abc123", Content: "Sunny, 72°F"},
 	}
 
-	resp, err := client.SendMessage(context.Background(), messages, tools, toolResults, "")
+	resp, err := client.SendMessage(context.Background(), messages, tools, toolResults, "", "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -251,7 +251,7 @@ func TestOpenAIProvider_ChatStream(t *testing.T) {
 	blocksChan, result := client.SendMessageStream(
 		context.Background(),
 		[]Message{{Role: "user", Content: "Say hello"}},
-		nil, nil, "",
+		nil, nil, "", "",
 		30*time.Second,
 		30*time.Second,
 		nil,
@@ -398,6 +398,7 @@ func TestOpenAIProvider_SystemPrompt(t *testing.T) {
 		[]Message{{Role: "user", Content: "Hi"}},
 		nil, nil,
 		"You are a helpful assistant.",
+		"",
 	)
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
@@ -448,7 +449,7 @@ func TestOpenAIProvider_ChatStreamWithToolCalls(t *testing.T) {
 	blocksChan, result := client.SendMessageStream(
 		context.Background(),
 		[]Message{{Role: "user", Content: "Weather?"}},
-		tools, nil, "",
+		tools, nil, "", "",
 		30*time.Second,
 		30*time.Second,
 		nil,
@@ -512,7 +513,7 @@ func TestOpenAIProvider_ReasoningContent(t *testing.T) {
 	t.Setenv("OPENAI_DEFAULT_MODEL", "o3-mini")
 
 	client, _ := NewClientWithModel("")
-	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "What is the answer?"}}, nil, nil, "")
+	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "What is the answer?"}}, nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -565,7 +566,7 @@ func TestOpenAIProvider_CachedTokensNonStreaming(t *testing.T) {
 	t.Setenv("OPENAI_DEFAULT_MODEL", "gpt-5.4-nano")
 
 	client, _ := NewClientWithModel("")
-	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Hi"}}, nil, nil, "")
+	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Hi"}}, nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -610,7 +611,7 @@ func TestOpenAIProvider_StreamingReasoningContent(t *testing.T) {
 	blocksChan, result := client.SendMessageStream(
 		context.Background(),
 		[]Message{{Role: "user", Content: "What is the answer?"}},
-		nil, nil, "",
+		nil, nil, "", "",
 		30*time.Second,
 		30*time.Second,
 		nil,
@@ -701,7 +702,7 @@ func TestOpenAIProvider_StreamingCachedTokens(t *testing.T) {
 	blocksChan, result := client.SendMessageStream(
 		context.Background(),
 		[]Message{{Role: "user", Content: "Hi"}},
-		nil, nil, "",
+		nil, nil, "", "",
 		30*time.Second,
 		30*time.Second,
 		nil,

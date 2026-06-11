@@ -43,6 +43,7 @@ type StreamConfig struct {
 	ReadFileCache        *tool.ReadFileCache         // Cache for read-before-write enforcement
 	AutoMemoryEnabled    bool                        // Whether auto-memory is enabled
 	MemoryContent        string                      // Memory content to inject into system prompt
+	CachedSystemPrompt   string                      // Frozen system prompt from first assembly (cache-friendly)
 	Skills               []skills.Skill              // Discovered skills for manifest
 	IsForkChild          bool                        // True when this session is a fork child (subagent spawned another agent)
 	StructuredSchema     map[string]any              // JSON schema for structured output (AC1, AC4: non-interactive only)

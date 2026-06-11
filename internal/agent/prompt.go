@@ -31,6 +31,7 @@ When performing tasks, you should follow these principles:
 4. Be extremely cautious with destructive operations. Avoid running commands like "rm -rf", "git clean -fd", or other potentially harmful bash commands unless you are absolutely certain of their impact and the user has explicitly requested such an action.
 5. Provide clear, concise, and accurate information. When you have finished a task, synthesize the results of your tool calls to give a direct and helpful answer.
 6. Maintain a professional, efficient, and objective tone. Act as a reliable and proactive partner in problem-solving.
+7. Your final response must be a meaningful and regular message, which will be read by user or your caller. If asked for JSON, output raw JSON without any additional commentary, fences or formatting.
 
 Your capabilities include searching the filesystem, reading and editing files, running shell commands, and integrating with external tools. You should always use the most appropriate tool for each step of your workflow, and explain your reasoning when it helps the user understand your progress.`, true
 }
@@ -129,7 +130,20 @@ func appendSection(appendPrompt string, override bool) (string, bool) {
 
 // AssembleSystemPrompt builds the system prompt from sections based on configuration.
 // Each section is a function returning (content, shouldInclude).
+// On the first call, the result should be frozen by the caller into cfg.CachedSystemPrompt
+// so that subsequent calls return the identical string, protecting Anthropic's prompt
+// caching from dynamic variation (date, git status).
 func AssembleSystemPrompt(cfg StreamConfig, tools []tool.Tool, cwd string) string {
+	// Return frozen prompt if already assembled
+	if cfg.CachedSystemPrompt != "" {
+		return cfg.CachedSystemPrompt
+	}
+	return buildSystemPrompt(cfg, tools, cwd)
+}
+
+// buildSystemPrompt assembles the system prompt sections (the actual builder).
+// Exported for testing; use AssembleSystemPrompt in production.
+func buildSystemPrompt(cfg StreamConfig, tools []tool.Tool, cwd string) string {
 	// AC1: Custom prompt replaces all defaults
 	if cfg.CustomSystemPrompt != "" {
 		var result strings.Builder
@@ -165,12 +179,12 @@ func AssembleSystemPrompt(cfg StreamConfig, tools []tool.Tool, cwd string) strin
 		sections = append(sections, toolList)
 	}
 
-	// AC3: Git status injection (only inside repo)
+	// AC3: Git status injection (only inside repo) — captured once at session start
 	if gitStatus, ok := gitStatusSection(cwd); ok {
 		sections = append(sections, gitStatus)
 	}
 
-	// AC4: Platform/cwd context
+	// AC4: Platform/cwd context — date is captured once at session start
 	if platform, ok := platformSection(cwd); ok {
 		sections = append(sections, platform)
 	}
@@ -191,6 +205,37 @@ func AssembleSystemPrompt(cfg StreamConfig, tools []tool.Tool, cwd string) strin
 	if cfg.RedactEnabled {
 		sections = append(sections, "This session has secret redaction enabled. Tool results may contain `[REDACTED:<hex>]` placeholders (e.g. `[REDACTED:a3f1b2c9]`). Copy them verbatim — including the full hex suffix — and never simplify, abbreviate, or otherwise modify them.")
 	}
+
+	return strings.Join(sections, "\n\n")
+}
+
+// DynamicSystemSuffix returns the per-turn dynamic sections of the system prompt
+// that should NOT be cached (git status, platform/cwd). These change frequently
+// and re-sending them each turn is cheaper than busting the stable cached prefix.
+// Stable sections (intro, tool list, memory, skills, redaction) are handled separately
+// as the cached system prompt block in provider_anthropic.go.
+func DynamicSystemSuffix(cfg StreamConfig, cwd string) string {
+	// CustomSystemPrompt overrides everything — no dynamic suffix in that case
+	if cfg.CustomSystemPrompt != "" {
+		return ""
+	}
+
+	var sections []string
+
+	// Git status — only included if in a git repo
+	if gitStatus, ok := gitStatusSection(cwd); ok {
+		sections = append(sections, gitStatus)
+	}
+
+	// Platform + cwd (date excluded — it is already in the cached prefix)
+	platform := fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH)
+	if cwd == "" {
+		cwd, _ = os.Getwd()
+		if cwd == "" {
+			cwd = "/"
+		}
+	}
+	sections = append(sections, fmt.Sprintf("Platform: %s\nCwd: %s", platform, cwd))
 
 	return strings.Join(sections, "\n\n")
 }

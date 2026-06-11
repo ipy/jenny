@@ -19,11 +19,12 @@ const (
 // for communicating with a specific AI API backend.
 type Provider interface {
 	// SendMessage sends a non-streaming message and returns the response.
-	SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string) (*Response, error)
+	// systemPrompt is the cached stable prefix; systemPromptSuffix is the per-turn dynamic part (no cache control).
+	SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) (*Response, error)
 
 	// SendMessageStream sends a streaming message and yields content blocks via the channel.
-	// The StreamResult contains final blocks, usage, and any error.
-	SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, idleTimeout time.Duration) (<-chan StreamContentBlock, *StreamResult)
+	// systemPrompt is the cached stable prefix; systemPromptSuffix is the per-turn dynamic part (no cache control).
+	SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string, idleTimeout time.Duration) (<-chan StreamContentBlock, *StreamResult)
 
 	// Kind returns the provider kind for debugging/logging.
 	Kind() ProviderKind

@@ -9,12 +9,8 @@ import (
 )
 
 // NormalizeMessagesAPI normalizes messages for API transmission.
-// It follows the 6-step order: internal filter, orphaned thinking filter,
-// trailing thinking strip, whitespace-only filter, non-empty assistant guard,
-// tool pairing, and role merging.
-//
-// This function is exported for use by the api package as part of the
-// universal normalization gateway.
+// It applies content-level fixes AND structural transforms (tool pairing, role merging).
+// Used by the compaction path only — see normalizeNewMessage for per-turn use.
 func NormalizeMessagesAPI(messages []api.Message) []api.Message {
 	if len(messages) == 0 {
 		return messages
@@ -40,9 +36,35 @@ func NormalizeMessagesAPI(messages []api.Message) []api.Message {
 	messages = ensureToolResultPairing(messages)
 
 	// Step 6: Role merging - merge consecutive same-role messages
+	// NOTE: This is the primary cache buster in the normal turn path.
+	// It is only called here (compaction path), not in the per-turn engine loop.
 	messages = mergeConsecutiveSameRole(messages)
 
 	return messages
+}
+
+// normalizeNewMessage applies content-level normalization to a single message
+// without any structural transforms. This is safe to call on messages before
+// appending them to the history, since it never changes message boundaries or
+// merges adjacent messages — preserving cache continuity across turns.
+func normalizeNewMessage(msg api.Message) api.Message {
+	// Strip virtual marker
+	msg.IsVirtual = false
+	// Strip progress type
+	if msg.Type == "progress" {
+		msg.Type = ""
+	}
+	// Strip orphaned thinking-only content
+	if msg.Role == "assistant" && isThinkingOnlyContent(msg.Content) {
+		msg.Content = ""
+	}
+	// Strip trailing thinking
+	msg.Content = stripTrailingThinkingFromContent(msg.Content)
+	// Ensure non-empty assistant has a placeholder
+	if msg.Role == "assistant" && strings.TrimSpace(msg.Content) == "" && len(msg.ToolUse) == 0 {
+		msg.Content = "[Tool use interrupted]"
+	}
+	return msg
 }
 
 // filterInternalMessages removes internal-only messages that should not be sent to the API.

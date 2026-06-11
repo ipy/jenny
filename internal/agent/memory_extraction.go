@@ -274,7 +274,7 @@ func (me *MemoryExtractor) extract(ctx context.Context, turnCtx TurnContext) err
 
 	systemPrompt := "You are a memory extraction assistant. Your task is to identify durable facts, preferences, and context from the conversation and write them to the appropriate memory files in the auto-mem directory. You may use Read to examine existing memory files, and Edit/Write to update them. Focus on extracting: user preferences (user/), feedback about behavior (feedback/), project state and decisions (project/), and external references (reference/)."
 
-	resp, err := me.client.SendMessage(ctx, messages, toolParams, nil, systemPrompt)
+	resp, err := me.client.SendMessage(ctx, messages, toolParams, nil, systemPrompt, "")
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			log.Warn("Memory extraction timed out")

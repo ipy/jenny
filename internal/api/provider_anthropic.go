@@ -97,10 +97,10 @@ func (p *anthropicProvider) SetRetryConfig(cfg RetryConfig) {
 }
 
 // SendMessage sends a non-streaming message.
-func (p *anthropicProvider) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string) (*Response, error) {
+func (p *anthropicProvider) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) (*Response, error) {
 	// Wrap with retry
 	return p.sendWithRetry(ctx, func(ctx context.Context) (*Response, error) {
-		return p.doSendMessage(ctx, messages, tools, toolResults, systemPrompt)
+		return p.doSendMessage(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix)
 	}, p.isBackground)
 }
 
@@ -182,7 +182,7 @@ func (p *anthropicProvider) sendWithRetry(ctx context.Context, fn func(context.C
 }
 
 // doSendMessage performs the actual message sending.
-func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string) (*Response, error) {
+func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) (*Response, error) {
 	log.Debug("Sending message", "model", p.model)
 
 	// Validate media before sending
@@ -266,11 +266,19 @@ func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Messag
 		MaxTokens: int64(maxTokens),
 	}
 	body.Messages = sdkMessages
-	if systemPrompt != "" {
-		body.System = []anthropic.TextBlockParam{{
-			Text:         systemPrompt,
-			CacheControl: anthropic.NewCacheControlEphemeralParam(),
-		}}
+	if systemPrompt != "" || systemPromptSuffix != "" {
+		body.System = []anthropic.TextBlockParam{}
+		if systemPrompt != "" {
+			body.System = append(body.System, anthropic.TextBlockParam{
+				Text:         systemPrompt,
+				CacheControl: anthropic.NewCacheControlEphemeralParam(),
+			})
+		}
+		if systemPromptSuffix != "" {
+			body.System = append(body.System, anthropic.TextBlockParam{
+				Text: systemPromptSuffix,
+			})
+		}
 	}
 	if len(sdkTools) > 0 {
 		body.Tools = sdkTools
@@ -346,7 +354,7 @@ func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Messag
 }
 
 // SendMessageStream sends a streaming message.
-func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, idleTimeout time.Duration) (<-chan StreamContentBlock, *StreamResult) {
+func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string, idleTimeout time.Duration) (<-chan StreamContentBlock, *StreamResult) {
 	blocksChan := make(chan StreamContentBlock, 10)
 	result := &StreamResult{}
 
@@ -435,11 +443,19 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 			MaxTokens: int64(maxTokens),
 		}
 		body.Messages = sdkMessages
-		if systemPrompt != "" {
-			body.System = []anthropic.TextBlockParam{{
-				Text:         systemPrompt,
-				CacheControl: anthropic.NewCacheControlEphemeralParam(),
-			}}
+		if systemPrompt != "" || systemPromptSuffix != "" {
+			body.System = []anthropic.TextBlockParam{}
+			if systemPrompt != "" {
+				body.System = append(body.System, anthropic.TextBlockParam{
+					Text:         systemPrompt,
+					CacheControl: anthropic.NewCacheControlEphemeralParam(),
+				})
+			}
+			if systemPromptSuffix != "" {
+				body.System = append(body.System, anthropic.TextBlockParam{
+					Text: systemPromptSuffix,
+				})
+			}
 		}
 		if len(sdkTools) > 0 {
 			body.Tools = sdkTools

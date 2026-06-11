@@ -98,9 +98,9 @@ func (p *openAIProvider) SetRetryConfig(cfg RetryConfig) {
 }
 
 // SendMessage sends a non-streaming message.
-func (p *openAIProvider) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string) (*Response, error) {
+func (p *openAIProvider) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) (*Response, error) {
 	return p.sendWithRetry(ctx, func(ctx context.Context) (*Response, error) {
-		return p.doSendMessage(ctx, messages, tools, toolResults, systemPrompt)
+		return p.doSendMessage(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix)
 	}, false)
 }
 
@@ -182,12 +182,17 @@ func (p *openAIProvider) sendWithRetry(ctx context.Context, fn func(context.Cont
 }
 
 // doSendMessage performs the actual message sending.
-func (p *openAIProvider) doSendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string) (*Response, error) {
+func (p *openAIProvider) doSendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) (*Response, error) {
 	log.Debug("OpenAI provider sending message", "model", p.model)
 
 	messages, tools, _ = NormalizeMessages(messages, tools, Capabilities{SupportsPromptCaching: false})
 
-	sdkMessages := p.buildMessages(messages, toolResults, systemPrompt)
+	// Concatenate both system prompt parts for OpenAI (no separate cache control)
+	fullSystemPrompt := systemPrompt
+	if systemPromptSuffix != "" {
+		fullSystemPrompt = systemPrompt + "\n\n" + systemPromptSuffix
+	}
+	sdkMessages := p.buildMessages(messages, toolResults, fullSystemPrompt)
 
 	var sdkTools []openai.ChatCompletionToolUnionParam
 	if len(tools) > 0 {
@@ -374,7 +379,7 @@ func (p *openAIProvider) parseResponse(resp *openai.ChatCompletion) (*Response, 
 }
 
 // SendMessageStream sends a streaming message.
-func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, idleTimeout time.Duration) (<-chan StreamContentBlock, *StreamResult) {
+func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string, idleTimeout time.Duration) (<-chan StreamContentBlock, *StreamResult) {
 	blocksChan := make(chan StreamContentBlock, 10)
 	result := &StreamResult{}
 
@@ -385,7 +390,11 @@ func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Messa
 
 		messages, tools, _ = NormalizeMessages(messages, tools, Capabilities{SupportsPromptCaching: false})
 
-		sdkMessages := p.buildMessages(messages, toolResults, systemPrompt)
+		fullSystemPrompt := systemPrompt
+		if systemPromptSuffix != "" {
+			fullSystemPrompt = systemPrompt + "\n\n" + systemPromptSuffix
+		}
+		sdkMessages := p.buildMessages(messages, toolResults, fullSystemPrompt)
 
 		var sdkTools []openai.ChatCompletionToolUnionParam
 		if len(tools) > 0 {

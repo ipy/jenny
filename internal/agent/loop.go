@@ -183,7 +183,7 @@ func Run(ctx context.Context, prompt string, tools []tool.Tool, cwd string, maxI
 	// Main agent loop
 	for i := 0; maxIterations <= 0 || i < maxIterations; i++ {
 		// Send message to API (pass nil for toolResults as we include them in messages)
-		resp, err := client.SendMessage(ctx, messages, apiTools, nil, systemPrompt)
+		resp, err := client.SendMessage(ctx, messages, apiTools, nil, systemPrompt, "")
 		if err != nil {
 			return "", fmt.Errorf("API error: %v", err)
 		}

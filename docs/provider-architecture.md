@@ -19,15 +19,16 @@ type Provider interface {
 |------|---------------|-------|
 | `anthropic` | `provider_anthropic.go` | Uses `github.com/anthropics/anthropic-sdk-go` |
 | `openai` | `provider_openai.go` | Uses `github.com/openai/openai-go/v3` |
-| `vertexai` | `provider_vertexai.go` | OpenAI-compatible API, Google Cloud auth |
+| `genai` | `provider_genai.go` | Uses `google.golang.org/genai` (Gemini API or Vertex AI) |
 
 ## Provider Selection
 
 `NewClientWithModel(model)` selects the provider at client creation time based on environment variables:
 
 1. If `OPENAI_BASE_URL` is set → `openAIProvider`
-2. If `VERTEXAI_BASE_URL` is set → `vertexAIProvider`
-3. Otherwise → `anthropicProvider` (default)
+2. If `GENAI_API_KEY` is set → `genaiProvider` (Gemini API backend)
+3. If `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` are set → `genaiProvider` (Vertex AI backend with ADC)
+4. Otherwise → `anthropicProvider` (default)
 
 ## Adding a New Provider
 
@@ -81,7 +82,28 @@ All types are defined in `client.go`:
 - `ANTHROPIC_BETAS` — comma-separated list of additional beta headers
 - `API_TIMEOUT_MS` — request timeout in milliseconds
 
-### Vertex AI Provider
-- `VERTEXAI_BASE_URL` — API base URL (required)
-- `VERTEXAI_API_KEY` — API key (required)
-- `VERTEXAI_DEFAULT_MODEL` — default model (required when using Vertex AI provider)
+### GenAI Provider (Gemini / Vertex AI)
+The `genaiProvider` is backed by Google's official `google.golang.org/genai` Go SDK. It can target either the public Gemini API (`BackendGeminiAPI`) or Vertex AI (`BackendVertexAI`) — selection is automatic from environment variables.
+
+Environment variables (in precedence order, higher wins):
+- `GENAI_BASE_URL` — override the API base URL (e.g. proxy or VPC endpoint). Optional.
+- `GENAI_API_KEY` — explicit API key. Highest precedence; bypasses the SDK's built-in `GOOGLE_API_KEY` / `GEMINI_API_KEY` lookups.
+- `GOOGLE_API_KEY` / `GEMINI_API_KEY` — Gemini API key (read by the SDK when no explicit key is set).
+- `GOOGLE_CLOUD_PROJECT` — required to select the Vertex AI backend.
+- `GOOGLE_CLOUD_LOCATION` (or `GOOGLE_CLOUD_REGION`) — required to select the Vertex AI backend.
+- `GOOGLE_GENAI_USE_VERTEXAI=1|true` — force the Vertex AI backend.
+- `GENAI_DEFAULT_MODEL` — default model (required when using the genai provider).
+
+Selection rules (mirrors the SDK's own logic):
+1. If `GENAI_API_KEY` is set explicitly → Gemini API backend.
+2. Else if `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` are set → Vertex AI backend with Application Default Credentials.
+3. Else if `GOOGLE_API_KEY` / `GEMINI_API_KEY` is set → Gemini API backend.
+4. Otherwise the provider constructor returns an error.
+
+Behavior:
+- Non-streaming and streaming requests use `client.Models.GenerateContent` and `client.Models.GenerateContentStream` respectively.
+- System prompts are concatenated (`systemPrompt` + `"\n\n" + systemPromptSuffix`) and passed via `GenerateContentConfig.SystemInstruction`. (The SDK does not expose a per-segment cache-control knob, so the cached-stable/per-turn split is collapsed.)
+- Tools are translated from `ToolParam` to `*genai.Tool` with a `*genai.FunctionDeclaration` per tool. Empty property sets receive a synthetic `__arg__: string` placeholder.
+- Tool results are fed back as `*genai.FunctionResponse` parts on a `RoleUser` content turn, paired with the model's prior `*genai.FunctionCall` turn (the SDK requires both to be present in the conversation history).
+- Errors are mapped to `*RetryableHTTPError` (or returned unwrapped) based on `genai.APIError.Code` so the existing retry/streaming-fallback machinery works without changes.
+- Usage tokens: `PromptTokenCount → InputTokens`, `ResponseTokenCount → OutputTokens`, `CachedContentTokenCount → CacheReadInputTokens`, `ThoughtsTokenCount` is folded into `OutputTokens` (matching the Anthropic behavior where thinking tokens are part of the output budget).

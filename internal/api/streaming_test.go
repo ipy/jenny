@@ -139,7 +139,7 @@ func TestAC1_StreamingSendsStreamTrue(t *testing.T) {
 	}
 
 	blocksChan, result := client.SendMessageStream(
-		context.Background(), nil, nil, nil, "",
+		context.Background(), nil, nil, nil, "", "",
 		5*time.Second, 5*time.Second, nil,
 	)
 	blocks := readAllBlocks(t, blocksChan)
@@ -194,7 +194,7 @@ func TestAC2_AccumulatesMultipleTextDeltas(t *testing.T) {
 
 	client, _ := NewClientWithModel("m")
 	blocksChan, result := client.SendMessageStream(
-		context.Background(), nil, nil, nil, "",
+		context.Background(), nil, nil, nil, "", "",
 		5*time.Second, 5*time.Second, nil,
 	)
 	blocks := readAllBlocks(t, blocksChan)
@@ -231,7 +231,7 @@ func TestAC2_UsageFromMessageDelta(t *testing.T) {
 
 	client, _ := NewClientWithModel("m")
 	blocksChan, result := client.SendMessageStream(
-		context.Background(), nil, nil, nil, "",
+		context.Background(), nil, nil, nil, "", "",
 		5*time.Second, 5*time.Second, nil,
 	)
 	readAllBlocks(t, blocksChan)
@@ -262,7 +262,7 @@ func TestAC2_StopReasonExtraction(t *testing.T) {
 
 	client, _ := NewClientWithModel("m")
 	blocksChan, result := client.SendMessageStream(
-		context.Background(), nil, nil, nil, "",
+		context.Background(), nil, nil, nil, "", "",
 		5*time.Second, 5*time.Second, nil,
 	)
 	readAllBlocks(t, blocksChan)
@@ -298,7 +298,7 @@ func TestAC1_CacheTokensExtractedFromMessageDelta(t *testing.T) {
 
 	client, _ := NewClientWithModel("m")
 	blocksChan, result := client.SendMessageStream(
-		context.Background(), nil, nil, nil, "",
+		context.Background(), nil, nil, nil, "", "",
 		5*time.Second, 5*time.Second, nil,
 	)
 	readAllBlocks(t, blocksChan)
@@ -339,7 +339,7 @@ func TestAC1_CacheOnlyMessageDeltaEdgeCase(t *testing.T) {
 
 	client, _ := NewClientWithModel("m")
 	blocksChan, result := client.SendMessageStream(
-		context.Background(), nil, nil, nil, "",
+		context.Background(), nil, nil, nil, "", "",
 		5*time.Second, 5*time.Second, nil,
 	)
 	readAllBlocks(t, blocksChan)
@@ -371,7 +371,7 @@ func TestAC1_NonStreamingCacheTokensExtracted(t *testing.T) {
 
 	client, _ := NewClientWithModel("m")
 	client.SetMaxTokensOverride(8192)
-	resp, err := client.SendMessage(context.Background(), nil, nil, nil, "")
+	resp, err := client.SendMessage(context.Background(), nil, nil, nil, "", "")
 	if err != nil {
 		t.Fatalf("AC1 FAIL: SendMessage error = %v", err)
 	}
@@ -426,7 +426,7 @@ func TestAC3_FallbackOnIncompleteStream(t *testing.T) {
 	}
 
 	blocksChan, result := client.SendMessageStream(
-		context.Background(), nil, nil, nil, "",
+		context.Background(), nil, nil, nil, "", "",
 		5*time.Second, 5*time.Second, fallbackFn,
 	)
 	allBlocks := readAllBlocks(t, blocksChan)
@@ -497,7 +497,7 @@ func TestAC3_FallbackOnNonSSEResponse(t *testing.T) {
 	}
 
 	blocksChan, result := client.SendMessageStream(
-		context.Background(), nil, nil, nil, "",
+		context.Background(), nil, nil, nil, "", "",
 		5*time.Second, 5*time.Second, fallbackFn,
 	)
 	readAllBlocks(t, blocksChan)
@@ -563,7 +563,7 @@ func TestAC5_IdleTimeoutDetectedAfterDelayButFallbackNotCalled(t *testing.T) {
 
 	start := time.Now()
 	blocksChan, result := client.SendMessageStream(
-		context.Background(), nil, nil, nil, "",
+		context.Background(), nil, nil, nil, "", "",
 		100*time.Millisecond, // idle timeout: 100ms
 		2*time.Second,
 		fallbackFn,
@@ -621,7 +621,7 @@ func TestStreamingMultipleContentBlocks(t *testing.T) {
 
 	client, _ := NewClientWithModel("m")
 	blocksChan, _ := client.SendMessageStream(
-		context.Background(), nil, nil, nil, "",
+		context.Background(), nil, nil, nil, "", "",
 		5*time.Second, 5*time.Second, nil,
 	)
 	blocks := readAllBlocks(t, blocksChan)
@@ -665,7 +665,7 @@ func TestFallback_NonStreamingMaxTokens64000(t *testing.T) {
 
 	client, _ := NewClientWithModel("m")
 	// No SetMaxTokensOverride — must use the universal 64000 default.
-	if _, err := client.SendMessage(context.Background(), nil, nil, nil, ""); err != nil {
+	if _, err := client.SendMessage(context.Background(), nil, nil, nil, "", ""); err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
 
