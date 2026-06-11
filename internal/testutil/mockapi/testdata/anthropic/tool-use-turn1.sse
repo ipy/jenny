@@ -1,0 +1,5 @@
+event: message_start
+data: {"type":"message_start","message":{"id":"msg_tool_1","type":"message","role":"assistant","content":[{"type":"tool_use","id":"tu_1","name":"get_weather","input":{"location":"San Francisco"}}],"model":"test","usage":{"input_tokens":20,"output_tokens":15}}}
+
+event: message_stop
+data: {"type":"message_stop"}
