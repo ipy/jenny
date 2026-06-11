@@ -140,6 +140,13 @@ func NewQueryEngine(cfg StreamConfig, tools []tool.Tool, model string) *QueryEng
 				log.Debug("Compact fail count restored", "sessionID", sessionID, "count", count)
 			}
 		}
+		// AC3: Restore frozen system prompt from transcript for prompt caching
+		if cfg.SessionManager != nil {
+			if sp, err := cfg.SessionManager.LoadSystemPrompt(sessionID); err == nil && sp != "" {
+				cfg.CachedSystemPrompt = sp
+				log.Debug("System prompt restored from transcript", "sessionID", sessionID, "len", len(sp))
+			}
+		}
 		// AC2: Seed readFileState from transcript for read-before-write optimization on resume
 		if cfg.ReadFileCache != nil {
 			if err := seedReadFileCacheFromTranscript(cfg.ReadFileCache, cfg.SessionManager, sessionID); err != nil {

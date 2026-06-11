@@ -44,11 +44,29 @@ Parse chain participants (see session-persistence.md)
 Filter queue-only / empty sessions
     │
     ▼
+Restore system prompt (CachedSystemPrompt) from transcript state entry
+    │
+    ▼
 Restore caches (readFileState, cost, compaction boundaries)
     │
     ▼
 Continue with user prompt
 ```
+
+## System Prompt Restoration
+
+The frozen system prompt is persisted as a transcript `state` entry with field `SystemPrompt`:
+
+```
+{"type":"state","system_prompt":"You are an AI assistant with access to..."}
+```
+
+On resume loaded at `engine.go:131-149`:
+1. Scan transcript for latest `state` entry with non-empty `SystemPrompt`
+2. Set `cfg.CachedSystemPrompt` to the loaded value
+3. Subsequent `AssembleSystemPrompt` calls return the frozen string
+
+This ensures the system prompt prefix is byte-for-byte identical across process boundaries, enabling prompt caching hits even on resumed sessions.
 
 ## Queue-Only Filtering
 

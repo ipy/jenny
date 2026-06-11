@@ -16,6 +16,35 @@ depends_on:
 
 Before each API request, convert internal transcript messages to API-safe payloads: strip internal fields, merge roles, enforce tool pairing, format Read output.
 
+## Append-Only Guarantee for Prompt Caching
+
+To protect Anthropic prompt caching, message history must be **append-only** across turns — no structural mutations to previously-sent messages.
+
+Two normalization paths exist:
+
+| Path | Scope | Used by | Cache impact |
+|------|-------|---------|-------------|
+| `normalizeNewMessage(msg)` | Content-level only: strip virtual/progress markers, strip orphaned thinking, strip trailing thinking, ensure non-empty assistant | Per-turn engine loop (`engine_loop.go`) | **Safe** — immutable message boundaries |
+| `NormalizeMessagesAPI(msgs)` | Full normalization: all content fixes + `ensureToolResultPairing` + `mergeConsecutiveSameRole` | Compaction only (`compact.go:normalizeCompactedChain`) | **Breaks cache** — structural changes accepted (compaction already destroys cache continuity) |
+
+Key design choice: `mergeConsecutiveSameRole` (the primary cache buster) is **never** called on the normal per-turn path. Previously-sent messages retain their exact byte content and boundaries across turns.
+
+## NormalizeNewMessage (Per-Turn)
+
+Applied to every message before each API request at `engine_loop.go:303-308`:
+
+1. Strip `IsVirtual` marker
+2. Strip `Type == "progress"` 
+3. Strip orphaned thinking-only content
+4. Strip trailing thinking blocks
+5. Ensure non-empty assistant has `[Tool use interrupted]` placeholder
+
+No message filtering, no tool_result pairing, no role merging — content-level only.
+
+## NormalizeMessagesAPI (Compaction)
+
+Used exclusively by `normalizeCompactedChain` after context compaction. Same 6-step pipeline as before. Full structural normalization is acceptable here because compaction already destroys cache continuity by changing the message array.
+
 ## Strip Internal Content
 
 Drop from API send:

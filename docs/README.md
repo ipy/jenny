@@ -83,6 +83,7 @@ Specifications for the core agent engine and infrastructure.
 | [testutil.md](./arch/testutil.md) | Shared test helpers and import cycle resolution |
 | [tool-registry.md](./arch/tool-registry.md) | Default tool preset registry |
 | [universal-normalization-architecture.md](./arch/universal-normalization-architecture.md) | Cross-provider normalization architecture |
+| [windows-support.md](./arch/windows-support.md) | Native Windows support strategy |
 
 ## Tool Specifications
 
@@ -123,6 +124,14 @@ Specifications for architectural patterns and optional subsystems.
 | [skill.md](./patterns/skill.md) | Skill definition and execution |
 | [skills-framework.md](./patterns/skills-framework.md) | Skills framework architecture |
 | [swarm.md](./patterns/swarm.md) | Multi-agent swarm orchestration |
+
+## Technical Debt
+
+Audits and plans for system hardening and reliability.
+
+| Spec | Description |
+|------|-------------|
+| [file-io-robustness.md](./debt/file-io-robustness.md) | Critical fixes for concurrency and I/O |
 
 ## Implementation Order
 

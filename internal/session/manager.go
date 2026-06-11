@@ -29,7 +29,8 @@ type TranscriptEntry struct {
 	IsError   bool      `json:"is_error,omitempty"`
 
 	// Session state fields - used for session-level state persistence
-	CompactFailCount int `json:"compact_fail_count,omitempty"`
+	CompactFailCount int    `json:"compact_fail_count,omitempty"`
+	SystemPrompt     string `json:"system_prompt,omitempty"`
 
 	// Worktree state fields - used for worktree isolation and resume
 	WorktreePath   string `json:"worktree_path,omitempty"`
@@ -340,6 +341,39 @@ func (m *Manager) CheckRewriteSize(sessionID string) error {
 		return fmt.Errorf("transcript file size %d exceeds maximum %d bytes for rewrite", info.Size(), constants.MaxTombstoneRewriteBytes)
 	}
 	return nil
+}
+
+// AppendSystemPrompt persists the frozen system prompt as a state entry.
+// The entry is only written when the session is active and prompt is non-empty.
+func (m *Manager) AppendSystemPrompt(sessionID string, systemPrompt string) error {
+	if m.Disabled || sessionID == "" || systemPrompt == "" {
+		return nil
+	}
+	return m.AppendEntry(sessionID, TranscriptEntry{
+		Type:         "state",
+		SystemPrompt: systemPrompt,
+	})
+}
+
+// LoadSystemPrompt loads the most recent system prompt from the transcript.
+// Returns empty string if no state entry with system_prompt is found.
+func (m *Manager) LoadSystemPrompt(sessionID string) (string, error) {
+	if sessionID == "" {
+		return "", nil
+	}
+
+	entries, err := m.LoadTranscript(sessionID)
+	if err != nil {
+		return "", err
+	}
+
+	var latest string
+	for _, entry := range entries {
+		if entry.Type == "state" && entry.SystemPrompt != "" {
+			latest = entry.SystemPrompt
+		}
+	}
+	return latest, nil
 }
 
 // Flush flushes any pending writes to disk. Since writes are currently

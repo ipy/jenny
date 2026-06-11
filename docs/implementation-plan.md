@@ -55,7 +55,7 @@ All feature specs live in `docs/`. See [`README.md`](./README.md) for the full i
 | P1 | [tool-registry](./arch/tool-registry.md) → [query-engine](./arch/query-engine.md) → [git-helpers](./tools/git-helpers.md) → [system-prompt](./arch/system-prompt.md) → [read](./tools/read.md) → [glob](./tools/glob.md) → [grep](./tools/grep.md) → [dangerous-command-gate](./tools/dangerous-command-gate.md) → [bash](./tools/bash.md) → [write](./tools/write.md) → [edit](./tools/edit.md) → [parallel-tool-execution](./arch/parallel-tool-execution.md) → [rate-limit-handling](./arch/rate-limit-handling.md) |
 | P2 | [message-normalization](./arch/message-normalization.md) → [context-compaction](./arch/context-compaction.md) → [sandbox](./patterns/sandbox.md) → [notebook-edit](./tools/notebook-edit.md) → [list-mcp-resources](./tools/list-mcp-resources.md) → [read-mcp-resource](./tools/read-mcp-resource.md) |
 | P3 | [structured-logging](./arch/structured-logging.md) → [memdir](./patterns/memdir.md) → [session-memory](./arch/session-memory.md) → [memory-extraction](./patterns/memory-extraction.md) → [web-fetch](./tools/web-fetch.md) → [web-search](./tools/web-search.md) → [lsp](./tools/lsp.md) → [skill](./patterns/skill.md) → [sleep-await](./tools/sleep-await.md) |
-| P4 | [subagent-types](./arch/subagent-types.md) → [tasks](./tools/tasks.md) → [agent-resume-fork](./patterns/agent-resume-fork.md) → [background-tasks](./patterns/background-tasks.md) → [skills-framework](./patterns/skills-framework.md) → [structured-sdk-output](./arch/structured-sdk-output.md) → [swarm](./patterns/swarm.md) → [enter-worktree](./tools/enter-worktree.md) → [exit-worktree](./tools/exit-worktree.md) |
+| P4 | [subagent-types](./arch/subagent-types.md) → [tasks](./tools/tasks.md) → [agent-resume-fork](./patterns/agent-resume-fork.md) → [background-tasks](./patterns/background-tasks.md) → [skills-framework](./patterns/skills-framework.md) → [structured-sdk-output](./arch/structured-sdk-output.md) → [swarm](./patterns/swarm.md) → [enter-worktree](./tools/enter-worktree.md) → [exit-worktree](./tools/exit-worktree.md) → [windows-support](./arch/windows-support.md) |
 
 ---
 
@@ -231,6 +231,7 @@ Implement in this order:
 
 - [x] Tasks (TodoWrite, TaskCreate, TaskGet, TaskList, TaskUpdate, TaskStop, TaskOutput, TaskSubAgent) — [`tasks.md`](./tools/tasks.md)
 - [x] EnterWorktree / ExitWorktree — [`enter-worktree.md`](./tools/enter-worktree.md), [`exit-worktree.md`](./tools/exit-worktree.md)
+- [ ] Native Windows Support — [`windows-support.md`](./arch/windows-support.md)
 
 ---
 
@@ -240,7 +241,6 @@ Implement in this order:
 - Slash commands
 - Remote control, bridge, analytics, telemetry
 - AskUserQuestion, plan mode enter/exit
-- PowerShell
 - Team / coordinator / SendMessage
 - Cron / remote triggers
 - Interactive config tool

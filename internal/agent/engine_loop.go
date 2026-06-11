@@ -121,6 +121,10 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 	// within the same session receive an identical string, protecting prompt caching.
 	if e.streamCfg.CachedSystemPrompt == "" {
 		e.streamCfg.CachedSystemPrompt = systemPrompt
+		// Persist frozen system prompt to transcript for cross-process resume
+		if e.sessionManager != nil && sessionID != "" {
+			_ = e.sessionManager.AppendSystemPrompt(sessionID, systemPrompt)
+		}
 	}
 
 	// AC3: When stream-json mode is active, redirect debug logs to stderr

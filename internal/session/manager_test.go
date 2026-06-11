@@ -709,4 +709,125 @@ func TestManager_Disabled_NoFilesCreated(t *testing.T) {
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Errorf(" transcript file should not exist when disabled, got err = %v", err)
 	}
+
+	// AppendSystemPrompt should also be a no-op when disabled
+	if err := m.AppendSystemPrompt(sessionID, "system prompt"); err != nil {
+		t.Fatalf("AppendSystemPrompt() error = %v when disabled", err)
+	}
+	// SessionExists should still be false (no file written)
+	if m.SessionExists(sessionID) {
+		t.Error("SessionExists() = true, want false when disabled after AppendSystemPrompt")
+	}
+}
+
+func TestManager_AppendAndLoadSystemPrompt(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp() error = %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	m, err := NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	sessionID := "test-sp-1"
+
+	// Append a system prompt
+	if err := m.AppendSystemPrompt(sessionID, "You are an AI assistant."); err != nil {
+		t.Fatalf("AppendSystemPrompt() error = %v", err)
+	}
+
+	// Load and verify
+	loaded, err := m.LoadSystemPrompt(sessionID)
+	if err != nil {
+		t.Fatalf("LoadSystemPrompt() error = %v", err)
+	}
+	if loaded != "You are an AI assistant." {
+		t.Errorf("LoadSystemPrompt() = %q, want %q", loaded, "You are an AI assistant.")
+	}
+
+	// Overwrite with a new system prompt
+	if err := m.AppendSystemPrompt(sessionID, "You are a different assistant."); err != nil {
+		t.Fatalf("AppendSystemPrompt() overwrite error = %v", err)
+	}
+
+	// Should return the latest
+	loaded, err = m.LoadSystemPrompt(sessionID)
+	if err != nil {
+		t.Fatalf("LoadSystemPrompt() overwrite error = %v", err)
+	}
+	if loaded != "You are a different assistant." {
+		t.Errorf("LoadSystemPrompt() = %q, want %q", loaded, "You are a different assistant.")
+	}
+}
+
+func TestManager_LoadSystemPrompt_EmptySession(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp() error = %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	m, err := NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	// Session doesn't exist - should return error
+	prompt, err := m.LoadSystemPrompt("nonexistent-session")
+	if err == nil {
+		t.Error("LoadSystemPrompt() error = nil, want error for nonexistent session")
+	}
+	if prompt != "" {
+		t.Errorf("LoadSystemPrompt() = %q, want empty", prompt)
+	}
+
+	// Empty session ID returns empty string without error
+	prompt, err = m.LoadSystemPrompt("")
+	if err != nil {
+		t.Errorf("LoadSystemPrompt() error = %v, want nil for empty session ID", err)
+	}
+	if prompt != "" {
+		t.Errorf("LoadSystemPrompt() = %q, want empty for empty session ID", prompt)
+	}
+}
+
+func TestManager_AppendSystemPrompt_NilChecks(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp() error = %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	m, err := NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+	sessionID := "test-sp-nil"
+
+	// Empty system prompt should not create an entry
+	if err := m.AppendSystemPrompt(sessionID, ""); err != nil {
+		t.Errorf("AppendSystemPrompt() with empty prompt error = %v, want nil", err)
+	}
+
+	// Empty session ID should not create an entry
+	if err := m.AppendSystemPrompt("", "some prompt"); err != nil {
+		t.Errorf("AppendSystemPrompt() with empty session ID error = %v, want nil", err)
+	}
+
+	// Verify no state entries with system_prompt were written.
+	// Session may not exist yet, that's fine.
+	if m.SessionExists(sessionID) {
+		entries, err := m.LoadTranscript(sessionID)
+		if err != nil {
+			t.Fatalf("LoadTranscript() error = %v", err)
+		}
+		for _, e := range entries {
+			if e.Type == "state" && e.SystemPrompt != "" {
+				t.Errorf("unexpected state entry with system_prompt = %q", e.SystemPrompt)
+			}
+		}
+	}
 }
