@@ -286,11 +286,17 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			e.mu.Unlock()
 
 			if !circuitBreakerTripped {
+				// Capture pre-compaction tokens for boundary persistence
+				preCompactTokens := estimatedTokens
+
 				// Attempt compaction
 				compacted, err := e.compactMessages(ctx, messages, e.compactConfig, systemPrompt)
 				if err == nil {
 					// Compaction succeeded - normalize the compacted chain
 					messages = normalizeCompactedChain(compacted)
+					preservedCount := len(compacted)
+					// Persist compaction boundary to transcript for resume filtering
+					e.persistCompactBoundary(preCompactTokens, preservedCount, "auto")
 					log.Debug("Context compaction succeeded", "newMessageCount", len(messages))
 				} else {
 					// Compaction failed - increment failure counter

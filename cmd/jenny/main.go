@@ -123,8 +123,9 @@ func run() error {
 			return fmt.Errorf("session not found: %s", sessionID)
 		}
 
-		// Load transcript and rebuild message history
-		entries, err := sessionManager.LoadTranscript(sessionID)
+		// Load transcript for validation (LoadPostBoundaryMessages for history)
+		// Use LoadPostBoundaryMessages to skip pre-compaction messages when resuming
+		entries, err := sessionManager.LoadPostBoundaryMessages(sessionID)
 		if err != nil {
 			return fmt.Errorf("loading transcript: %w", err)
 		}

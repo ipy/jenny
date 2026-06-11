@@ -20,7 +20,7 @@ import (
 
 // TranscriptEntry represents a single turn in the conversation transcript.
 type TranscriptEntry struct {
-	Type      string    `json:"type"`
+	Type string    `json:"type"`
 	Timestamp time.Time `json:"timestamp"`
 	SessionID string    `json:"session_id"`
 	UUID      string    `json:"uuid"`
@@ -38,6 +38,17 @@ type TranscriptEntry struct {
 	WorktreePath   string `json:"worktree_path,omitempty"`
 	WorktreeBranch string `json:"worktree_branch,omitempty"`
 	WorktreeCWD    string `json:"worktree_cwd,omitempty"`
+
+	// Compaction boundary fields
+	Subtype         string            `json:"subtype,omitempty"`
+	CompactMetadata *CompactMetadata `json:"compact_metadata,omitempty"`
+}
+
+// CompactMetadata holds metadata about a compaction boundary.
+type CompactMetadata struct {
+	Trigger          string `json:"trigger"`
+	PreTokens       int    `json:"pre_tokens"`
+	PreservedSegment int    `json:"preserved_segment"`
 }
 
 // ToolUse represents a tool call in the transcript.
@@ -420,6 +431,119 @@ func (m *Manager) LoadSystemPrompt(sessionID string) (string, error) {
 		}
 	}
 	return latest, nil
+}
+
+// LoadPostBoundaryMessages loads transcript entries after the last compaction boundary.
+// This is used during session resume to exclude pre-boundary messages that have already
+// been summarized.
+//
+// Returns all entries if no compaction boundary is found (preserves current behavior).
+// A read lock is held for the duration of file read + JSON parsing.
+func (m *Manager) LoadPostBoundaryMessages(sessionID string) ([]TranscriptEntry, error) {
+	if sessionID == "" {
+		return nil, fmt.Errorf("session ID is required")
+	}
+
+	if containsPathTraversal(sessionID) {
+		return nil, fmt.Errorf("invalid session ID: path traversal not allowed")
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	path := m.transcriptPath(sessionID)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("session not found: %s", sessionID)
+		}
+		return nil, fmt.Errorf("reading transcript file: %w", err)
+	}
+
+	// First pass: find the last compaction boundary line index
+	var lastBoundaryLineIdx int = -1
+	lines := splitLines(string(data))
+	for idx, line := range lines {
+		if line == "" {
+			continue
+		}
+		var entry TranscriptEntry
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			continue
+		}
+		if entry.Type == "system" && entry.Subtype == "compact_boundary" {
+			lastBoundaryLineIdx = idx
+		}
+	}
+
+	// If no boundary found, return all entries (current behavior)
+	if lastBoundaryLineIdx == -1 {
+		var entries []TranscriptEntry
+		for _, line := range lines {
+			if line == "" {
+				continue
+			}
+			var entry TranscriptEntry
+			if err := json.Unmarshal([]byte(line), &entry); err != nil {
+				log.Warn("Malformed JSON line in transcript",
+					"session", sessionID,
+					"line", truncateForLog(line, 200),
+					"error", err.Error())
+				continue
+			}
+			if progressTypes[entry.Type] {
+				continue
+			}
+			entries = append(entries, entry)
+		}
+		return entries, nil
+	}
+
+	// Second pass: count non-filtered entries before the boundary
+	filteredBeforeBoundary := 0
+	for idx, line := range lines {
+		if idx >= lastBoundaryLineIdx {
+			break
+		}
+		if line == "" {
+			continue
+		}
+		var entry TranscriptEntry
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			continue
+		}
+		if !progressTypes[entry.Type] {
+			filteredBeforeBoundary++
+		}
+	}
+
+	// Third pass: build entries list, skipping entries before boundary
+	var entries []TranscriptEntry
+	filteredCount := 0
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		var entry TranscriptEntry
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			log.Warn("Malformed JSON line in transcript",
+				"session", sessionID,
+				"line", truncateForLog(line, 200),
+				"error", err.Error())
+			continue
+		}
+		if progressTypes[entry.Type] {
+			continue
+		}
+		filteredCount++
+		// Skip entries before the boundary
+		if filteredCount <= filteredBeforeBoundary {
+			continue
+		}
+		entries = append(entries, entry)
+	}
+
+	return entries, nil
 }
 
 // Flush flushes any pending writes to disk. Since writes are currently

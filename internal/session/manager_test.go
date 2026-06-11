@@ -1008,3 +1008,258 @@ func TestConcurrency(t *testing.T) {
 		}
 	}
 }
+
+
+// TestAC2_LoadPostBoundaryMessages tests that LoadPostBoundaryMessages correctly
+// filters entries after a compaction boundary.
+func TestAC2_LoadPostBoundaryMessages(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp() error = %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	m, err := NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	sessionID := "sess_boundary_test"
+
+	// Append entries before boundary
+	entries := []TranscriptEntry{
+		{Type: "user", Content: "Hello"},
+		{Type: "assistant", Content: "Hi there"},
+		{Type: "user", Content: "How are you?"},
+	}
+
+	for _, e := range entries {
+		if err := m.AppendEntry(sessionID, e); err != nil {
+			t.Fatalf("AppendEntry() error = %v", err)
+		}
+	}
+
+	// Append compaction boundary
+	boundaryEntry := TranscriptEntry{
+		Type:    "system",
+		Subtype: "compact_boundary",
+		CompactMetadata: &CompactMetadata{
+			Trigger:          "auto",
+			PreTokens:       5000,
+			PreservedSegment: 3,
+		},
+	}
+	if err := m.AppendEntry(sessionID, boundaryEntry); err != nil {
+		t.Fatalf("AppendEntry() for boundary error = %v", err)
+	}
+
+	// Append entries after boundary
+	postBoundary := []TranscriptEntry{
+		{Type: "user", Content: "Tell me about the project"},
+		{Type: "assistant", Content: "The project is great"},
+	}
+	for _, e := range postBoundary {
+		if err := m.AppendEntry(sessionID, e); err != nil {
+			t.Fatalf("AppendEntry() for post-boundary error = %v", err)
+		}
+	}
+
+	// Test LoadPostBoundaryMessages
+	loaded, err := m.LoadPostBoundaryMessages(sessionID)
+	if err != nil {
+		t.Fatalf("LoadPostBoundaryMessages() error = %v", err)
+	}
+
+	// Should return only post-boundary entries (boundary + postBoundary entries = 3)
+	if len(loaded) != 3 {
+		t.Errorf("LoadPostBoundaryMessages() returned %d entries, want 3 (boundary + 2 post-boundary)", len(loaded))
+	}
+
+	// First entry should be the boundary
+	if loaded[0].Type != "system" || loaded[0].Subtype != "compact_boundary" {
+		t.Errorf("First entry is not boundary: type=%s, subtype=%s", loaded[0].Type, loaded[0].Subtype)
+	}
+
+	// Verify metadata
+	if loaded[0].CompactMetadata == nil {
+		t.Error("CompactMetadata is nil")
+	} else {
+		if loaded[0].CompactMetadata.Trigger != "auto" {
+			t.Errorf("Trigger = %s, want auto", loaded[0].CompactMetadata.Trigger)
+		}
+		if loaded[0].CompactMetadata.PreTokens != 5000 {
+			t.Errorf("PreTokens = %d, want 5000", loaded[0].CompactMetadata.PreTokens)
+		}
+		if loaded[0].CompactMetadata.PreservedSegment != 3 {
+			t.Errorf("PreservedSegment = %d, want 3", loaded[0].CompactMetadata.PreservedSegment)
+		}
+	}
+
+	// Verify post-boundary entries
+	if len(loaded) > 1 {
+		if loaded[1].Type != "user" || loaded[1].Content != "Tell me about the project" {
+			t.Errorf("Second entry mismatch: got %+v", loaded[1])
+		}
+	}
+}
+
+// TestAC2_LoadPostBoundaryMessages_NoBoundary tests that when there's no boundary,
+// LoadPostBoundaryMessages returns all entries (current behavior).
+func TestAC2_LoadPostBoundaryMessages_NoBoundary(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp() error = %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	m, err := NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	sessionID := "sess_no_boundary_test"
+
+	// Append entries without any boundary
+	entries := []TranscriptEntry{
+		{Type: "user", Content: "Hello"},
+		{Type: "assistant", Content: "Hi there"},
+	}
+	for _, e := range entries {
+		if err := m.AppendEntry(sessionID, e); err != nil {
+			t.Fatalf("AppendEntry() error = %v", err)
+		}
+	}
+
+	// LoadPostBoundaryMessages should return all entries (no boundary to filter)
+	loaded, err := m.LoadPostBoundaryMessages(sessionID)
+	if err != nil {
+		t.Fatalf("LoadPostBoundaryMessages() error = %v", err)
+	}
+
+	if len(loaded) != 2 {
+		t.Errorf("LoadPostBoundaryMessages() returned %d entries, want 2", len(loaded))
+	}
+}
+
+// TestAC5_MultipleCompactionBoundaries tests that only the most recent boundary applies.
+func TestAC5_MultipleCompactionBoundaries(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp() error = %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	m, err := NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	sessionID := "sess_multi_boundary_test"
+
+	// Append entries before first boundary
+	for i := 0; i < 3; i++ {
+		if err := m.AppendEntry(sessionID, TranscriptEntry{Type: "user", Content: fmt.Sprintf("msg-%d", i)}); err != nil {
+			t.Fatalf("AppendEntry() error = %v", err)
+		}
+	}
+
+	// First boundary
+	if err := m.AppendEntry(sessionID, TranscriptEntry{Type: "system", Subtype: "compact_boundary", CompactMetadata: &CompactMetadata{Trigger: "auto", PreTokens: 1000, PreservedSegment: 3}}); err != nil {
+		t.Fatalf("AppendEntry() for boundary error = %v", err)
+	}
+
+	// Entries between boundaries
+	for i := 0; i < 3; i++ {
+		if err := m.AppendEntry(sessionID, TranscriptEntry{Type: "user", Content: fmt.Sprintf("msg-between-%d", i)}); err != nil {
+			t.Fatalf("AppendEntry() error = %v", err)
+		}
+	}
+
+	// Second boundary (should be the one that matters)
+	if err := m.AppendEntry(sessionID, TranscriptEntry{Type: "system", Subtype: "compact_boundary", CompactMetadata: &CompactMetadata{Trigger: "auto", PreTokens: 2000, PreservedSegment: 3}}); err != nil {
+		t.Fatalf("AppendEntry() for boundary error = %v", err)
+	}
+
+	// Entries after second boundary
+	for i := 0; i < 2; i++ {
+		if err := m.AppendEntry(sessionID, TranscriptEntry{Type: "user", Content: fmt.Sprintf("msg-after-%d", i)}); err != nil {
+			t.Fatalf("AppendEntry() error = %v", err)
+		}
+	}
+
+	// LoadPostBoundaryMessages should return only entries after the LAST boundary
+	loaded, err := m.LoadPostBoundaryMessages(sessionID)
+	if err != nil {
+		t.Fatalf("LoadPostBoundaryMessages() error = %v", err)
+	}
+
+	// Should be: second boundary + 2 post-boundary = 3 entries
+	if len(loaded) != 3 {
+		t.Errorf("LoadPostBoundaryMessages() returned %d entries, want 3 (boundary + 2 post-boundary)", len(loaded))
+	}
+
+	// First entry should be the second boundary
+	if loaded[0].Type != "system" || loaded[0].Subtype != "compact_boundary" {
+		t.Errorf("First entry is not boundary: type=%s, subtype=%s", loaded[0].Type, loaded[0].Subtype)
+	}
+
+	// Verify it's the second boundary (PreTokens = 2000)
+	if loaded[0].CompactMetadata.PreTokens != 2000 {
+		t.Errorf("Got PreTokens = %d, want 2000 (second boundary)", loaded[0].CompactMetadata.PreTokens)
+	}
+}
+
+// TestAC4_CompactionBoundaryMetadata tests that boundary metadata is persisted correctly.
+func TestAC4_CompactionBoundaryMetadata(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp() error = %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	m, err := NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	sessionID := "sess_metadata_test"
+
+	// Append boundary with specific metadata
+	entry := TranscriptEntry{
+		Type:    "system",
+		Subtype: "compact_boundary",
+		CompactMetadata: &CompactMetadata{
+			Trigger:          "manual",
+			PreTokens:       7500,
+			PreservedSegment: 5,
+		},
+	}
+	if err := m.AppendEntry(sessionID, entry); err != nil {
+		t.Fatalf("AppendEntry() error = %v", err)
+	}
+
+	// Load and verify metadata
+	loaded, err := m.LoadPostBoundaryMessages(sessionID)
+	if err != nil {
+		t.Fatalf("LoadPostBoundaryMessages() error = %v", err)
+	}
+
+	if len(loaded) != 1 {
+		t.Fatalf("Expected 1 entry, got %d", len(loaded))
+	}
+
+	if loaded[0].CompactMetadata == nil {
+		t.Fatal("CompactMetadata is nil")
+	}
+
+	// Verify all metadata fields are non-zero
+	if loaded[0].CompactMetadata.Trigger == "" {
+		t.Error("Trigger is empty")
+	}
+	if loaded[0].CompactMetadata.PreTokens == 0 {
+		t.Error("PreTokens is 0")
+	}
+	if loaded[0].CompactMetadata.PreservedSegment == 0 {
+		t.Error("PreservedSegment is 0")
+	}
+}

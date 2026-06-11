@@ -277,3 +277,23 @@ func (e *QueryEngine) getTaskManager() *tool.TaskManager {
 	}
 	return nil
 }
+
+// persistCompactBoundary persists a compaction boundary entry to the transcript.
+// This is called after successful context compaction to record the boundary for
+// future session resume filtering.
+func (e *QueryEngine) persistCompactBoundary(preTokens int, preservedCount int, trigger string) {
+	if e.sessionManager == nil || e.streamCfg.SessionID == "" {
+		return
+	}
+	entry := session.TranscriptEntry{
+		Type:    "system",
+		Subtype: "compact_boundary",
+		CompactMetadata: &session.CompactMetadata{
+			Trigger:          trigger,
+			PreTokens:       preTokens,
+			PreservedSegment: preservedCount,
+		},
+		CWD: e.cwd,
+	}
+	_ = e.sessionManager.AppendEntry(e.streamCfg.SessionID, entry)
+}
