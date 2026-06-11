@@ -165,8 +165,8 @@ func TestTranscriptResume(t *testing.T) {
 	// we would need a Sequence of Invocations in the declarative harness.
 	// Since we are migrating them to declarative, we should consider if we can chain them.
 	// We can leave this imperative, OR we can just write an imperative wrapper that calls RunJenny twice.
-	
-	// Let's implement an imperative wrapper since extending harness for multi-CLI execution 
+
+	// Let's implement an imperative wrapper since extending harness for multi-CLI execution
 	// is beyond simple modifications.
 	mock := harness.NewMockServer(cassetteDir)
 	defer mock.Close()
@@ -219,7 +219,7 @@ func TestTranscriptResume(t *testing.T) {
 			},
 		},
 	}, &harness.CapturedOutput{Stdout: res2.Stdout}, workDir)
-	
+
 	if !cmp.Pass {
 		t.Fatalf("transcript resume checks failed: %+v", cmp.Diff)
 	}
@@ -249,7 +249,7 @@ func TestTranscriptContinue(t *testing.T) {
 	if res2.ExitCode != 0 {
 		t.Fatalf("second run exited %d", res2.ExitCode)
 	}
-	
+
 	// Assert
 	cmp := harness.Compare(&harness.TestCase{
 		Expected: harness.ExpectedBehavior{
@@ -264,7 +264,7 @@ func TestTranscriptContinue(t *testing.T) {
 			},
 		},
 	}, &harness.CapturedOutput{Stdout: res2.Stdout}, workDir)
-	
+
 	if !cmp.Pass {
 		t.Fatalf("transcript continue checks failed: %+v", cmp.Diff)
 	}

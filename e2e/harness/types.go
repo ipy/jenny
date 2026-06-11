@@ -74,13 +74,6 @@ type TargetInvocation struct {
 	MockBehavior *MockBehavior
 }
 
-// MockBehavior defines custom behaviors for the mock server.
-type MockBehavior struct {
-	// RejectEmptyToolProperties simulates Minimax: if any tool in the request
-	// has an empty "properties" object in its input_schema, return a 400 error.
-	RejectEmptyToolProperties bool
-}
-
 // ExpectedBehavior holds assertions on the target's behavior.
 type ExpectedBehavior struct {
 	// ExitCode is the expected process exit code.
