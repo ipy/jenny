@@ -12,6 +12,7 @@ import (
 	"github.com/ipy/jenny/internal/log"
 	"github.com/ipy/jenny/internal/redact"
 	"github.com/ipy/jenny/internal/session"
+	"github.com/ipy/jenny/internal/skills"
 	"github.com/ipy/jenny/internal/tool"
 )
 
@@ -380,9 +381,15 @@ func (e *QueryEngine) syncActiveSkills() {
 
 	// Check if the activator supports GetActivatedSkills
 	type activatorWithSkills interface {
-		GetActivatedSkills() []ActivatedSkill
+		GetActivatedSkills() []skills.ActivatedSkill
 	}
 	if activator, ok := e.skillActivator.(activatorWithSkills); ok {
-		e.streamCfg.SetActiveSkills(activator.GetActivatedSkills())
+		// Convert from skills.ActivatedSkill to agent.ActivatedSkill
+		skillsList := activator.GetActivatedSkills()
+		activated := make([]ActivatedSkill, len(skillsList))
+		for i, s := range skillsList {
+			activated[i] = ActivatedSkill{Name: s.Name, RootPath: s.RootPath}
+		}
+		e.streamCfg.SetActiveSkills(activated)
 	}
 }

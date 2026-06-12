@@ -21,6 +21,7 @@ import (
 	"github.com/ipy/jenny/internal/log"
 	"github.com/ipy/jenny/internal/memdir"
 	"github.com/ipy/jenny/internal/session"
+	"github.com/ipy/jenny/internal/skills"
 	"github.com/ipy/jenny/internal/testutil/mockapi"
 	"github.com/ipy/jenny/internal/tool"
 )
@@ -2544,4 +2545,98 @@ func TestAC2_PersistCompactBoundary_LogsError(t *testing.T) {
 	} else {
 		t.Logf("AC1 PASS: log output contains expected message")
 	}
+}
+
+// mockSkillActivatorForTest implements both tool.SkillActivator and GetActivatedSkills.
+type mockSkillActivatorForTest struct {
+	activated []skills.ActivatedSkill
+}
+
+func (m *mockSkillActivatorForTest) ActivateForPath(path string) []string {
+	return nil
+}
+
+func (m *mockSkillActivatorForTest) RegisterActivation(name string, rootPath string) {
+	// Deduplicate
+	for _, s := range m.activated {
+		if s.Name == name {
+			return
+		}
+	}
+	m.activated = append(m.activated, skills.ActivatedSkill{Name: name, RootPath: rootPath})
+}
+
+func (m *mockSkillActivatorForTest) GetActivatedSkills() []skills.ActivatedSkill {
+	return m.activated
+}
+
+// TestAC1_SkillActivatorWiring tests that the skill activator is properly wired
+// through the engine and syncActiveSkills correctly converts skills.ActivatedSkill
+// to agent.ActivatedSkill.
+func TestAC1_SkillActivatorWiring(t *testing.T) {
+	cfg := StreamConfig{Enabled: false}
+	mockActivator := &mockSkillActivatorForTest{}
+	engine := NewQueryEngine(cfg, nil, "", WithClient(fastClient()), WithSkillActivator(mockActivator))
+
+	// Verify the activator was wired correctly
+	if engine.skillActivator == nil {
+		t.Fatal("skillActivator was not set on engine")
+	}
+
+	// Register some activations via the activator
+	mockActivator.RegisterActivation("readme-writer", "/path/to/readme-writer")
+	mockActivator.RegisterActivation("code-review", "/path/to/code-review")
+
+	// Call syncActiveSkills to copy the activated skills to StreamConfig
+	engine.syncActiveSkills()
+
+	// Verify StreamConfig.ActiveSkills now contains the activated skills
+	if len(engine.streamCfg.ActiveSkills) != 2 {
+		t.Errorf("expected 2 active skills, got %d", len(engine.streamCfg.ActiveSkills))
+	}
+
+	// Verify the skills are correct (type conversion from skills.ActivatedSkill)
+	if engine.streamCfg.ActiveSkills[0].Name != "readme-writer" {
+		t.Errorf("expected skill name 'readme-writer', got %s", engine.streamCfg.ActiveSkills[0].Name)
+	}
+	if engine.streamCfg.ActiveSkills[0].RootPath != "/path/to/readme-writer" {
+		t.Errorf("expected root path '/path/to/readme-writer', got %s", engine.streamCfg.ActiveSkills[0].RootPath)
+	}
+	if engine.streamCfg.ActiveSkills[1].Name != "code-review" {
+		t.Errorf("expected skill name 'code-review', got %s", engine.streamCfg.ActiveSkills[1].Name)
+	}
+	t.Log("AC1 PASS: skill activator wiring and type conversion work correctly")
+}
+
+// TestAC1_SkillActivatorDeduplication tests that duplicate activations are not added.
+func TestAC1_SkillActivatorDeduplication(t *testing.T) {
+	cfg := StreamConfig{Enabled: false}
+	mockActivator := &mockSkillActivatorForTest{}
+	engine := NewQueryEngine(cfg, nil, "", WithClient(fastClient()), WithSkillActivator(mockActivator))
+
+	// Register the same skill twice
+	mockActivator.RegisterActivation("readme-writer", "/path/to/readme-writer")
+	mockActivator.RegisterActivation("readme-writer", "/path/to/readme-writer") // duplicate
+
+	engine.syncActiveSkills()
+
+	if len(engine.streamCfg.ActiveSkills) != 1 {
+		t.Errorf("expected 1 active skill (deduplicated), got %d", len(engine.streamCfg.ActiveSkills))
+	}
+	t.Log("PASS: deduplication works correctly")
+}
+
+// TestAC1_SkillActivatorNoOpWhenNil tests that syncActiveSkills is a no-op
+// when the skill activator is nil.
+func TestAC1_SkillActivatorNoOpWhenNil(t *testing.T) {
+	cfg := StreamConfig{Enabled: false}
+	engine := NewQueryEngine(cfg, nil, "", WithClient(fastClient())) // No activator
+
+	// Should not panic and should leave ActiveSkills empty
+	engine.syncActiveSkills()
+
+	if len(engine.streamCfg.ActiveSkills) != 0 {
+		t.Errorf("expected 0 active skills when activator is nil, got %d", len(engine.streamCfg.ActiveSkills))
+	}
+	t.Log("PASS: syncActiveSkills is no-op when activator is nil")
 }

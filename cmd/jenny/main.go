@@ -285,6 +285,9 @@ func run() error {
 		WithSkillsFrameworkEnabled(!flags.Bare, discoveredSkills)
 	tools = registry.Build()
 
+	// Get skill activator to wire it to the engine for active skill tracking
+	skillActivator := registry.GetSkillActivator()
+
 	// Create subagent runners and AgentTool
 	denyRulesMap := make(map[string]bool)
 	for _, name := range flags.DeniedTools {
@@ -337,7 +340,7 @@ func run() error {
 	asyncRunner.SetParentConfig(streamCfg)
 
 	// Run agent
-	result, _, err := agent.RunStream(ctx, flags.Prompt, tools, cwd, streamCfg, flags.Model)
+	result, _, err := agent.RunStream(ctx, flags.Prompt, tools, cwd, streamCfg, flags.Model, agent.WithSkillActivator(skillActivator))
 	if err != nil {
 		return err
 	}

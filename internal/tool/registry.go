@@ -196,6 +196,12 @@ func (r *Registry) WithExitWorktreeEnabled(enabled bool) *Registry {
 	return r
 }
 
+// GetSkillActivator returns the skill activator if skills framework is enabled.
+// This allows the caller to wire the activator to the QueryEngine for active skill tracking.
+func (r *Registry) GetSkillActivator() SkillActivator {
+	return r.skillActivator
+}
+
 // Build returns the final ordered tool list.
 // Built-in tools appear first, then MCP tools. Deny rules and enabled flags
 // filter the output. On name collision, the built-in tool wins.
