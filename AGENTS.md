@@ -4,7 +4,7 @@
 
 Every behavior change MUST follow this sequence — **never skip or reorder**:
 
-1. **Documentation** — update or add spec under `docs/` (source of truth)
+1. **Documentation** — update or add spec under `docs/` (source of truth). read `docs/README.md` for format and guide
 2. **Tests** — unit and integration tests (`*_test.go`) that encode acceptance criteria
 3. **Code** — implementation that matches the spec and tests
 

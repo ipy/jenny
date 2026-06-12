@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/ipy/jenny/internal/tool/ignore"
 )
 
 // GlobTool finds files matching a glob pattern.
@@ -24,7 +26,7 @@ func (t *GlobTool) Name() string {
 
 // Description returns a description of the tool.
 func (t *GlobTool) Description() string {
-	return "Find files matching a glob pattern. Returns paths relative to cwd, sorted newest first, max 100 results."
+	return "Find files matching a glob pattern. Honors .gitignore and .jennyignore. Returns paths relative to cwd, sorted newest first, max 100 results."
 }
 
 // InputSchema returns the JSON schema for tool input.
@@ -172,6 +174,11 @@ func (t *GlobTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}
 	}
 
+	// AC7: Load ignore patterns once for the search root and skip any entry
+	// (file or directory) that matches. The match is computed on the path
+	// relative to searchRoot so the patterns are search-root-portable.
+	ignorePatterns := ignore.LoadPatterns(searchRoot)
+
 	// Walk the directory tree and collect matching files
 	var matches []fileMatch
 	const maxResults = 100
@@ -184,6 +191,14 @@ func (t *GlobTool) Execute(ctx context.Context, input map[string]any, cwd string
 		// Get relative path from search root
 		relPath, err := filepath.Rel(searchRoot, path)
 		if err != nil {
+			return nil
+		}
+
+		// Skip ignored entries (and their contents when it's a directory)
+		if relPath != "." && ignore.Match(relPath, ignorePatterns) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 

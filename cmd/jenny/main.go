@@ -9,18 +9,20 @@ import (
 
 	"github.com/ipy/jenny/internal/agent"
 	"github.com/ipy/jenny/internal/cli"
+	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/log"
 	"github.com/ipy/jenny/internal/mcp"
 	"github.com/ipy/jenny/internal/plugin"
 	"github.com/ipy/jenny/internal/session"
 	"github.com/ipy/jenny/internal/skills"
 	"github.com/ipy/jenny/internal/tool"
+	"github.com/joho/godotenv"
 )
 
-// version is the jenny release identifier. It is overridable at build
-// time via `-ldflags '-X main.version=<value>'`; the default "0.0.0"
-// is used for plain `go build` invocations (e.g. the e2e harness).
-var version = "0.0.0"
+// AC4: --version and the stream-json claude_code_version field must agree.
+// `version` defaults to constants.Version. To override at build time use
+// `-ldflags '-X main.version=<value>'`.
+var version = constants.Version
 
 func main() {
 	if err := run(); err != nil {
@@ -29,7 +31,36 @@ func main() {
 	}
 }
 
+// loadEnvFiles reads .env and .jenny/.env from cwd (whichever exist) and
+// applies them to the process environment. godotenv's default Load does NOT
+// overwrite variables already set in the environment, so explicit `export`
+// in the shell always wins. Missing files are not an error.
+func loadEnvFiles(cwd string) {
+	if cwd == "" {
+		return
+	}
+	candidates := []string{
+		filepath.Join(cwd, ".env"),
+		filepath.Join(cwd, ".jenny", ".env"),
+	}
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err != nil {
+			continue
+		}
+		// Best-effort: errors are ignored — a malformed .env should not
+		// prevent jenny from starting.
+		_ = godotenv.Load(p)
+	}
+}
+
 func run() error {
+	// AC9: load .env files (and .jenny/.env) before parsing flags so any
+	// env-driven flag behaviour or pre-flight checks see the merged env.
+	// Best-effort: missing or malformed .env is not an error.
+	if cwd, err := os.Getwd(); err == nil {
+		loadEnvFiles(cwd)
+	}
+
 	// Parse command-line flags
 	flags, err := cli.Parse()
 	if err != nil {
@@ -249,6 +280,7 @@ func run() error {
 		WithMCPTools(mcpTools).
 		WithDenyRules(flags.DeniedTools).
 		WithSkipPermissions(flags.SkipPermissions).
+		WithStrictMCP(flags.StrictMCP).
 		WithSkillsFrameworkEnabled(!flags.Bare, discoveredSkills)
 	tools = registry.Build()
 
@@ -312,6 +344,7 @@ func buildPrintTools(flags *cli.Flags) []tool.Tool {
 		WithModel(flags.Model).
 		WithDenyRules(flags.DeniedTools).
 		WithSkipPermissions(flags.SkipPermissions).
+		WithStrictMCP(flags.StrictMCP).
 		WithSkillsFrameworkEnabled(!flags.Bare, nil)
 	tools := registry.Build()
 

@@ -413,3 +413,60 @@ func TestGlobTool_SortedByMtime(t *testing.T) {
 		t.Errorf("expected last result to be oldest.txt, got: %s", lines[2])
 	}
 }
+
+// AC7: GlobTool respects .gitignore. Files matched by .gitignore are filtered
+// out of the result. The .gitignore file itself is also walked but not
+// matched by the pattern, so it does not appear either.
+func TestGlobTool_HonorsGitignore(t *testing.T) {
+	tmpDir := t.TempDir()
+	mustWrite(t, filepath.Join(tmpDir, "keep.go"), "package x")
+	mustWrite(t, filepath.Join(tmpDir, "secret.log"), "secret")
+	mustWrite(t, filepath.Join(tmpDir, ".gitignore"), "*.log\n")
+
+	tool := NewGlobTool()
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"pattern": "**/*",
+		"path":    tmpDir,
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	if strings.Contains(result.Content, "secret.log") {
+		t.Errorf("expected .gitignore'd '*.log' files to be excluded; got: %s", result.Content)
+	}
+	if !strings.Contains(result.Content, "keep.go") {
+		t.Errorf("expected non-ignored 'keep.go' to remain; got: %s", result.Content)
+	}
+}
+
+// AC7: GlobTool respects .jennyignore (additive to .gitignore).
+func TestGlobTool_HonorsJennyignore(t *testing.T) {
+	tmpDir := t.TempDir()
+	mustWrite(t, filepath.Join(tmpDir, "keep.go"), "package x")
+	mustWrite(t, filepath.Join(tmpDir, "scratch.txt"), "scratch")
+	mustWrite(t, filepath.Join(tmpDir, ".jennyignore"), "scratch.txt\n")
+
+	tool := NewGlobTool()
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"pattern": "**/*",
+		"path":    tmpDir,
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	if strings.Contains(result.Content, "scratch.txt") {
+		t.Errorf("expected .jennyignore'd 'scratch.txt' to be excluded; got: %s", result.Content)
+	}
+	if !strings.Contains(result.Content, "keep.go") {
+		t.Errorf("expected non-ignored 'keep.go' to remain; got: %s", result.Content)
+	}
+}
+
+func mustWrite(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}

@@ -185,9 +185,9 @@ func TestAssembleSystemPrompt_AppendSupport(t *testing.T) {
 		t.Error("append content should be present")
 	}
 
-	// Should be at the end
-	if !strings.HasSuffix(prompt, "This is appended content.") {
-		t.Error("append content should be at the end")
+	// Should be at the end (followed by a single trailing newline per AC1)
+	if !strings.HasSuffix(prompt, "This is appended content.\n") {
+		t.Error("append content should be at the end (with trailing newline per AC1)")
 	}
 }
 
@@ -502,5 +502,23 @@ func TestDynamicSystemSuffix_EmptyOutsideGitRepo(t *testing.T) {
 	// Should NOT contain git context
 	if strings.Contains(result, "Git context:") {
 		t.Error("dynamic suffix should NOT contain git context outside repo")
+	}
+}
+
+// AC1: --print-system-prompt must end with a newline so the shell prompt does
+// not run onto the last line. Verified by ensuring the last byte is '\n'.
+func TestAssembleSystemPrompt_TrailingNewline(t *testing.T) {
+	cfg := StreamConfig{}
+	tools := []tool.Tool{
+		&mockTool{name: "Read", description: "Read files"},
+	}
+
+	prompt := AssembleSystemPrompt(cfg, tools, "/some/path")
+
+	if len(prompt) == 0 {
+		t.Fatal("prompt is empty")
+	}
+	if prompt[len(prompt)-1] != '\n' {
+		t.Errorf("assembled system prompt must end with a newline; last byte = 0x%02x", prompt[len(prompt)-1])
 	}
 }

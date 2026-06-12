@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ipy/jenny/internal/agent"
+	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/mcp"
 	"github.com/ipy/jenny/internal/plugin"
 	"github.com/ipy/jenny/internal/session"
@@ -657,5 +658,79 @@ func TestPluginMCPServersWiring(t *testing.T) {
 	}
 	if serverAfterMerge.Command != "cli-python" {
 		t.Errorf("after CLI override, server.Command = %q, want %q (CLI should win)", serverAfterMerge.Command, "cli-python")
+	}
+}
+
+// AC4: --version and the stream-json claude_code_version field must agree.
+// The two values flow through different paths: one through main.version, one
+// through constants.Version. With AC4 applied, both read from the same
+// constants.Version var.
+func TestVersionUnified(t *testing.T) {
+	if version != constants.Version {
+		t.Errorf("--version path: main.version = %q, want %q (constants.Version)", version, constants.Version)
+	}
+}
+
+// AC9: loadEnvFiles applies .env to the process environment without
+// overwriting variables already exported in the shell.
+func TestLoadEnvFiles_AppliesDotEnv(t *testing.T) {
+	dir := t.TempDir()
+	envPath := filepath.Join(dir, ".env")
+	if err := os.WriteFile(envPath, []byte("JENNY_TEST_LOADENV=hello-from-env\n"), 0600); err != nil {
+		t.Fatalf("write .env: %v", err)
+	}
+
+	// Make sure the test var is unset before the load.
+	t.Setenv("JENNY_TEST_LOADENV", "")
+	os.Unsetenv("JENNY_TEST_LOADENV")
+	defer os.Unsetenv("JENNY_TEST_LOADENV")
+
+	loadEnvFiles(dir)
+
+	if got := os.Getenv("JENNY_TEST_LOADENV"); got != "hello-from-env" {
+		t.Errorf("expected JENNY_TEST_LOADENV=hello-from-env, got %q", got)
+	}
+}
+
+// AC9: loadEnvFiles does NOT overwrite already-set env vars.
+func TestLoadEnvFiles_DoesNotOverwriteExisting(t *testing.T) {
+	dir := t.TempDir()
+	envPath := filepath.Join(dir, ".env")
+	if err := os.WriteFile(envPath, []byte("JENNY_TEST_OVERWRITE=from-file\n"), 0600); err != nil {
+		t.Fatalf("write .env: %v", err)
+	}
+
+	t.Setenv("JENNY_TEST_OVERWRITE", "from-shell")
+	loadEnvFiles(dir)
+
+	if got := os.Getenv("JENNY_TEST_OVERWRITE"); got != "from-shell" {
+		t.Errorf("expected shell value to win, got %q", got)
+	}
+}
+
+// AC9: missing .env is not an error.
+func TestLoadEnvFiles_MissingIsFine(t *testing.T) {
+	dir := t.TempDir() // empty
+	loadEnvFiles(dir) // must not panic / error
+}
+
+// AC9: loadEnvFiles also picks up .jenny/.env.
+func TestLoadEnvFiles_PicksUpJennyEnv(t *testing.T) {
+	dir := t.TempDir()
+	jennyDir := filepath.Join(dir, ".jenny")
+	if err := os.MkdirAll(jennyDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(jennyDir, ".env"), []byte("JENNY_TEST_JENNYENV=from-jenny-env\n"), 0600); err != nil {
+		t.Fatalf("write .jenny/.env: %v", err)
+	}
+
+	os.Unsetenv("JENNY_TEST_JENNYENV")
+	defer os.Unsetenv("JENNY_TEST_JENNYENV")
+
+	loadEnvFiles(dir)
+
+	if got := os.Getenv("JENNY_TEST_JENNYENV"); got != "from-jenny-env" {
+		t.Errorf("expected JENNY_TEST_JENNYENV=from-jenny-env, got %q", got)
 	}
 }

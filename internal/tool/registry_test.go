@@ -477,3 +477,45 @@ func TestAC10_TaskGetListUpdateNotAppearsWithoutTaskCreateEnabled(t *testing.T) 
 
 	t.Log("AC10 PASS: TaskGet, TaskList, TaskUpdate do not appear without TaskCreateEnabled")
 }
+
+// AC3: --strict-mcp-config suppresses all built-in tools. With WithStrictMCP
+// set, even if WithBaseTools / WebFetch / WebSearch are requested, none of
+// them appear in the result. MCP tools (provided via WithMCPTools) still flow
+// through.
+func TestRegistry_StrictMCP_SuppressesBuiltins(t *testing.T) {
+	tools := NewRegistry().
+		WithBaseTools().
+		WithWebFetchEnabled(true).
+		WithWebSearchEnabled(true).
+		WithStrictMCP(true).
+		Build()
+
+	if len(tools) != 0 {
+		names := make([]string, 0, len(tools))
+		for _, t := range tools {
+			names = append(names, t.Name())
+		}
+		t.Errorf("strict MCP should suppress all built-ins; got %d: %v", len(tools), names)
+	}
+}
+
+func TestRegistry_StrictMCP_AllowsMCPTools(t *testing.T) {
+	mcpTools := []Tool{
+		&mockTool{name: "mcp__fs__read"},
+		&mockTool{name: "mcp__fs__write"},
+	}
+
+	tools := NewRegistry().
+		WithBaseTools().
+		WithMCPTools(mcpTools).
+		WithStrictMCP(true).
+		Build()
+
+	if len(tools) != 2 {
+		names := make([]string, 0, len(tools))
+		for _, t := range tools {
+			names = append(names, t.Name())
+		}
+		t.Errorf("expected 2 MCP tools under strict mode, got %d: %v", len(tools), names)
+	}
+}

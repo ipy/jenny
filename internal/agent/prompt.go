@@ -213,7 +213,10 @@ func buildSystemPrompt(cfg StreamConfig, tools []tool.Tool, cwd string) string {
 		sections = append(sections, "This session has secret redaction enabled. Tool results may contain `[REDACTED:<hex>]` placeholders (e.g. `[REDACTED:a3f1b2c9]`). Copy them verbatim — including the full hex suffix — and never simplify, abbreviate, or otherwise modify them.")
 	}
 
-	return strings.Join(sections, "\n\n")
+	// AC1: Trailing newline so the shell prompt does not run onto the last line.
+	// The caller of --print-system-prompt used to print with fmt.Print and rely on
+	// any trailing whitespace the joined sections happened to have — there was none.
+	return strings.Join(sections, "\n\n") + "\n"
 }
 
 // DynamicSystemSuffix returns the per-turn dynamic sections of the system prompt

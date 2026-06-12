@@ -4,6 +4,9 @@ Clean-room specifications for headless agent implementation. Each doc is the sou
 
 **Workflow:** Documentation → Tests (`internal/**/*_test.go`) → Code
 
+### Ad-hoc Documentation Lifecycle
+For one-time tasks, bug investigations, or transient implementation plans, create documents in the `docs/adhoc/` directory. Once the task is completed and verified, **consolidate** necessary information into existing or new permanent documents in `docs/arch/`, `docs/tools/`, or `docs/patterns/`, then delete the ad-hoc file.
+
 **Master checklist and order:** [`implementation-plan.md`](./implementation-plan.md)
 
 ## Frontmatter
@@ -67,6 +70,7 @@ Specifications for the core agent engine and infrastructure.
 | [mcp-config.md](./arch/mcp-config.md) | MCP server configuration |
 | [message-normalization.md](./arch/message-normalization.md) | Cross-provider message normalization |
 | [parallel-tool-execution.md](./arch/parallel-tool-execution.md) | Concurrent tool execution |
+| [provider-architecture.md](./arch/provider-architecture.md) | API provider and client architecture |
 | [provider-aware-fixes.md](./arch/provider-aware-fixes.md) | Provider-specific API fix rationale |
 | [query-engine.md](./arch/query-engine.md) | QueryEngine lifecycle and state |
 | [rate-limit-handling.md](./arch/rate-limit-handling.md) | API retry and rate limit handling |
@@ -124,14 +128,6 @@ Specifications for architectural patterns and optional subsystems.
 | [skill.md](./patterns/skill.md) | Skill definition and execution |
 | [skills-framework.md](./patterns/skills-framework.md) | Skills framework architecture |
 | [swarm.md](./patterns/swarm.md) | Multi-agent swarm orchestration |
-
-## Technical Debt
-
-Audits and plans for system hardening and reliability.
-
-| Spec | Description |
-|------|-------------|
-| [file-io-robustness.md](./debt/file-io-robustness.md) | Critical fixes for concurrency and I/O |
 
 ## Implementation Order
 

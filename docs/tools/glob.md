@@ -57,3 +57,4 @@ Glob finds files matching a pattern. Read-only, concurrency-safe.
 - **AC3:** Empty → "No files found".
 - **AC4:** Non-directory path errors.
 - **AC5:** Safe for parallel execution.
+- **AC6:** Respects `.gitignore` and `.jennyignore` filtering.

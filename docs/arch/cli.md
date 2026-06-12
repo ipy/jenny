@@ -52,7 +52,8 @@ jenny -p "prompt text"
 | Rule | Behavior |
 |------|----------|
 | No prompt | Print usage; exit non-zero |
-| Positional + `-p` both given | Positional wins when `-p` empty; otherwise document explicit precedence |
+| Multiple `-p` flags | Joins values with a single newline |
+| Positional + `-p` both given | Positional wins when `-p` empty; otherwise positional is joined after `-p` |
 | `--output-format stream-json` | Requires prompt (`-p` or positional) |
 | `--include-partial-messages` | Requires `--output-format stream-json` |
 | `--resume-session-at` | Requires `-r` / `--resume` |
@@ -66,12 +67,13 @@ jenny -p "prompt text"
 | Non-zero | Missing prompt, API error, agent error, session not found |
 | Non-zero | Unknown or invalid flag |
 
-Help (`-h`) exits 0.
+Help (`-h`) exits 0. Version (`--version`) uses `constants.Version` for unified reporting.
 
 ## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
+| `.env` Loading | Auto-loads `./.env` and `./.jenny/.env` if present |
 | `ANTHROPIC_BASE_URL` | API endpoint |
 | `ANTHROPIC_AUTH_TOKEN` | Auth token — forwarded as `Authorization: Bearer <token>` |
 | `ANTHROPIC_API_KEY` | API key sent as `X-Api-Key` header. When set, takes precedence over `ANTHROPIC_AUTH_TOKEN`. |

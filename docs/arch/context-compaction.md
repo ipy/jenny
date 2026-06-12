@@ -74,6 +74,34 @@ Track `consecutiveFailures` per session.
 
 Post-compact order: `boundaryMarker → summaryMessages → messagesToKeep → attachments → hookResults`.
 
+## Persistence & Session Resume
+
+To ensure compaction survives session resumes (`-r`), compaction boundaries are persisted to the transcript.
+
+### Transcript Entry Schema
+Compaction boundaries are recorded as `system` messages with `subtype: "compact_boundary"`:
+```json
+{
+  "type": "system",
+  "content": "",
+  "subtype": "compact_boundary",
+  "compact_metadata": {
+    "trigger": "auto",
+    "pre_tokens": 125000,
+    "preserved_segment": 5
+  }
+}
+```
+
+### Resume Filtering
+When resuming a session, `LoadPostBoundaryMessages` scans the transcript for the *latest* `compact_boundary`. Only entries appearing after this boundary are sent to the API. This prevents re-sending uncompacted history and wasting tokens.
+
+### Acceptance Criteria (Persistence)
+- **AC8:** Compaction boundary persisted to transcript as `system`/`compact_boundary` entry.
+- **AC9:** `LoadPostBoundaryMessages` returns only entries after the last boundary.
+- **AC10:** Resume after compaction sends only post-boundary messages to API.
+- **AC11:** Boundary metadata includes `trigger`, `pre_tokens`, and `preserved_segment`.
+
 ## Post-Compact Normalization
 
 Before next API call:

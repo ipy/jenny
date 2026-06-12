@@ -1,3 +1,12 @@
+---
+title: API Provider Architecture
+slug: provider-architecture
+priority: P0
+status: done
+spec: complete
+code: done
+package: internal/api
+---
 # API Provider Architecture
 
 The `internal/api/` package provides a unified interface for calling LLM APIs, with pluggable backends ("providers").

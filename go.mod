@@ -2,7 +2,10 @@ module github.com/ipy/jenny
 
 go 1.26
 
-require github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
+require (
+	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
+	github.com/joho/godotenv v1.5.1
+)
 
 require (
 	github.com/JohannesKaufmann/dom v0.3.1 // indirect

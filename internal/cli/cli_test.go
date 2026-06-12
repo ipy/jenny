@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -52,6 +54,22 @@ func TestParsePFlag(t *testing.T) {
 	}
 	if flags.Prompt != "hello from -p" {
 		t.Errorf("expected prompt 'hello from -p', got %q", flags.Prompt)
+	}
+}
+
+// AC8: -p may be specified multiple times; values are joined with newlines.
+func TestParseMultiplePFlags(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "-p", "first", "-p", "second", "-p", "third"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if flags.Prompt != "first\nsecond\nthird" {
+		t.Errorf("expected 'first\\nsecond\\nthird', got %q", flags.Prompt)
 	}
 }
 
@@ -390,5 +408,39 @@ func TestStreamMessageToolInputUsesInputKey(t *testing.T) {
 
 	if !strings.Contains(string(data), `"input"`) {
 		t.Errorf("JSON output does not contain 'input' key: %s", string(data))
+	}
+}
+
+// AC6: --help must print the usage block exactly once.
+// Go's flag package invokes flags.Usage() itself when -h/--help is seen and
+// the flag is undefined; our cli.Parse used to call it again on flag.ErrHelp,
+// doubling the output. This subprocess test runs the test binary with -h
+// (matching the actual CLI surface) and counts the number of times the
+// "Usage:" line appears in stderr.
+func TestHelpPrintedOnce(t *testing.T) {
+	if os.Getenv("JENNY_HELP_CHILD") == "1" {
+		// Child: run cli.Parse with -h; it will os.Exit(0) after printing usage.
+		os.Args = []string{"jenny", "-h"}
+		_, _ = Parse()
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=TestHelpPrintedOnce")
+	cmd.Env = append(os.Environ(), "JENNY_HELP_CHILD=1")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		// exit 0 is the success case; the child exits via os.Exit(0).
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 0 {
+			// ok
+		} else {
+			t.Fatalf("child process failed: %v\nstderr: %s", err, stderr.String())
+		}
+	}
+
+	count := strings.Count(stderr.String(), "Usage:")
+	if count != 1 {
+		t.Errorf("expected 'Usage:' line to appear exactly once in --help output, got %d.\nstderr:\n%s", count, stderr.String())
 	}
 }

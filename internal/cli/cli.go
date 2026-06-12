@@ -55,8 +55,8 @@ func Parse() (*Flags, error) {
 		flags.PrintDefaults()
 	}
 
-	var prompt string
-	flags.StringVar(&prompt, "p", "", "Prompt to send")
+	var promptParts StringSlice
+	flags.Var(&promptParts, "p", "Prompt to send (can be specified multiple times; values are joined with newlines)")
 
 	var model string
 	flags.StringVar(&model, "model", "", "Model to use")
@@ -120,7 +120,9 @@ func Parse() (*Flags, error) {
 	// Parse the flags
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		if err == flag.ErrHelp {
-			flags.Usage()
+			// AC6: Go's flag package already invoked flags.Usage() before
+			// returning flag.ErrHelp (see stdlib flag/flag.go:1112). Calling
+			// it again would print the usage block twice. Just exit.
 			os.Exit(0)
 		}
 		return nil, err
@@ -129,8 +131,11 @@ func Parse() (*Flags, error) {
 	// Get remaining non-flag arguments as positional prompt
 	args := flags.Args()
 
+	// AC8: -p may be specified multiple times; values are joined with a newline.
+	prompt := strings.Join(promptParts, "\n")
+
 	if len(args) > 0 {
-		// If positional args exist and -p was not used, use the first positional arg
+		// If positional args exist and -p was not used, use them
 		if prompt == "" {
 			prompt = strings.Join(args, " ")
 		}

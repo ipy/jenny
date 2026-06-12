@@ -146,3 +146,4 @@ When tool search enabled: omit deferred tool **descriptions** from API schemas (
 - **AC22:** `DynamicSystemSuffix` does not contain default intro, memory content, tool list, or any cached-section content.
 - **AC23:** Anthropic API request body.System has two blocks: first with `cache_control`, second without.
 - **AC24:** Resume restores `CachedSystemPrompt` from transcript; system prompt does not change.
+- **AC25:** `--print-system-prompt` output ends with a newline character to prevent shell prompt overlap.

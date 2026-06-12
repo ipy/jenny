@@ -70,3 +70,4 @@ Merged after built-ins; names prefixed `mcp__<server>__<tool>`.
 - **AC3:** LSP only when flag enabled.
 - **AC4:** MCP tools appended with correct prefix.
 - **AC5:** Tool list in system prompt matches registered set.
+- **AC6:** When `--strict-mcp-config` is enabled, all built-in tools (except `ListMcpResourcesTool`) are disabled.

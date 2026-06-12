@@ -18,6 +18,7 @@ type Registry struct {
 	enabled                map[string]bool
 	skipPermissions        bool
 	hasBaseTools           bool
+	strictMCP              bool // AC3: when true, suppress all built-in tools
 	readCache              *ReadFileCache
 	sandbox                sandbox.SandboxManager
 	webFetchEnabled        bool
@@ -86,6 +87,15 @@ func (r *Registry) WithEnabled(name string, enabled bool) *Registry {
 // WithSkipPermissions sets the skipPermissions flag for all tools.
 func (r *Registry) WithSkipPermissions(skip bool) *Registry {
 	r.skipPermissions = skip
+	return r
+}
+
+// WithStrictMCP enables strict MCP mode: built-in tools (Read, Bash, Glob,
+// Grep, Write, Edit, WebFetch, WebSearch, etc.) are suppressed so the model
+// only sees tools that come from --mcp-config files. Mirrors the
+// --strict-mcp-config CLI flag.
+func (r *Registry) WithStrictMCP(strict bool) *Registry {
+	r.strictMCP = strict
 	return r
 }
 
@@ -192,6 +202,25 @@ func (r *Registry) WithExitWorktreeEnabled(enabled bool) *Registry {
 func (r *Registry) Build() []Tool {
 	seen := make(map[string]int) // name -> index
 	var result []Tool
+
+	// AC3: --strict-mcp-config suppresses all built-in tools. MCP tools (added
+	// below from r.mcpTools) still flow through. Skip the base-tools block
+	// entirely so neither the base set nor the optional add-ons (WebFetch,
+	// WebSearch, etc.) appear in the result.
+	if r.strictMCP {
+		for _, t := range r.mcpTools {
+			name := t.Name()
+			if r.denyRules[name] {
+				continue
+			}
+			if enabled, ok := r.enabled[name]; ok && !enabled {
+				continue
+			}
+			seen[name] = len(result)
+			result = append(result, t)
+		}
+		return result
+	}
 
 	// Create base tools with skipPermissions if hasBaseTools is set
 	if r.hasBaseTools {

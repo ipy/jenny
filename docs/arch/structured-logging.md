@@ -47,6 +47,19 @@ Error/debug channels from MCP clients drained on attach.
 
 No persistent error files unless explicitly configured. Ring buffer always on in memory.
 
+## Implementation Details
+
+### Thread Safety & Immutability
+- **Deep Copying:** Functions returning internal state slices (e.g., `GetLastRequest()`) MUST return deep-copied slices to prevent external mutation of the internal store.
+- **Mutex Protection:** All global state (`errorRing`, `lastRequestStore`) must be protected by a dedicated mutex.
+
+## Testing Standards
+
+### Parallel-Safe Tests
+- Tests must not mutate global state directly.
+- Use `ResetForTest()` to initialize/reset the package state.
+- Always use `t.Cleanup(ResetForTest)` to ensure state is cleared after each test run, allowing for safer parallel execution.
+
 ## Acceptance Criteria
 
 - **AC1:** Logs never on stdout in stream-json mode.

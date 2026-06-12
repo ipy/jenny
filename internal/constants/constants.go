@@ -9,8 +9,9 @@ import (
 // ProjectName is the canonical name of the binary.
 const ProjectName = "jenny"
 
-// Version is the current version of jenny.
-const Version = "0.1.0"
+// Version is the current version of jenny. Overridable at build time via
+// `-ldflags '-X github.com/ipy/jenny/internal/constants.Version=<value>'`.
+var Version = "0.1.0"
 
 // JennyHomeDirFunc is the function that returns the jenny home directory.
 // It can be overridden in tests.
