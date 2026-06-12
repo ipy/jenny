@@ -884,6 +884,7 @@ func TestAC1_MemdirCreatedAtPromptBuild(t *testing.T) {
 	expectedMem, err := memdir.New(memdir.Config{
 		ProjectRoot:       resolvedRepoDir,
 		AutoMemoryEnabled: true,
+		ConfigHome:        tmpHome,
 	})
 	if err != nil {
 		t.Fatalf("memdir.New() error: %v", err)
@@ -2061,6 +2062,7 @@ func TestRunLoop_EmptyStopReason_MemExtractorCalledWithEmpty(t *testing.T) {
 	expectedMem, _ := memdir.New(memdir.Config{
 		ProjectRoot:       resolvedRepoDir,
 		AutoMemoryEnabled: true,
+		ConfigHome:        tmpHome,
 	})
 	memPath := expectedMem.MemoryPath()
 

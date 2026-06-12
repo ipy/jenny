@@ -4,12 +4,14 @@ package tool
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/ipy/jenny/internal/grepinproc"
 	"github.com/ipy/jenny/internal/sandbox"
 )
 
@@ -122,30 +124,31 @@ func (t *GrepTool) Execute(ctx context.Context, input map[string]any, cwd string
 		return nil, fmt.Errorf("pattern is required and must be a string")
 	}
 
-	// Determine ripgrep command - use sandboxed ripgrep if available
+	// Determine ripgrep command - use sandboxed ripgrep if available.
+	// If ripgrep is not available on the host, fall back to the
+	// in-process search backend in internal/grepinproc. The fallback
+	// produces the same text format as ripgrep, so the rest of the
+	// pipeline (head_limit, offset, truncation) works unchanged.
 	rgCommand := "rg"
+	rgAvailable := true
 	if t.sandbox != nil && t.sandbox.IsActive() {
 		// Use sandboxed ripgrep config if provided
 		ripgrepCfg := t.sandbox.RipgrepConfig()
 		if ripgrepCfg.Command != "" {
 			rgCommand = ripgrepCfg.Command
 		} else {
-			// Fall back to host ripgrep if no sandboxed config
 			if _, err := exec.LookPath("rg"); err != nil {
-				return &ToolResult{
-					Content: "ripgrep (rg) not found. Install with: brew install ripgrep",
-					IsError: true,
-				}, nil
+				rgAvailable = false
 			}
 		}
 	} else {
-		// Sandbox not active - use host ripgrep
 		if _, err := exec.LookPath("rg"); err != nil {
-			return &ToolResult{
-				Content: "ripgrep (rg) not found. Install with: brew install ripgrep",
-				IsError: true,
-			}, nil
+			rgAvailable = false
 		}
+	}
+
+	if !rgAvailable {
+		return t.executeInProcess(ctx, input, pattern, cwd)
 	}
 
 	// Build ripgrep arguments
@@ -322,4 +325,185 @@ func boolVal(input map[string]any, key string) bool {
 		return val
 	}
 	return false
+}
+
+// executeInProcess is the fallback path used when ripgrep is not
+// available on the host. It calls the in-process grepinproc search
+// backend, renders the result in ripgrep's text format, and runs the
+// same post-processing (head_limit, offset, 20K char truncation) as
+// the rg path.
+func (t *GrepTool) executeInProcess(ctx context.Context, input map[string]any, pattern, cwd string) (*ToolResult, error) {
+	// Build a context with the requested timeout.
+	timeout := defaultTimeout
+	if timeoutVal, ok := input["timeout"].(float64); ok {
+		timeout = int(timeoutVal)
+	}
+	derivedCtx, derivedCancel := context.WithCancel(ctx)
+	defer derivedCancel()
+	cmdCtx, cmdCancel := context.WithTimeout(derivedCtx, time.Duration(timeout)*time.Second)
+	defer cmdCancel()
+
+	// Resolve the search path the same way the rg path does.
+	path := "."
+	if pathVal, ok := input["path"].(string); ok && pathVal != "" {
+		path = pathVal
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(cwd, path)
+		}
+	}
+
+	opts := grepinproc.Options{
+		Pattern:        pattern,
+		Path:           path,
+		Cwd:            cwd,
+		Glob:           stringVal(input, "glob"),
+		OutputMode:     stringVal(input, "output_mode"),
+		IgnoreCase:     boolVal(input, "i"),
+		Multiline:      boolVal(input, "multiline"),
+		Hidden:         true, // matches the rg path's --hidden
+		FileType:       stringVal(input, "type"),
+		ContextBefore:  intValOrZero(input, "B"),
+		ContextAfter:   intValOrZero(input, "A"),
+	}
+	if c, ok := input["C"].(float64); ok && c > 0 {
+		// -C overrides -A/-B if both set
+		opts.ContextBefore = int(c)
+		opts.ContextAfter = int(c)
+	}
+
+	results, err := grepinproc.Run(cmdCtx, opts)
+	if err != nil {
+		// Distinguish a real error from a context cancellation.
+		if cmdCtx.Err() == context.DeadlineExceeded {
+			return &ToolResult{
+				Content: fmt.Sprintf("Grep timed out after %d seconds", timeout),
+				IsError: true,
+			}, nil
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return &ToolResult{
+				Content: "search cancelled",
+				IsError: true,
+			}, nil
+		}
+		return &ToolResult{
+			Content: fmt.Sprintf("grepinproc error: %v", err),
+			IsError: true,
+		}, nil
+	}
+
+	outputMode := opts.OutputMode
+	if outputMode == "" {
+		outputMode = "content"
+	}
+	output := renderGrepResults(results, outputMode)
+
+	// No matches: emulate the rg exit-code-1 behavior.
+	if output == "" && !anyMatches(results) {
+		return &ToolResult{Content: "No matches found", IsError: false}, nil
+	}
+
+	// Post-process: head_limit, offset, 20K char cap. Identical to
+	// the rg path's tail of Execute.
+	headLimit := defaultHeadLimit
+	if limitVal, ok := input["head_limit"].(float64); ok {
+		headLimit = int(limitVal)
+	} else if limitVal, ok := input["head_limit"].(int); ok {
+		headLimit = limitVal
+	}
+	offset := 0
+	if offsetVal, ok := input["offset"].(float64); ok {
+		offset = int(offsetVal)
+	} else if offsetVal, ok := input["offset"].(int); ok {
+		offset = offsetVal
+	}
+
+	lines := strings.Split(output, "\n")
+	if offset > 0 && offset < len(lines) {
+		lines = lines[offset:]
+	} else if offset >= len(lines) {
+		lines = []string{}
+	}
+	if headLimit > 0 && len(lines) > headLimit {
+		lines = lines[:headLimit]
+	}
+	output = strings.Join(lines, "\n")
+
+	truncated := false
+	if len(output) > maxResultSizeChars {
+		output = output[:maxResultSizeChars]
+		truncated = true
+		output += "\n[output truncated]"
+	}
+
+	return &ToolResult{
+		Content:   output,
+		IsError:   false,
+		Truncated: truncated,
+	}, nil
+}
+
+// renderGrepResults converts grepinproc results into ripgrep-style text.
+// The format matches what ripgrep emits for the same mode so callers
+// that already understand rg output do not need to know which backend
+// produced the result.
+func renderGrepResults(results []grepinproc.Result, mode string) string {
+	var b strings.Builder
+	switch mode {
+	case "files_with_matches":
+		for _, r := range results {
+			b.WriteString(r.Target)
+			b.WriteByte('\n')
+		}
+	case "count":
+		for _, r := range results {
+			fmt.Fprintf(&b, "%s:%d\n", r.Target, len(r.Matches))
+		}
+	default: // "content" or unset
+		for _, r := range results {
+			for _, m := range r.Matches {
+				// Render context-before lines as "filename-lineno-content".
+				// Render the match line as "filename:lineno:content".
+				// Render context-after lines the same way.
+				for i, before := range m.Before {
+					fmt.Fprintf(&b, "%s:%d-%s\n", r.Target,
+						m.Line-int64(len(m.Before))+int64(i), before)
+				}
+				fmt.Fprintf(&b, "%s:%d:%s\n", r.Target, m.Line, m.Content)
+				for i, after := range m.After {
+					fmt.Fprintf(&b, "%s:%d-%s\n", r.Target, m.Line+int64(i+1), after)
+				}
+			}
+		}
+	}
+	return b.String()
+}
+
+// anyMatches reports whether any result has at least one match.
+func anyMatches(results []grepinproc.Result) bool {
+	for _, r := range results {
+		if len(r.Matches) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// stringVal safely extracts a string from a map.
+func stringVal(input map[string]any, key string) string {
+	if val, ok := input[key].(string); ok {
+		return val
+	}
+	return ""
+}
+
+// intValOrZero safely extracts a non-negative int from a map.
+func intValOrZero(input map[string]any, key string) int {
+	if v, ok := input[key].(float64); ok && v > 0 {
+		return int(v)
+	}
+	if v, ok := input[key].(int); ok && v > 0 {
+		return v
+	}
+	return 0
 }

@@ -38,6 +38,38 @@ Grep searches file contents via ripgrep. Read-only, concurrency-safe.
 - `--max-columns 500` to avoid base64 line bloat.
 - Pattern starting with `-`: use `-e` flag.
 
+## Backend Selection
+
+The GrepTool prefers ripgrep (`rg`) when it is available on the host
+and falls back to a small in-process Go search engine otherwise. The
+selection is automatic, per-call:
+
+1. **Sandbox active with a configured `RipgrepConfig.Command`** —
+   use the sandboxed binary. If that binary is missing, fall through
+   to step 2.
+2. **`rg` is on `PATH`** — shell out to it.
+3. **Otherwise** — call the in-process backend in
+   `internal/grepinproc`. This backend uses `filepath.WalkDir` and
+   `regexp.FindAllIndex` and produces the same text format as
+   ripgrep, so the post-processing pipeline (head_limit, offset, 20K
+   char cap) works identically for both backends.
+
+The fallback exists so jenny can run in environments where ripgrep
+cannot be installed (locked-down CI, minimal containers, no
+package manager). The trade-off vs. ripgrep:
+
+| | ripgrep | in-process |
+|---|---|---|
+| Speed on large repos | very fast (Rust + SIMD) | slower (pure Go) |
+| External binary required | yes | no |
+| `.gitignore` integration | yes (rg-native) | no (uses `.git`/`.svn` skip only) |
+| `--type` | yes (rg built-in types) | yes (subset, see `internal/grepinproc/adapter.go`) |
+| Symlink handling | rg-native | follows `os.Stat` |
+
+Both backends honor the same input schema and produce the same
+output format. Callers (and tests) do not need to know which
+backend ran.
+
 ## Output Limits
 
 - Total output capped ~**20K characters** (`maxResultSizeChars`).

@@ -488,3 +488,143 @@ func TestGrepTool_ConcurrencySafe(t *testing.T) {
 		}
 	}
 }
+
+// TestGrepTool_FallbackWhenRgMissing forces the in-process fallback
+// path by emptying PATH so exec.LookPath("rg") fails. The GrepTool
+// should fall back to grepinproc and produce ripgrep-style text.
+func TestGrepTool_FallbackWhenRgMissing(t *testing.T) {
+	// Build a temp dir with a fixture.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"),
+		[]byte("hello world\nfoo bar\nhello again\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.txt"),
+		[]byte("no match here\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "sub", "c.txt"),
+		[]byte("deep hello\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Hide rg from PATH so the fallback is exercised.
+	t.Setenv("PATH", "")
+
+	tool := NewGrepTool()
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"pattern":     "hello",
+		"path":        dir,
+		"output_mode": "content",
+	}, dir)
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", result.Content)
+	}
+	// The renderer produces "filename:lineno:content" lines. We
+	// expect at least 3 matches across 2 files.
+	lines := strings.Split(strings.TrimSpace(result.Content), "\n")
+	if len(lines) < 3 {
+		t.Errorf("expected at least 3 match lines, got %d:\n%s", len(lines), result.Content)
+	}
+	for _, line := range lines {
+		if !strings.Contains(line, "hello") {
+			t.Errorf("unexpected line: %q", line)
+		}
+	}
+
+	// files_with_matches mode
+	result, err = tool.Execute(context.Background(), map[string]any{
+		"pattern":     "hello",
+		"path":        dir,
+		"output_mode": "files_with_matches",
+	}, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", result.Content)
+	}
+	if !strings.Contains(result.Content, "a.txt") {
+		t.Errorf("expected a.txt in files_with_matches output, got: %s", result.Content)
+	}
+	if !strings.Contains(result.Content, "c.txt") {
+		t.Errorf("expected c.txt in files_with_matches output, got: %s", result.Content)
+	}
+
+	// No matches
+	result, err = tool.Execute(context.Background(), map[string]any{
+		"pattern":     "nonexistent",
+		"path":        dir,
+		"output_mode": "content",
+	}, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Content != "No matches found" {
+		t.Errorf("expected 'No matches found', got: %q", result.Content)
+	}
+}
+
+// TestGrepTool_FallbackCountMode verifies the count output mode works
+// on the in-process fallback path.
+func TestGrepTool_FallbackCountMode(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"),
+		[]byte("hello\nhello\nworld\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("PATH", "")
+
+	tool := NewGrepTool()
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"pattern":     "hello",
+		"path":        dir,
+		"output_mode": "count",
+	}, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got: %s", result.Content)
+	}
+	if !strings.Contains(result.Content, "a.txt:2") {
+		t.Errorf("expected 'a.txt:2' in count output, got: %q", result.Content)
+	}
+}
+
+// TestGrepTool_FallbackCaseInsensitive verifies the -i flag is honored
+// by the in-process fallback.
+func TestGrepTool_FallbackCaseInsensitive(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"),
+		[]byte("Hello\nHELLO\nhello\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("PATH", "")
+
+	tool := NewGrepTool()
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"pattern":     "hello",
+		"path":        dir,
+		"output_mode": "content",
+		"i":           true,
+	}, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got: %s", result.Content)
+	}
+	lines := strings.Split(strings.TrimSpace(result.Content), "\n")
+	if len(lines) != 3 {
+		t.Errorf("expected 3 matches with -i, got %d:\n%s", len(lines), result.Content)
+	}
+}

@@ -52,6 +52,10 @@ type Config struct {
 	// MemoryDirExists is a function that checks if a memory directory exists
 	// for a remote session. If nil, defaults to false.
 	MemoryDirExists func(projectRoot string) bool
+
+	// ConfigHome overrides the config directory returned by os.UserConfigDir().
+	// If empty, os.UserConfigDir() is used. This is intended for testing.
+	ConfigHome string
 }
 
 // Memdir provides project-scoped auto-memory management.
@@ -68,14 +72,20 @@ func New(cfg Config) (*Memdir, error) {
 	}
 
 	// Determine memory path: <config-home>/projects/<sanitized-git-root>/memory/
-	configHome, err := os.UserConfigDir()
-	if err != nil {
-		// Fallback to home directory
-		home, err := os.UserHomeDir()
+	var configHome string
+	if cfg.ConfigHome != "" {
+		configHome = cfg.ConfigHome
+	} else {
+		var err error
+		configHome, err = os.UserConfigDir()
 		if err != nil {
-			return nil, fmt.Errorf("cannot determine config home: %w", err)
+			// Fallback to home directory
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return nil, fmt.Errorf("cannot determine config home: %w", err)
+			}
+			configHome = filepath.Join(home, ".config")
 		}
-		configHome = filepath.Join(home, ".config")
 	}
 
 	sanitizedRoot := sanitizeAsDirName(cfg.ProjectRoot)
