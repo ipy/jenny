@@ -430,6 +430,9 @@ func TestSandbox_AC5_MockRefreshConfig(t *testing.T) {
 }
 
 func TestSandbox_AC5_MacOSRefreshConfig(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS sandbox tests require darwin")
+	}
 	sb := sandbox.NewMacOSSandboxManager()
 	cfg := sandbox.Config{
 		Backend:           sandbox.BackendMacOS,
@@ -542,6 +545,9 @@ func TestRegistry_WithSandboxWiring(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestMacOSSandbox_AC1_WrapsCommand(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS sandbox tests require darwin")
+	}
 	sb := sandbox.NewMacOSSandboxManager()
 	if err := sb.Initialize(context.Background(), sandbox.Config{
 		Backend:           sandbox.BackendMacOS,
@@ -565,6 +571,9 @@ func TestMacOSSandbox_AC1_WrapsCommand(t *testing.T) {
 }
 
 func TestMacOSSandbox_AC1_ExcludedCommands(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS sandbox tests require darwin")
+	}
 	sb := sandbox.NewMacOSSandboxManager()
 	if err := sb.Initialize(context.Background(), sandbox.Config{
 		Backend:           sandbox.BackendMacOS,
@@ -584,6 +593,9 @@ func TestMacOSSandbox_AC1_ExcludedCommands(t *testing.T) {
 }
 
 func TestMacOSSandbox_AC2_NetworkPolicy(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS sandbox tests require darwin")
+	}
 	sb := sandbox.NewMacOSSandboxManager()
 	if err := sb.Initialize(context.Background(), sandbox.Config{
 		Backend:           sandbox.BackendMacOS,
