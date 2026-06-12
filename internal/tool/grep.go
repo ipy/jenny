@@ -347,9 +347,9 @@ func (t *GrepTool) executeInProcess(ctx context.Context, input map[string]any, p
 	path := "."
 	if pathVal, ok := input["path"].(string); ok && pathVal != "" {
 		path = pathVal
-		if !filepath.IsAbs(path) {
-			path = filepath.Join(cwd, path)
-		}
+	}
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(cwd, path)
 	}
 
 	opts := grepinproc.Options{
@@ -394,7 +394,16 @@ func (t *GrepTool) executeInProcess(ctx context.Context, input map[string]any, p
 
 	outputMode := opts.OutputMode
 	if outputMode == "" {
-		outputMode = "content"
+		outputMode = "files_with_matches"
+	}
+	// Relativize paths against the search root so the output matches
+	// ripgrep's behavior (relative paths when searching "." from cwd).
+	searchRoot := path
+	if !strings.HasSuffix(searchRoot, string(filepath.Separator)) {
+		searchRoot += string(filepath.Separator)
+	}
+	for i := range results {
+		results[i].Target = strings.TrimPrefix(results[i].Target, searchRoot)
 	}
 	output := renderGrepResults(results, outputMode)
 

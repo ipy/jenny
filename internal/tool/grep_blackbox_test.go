@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,20 +12,8 @@ import (
 	"github.com/ipy/jenny/internal/tool"
 )
 
-// skipIfNoRg skips the test when ripgrep is not on PATH.
-// CI on Windows runners does not install ripgrep, so tests that shell out
-// to `rg` would otherwise fail there.
-func skipIfNoRg(t *testing.T) {
-	t.Helper()
-	if _, err := exec.LookPath("rg"); err != nil {
-		t.Skip("ripgrep (rg) not on PATH; skipping GrepTool test")
-	}
-}
-
 func TestBlackBox_AC1_HeadLimit(t *testing.T) {
-	skipIfNoRg(t)
 	tmpDir := t.TempDir()
-
 	// Create 310 files with matching content
 	for i := range 310 {
 		p := filepath.Join(tmpDir, fmt.Sprintf("file%d.txt", i))
@@ -34,9 +21,7 @@ func TestBlackBox_AC1_HeadLimit(t *testing.T) {
 			t.Fatalf("failed to create file: %v", err)
 		}
 	}
-
 	tools := tool.NewGrepTool()
-
 	// Verify default head_limit is 250
 	result, err := tools.Execute(context.Background(), map[string]any{
 		"pattern": "match",
@@ -47,7 +32,6 @@ func TestBlackBox_AC1_HeadLimit(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("error result: %s", result.Content)
 	}
-
 	lines := strings.Split(strings.TrimSpace(result.Content), "\n")
 	if len(lines) != 250 {
 		t.Errorf("expected 250 results with default head_limit, got %d", len(lines))
@@ -55,7 +39,6 @@ func TestBlackBox_AC1_HeadLimit(t *testing.T) {
 	if result.Truncated {
 		t.Errorf("expected Truncated=false (250 lines < 20K chars), got true")
 	}
-
 	// Verify head_limit=0 returns all matches
 	result, err = tools.Execute(context.Background(), map[string]any{
 		"pattern":    "match",
@@ -67,17 +50,13 @@ func TestBlackBox_AC1_HeadLimit(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("error result: %s", result.Content)
 	}
-
 	lines = strings.Split(strings.TrimSpace(result.Content), "\n")
 	if len(lines) <= 250 {
 		t.Errorf("expected >250 results with head_limit=0, got %d", len(lines))
 	}
 }
-
 func TestBlackBox_AC2_DashPattern(t *testing.T) {
-	skipIfNoRg(t)
 	tmpDir := t.TempDir()
-
 	// Create file with literal "-foo"
 	if err := os.WriteFile(filepath.Join(tmpDir, "matches.txt"), []byte("-foo"), 0644); err != nil {
 		t.Fatal(err)
@@ -86,9 +65,7 @@ func TestBlackBox_AC2_DashPattern(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(tmpDir, "nomatch.txt"), []byte("bar"), 0644); err != nil {
 		t.Fatal(err)
 	}
-
 	tools := tool.NewGrepTool()
-
 	// Search for "-foo"
 	result, err := tools.Execute(context.Background(), map[string]any{
 		"pattern":     "-foo",
@@ -100,7 +77,6 @@ func TestBlackBox_AC2_DashPattern(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("error result: %s", result.Content)
 	}
-
 	// Should find matches.txt but NOT nomatch.txt
 	if !strings.Contains(result.Content, "matches.txt") {
 		t.Errorf("expected to find matches.txt for pattern '-foo', got: %s", result.Content)
@@ -109,11 +85,8 @@ func TestBlackBox_AC2_DashPattern(t *testing.T) {
 		t.Errorf("-foo should NOT match file containing 'bar', got: %s", result.Content)
 	}
 }
-
 func TestBlackBox_AC3_Timeout(t *testing.T) {
-	skipIfNoRg(t)
 	tools := tool.NewGrepTool()
-
 	// Test 1: timeout=0 (as float64) with a search that requires scanning many files.
 	// The timeout value flows through as float64 (matching JSON decode behavior).
 	tmpDir := t.TempDir()
@@ -129,7 +102,6 @@ func TestBlackBox_AC3_Timeout(t *testing.T) {
 			}
 		}
 	}
-
 	result, err := tools.Execute(context.Background(), map[string]any{
 		"pattern": "content",
 		"timeout": float64(0), // must be float64 (JSON schema "number" type)
@@ -142,11 +114,8 @@ func TestBlackBox_AC3_Timeout(t *testing.T) {
 	}
 	t.Errorf("expected timeout error with timeout=0, got success result")
 }
-
 func TestBlackBox_AC4_OutputCap(t *testing.T) {
-	skipIfNoRg(t)
 	tmpDir := t.TempDir()
-
 	// Single file with many lines that match, exceeding 20K chars
 	var sb strings.Builder
 	for i := range 1000 {
@@ -155,13 +124,10 @@ func TestBlackBox_AC4_OutputCap(t *testing.T) {
 		sb.WriteString(string('A' + rune(i%26)))
 		sb.WriteString("\n")
 	}
-
 	if err := os.WriteFile(filepath.Join(tmpDir, "big.txt"), []byte(sb.String()), 0644); err != nil {
 		t.Fatal(err)
 	}
-
 	tools := tool.NewGrepTool()
-
 	result, err := tools.Execute(context.Background(), map[string]any{
 		"pattern":     "very",
 		"output_mode": "content",
@@ -173,7 +139,6 @@ func TestBlackBox_AC4_OutputCap(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("error result: %s", result.Content)
 	}
-
 	if !result.Truncated {
 		t.Errorf("expected Truncated=true for >20K output")
 	}
@@ -182,11 +147,8 @@ func TestBlackBox_AC4_OutputCap(t *testing.T) {
 		t.Errorf("output too long: %d chars (should be capped ~20K)", len(result.Content))
 	}
 }
-
 func TestBlackBox_AC5_VCSExcluded(t *testing.T) {
-	skipIfNoRg(t)
 	tmpDir := t.TempDir()
-
 	// .git/objects tree with matching content
 	gitObjs := filepath.Join(tmpDir, ".git", "objects")
 	if err := os.MkdirAll(gitObjs, 0755); err != nil {
@@ -195,7 +157,6 @@ func TestBlackBox_AC5_VCSExcluded(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(gitObjs, "pack"), []byte("secret-data"), 0644); err != nil {
 		t.Fatal(err)
 	}
-
 	// .svn dir with matching content
 	svnDir := filepath.Join(tmpDir, ".svn")
 	if err := os.MkdirAll(svnDir, 0755); err != nil {
@@ -204,14 +165,11 @@ func TestBlackBox_AC5_VCSExcluded(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(svnDir, "entries"), []byte("secret-data"), 0644); err != nil {
 		t.Fatal(err)
 	}
-
 	// Working tree file with same content
 	if err := os.WriteFile(filepath.Join(tmpDir, "workfile.txt"), []byte("secret-data"), 0644); err != nil {
 		t.Fatal(err)
 	}
-
 	tools := tool.NewGrepTool()
-
 	result, err := tools.Execute(context.Background(), map[string]any{
 		"pattern": "secret-data",
 	}, tmpDir)
@@ -221,7 +179,6 @@ func TestBlackBox_AC5_VCSExcluded(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("error result: %s", result.Content)
 	}
-
 	if !strings.Contains(result.Content, "workfile.txt") {
 		t.Errorf("expected to find workfile.txt, got: %s", result.Content)
 	}

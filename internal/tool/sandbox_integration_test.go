@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -199,8 +200,10 @@ func TestSandbox_AC2_DeniedDomainsAlwaysBlocked(t *testing.T) {
 // ---------------------------------------------------------------------------
 // AC3 — Grep uses sandboxed ripgrep when sandbox on
 // ---------------------------------------------------------------------------
-
 func TestGrepTool_AC3_SandboxedRipgrepPathUsed(t *testing.T) {
+	if _, err := exec.LookPath("rg"); err != nil {
+		t.Skip("ripgrep (rg) not on PATH; skipping sandboxed rg test")
+	}
 	// When sandbox is active and ripgrep config has Command, Grep uses that path
 	sb := sandbox.NewMockSandboxManager()
 	if err := sb.Initialize(context.Background(), sandbox.Config{
@@ -239,7 +242,6 @@ func TestGrepTool_AC3_SandboxedRipgrepPathUsed(t *testing.T) {
 }
 
 func TestGrepTool_AC3_NoSandboxFallsBackToHostRg(t *testing.T) {
-	skipIfNoRg(t)
 	// When no sandbox configured, Grep uses host rg
 	grep := NewGrepTool()
 
@@ -264,7 +266,6 @@ func TestGrepTool_AC3_NoSandboxFallsBackToHostRg(t *testing.T) {
 }
 
 func TestGrepTool_AC3_InactiveSandboxFallsBackToHostRg(t *testing.T) {
-	skipIfNoRg(t)
 	// When sandbox is inactive, Grep uses host rg even if sandbox is configured
 	sb := sandbox.NewMockSandboxManager()
 	if err := sb.Initialize(context.Background(), sandbox.Config{
@@ -436,7 +437,6 @@ func TestSandbox_AC5_MacOSRefreshConfig(t *testing.T) {
 	}
 
 	if err := sb.Initialize(context.Background(), cfg); err != nil {
-		t.Skipf("macOS backend not available, skipping: %v", err)
 	}
 
 	// Refresh should re-run setup and succeed
@@ -547,7 +547,6 @@ func TestMacOSSandbox_AC1_WrapsCommand(t *testing.T) {
 		Backend:           sandbox.BackendMacOS,
 		FailIfUnavailable: true,
 	}); err != nil {
-		t.Skipf("macOS sandbox not available: %v", err)
 	}
 
 	wrapped, err := sb.WrapWithSandbox("echo hello")
@@ -572,7 +571,6 @@ func TestMacOSSandbox_AC1_ExcludedCommands(t *testing.T) {
 		FailIfUnavailable: true,
 		ExcludedCommands:  []string{"echo*"},
 	}); err != nil {
-		t.Skipf("macOS sandbox not available: %v", err)
 	}
 
 	// A command matching the excluded pattern should be returned as-is
@@ -594,7 +592,6 @@ func TestMacOSSandbox_AC2_NetworkPolicy(t *testing.T) {
 		AllowedDomains:    []string{"api.example.com"},
 		DeniedDomains:     []string{"evil.example.com"},
 	}); err != nil {
-		t.Skipf("macOS sandbox not available: %v", err)
 	}
 
 	// Wrap a network command — the profile should restrict network
@@ -690,7 +687,6 @@ func TestMacOSSandbox_AC4_Unhappy_MissingBinary(t *testing.T) {
 		}
 	} else {
 		if runtime.GOOS == "darwin" {
-			t.Skip("ripgrep at nonexistent path found (unexpected), skipping")
 		} else {
 			t.Error("expected non-nil error on non-darwin, got nil")
 		}
