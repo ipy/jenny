@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/ipy/jenny/internal/constants"
 )
@@ -531,9 +532,10 @@ func (t *EditTool) executeScoped(filePath, oldString, newString string, replaceA
 	}
 	tmpFile.Close()
 
-	// 2. Atomic rename. If the rename fails with EXDEV (cross-device link,
-	//    e.g. editing a file on a different mount than the temp file's
-	//    directory), fall back to copy+delete so the edit still succeeds.
+	// 2. Atomic rename. On Windows, os.Rename can fail with "Access is denied"
+	// (transient AV scanner handle on the temp file) even when the paths are
+	// on the same device. Fall back to copy+replace for any non-EXDEV error,
+	// so the edit succeeds even under AV interference.
 	if err := os.Rename(tmpPath, filePath); err != nil {
 		if isCrossDeviceErr(err) {
 			if fbErr := copyAndReplace(tmpPath, filePath); fbErr != nil {
@@ -543,10 +545,26 @@ func (t *EditTool) executeScoped(filePath, oldString, newString string, replaceA
 				}, nil
 			}
 		} else {
-			return &ToolResult{
-				Content: fmt.Sprintf("Failed to rename temp file: %v", err),
-				IsError: true,
-			}, nil
+			// On Windows, retry once after a brief sleep — transient AV handle often releases quickly.
+			if runtime.GOOS == "windows" {
+				time.Sleep(10 * time.Millisecond)
+				if retryErr := os.Rename(tmpPath, filePath); retryErr == nil {
+					// Success on retry — fall through to finalize
+				} else {
+					// Retry failed too — fall back to copy+replace for any non-EXDEV error.
+					if fbErr := copyAndReplace(tmpPath, filePath); fbErr != nil {
+						return &ToolResult{
+							Content: fmt.Sprintf("Failed to rename temp file: %v (retry failed: %v, fallback also failed: %v)", err, retryErr, fbErr),
+							IsError: true,
+						}, nil
+					}
+				}
+			} else {
+				return &ToolResult{
+					Content: fmt.Sprintf("Failed to rename temp file: %v", err),
+					IsError: true,
+				}, nil
+			}
 		}
 	}
 

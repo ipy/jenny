@@ -26,12 +26,13 @@ func IsIgnored(repoRoot, path string) (bool, error) {
 		return false, err
 	}
 
-	// Try to resolve symlinks on absPath (may fail if file doesn't exist)
-	// If it fails, try resolving the parent directory and rejoining
+	// Resolve symlinks on path too (mirrors repoRoot resolution).
+	// On Windows, filepath.Abs returns short-name form (e.g. RUNNER~1) while
+	// filepath.EvalSymlinks on repoRoot returns long names — resolving here
+	// makes the two comparable.
 	if resolvedPath, err := filepath.EvalSymlinks(absPath); err == nil {
 		absPath = resolvedPath
 	} else if resolvedDir, err := filepath.EvalSymlinks(filepath.Dir(absPath)); err == nil {
-		// File doesn't exist but directory does - resolve via directory
 		absPath = filepath.Join(resolvedDir, filepath.Base(absPath))
 	}
 

@@ -244,13 +244,17 @@ func (t *GlobTool) Execute(ctx context.Context, input map[string]any, cwd string
 		matches = matches[:maxResults]
 	}
 
-	// Build result content - list of relative paths
+	// Build result content - list of relative paths (forward slashes for cross-platform consistency)
 	var content strings.Builder
 	for i, m := range matches {
 		if i > 0 {
 			content.WriteString("\n")
 		}
-		content.WriteString(m.path)
+		path := m.path
+		if runtime.GOOS == "windows" {
+			path = filepath.ToSlash(path)
+		}
+		content.WriteString(path)
 	}
 
 	return &ToolResult{
