@@ -65,12 +65,14 @@ func TestGrepTool_Execute(t *testing.T) {
 			cwd:     tmpDir,
 			wantErr: false,
 			checkFn: func(r *ToolResult) bool {
+				// Normalize paths for cross-platform comparison
+				content := strings.ReplaceAll(r.Content, "\\", "/")
 				return r != nil && !r.IsError &&
-					strings.Contains(r.Content, "a.txt") &&
-					strings.Contains(r.Content, "b.txt") &&
-					strings.Contains(r.Content, "sub/c.txt") &&
-					strings.Contains(r.Content, "sub/d.txt") &&
-					strings.Contains(r.Content, "sub/nested/e.txt")
+					strings.Contains(content, "a.txt") &&
+					strings.Contains(content, "b.txt") &&
+					strings.Contains(content, "sub/c.txt") &&
+					strings.Contains(content, "sub/d.txt") &&
+					strings.Contains(content, "sub/nested/e.txt")
 			},
 		},
 		{

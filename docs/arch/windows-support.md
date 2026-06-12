@@ -2,9 +2,9 @@
 title: Native Windows Support
 slug: windows-support
 priority: P4
-status: not_started
+status: done
 spec: complete
-code: not_started
+code: done
 package: internal/tool
 depends_on:
   - tool-registry

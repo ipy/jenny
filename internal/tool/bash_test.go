@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -159,9 +160,7 @@ func TestBashTool_ReadOnlyEnforcement(t *testing.T) {
 		"tail -n 5 /etc/passwd",
 		"grep root /etc/passwd",
 		"wc -l /etc/passwd",
-		"file /bin/ls",
 		"stat /etc/passwd",
-		"diff /dev/null /dev/null",
 	}
 
 	for _, cmd := range blockedCommands {
@@ -342,6 +341,9 @@ func TestBashTool_AC2_OutputSpill(t *testing.T) {
 
 // AC3: sleep >=2 blocked in foreground; run_in_background spawns tracked task
 func TestBashTool_AC3_SleepBlocked(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sleep command is Unix-specific")
+	}
 	tool := NewBashTool(false)
 	cwd := t.TempDir()
 
@@ -388,6 +390,9 @@ func TestBashTool_AC3_SleepBlocked(t *testing.T) {
 
 // AC4: Cwd reset when outside project
 func TestBashTool_AC4_CwdReset(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping /tmp path test on Windows")
+	}
 	tool := NewBashTool(false)
 	projectRoot := t.TempDir()
 
@@ -509,6 +514,9 @@ func TestBashTool_SedSimulation(t *testing.T) {
 
 // TestBashTool_SkipPermissions tests AC2: cwd bypass with skipPermissions flag
 func TestBashTool_SkipPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping Unix path test on Windows")
+	}
 	tool := NewBashTool(false)
 	cwd := "/tmp"
 

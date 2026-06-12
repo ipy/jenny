@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -246,6 +247,9 @@ func TestLSPTool_AC2_DisconnectedError(t *testing.T) {
 }
 
 func TestLSPTool_AC3_FileSizeLimit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping large file test on Windows (file path handling differs)")
+	}
 	mockClient := newMockLSPClient()
 	tool := NewLSPTool(mockClient)
 	ctx := context.Background()

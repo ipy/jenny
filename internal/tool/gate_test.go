@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -253,6 +254,9 @@ func TestCommandGate_CheckPipelineSegments_WithSkipPermissions(t *testing.T) {
 }
 
 func TestCommandGate_CheckDevicePath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("/dev and /proc device paths don't exist on Windows")
+	}
 	gate := NewCommandGate(false)
 
 	tests := []struct {

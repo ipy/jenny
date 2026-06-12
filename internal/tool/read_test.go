@@ -446,6 +446,9 @@ func TestReadTool_Dedup(t *testing.T) {
 }
 
 func TestReadTool_BlockDeviceGuard(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("/dev/null device path doesn't exist on Windows")
+	}
 	tmpDir := t.TempDir()
 	tool := NewReadTool(false, nil)
 
@@ -528,6 +531,9 @@ func TestReadTool_SkipPermissions(t *testing.T) {
 
 // TestReadTool_ScratchpadAccess tests AC4: scratchpad is always accessible
 func TestReadTool_ScratchpadAccess(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("/etc/passwd doesn't exist on Windows")
+	}
 	tmpDir := t.TempDir()
 	tool := NewReadTool(false, nil)
 

@@ -16,6 +16,9 @@ var Version = "0.1.0"
 // JennyHomeDirFunc is the function that returns the jenny home directory.
 // It can be overridden in tests.
 var JennyHomeDirFunc = func() string {
+	if h := os.Getenv("JENNY_HOME"); h != "" {
+		return h
+	}
 	dirName := "." + ProjectName
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {

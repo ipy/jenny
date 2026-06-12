@@ -3,6 +3,7 @@ package tool
 import (
 	"context"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -45,8 +46,11 @@ func TestPowerShellToolExecute(t *testing.T) {
 	if result.IsError {
 		t.Errorf("expected no error, got: %s", result.Content)
 	}
-	if result.Content != "hello\n" {
-		t.Errorf("expected 'hello\\n', got %q", result.Content)
+	// Normalize line endings: PowerShell outputs CRLF on Windows, but we expect LF
+	expected := "hello\n"
+	actual := strings.ReplaceAll(result.Content, "\r\n", "\n")
+	if actual != expected {
+		t.Errorf("expected %q, got %q", expected, actual)
 	}
 	t.Log("AC2 PASS: PowerShellTool.Execute returns UTF-8 output")
 }

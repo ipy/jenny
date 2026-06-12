@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -267,6 +268,11 @@ func TestMCPToolExecuteDisconnectedServer(t *testing.T) {
 // This verifies the full JSON-RPC message exchange, tool discovery registration,
 // and tool call dispatch using the stdio transport.
 func TestIntegrationMCPSubprocess(t *testing.T) {
+	// This test requires a Unix-like environment with /tmp
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping MCP subprocess integration test on Windows (requires Unix shell)")
+	}
+
 	// Get the absolute path to the fake MCP server source
 	execDir, err := os.Getwd()
 	if err != nil {

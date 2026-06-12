@@ -50,3 +50,13 @@ func TestJennyHomeDir(t *testing.T) {
 		}
 	}
 }
+
+func TestJennyHomeDir_Env(t *testing.T) {
+	tmpDir := t.TempDir()
+	os.Setenv("JENNY_HOME", tmpDir)
+	defer os.Unsetenv("JENNY_HOME")
+
+	if JennyHomeDir() != tmpDir {
+		t.Errorf("expected %s, got %s", tmpDir, JennyHomeDir())
+	}
+}
