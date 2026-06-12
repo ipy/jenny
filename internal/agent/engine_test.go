@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/api"
+	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/log"
 	"github.com/ipy/jenny/internal/memdir"
 	"github.com/ipy/jenny/internal/session"
@@ -211,6 +212,12 @@ func TestAC5_TurnCounterResets(t *testing.T) {
 // each SubmitMessage call completes.
 func TestAC3_CostStateFlushed(t *testing.T) {
 	tmpDir := t.TempDir()
+
+	// Override JennyHomeDir to use tmpDir so cost state is written/read from predictable location
+	origFunc := constants.JennyHomeDirFunc
+	constants.JennyHomeDirFunc = func() string { return tmpDir }
+	defer func() { constants.JennyHomeDirFunc = origFunc }()
+
 	sessMgr, err := session.NewManager(tmpDir, false)
 	if err != nil {
 		t.Fatalf("NewManager error: %v", err)
