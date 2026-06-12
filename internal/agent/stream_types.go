@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/ipy/jenny/internal/api"
 	"github.com/ipy/jenny/internal/mcp"
@@ -27,6 +28,8 @@ func SessionID() (string, error) {
 
 // StreamConfig holds configuration for streaming output.
 type StreamConfig struct {
+	mu sync.Mutex // Protects PermissionDenials and DiscoveredSkillNames from concurrent access
+
 	Enabled              bool
 	Verbose              bool
 	IncludePartial       bool
@@ -46,12 +49,12 @@ type StreamConfig struct {
 	MemoryContent        string                      // Memory content to inject into system prompt
 	CachedSystemPrompt   string                      // Frozen system prompt from first assembly (cache-friendly)
 	Skills               []skills.Skill              // Discovered skills for manifest
-	ActiveSkills           []ActivatedSkill            // Skills activated this session (survives compaction)
+	ActiveSkills         []ActivatedSkill            // Skills activated this session (survives compaction)
 	// Non-compacted: survives context compaction.
-	PermissionDenials     []string                     // Denied tool executions (toolName + inputKey pairs) for cross-turn caching
+	PermissionDenials    []string // Denied tool executions (toolName + inputKey pairs) for cross-turn caching
 	// Non-compacted: survives context compaction.
-	DiscoveredSkillNames  []string                     // Skill names discovered during execution for cross-turn persistence
-	IsForkChild          bool                        // True when this session is a fork child (subagent spawned another agent)
+	DiscoveredSkillNames []string // Skill names discovered during execution for cross-turn persistence
+	IsForkChild          bool     // True when this session is a fork child (subagent spawned another agent)
 	StructuredSchema     map[string]any              // JSON schema for structured output (AC1, AC4: non-interactive only)
 	StructuredDenyRules  []string                    // Tool names to deny; checked by engine to enforce AC1
 	IsNamedAgent         bool                        // True when this session is a named swarm agent
@@ -67,12 +70,18 @@ func (cfg *StreamConfig) SetActiveSkills(skills []ActivatedSkill) {
 
 // AddPermissionDenial records a denied tool execution for cross-turn caching.
 // The denialKey should be a unique identifier for the tool name + input combination.
+// Thread-safe: uses mutex to protect concurrent access from parallel tool execution.
 func (cfg *StreamConfig) AddPermissionDenial(denialKey string) {
+	cfg.mu.Lock()
+	defer cfg.mu.Unlock()
 	cfg.PermissionDenials = append(cfg.PermissionDenials, denialKey)
 }
 
 // HasPermissionDenial checks if a tool with the given denial key has been denied before.
+// Thread-safe: uses mutex to protect concurrent access from parallel tool execution.
 func (cfg *StreamConfig) HasPermissionDenial(denialKey string) bool {
+	cfg.mu.Lock()
+	defer cfg.mu.Unlock()
 	for _, key := range cfg.PermissionDenials {
 		if key == denialKey {
 			return true
@@ -82,7 +91,10 @@ func (cfg *StreamConfig) HasPermissionDenial(denialKey string) bool {
 }
 
 // AddDiscoveredSkillName adds a skill name if not already present (deduplication).
+// Thread-safe: uses mutex to protect concurrent access from parallel tool execution.
 func (cfg *StreamConfig) AddDiscoveredSkillName(name string) {
+	cfg.mu.Lock()
+	defer cfg.mu.Unlock()
 	for _, n := range cfg.DiscoveredSkillNames {
 		if n == name {
 			return // Already present, skip
