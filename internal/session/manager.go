@@ -60,6 +60,7 @@ type ToolUse struct {
 
 // Manager handles session persistence.
 type Manager struct {
+	jennyDir      string
 	transcriptDir string
 	Disabled      bool
 
@@ -89,18 +90,26 @@ var progressTypes = map[string]bool{
 
 // NewManager creates a new session manager with the given transcript directory.
 // If disabled is true, no files are created, appended, or modified.
-func NewManager(transcriptDir string, disabled bool) (*Manager, error) {
-	if transcriptDir == "" {
-		transcriptDir = constants.DefaultTranscriptDir()
+func NewManager(rootDir string, disabled bool) (*Manager, error) {
+	if rootDir == "" {
+		rootDir = constants.JennyHomeDir()
 	}
+	jennyDir := rootDir
+	transcriptDir := rootDir
+	if filepath.Base(rootDir) == "transcripts" {
+		jennyDir = filepath.Dir(rootDir)
+	} else {
+		transcriptDir = filepath.Join(rootDir, "transcripts")
+	}
+
 	if disabled {
-		return &Manager{transcriptDir: transcriptDir, Disabled: true}, nil
+		return &Manager{jennyDir: jennyDir, transcriptDir: transcriptDir, Disabled: true}, nil
 	}
-	// Ensure the directory exists
+	// Ensure the transcripts directory exists for legacy support (though we prefer sessions/)
 	if err := os.MkdirAll(transcriptDir, 0755); err != nil {
 		return nil, fmt.Errorf("creating transcript directory: %w", err)
 	}
-	return &Manager{transcriptDir: transcriptDir}, nil
+	return &Manager{jennyDir: jennyDir, transcriptDir: transcriptDir}, nil
 }
 
 // NewSessionID generates a new session ID as a lowercase UUID v4 string.
@@ -148,7 +157,7 @@ func (m *Manager) transcriptPath(sessionID string) string {
 	if sessionID == "" || containsPathTraversal(sessionID) {
 		return ""
 	}
-	return filepath.Join(m.transcriptDir, sessionID+".jsonl")
+	return filepath.Join(m.jennyDir, "sessions", sessionID, "transcript.jsonl")
 }
 
 // containsPathTraversal checks if a string contains path traversal components.
@@ -201,6 +210,10 @@ func (m *Manager) AppendEntry(sessionID string, entry TranscriptEntry) error {
 	defer m.mu.Unlock()
 
 	path := m.transcriptPath(sessionID)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("creating transcript parent directory: %w", err)
+	}
+
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("opening transcript file: %w", err)
@@ -525,29 +538,31 @@ type sessionEntry struct {
 }
 
 // ListSessions returns session IDs sorted by modification time (most recent first).
-// Only returns sessions with .jsonl transcript files.
+// Only returns sessions with transcript.jsonl files.
 func (m *Manager) ListSessions() ([]string, error) {
-	entries, err := os.ReadDir(m.transcriptDir)
+	var sessions []sessionEntry
+
+	// Scan new sessions directory
+	sessionsBaseDir := filepath.Join(m.jennyDir, "sessions")
+	entries, err := os.ReadDir(sessionsBaseDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("reading transcript directory: %w", err)
+		return nil, fmt.Errorf("reading sessions directory: %w", err)
 	}
 
-	var sessions []sessionEntry
 	for _, entry := range entries {
-		if entry.IsDir() {
+		if !entry.IsDir() {
 			continue
 		}
-		if filepath.Ext(entry.Name()) != ".jsonl" {
-			continue
-		}
-		info, err := entry.Info()
+		sessionID := entry.Name()
+		// Check for transcript.jsonl inside the session directory
+		transcriptPath := filepath.Join(sessionsBaseDir, sessionID, "transcript.jsonl")
+		info, err := os.Stat(transcriptPath)
 		if err != nil {
 			continue
 		}
-		sessionID := strings.TrimSuffix(entry.Name(), ".jsonl")
 		sessions = append(sessions, sessionEntry{
 			id:        sessionID,
 			mtimeNano: info.ModTime().UnixNano(),

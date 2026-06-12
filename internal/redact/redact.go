@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -42,19 +41,46 @@ func shannonEntropy(data string) float64 {
 // SecretRedactor detects and redacts secrets in tool results.
 type SecretRedactor struct {
 	mu           sync.Mutex
-	enabled      bool
+	mode         RedactMode
 	replacements map[string]string // placeholder -> original
 	secretToID   map[string]string // secret -> placeholder ID (for deduplication)
 	detector     *Detector         // rule-based detector
 }
 
+// RedactMode defines the behavior of secret redaction.
+type RedactMode string
+
+const (
+	// ModeDisabled disables secret redaction entirely.
+	ModeDisabled RedactMode = "disabled"
+	// ModeRedact enables one-way secret redaction (cannot be recovered).
+	ModeRedact RedactMode = "redact"
+	// ModeRecover enables secret redaction with recovery (default).
+	ModeRecover RedactMode = "recover"
+)
+
+// ParseRedactMode parses a string into a RedactMode.
+func ParseRedactMode(s string) RedactMode {
+	switch strings.ToLower(s) {
+	case "disabled", "0", "false":
+		return ModeDisabled
+	case "redact":
+		return ModeRedact
+	case "recover", "1", "true", "":
+		return ModeRecover
+	default:
+		return ModeRecover
+	}
+}
+
 // NewSecretRedactor creates a new SecretRedactor backed by the default
-// gitleaks-aligned rule set. Enabled by default unless
-// JENNY_REDACT_DISABLE=1 is set.
-func NewSecretRedactor() *SecretRedactor {
-	enabled := os.Getenv("JENNY_REDACT_DISABLE") == ""
+// gitleaks-aligned rule set.
+func NewSecretRedactor(mode RedactMode) *SecretRedactor {
+	if mode == "" {
+		mode = ModeRecover
+	}
 	return &SecretRedactor{
-		enabled:      enabled,
+		mode:         mode,
 		replacements: make(map[string]string),
 		secretToID:   make(map[string]string),
 		detector:     DefaultDetector(),
@@ -63,7 +89,7 @@ func NewSecretRedactor() *SecretRedactor {
 
 // Enabled returns whether redaction is active.
 func (r *SecretRedactor) Enabled() bool {
-	return r.enabled
+	return r.mode != ModeDisabled
 }
 
 // Redact scans content for secrets and replaces them with placeholders.
@@ -73,7 +99,7 @@ func (r *SecretRedactor) Enabled() bool {
 // placeholder. Same-secret deduplication: identical secret text gets the
 // same placeholder ID across calls.
 func (r *SecretRedactor) Redact(content string) string {
-	if !r.enabled {
+	if r.mode == ModeDisabled {
 		return content
 	}
 
@@ -120,7 +146,9 @@ func (r *SecretRedactor) placeholderFor(secret string) string {
 	id := randomHex(8)
 	placeholder := fmt.Sprintf("[REDACTED:%s]", id)
 	r.secretToID[secret] = placeholder
-	r.replacements[placeholder] = secret
+	if r.mode == ModeRecover {
+		r.replacements[placeholder] = secret
+	}
 	return placeholder
 }
 
@@ -134,7 +162,7 @@ func randomHex(n int) string {
 // Recover replaces placeholders with their original values.
 // Unknown placeholders are left unchanged.
 func (r *SecretRedactor) Recover(content string) string {
-	if !r.enabled {
+	if r.mode != ModeRecover {
 		return content
 	}
 
@@ -150,7 +178,7 @@ func (r *SecretRedactor) Recover(content string) string {
 
 // Reset clears all stored mappings.
 func (r *SecretRedactor) Reset() {
-	if !r.enabled {
+	if r.mode == ModeDisabled {
 		return
 	}
 	r.mu.Lock()

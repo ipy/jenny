@@ -17,11 +17,18 @@ import (
 // NotebookEditTool modifies Jupyter .ipynb files.
 type NotebookEditTool struct {
 	readCache *ReadFileCache
+	sessionID string
 }
 
 // NewNotebookEditTool creates a new NotebookEditTool.
 func NewNotebookEditTool(readCache *ReadFileCache) *NotebookEditTool {
 	return &NotebookEditTool{readCache: readCache}
+}
+
+// WithSessionID sets the session ID for the NotebookEditTool.
+func (t *NotebookEditTool) WithSessionID(id string) *NotebookEditTool {
+	t.sessionID = id
+	return t
 }
 
 // Name returns the tool name.
@@ -99,7 +106,7 @@ func (t *NotebookEditTool) Execute(ctx context.Context, input map[string]any, cw
 
 	// Gate: ensure path is within working directory
 	var pathErr error
-	notebookPath, pathErr = PathInWorkingDir(notebookPath, cwd, constants.ScratchpadDir())
+	notebookPath, pathErr = PathInWorkingDir(notebookPath, cwd, constants.ScratchpadDir(t.sessionID))
 	if pathErr != nil {
 		return &ToolResult{
 			Content: pathErr.Error(),

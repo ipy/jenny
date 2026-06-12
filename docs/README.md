@@ -66,6 +66,7 @@ Specifications for the core agent engine and infrastructure.
 | [context-compaction.md](./arch/context-compaction.md) | Long-session context management |
 | [cost-tracking.md](./arch/cost-tracking.md) | Token and cost tracking |
 | [e2e-test-harness.md](./arch/e2e-test-harness.md) | End-to-end testing infrastructure |
+| [jenny-directory-structure.md](./arch/jenny-directory-structure.md) | Local .jenny directory and session data organization |
 | [mcp-client.md](./arch/mcp-client.md) | MCP stdio client implementation |
 | [mcp-config.md](./arch/mcp-config.md) | MCP server configuration |
 | [message-normalization.md](./arch/message-normalization.md) | Cross-provider message normalization |

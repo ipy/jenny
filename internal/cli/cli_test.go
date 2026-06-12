@@ -380,6 +380,39 @@ func TestParseMCPConfigNoFlag(t *testing.T) {
 	}
 }
 
+func TestParseFeatureFlags(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "-ff", "redact=disabled", "--feature-flags", "other=true", "-p", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if len(flags.FeatureFlags) != 2 {
+		t.Errorf("expected 2 feature flags, got %d", len(flags.FeatureFlags))
+	}
+	if flags.FeatureFlags["redact"] != "disabled" {
+		t.Errorf("expected redact=disabled, got %q", flags.FeatureFlags["redact"])
+	}
+	if flags.FeatureFlags["other"] != "true" {
+		t.Errorf("expected other=true, got %q", flags.FeatureFlags["other"])
+	}
+}
+
+func TestParseFeatureFlagsInvalid(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "-ff", "invalid", "-p", "hello"}
+
+	_, err := Parse()
+	if err == nil {
+		t.Error("expected error for invalid feature flag format")
+	}
+}
+
 func TestStreamMessageToolInputUsesInputKey(t *testing.T) {
 	msg := StreamMessage{
 		Type:     "tool_use",

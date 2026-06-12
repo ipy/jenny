@@ -531,6 +531,9 @@ func TestAC4_EditScopedToAutoMem(t *testing.T) {
 // TestAC5_CoalescingConcurrentRequests verifies that concurrent extraction
 // requests are coalesced - only one extraction runs at a time.
 func TestAC5_CoalescingConcurrentRequests(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode")
+	}
 	cfg := ExtractorConfig{
 		IsSubAgent:         false,
 		ExtractEveryNTurns: 1,
@@ -805,6 +808,9 @@ func TestIsUnderAutoMem(t *testing.T) {
 // in-flight extraction goroutine (including the trailing run spawned by
 // finalizeExtraction) is tracked and the cleanup is deterministic.
 func TestGoroutineLeak(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode")
+	}
 	// Settle to a stable baseline before measuring.
 	runtime.GC()
 	time.Sleep(100 * time.Millisecond)

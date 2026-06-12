@@ -16,11 +16,18 @@ type WriteTool struct {
 	readCache    *ReadFileCache
 	allowedPaths []string // If set, writes are restricted to these paths only
 	activator    SkillActivator
+	sessionID    string
 }
 
 // NewWriteTool creates a new WriteTool.
 func NewWriteTool(readCache *ReadFileCache) *WriteTool {
 	return &WriteTool{readCache: readCache}
+}
+
+// WithSessionID sets the session ID for the WriteTool.
+func (t *WriteTool) WithSessionID(id string) *WriteTool {
+	t.sessionID = id
+	return t
 }
 
 // SetAllowedPaths restricts Write to only these paths.
@@ -106,7 +113,7 @@ func (t *WriteTool) Execute(ctx context.Context, input map[string]any, cwd strin
 		if !allowed {
 			// Path not in allowlist - apply cwd gate with scratchpad exception
 			var pathErr error
-			filePath, pathErr = PathInWorkingDir(filePath, cwd, constants.ScratchpadDir())
+			filePath, pathErr = PathInWorkingDir(filePath, cwd, constants.ScratchpadDir(t.sessionID))
 			if pathErr != nil {
 				return &ToolResult{
 					Content: pathErr.Error(),
@@ -117,7 +124,7 @@ func (t *WriteTool) Execute(ctx context.Context, input map[string]any, cwd strin
 	} else {
 		// No allowedPaths restriction - apply cwd gate with scratchpad exception
 		var pathErr error
-		filePath, pathErr = PathInWorkingDir(filePath, cwd, constants.ScratchpadDir())
+		filePath, pathErr = PathInWorkingDir(filePath, cwd, constants.ScratchpadDir(t.sessionID))
 		if pathErr != nil {
 			return &ToolResult{
 				Content: pathErr.Error(),

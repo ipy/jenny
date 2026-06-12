@@ -31,15 +31,30 @@ func JennyHomeDir() string {
 	return JennyHomeDirFunc()
 }
 
-// DefaultTranscriptDir returns the default transcript directory path.
-func DefaultTranscriptDir() string {
-	return filepath.Join(JennyHomeDir(), "transcripts")
+// SessionDir returns the directory for a specific session (~/.jenny/sessions/<sessionID>).
+func SessionDir(sessionID string) string {
+	if sessionID == "" {
+		return JennyHomeDir()
+	}
+	return filepath.Join(JennyHomeDir(), "sessions", sessionID)
 }
 
-// ScratchpadDir returns the scratchpad directory path (~/.jenny/scratchpad).
-// The directory is created lazily by tools on first access.
-func ScratchpadDir() string {
+// ScratchpadDir returns the scratchpad directory path.
+// If sessionID is provided, it returns a session-specific scratchpad (~/.jenny/sessions/<sessionID>/scratchpad).
+func ScratchpadDir(sessionID ...string) string {
+	if len(sessionID) > 0 && sessionID[0] != "" {
+		return filepath.Join(SessionDir(sessionID[0]), "scratchpad")
+	}
 	return filepath.Join(JennyHomeDir(), "scratchpad")
+}
+
+// SpillsDir returns the spills directory path.
+// If sessionID is provided, it returns a session-specific spills directory (~/.jenny/sessions/<sessionID>/spills).
+func SpillsDir(sessionID ...string) string {
+	if len(sessionID) > 0 && sessionID[0] != "" {
+		return filepath.Join(SessionDir(sessionID[0]), "spills")
+	}
+	return filepath.Join(JennyHomeDir(), "spills")
 }
 
 // MaxTombstoneRewriteBytes is the maximum file size (50 MiB) before a tombstone

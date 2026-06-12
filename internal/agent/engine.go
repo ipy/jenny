@@ -168,11 +168,11 @@ func NewQueryEngine(cfg StreamConfig, tools []tool.Tool, model string) *QueryEng
 		compactConfig:        newCompactConfigForModel(client.GetModel()),
 		compactFailCount:     compactFailCount,
 		structuredOutputTool: structuredTool,
-		secretRedactor:       redact.NewSecretRedactor(),
+		secretRedactor:       redact.NewSecretRedactor(cfg.RedactMode),
 	}
 
-	// Wire ReadFileCache from StreamConfig into tools that support it
-	engine.WireReadFileCache()
+	// Wire context into tools
+	engine.WireTools()
 
 	// Initialize session memory
 	engine.sessionMemory = NewSessionMemory(sessionID, client, engine.compactConfig)
@@ -180,24 +180,42 @@ func NewQueryEngine(cfg StreamConfig, tools []tool.Tool, model string) *QueryEng
 	return engine
 }
 
-// WireReadFileCache injects the ReadFileCache from StreamConfig into tools
-// that support read-before-write enforcement (Read, Write, Edit, NotebookEdit).
-// This enables the engine to own the cache lifecycle.
-func (e *QueryEngine) WireReadFileCache() {
-	if e.streamCfg.ReadFileCache == nil {
-		return
-	}
+// WireTools injects context (ReadFileCache, SessionID) from StreamConfig into tools.
+func (e *QueryEngine) WireTools() {
 	cache := e.streamCfg.ReadFileCache
+	sessionID := e.streamCfg.SessionID
+
 	for _, t := range e.tools {
-		switch t := t.(type) {
-		case *tool.ReadTool:
-			t.WithReadFileCache(cache)
-		case *tool.WriteTool:
-			t.WithReadFileCache(cache)
-		case *tool.EditTool:
-			t.WithReadFileCache(cache)
-		case *tool.NotebookEditTool:
-			t.WithReadFileCache(cache)
+		// Wire ReadFileCache
+		if cache != nil {
+			switch t := t.(type) {
+			case *tool.ReadTool:
+				t.WithReadFileCache(cache)
+			case *tool.WriteTool:
+				t.WithReadFileCache(cache)
+			case *tool.EditTool:
+				t.WithReadFileCache(cache)
+			case *tool.NotebookEditTool:
+				t.WithReadFileCache(cache)
+			}
+		}
+
+		// Wire SessionID
+		if sessionID != "" {
+			switch t := t.(type) {
+			case *tool.BashTool:
+				t.WithSessionID(sessionID)
+			case *tool.ReadTool:
+				t.WithSessionID(sessionID)
+			case *tool.WriteTool:
+				t.WithSessionID(sessionID)
+			case *tool.EditTool:
+				t.WithSessionID(sessionID)
+			case *tool.NotebookEditTool:
+				t.WithSessionID(sessionID)
+			case *tool.ReadMcpResourceTool:
+				t.WithSessionID(sessionID)
+			}
 		}
 	}
 }

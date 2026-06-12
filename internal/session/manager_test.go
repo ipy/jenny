@@ -157,7 +157,7 @@ func TestManager_TranscriptPath(t *testing.T) {
 
 	sessionID := "sess_abc123"
 	path := m.transcriptPath(sessionID)
-	expected := filepath.Join(tmpDir, sessionID+".jsonl")
+	expected := filepath.Join(tmpDir, "sessions", sessionID, "transcript.jsonl")
 	if path != expected {
 		t.Errorf("transcriptPath() = %v, want %v", path, expected)
 	}
@@ -332,6 +332,9 @@ func TestManager_CheckRewriteSize_TooLarge(t *testing.T) {
 
 	// Create a file larger than MaxTombstoneRewriteBytes
 	path := m.transcriptPath(sessionID)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
 	f, err := os.Create(path)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)

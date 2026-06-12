@@ -1,21 +1,12 @@
 package redact
 
 import (
-	"os"
 	"strings"
 	"testing"
 )
 
 func TestRedact_ReplacesSSHPrivateKey(t *testing.T) {
-	origVal := os.Getenv("JENNY_REDACT_DISABLE")
-	os.Unsetenv("JENNY_REDACT_DISABLE")
-	defer func() {
-		if origVal != "" {
-			os.Setenv("JENNY_REDACT_DISABLE", origVal)
-		}
-	}()
-
-	redactor := NewSecretRedactor()
+	redactor := NewSecretRedactor(ModeRecover)
 	sshKey := "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABFwAAAAdzc2gtcn\n-----END OPENSSH PRIVATE KEY-----"
 	input := "SSH key:\n" + sshKey
 	result := redactor.Redact(input)
@@ -29,15 +20,7 @@ func TestRedact_ReplacesSSHPrivateKey(t *testing.T) {
 }
 
 func TestRedact_ReplacesRSAPrivateKey(t *testing.T) {
-	origVal := os.Getenv("JENNY_REDACT_DISABLE")
-	os.Unsetenv("JENNY_REDACT_DISABLE")
-	defer func() {
-		if origVal != "" {
-			os.Setenv("JENNY_REDACT_DISABLE", origVal)
-		}
-	}()
-
-	redactor := NewSecretRedactor()
+	redactor := NewSecretRedactor(ModeRecover)
 	rsaKey := "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA0gI9Xw==\n-----END RSA PRIVATE KEY-----"
 	input := "RSA key:\n" + rsaKey
 	result := redactor.Redact(input)

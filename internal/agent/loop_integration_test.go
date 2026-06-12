@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/session"
 )
 
@@ -217,6 +218,11 @@ func TestTranscriptPersistenceOnDisk(t *testing.T) {
 
 	sessionID := "sess_persistence_test"
 
+	// AC4-isolation: Override JennyHomeDirFunc to use tmpDir for session-specific directory structure
+	origFunc := constants.JennyHomeDirFunc
+	constants.JennyHomeDirFunc = func() string { return tmpDir }
+	defer func() { constants.JennyHomeDirFunc = origFunc }()
+
 	// Append some entries
 	entries := []session.TranscriptEntry{
 		{Type: "user", Content: "Test message"},
@@ -230,9 +236,9 @@ func TestTranscriptPersistenceOnDisk(t *testing.T) {
 	}
 
 	// Verify file exists
-	path := filepath.Join(tmpDir, sessionID+".jsonl")
+	path := filepath.Join(tmpDir, "sessions", sessionID, "transcript.jsonl")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		t.Fatal("transcript file does not exist")
+		t.Fatalf("transcript file does not exist at %s", path)
 	}
 
 	// Verify it's valid JSONL by loading it back

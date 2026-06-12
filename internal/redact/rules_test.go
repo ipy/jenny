@@ -1,23 +1,14 @@
 package redact
 
 import (
-	"os"
 	"strings"
 	"testing"
 )
 
-// withRedactionEnabled returns a redactor with JENNY_REDACT_DISABLE cleared
-// so the rule-based detector is active.
+// withRedactionEnabled returns a redactor with redaction active.
 func withRedactionEnabled(t *testing.T) *SecretRedactor {
 	t.Helper()
-	origVal := os.Getenv("JENNY_REDACT_DISABLE")
-	os.Unsetenv("JENNY_REDACT_DISABLE")
-	t.Cleanup(func() {
-		if origVal != "" {
-			os.Setenv("JENNY_REDACT_DISABLE", origVal)
-		}
-	})
-	return NewSecretRedactor()
+	return NewSecretRedactor(ModeRecover)
 }
 
 // ---- Detector-level tests ---------------------------------------------------

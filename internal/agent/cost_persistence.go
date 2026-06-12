@@ -10,20 +10,24 @@ import (
 	"github.com/ipy/jenny/internal/constants"
 )
 
-// costConfigPath returns the path to the cost config file.
-func costConfigPath() string {
-	return filepath.Join(constants.JennyHomeDir(), "config")
+// costConfigPath returns the path to the cost config file within a session directory.
+func costConfigPath(sessionID string) string {
+	if sessionID == "" {
+		return filepath.Join(constants.JennyHomeDir(), "config")
+	}
+	return filepath.Join(constants.SessionDir(sessionID), "config")
 }
 
-// SaveCostState saves the cost state to .jenny/config as JSON.
+// SaveCostState saves the cost state to a config file.
+// If sessionID is provided in the state, it's saved in the session-specific directory.
 func SaveCostState(state *CostState) error {
-	path := costConfigPath()
+	path := costConfigPath(state.LastSessionID)
 	data, err := json.Marshal(state)
 	if err != nil {
 		return fmt.Errorf("marshaling cost state: %w", err)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return fmt.Errorf("creating jenny home directory: %w", err)
+		return fmt.Errorf("creating config directory: %w", err)
 	}
 	if err := os.WriteFile(path, data, 0644); err != nil {
 		return fmt.Errorf("writing cost config: %w", err)
@@ -31,9 +35,9 @@ func SaveCostState(state *CostState) error {
 	return nil
 }
 
-// LoadCostState loads the cost state from .jenny/config.
-func LoadCostState() (*CostState, error) {
-	path := costConfigPath()
+// LoadCostState loads the cost state from a session-specific config file.
+func LoadCostState(sessionID string) (*CostState, error) {
+	path := costConfigPath(sessionID)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -51,7 +55,7 @@ func LoadCostState() (*CostState, error) {
 // RestoreCostState loads cost state and restores tokens if session ID matches.
 // Returns the restored CostState and a boolean indicating if restoration succeeded.
 func RestoreCostState(sessionID string) (*CostState, bool, error) {
-	state, err := LoadCostState()
+	state, err := LoadCostState(sessionID)
 	if err != nil {
 		return nil, false, err
 	}

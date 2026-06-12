@@ -2519,9 +2519,11 @@ func TestAC2_PersistCompactBoundary_LogsError(t *testing.T) {
 		t.Fatalf("AppendEntry for setup error: %v", err)
 	}
 
-	// Now make the session directory unreadable by removing it
-	// This will cause AppendEntry to fail when persistCompactBoundary tries to write
+	// Now make the session directory unwriteable by creating a file where the directory should be
 	os.RemoveAll(tmpDir)
+	if err := os.WriteFile(tmpDir, []byte("not a directory"), 0644); err != nil {
+		t.Fatalf("setup error: %v", err)
+	}
 
 	// Capture log output
 	var logBuf bytes.Buffer

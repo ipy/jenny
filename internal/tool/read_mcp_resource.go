@@ -15,11 +15,19 @@ import (
 )
 
 // ReadMcpResourceTool reads a single MCP resource by server and URI.
-type ReadMcpResourceTool struct{}
+type ReadMcpResourceTool struct {
+	sessionID string
+}
 
 // NewReadMcpResourceTool creates a new ReadMcpResourceTool.
 func NewReadMcpResourceTool() *ReadMcpResourceTool {
 	return &ReadMcpResourceTool{}
+}
+
+// WithSessionID sets the session ID for the ReadMcpResourceTool.
+func (t *ReadMcpResourceTool) WithSessionID(id string) *ReadMcpResourceTool {
+	t.sessionID = id
+	return t
 }
 
 // Name returns the tool name.
@@ -159,7 +167,7 @@ func (t *ReadMcpResourceTool) persistBlob(data []byte) (string, error) {
 	filename := fmt.Sprintf("%d-%016x.bin", timestamp, randSuffix)
 
 	// Create persist directory
-	persistDir := filepath.Join(constants.JennyHomeDir(), "mcp-resources")
+	persistDir := filepath.Join(constants.SessionDir(t.sessionID), "mcp-resources")
 	if err := os.MkdirAll(persistDir, 0755); err != nil {
 		return "", fmt.Errorf("creating persist directory: %w", err)
 	}

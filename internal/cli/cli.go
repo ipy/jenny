@@ -29,10 +29,11 @@ type Flags struct {
 	Version                bool   // --version / -v: print version and exit
 	PrintSystemPrompt      bool   // --print-system-prompt: print the assembled system prompt and exit
 	CustomSystemPrompt     string // --system-prompt: replaces default system prompt entirely
-	AppendSystemPrompt     string // --append-system-prompt: appended after assembled system prompt
-	MaxIterations          int    // --max-iterations: maximum loop iterations (0 = unlimited)
-	MaxTurns               int    // --max-turns: maximum number of turns (0 = unlimited)
-	MaxBudgetUsd           float64 // --max-budget-usd: budget limit in USD (0.0 = no limit)
+	AppendSystemPrompt     string            // --append-system-prompt: appended after assembled system prompt
+	MaxIterations          int               // --max-iterations: maximum loop iterations (0 = unlimited)
+	MaxTurns               int               // --max-turns: maximum number of turns (0 = unlimited)
+	MaxBudgetUsd           float64           // --max-budget-usd: budget limit in USD (0.0 = no limit)
+	FeatureFlags           map[string]string // --feature-flags / -ff: feature flags in key=value format
 }
 
 // StringSlice implements flag.Value for multiple string values.
@@ -45,6 +46,32 @@ func (s *StringSlice) Set(val string) error {
 
 func (s *StringSlice) String() string {
 	return strings.Join(*s, ",")
+}
+
+// FeatureFlagValue implements flag.Value for key=value feature flags.
+type FeatureFlagValue map[string]string
+
+func (f *FeatureFlagValue) Set(val string) error {
+	if *f == nil {
+		*f = make(map[string]string)
+	}
+	parts := strings.SplitN(val, "=", 2)
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid feature flag format %q; expected key=value", val)
+	}
+	(*f)[parts[0]] = parts[1]
+	return nil
+}
+
+func (f *FeatureFlagValue) String() string {
+	if *f == nil {
+		return ""
+	}
+	var pairs []string
+	for k, v := range *f {
+		pairs = append(pairs, fmt.Sprintf("%s=%s", k, v))
+	}
+	return strings.Join(pairs, ",")
 }
 
 // Parse parses command-line flags.
@@ -125,6 +152,10 @@ func Parse() (*Flags, error) {
 	var maxBudget float64
 	flags.Float64Var(&maxBudget, "max-budget-usd", 0, "Budget limit in USD (0.0 = no limit)")
 
+	var featureFlags FeatureFlagValue
+	flags.Var(&featureFlags, "feature-flags", "Feature flags in key=value format (can be specified multiple times)")
+	flags.Var(&featureFlags, "ff", "Feature flags in key=value format (alias for --feature-flags)")
+
 	// Parse the flags
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		if err == flag.ErrHelp {
@@ -167,6 +198,7 @@ func Parse() (*Flags, error) {
 			MaxIterations:          maxIter,
 			MaxTurns:               maxTurns,
 			MaxBudgetUsd:           maxBudget,
+			FeatureFlags:           featureFlags,
 		}, nil
 	}
 
@@ -214,6 +246,7 @@ func Parse() (*Flags, error) {
 		MaxIterations:          maxIter,
 		MaxTurns:               maxTurns,
 		MaxBudgetUsd:           maxBudget,
+		FeatureFlags:           featureFlags,
 	}, nil
 }
 

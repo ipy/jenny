@@ -1,49 +1,52 @@
 package redact
 
 import (
-	"os"
 	"strings"
 	"sync"
 	"testing"
 )
 
 func TestNewSecretRedactor_EnabledByDefault(t *testing.T) {
-	// Clear any existing env var
-	origVal := os.Getenv("JENNY_REDACT_DISABLE")
-	os.Unsetenv("JENNY_REDACT_DISABLE")
-	defer func() {
-		if origVal != "" {
-			os.Setenv("JENNY_REDACT_DISABLE", origVal)
-		}
-	}()
-
-	redactor := NewSecretRedactor()
+	redactor := NewSecretRedactor(ModeRecover)
 	if !redactor.Enabled() {
-		t.Error("Expected redaction to be enabled by default")
+		t.Error("Expected redaction to be enabled")
 	}
 }
 
-func TestNewSecretRedactor_DisabledByEnv(t *testing.T) {
-	// Set the disable env var
-	os.Setenv("JENNY_REDACT_DISABLE", "1")
-	defer os.Unsetenv("JENNY_REDACT_DISABLE")
-
-	redactor := NewSecretRedactor()
+func TestNewSecretRedactor_Disabled(t *testing.T) {
+	redactor := NewSecretRedactor(ModeDisabled)
 	if redactor.Enabled() {
-		t.Error("Expected redaction to be disabled when JENNY_REDACT_DISABLE=1")
+		t.Error("Expected redaction to be disabled")
 	}
 }
+
+func TestParseRedactMode(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected RedactMode
+	}{
+		{"disabled", ModeDisabled},
+		{"0", ModeDisabled},
+		{"false", ModeDisabled},
+		{"redact", ModeRedact},
+		{"recover", ModeRecover},
+		{"1", ModeRecover},
+		{"true", ModeRecover},
+		{"", ModeRecover},
+		{"unknown", ModeRecover},
+	}
+
+	for _, tc := range tests {
+		got := ParseRedactMode(tc.input)
+		if got != tc.expected {
+			t.Errorf("ParseRedactMode(%q) = %v; want %v", tc.input, got, tc.expected)
+		}
+	}
+}
+
 
 func TestRedact_ReplacesOpenAIKey(t *testing.T) {
-	origVal := os.Getenv("JENNY_REDACT_DISABLE")
-	os.Unsetenv("JENNY_REDACT_DISABLE")
-	defer func() {
-		if origVal != "" {
-			os.Setenv("JENNY_REDACT_DISABLE", origVal)
-		}
-	}()
-
-	redactor := NewSecretRedactor()
+	redactor := NewSecretRedactor(ModeRecover)
 	// Use valid OpenAI pattern: sk-{20}T3BlbkFJ{20}
 	input := "API key is sk-abcdefghijklmnopqrstT3BlbkFJabcdefghijklmnopqrst"
 	result := redactor.Redact(input)
@@ -59,15 +62,7 @@ func TestRedact_ReplacesOpenAIKey(t *testing.T) {
 }
 
 func TestRedact_ReplacesGitHubToken(t *testing.T) {
-	origVal := os.Getenv("JENNY_REDACT_DISABLE")
-	os.Unsetenv("JENNY_REDACT_DISABLE")
-	defer func() {
-		if origVal != "" {
-			os.Setenv("JENNY_REDACT_DISABLE", origVal)
-		}
-	}()
-
-	redactor := NewSecretRedactor()
+	redactor := NewSecretRedactor(ModeRecover)
 	// Use valid GitHub PAT pattern: ghp_ + exactly 36 alphanumeric chars
 	input := "GitHub token: ghp_abcdefghijklmnopqrstuvwxyz123456789012ab"
 	result := redactor.Redact(input)
@@ -83,15 +78,7 @@ func TestRedact_ReplacesGitHubToken(t *testing.T) {
 }
 
 func TestRedact_PreservesLongBase64(t *testing.T) {
-	origVal := os.Getenv("JENNY_REDACT_DISABLE")
-	os.Unsetenv("JENNY_REDACT_DISABLE")
-	defer func() {
-		if origVal != "" {
-			os.Setenv("JENNY_REDACT_DISABLE", origVal)
-		}
-	}()
-
-	redactor := NewSecretRedactor()
+	redactor := NewSecretRedactor(ModeRecover)
 	// Legitimate base64 content (like image data) should NOT be redacted
 	// This is a 48+ char base64 string without any secret prefix
 	legitBase64 := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
@@ -104,15 +91,7 @@ func TestRedact_PreservesLongBase64(t *testing.T) {
 }
 
 func TestRedact_ReplacesAWSKey(t *testing.T) {
-	origVal := os.Getenv("JENNY_REDACT_DISABLE")
-	os.Unsetenv("JENNY_REDACT_DISABLE")
-	defer func() {
-		if origVal != "" {
-			os.Setenv("JENNY_REDACT_DISABLE", origVal)
-		}
-	}()
-
-	redactor := NewSecretRedactor()
+	redactor := NewSecretRedactor(ModeRecover)
 	input := "AWS key: AKIAIOSFODNN7EXAMPLE"
 	result := redactor.Redact(input)
 
@@ -127,15 +106,7 @@ func TestRedact_ReplacesAWSKey(t *testing.T) {
 }
 
 func TestRedact_PreservesNonSecrets(t *testing.T) {
-	origVal := os.Getenv("JENNY_REDACT_DISABLE")
-	os.Unsetenv("JENNY_REDACT_DISABLE")
-	defer func() {
-		if origVal != "" {
-			os.Setenv("JENNY_REDACT_DISABLE", origVal)
-		}
-	}()
-
-	redactor := NewSecretRedactor()
+	redactor := NewSecretRedactor(ModeRecover)
 	input := "This is just regular text with no secrets"
 	result := redactor.Redact(input)
 
@@ -145,15 +116,7 @@ func TestRedact_PreservesNonSecrets(t *testing.T) {
 }
 
 func TestRedact_SameSecretSameID(t *testing.T) {
-	origVal := os.Getenv("JENNY_REDACT_DISABLE")
-	os.Unsetenv("JENNY_REDACT_DISABLE")
-	defer func() {
-		if origVal != "" {
-			os.Setenv("JENNY_REDACT_DISABLE", origVal)
-		}
-	}()
-
-	redactor := NewSecretRedactor()
+	redactor := NewSecretRedactor(ModeRecover)
 	// Use valid OpenAI pattern
 	secret := "sk-abcdefghijklmnopqrstT3BlbkFJabcdefghijklmnopqrst"
 	input1 := "Key1: " + secret
@@ -187,15 +150,7 @@ func TestRedact_SameSecretSameID(t *testing.T) {
 }
 
 func TestRedact_DifferentSecretsDifferentIDs(t *testing.T) {
-	origVal := os.Getenv("JENNY_REDACT_DISABLE")
-	os.Unsetenv("JENNY_REDACT_DISABLE")
-	defer func() {
-		if origVal != "" {
-			os.Setenv("JENNY_REDACT_DISABLE", origVal)
-		}
-	}()
-
-	redactor := NewSecretRedactor()
+	redactor := NewSecretRedactor(ModeRecover)
 	// Use two different valid OpenAI patterns
 	secret1 := "sk-abcdefghijklmnopqrstT3BlbkFJabcdefghijklmnopqrst"
 	secret2 := "sk-12345678901234567890T3BlbkFJ12345678901234567890"
@@ -227,12 +182,32 @@ func TestRedact_DifferentSecretsDifferentIDs(t *testing.T) {
 	}
 }
 
-func TestRedact_NoOpWhenDisabled(t *testing.T) {
-	// Set the disable env var
-	os.Setenv("JENNY_REDACT_DISABLE", "1")
-	defer os.Unsetenv("JENNY_REDACT_DISABLE")
+func TestRedact_OneWayMode(t *testing.T) {
+	redactor := NewSecretRedactor(ModeRedact)
+	// Use valid OpenAI pattern
+	secret := "sk-abcdefghijklmnopqrstT3BlbkFJabcdefghijklmnopqrst"
+	input := "Key: " + secret
+	redacted := redactor.Redact(input)
 
-	redactor := NewSecretRedactor()
+	if !strings.Contains(redacted, "[REDACTED:") {
+		t.Errorf("Expected redaction, got: %s", redacted)
+	}
+	if strings.Contains(redacted, secret) {
+		t.Error("Secret should not be in redacted output")
+	}
+
+	// Recover should NOT work in ModeRedact
+	recovered := redactor.Recover(redacted)
+	if recovered != redacted {
+		t.Errorf("Recover should be no-op in ModeRedact, got: %s", recovered)
+	}
+	if strings.Contains(recovered, secret) {
+		t.Error("Secret should not be in recovered output in ModeRedact")
+	}
+}
+
+func TestRedact_NoOpWhenDisabled(t *testing.T) {
+	redactor := NewSecretRedactor(ModeDisabled)
 	// Use valid OpenAI pattern
 	input := "Key: sk-abcdefghijklmnopqrstT3BlbkFJabcdefghijklmnopqrst"
 	result := redactor.Redact(input)
@@ -243,15 +218,7 @@ func TestRedact_NoOpWhenDisabled(t *testing.T) {
 }
 
 func TestRecover_RestoresOriginal(t *testing.T) {
-	origVal := os.Getenv("JENNY_REDACT_DISABLE")
-	os.Unsetenv("JENNY_REDACT_DISABLE")
-	defer func() {
-		if origVal != "" {
-			os.Setenv("JENNY_REDACT_DISABLE", origVal)
-		}
-	}()
-
-	redactor := NewSecretRedactor()
+	redactor := NewSecretRedactor(ModeRecover)
 	// Use valid OpenAI pattern
 	secret := "sk-abcdefghijklmnopqrstT3BlbkFJabcdefghijklmnopqrst"
 	redacted := redactor.Redact("Key: " + secret)
@@ -266,15 +233,7 @@ func TestRecover_RestoresOriginal(t *testing.T) {
 }
 
 func TestRecover_UnknownPlaceholder(t *testing.T) {
-	origVal := os.Getenv("JENNY_REDACT_DISABLE")
-	os.Unsetenv("JENNY_REDACT_DISABLE")
-	defer func() {
-		if origVal != "" {
-			os.Setenv("JENNY_REDACT_DISABLE", origVal)
-		}
-	}()
-
-	redactor := NewSecretRedactor()
+	redactor := NewSecretRedactor(ModeRecover)
 	input := "Unknown placeholder: [REDACTED:ID_99999]"
 	result := redactor.Recover(input)
 
@@ -284,15 +243,7 @@ func TestRecover_UnknownPlaceholder(t *testing.T) {
 }
 
 func TestReset_ClearsMappings(t *testing.T) {
-	origVal := os.Getenv("JENNY_REDACT_DISABLE")
-	os.Unsetenv("JENNY_REDACT_DISABLE")
-	defer func() {
-		if origVal != "" {
-			os.Setenv("JENNY_REDACT_DISABLE", origVal)
-		}
-	}()
-
-	redactor := NewSecretRedactor()
+	redactor := NewSecretRedactor(ModeRecover)
 	// Use valid OpenAI pattern
 	secret := "sk-abcdefghijklmnopqrstT3BlbkFJabcdefghijklmnopqrst"
 	redacted := redactor.Redact("Key: " + secret)
@@ -310,15 +261,7 @@ func TestReset_ClearsMappings(t *testing.T) {
 }
 
 func TestRedact_ConcurrentSafety(t *testing.T) {
-	origVal := os.Getenv("JENNY_REDACT_DISABLE")
-	os.Unsetenv("JENNY_REDACT_DISABLE")
-	defer func() {
-		if origVal != "" {
-			os.Setenv("JENNY_REDACT_DISABLE", origVal)
-		}
-	}()
-
-	redactor := NewSecretRedactor()
+	redactor := NewSecretRedactor(ModeRecover)
 	var wg sync.WaitGroup
 
 	for i := range 10 {
@@ -339,15 +282,7 @@ func TestRedact_ConcurrentSafety(t *testing.T) {
 }
 
 func TestRedact_ReplacesLongToken(t *testing.T) {
-	origVal := os.Getenv("JENNY_REDACT_DISABLE")
-	os.Unsetenv("JENNY_REDACT_DISABLE")
-	defer func() {
-		if origVal != "" {
-			os.Setenv("JENNY_REDACT_DISABLE", origVal)
-		}
-	}()
-
-	redactor := NewSecretRedactor()
+	redactor := NewSecretRedactor(ModeRecover)
 	// Token from .env.freemodel: 54 chars, "fe_oa_" prefix, high entropy
 	token := "fe_oa_7066b4cf68b1daf66206986fb5d16d45c466d74d39f0d52e"
 	input := "ANTHROPIC_AUTH_TOKEN=" + token
@@ -362,11 +297,7 @@ func TestRedact_ReplacesLongToken(t *testing.T) {
 }
 
 func TestRecover_NoOpWhenDisabled(t *testing.T) {
-	// Set the disable env var
-	os.Setenv("JENNY_REDACT_DISABLE", "1")
-	defer os.Unsetenv("JENNY_REDACT_DISABLE")
-
-	redactor := NewSecretRedactor()
+	redactor := NewSecretRedactor(ModeDisabled)
 	input := "Placeholder: [REDACTED:ID_00001]"
 	result := redactor.Recover(input)
 
@@ -376,11 +307,7 @@ func TestRecover_NoOpWhenDisabled(t *testing.T) {
 }
 
 func TestReset_NoOpWhenDisabled(t *testing.T) {
-	// Set the disable env var
-	os.Setenv("JENNY_REDACT_DISABLE", "1")
-	defer os.Unsetenv("JENNY_REDACT_DISABLE")
-
-	redactor := NewSecretRedactor()
+	redactor := NewSecretRedactor(ModeDisabled)
 	// Should not panic
 	redactor.Reset()
 }

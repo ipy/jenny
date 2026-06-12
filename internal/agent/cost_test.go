@@ -148,16 +148,16 @@ func TestAC2_SaveCostStatePersistsToDotJennyConfig(t *testing.T) {
 	}
 
 	// Verify file exists
-	configPath := filepath.Join(".jenny", "config")
+	configPath := filepath.Join(".jenny", "sessions", "sess_test_ac2", "config")
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		t.Fatalf("AC2 FAIL: cannot read .jenny/config: %v", err)
+		t.Fatalf("AC2 FAIL: cannot read .jenny/sessions/sess_test_ac2/config: %v", err)
 	}
 
 	// Parse JSON and verify required fields
 	var parsed map[string]any
 	if err := json.Unmarshal(data, &parsed); err != nil {
-		t.Fatalf("AC2 FAIL: .jenny/config is not valid JSON: %v", err)
+		t.Fatalf("AC2 FAIL: config is not valid JSON: %v", err)
 	}
 
 	// Check lastSessionId (AC2 requires lastSessionId)
@@ -201,6 +201,14 @@ func TestAC2_SaveCostStateEmptyModelUsage(t *testing.T) {
 	os.Chdir(tmpDir)
 	defer os.Chdir(origDir)
 
+	originalFunc := constants.JennyHomeDirFunc
+	constants.JennyHomeDirFunc = func() string {
+		return tmpDir
+	}
+	defer func() {
+		constants.JennyHomeDirFunc = originalFunc
+	}()
+
 	state := &CostState{
 		LastSessionID: "sess_empty",
 		ModelUsage:    map[string]ModelUsage{},
@@ -211,8 +219,14 @@ func TestAC2_SaveCostStateEmptyModelUsage(t *testing.T) {
 		t.Fatalf("AC2 FAIL: SaveCostState() error = %v", err)
 	}
 
+	// Verify the file was created in the session directory
+	configPath := filepath.Join(tmpDir, "sessions", "sess_empty", "config")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Fatalf("AC2 FAIL: .jenny/sessions/sess_empty/config not created")
+	}
+
 	// Verify it loads back correctly
-	loaded, err := LoadCostState()
+	loaded, err := LoadCostState("sess_empty")
 	if err != nil {
 		t.Fatalf("AC2 FAIL: LoadCostState() error = %v", err)
 	}
@@ -249,8 +263,10 @@ func TestAC2_PersistsEndTurnPath(t *testing.T) {
 		t.Fatalf("AC2 FAIL: NewManager error = %v", err)
 	}
 
+	sessionID := "sess_runstream_persist"
 	cfg := StreamConfig{
 		Enabled:        true,
+		SessionID:      sessionID,
 		SessionManager: sessMgr,
 	}
 	ctx := context.Background()
@@ -260,11 +276,11 @@ func TestAC2_PersistsEndTurnPath(t *testing.T) {
 		t.Fatalf("AC2 FAIL: RunStream error = %v", err)
 	}
 
-	// Verify .jenny/config was created
-	configPath := filepath.Join(tmpDir, ".jenny", "config")
+	// Verify .jenny/sessions/<id>/config was created
+	configPath := filepath.Join(tmpDir, ".jenny", "sessions", sessionID, "config")
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		t.Fatal("AC2 FAIL: .jenny/config not created after RunStream end_turn")
+		t.Fatalf("AC2 FAIL: .jenny/sessions/%s/config not created after RunStream end_turn", sessionID)
 	}
 
 	var state CostState
@@ -606,12 +622,12 @@ func TestAC5_BudgetStopInRunStream(t *testing.T) {
 		constants.JennyHomeDirFunc = originalFunc
 	}()
 
-	// Pre-seed .jenny/config with cost that already exceeds the budget.
+	// Pre-seed config with cost that already exceeds the budget.
 	// This simulates a resumed session where the restored cost exceeds MaxBudgetUSD,
 	// which is the scenario where budget enforcement kicks in before the first API call.
-	costDir := filepath.Join(tmpDir, ".jenny")
+	costDir := filepath.Join(tmpDir, ".jenny", "sessions", "sess_budget_test")
 	if err := os.MkdirAll(costDir, 0755); err != nil {
-		t.Fatalf("creating .jenny dir: %v", err)
+		t.Fatalf("creating session dir: %v", err)
 	}
 	preSeed := CostState{
 		LastSessionID: "sess_budget_test",
@@ -744,7 +760,7 @@ func TestCNY_AC1_USDRoundTripUnchanged(t *testing.T) {
 	if err := SaveCostState(state); err != nil {
 		t.Fatalf("CNY AC1 FAIL: SaveCostState error = %v", err)
 	}
-	loaded, err := LoadCostState()
+	loaded, err := LoadCostState("sess_cny_ac1")
 	if err != nil {
 		t.Fatalf("CNY AC1 FAIL: LoadCostState error = %v", err)
 	}

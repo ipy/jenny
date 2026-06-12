@@ -315,7 +315,7 @@ func TestBashTool_AC2_OutputSpill(t *testing.T) {
 		t.Errorf("expected success, got error: %s", result.Content)
 	}
 	// Should reference a file path
-	if !strings.Contains(result.Content, "/tmp/") && !strings.Contains(result.Content, "jenny-spill") {
+	if !strings.Contains(result.Content, "spill") {
 		t.Errorf("expected spill file path in result, got: %s", result.Content)
 	}
 	if !result.Truncated {

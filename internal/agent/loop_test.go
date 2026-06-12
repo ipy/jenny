@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/api"
+	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/session"
 	"github.com/ipy/jenny/internal/tool"
 )
@@ -415,13 +417,18 @@ func TestResumeWithToolCalls(t *testing.T) {
 	// Create a temporary transcript directory
 	tmpDir := t.TempDir()
 
+	// AC4-isolation: Override JennyHomeDirFunc to use tmpDir for session-specific directory structure
+	origFunc := constants.JennyHomeDirFunc
+	constants.JennyHomeDirFunc = func() string { return tmpDir }
+	defer func() { constants.JennyHomeDirFunc = origFunc }()
+
 	// Create session manager
 	mgr, err := session.NewManager(tmpDir, false)
 	if err != nil {
 		t.Fatalf("NewManager() error = %v", err)
 	}
 
-	sessionID := "sess_test_resume_toolcalls"
+	sessionID := "sess_test_resume_toolcalls_" + fmt.Sprintf("%d", time.Now().UnixNano())
 
 	// Simulate a conversation with tool calls:
 	// 1. User asks to list files
@@ -746,6 +753,9 @@ func TestAC1_RecursiveForkBlocked_ViaContext(t *testing.T) {
 }
 
 func TestAC1_RecursiveForkBlocked_NoFalsePositive(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode")
+	}
 	// AC1: Without fork marker in context, recursive fork is NOT blocked.
 	// The agent tool should proceed to execute (and fail with API error, not fork error).
 
@@ -918,6 +928,9 @@ func TestAC2_WorktreeIsolation_AloneWithoutCWD_Validates(t *testing.T) {
 }
 
 func TestAC2_NoCWD_NoIsolation_Passes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode")
+	}
 	// AC2: Without isolation and without cwd, normal validation passes
 	// (will fail later due to no API client, not due to validation)
 
@@ -996,6 +1009,9 @@ func TestAC3_AsyncSubagentOutputFile_ReturnsPath(t *testing.T) {
 }
 
 func TestAC3_AsyncOutputFile_WrittenOnCompletion(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode")
+	}
 	// AC3: After async subagent completes, the output file should exist and contain
 	// valid JSONL with the result/error information.
 
@@ -1215,6 +1231,9 @@ func TestAC4_InterruptTimeoutContext_ReturnsOutputPlusError(t *testing.T) {
 }
 
 func TestAC4_InterruptNormalContext_ReturnsNoCancelError(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode")
+	}
 	// AC4: When context is NOT cancelled, no cancellation error should be returned.
 	// (Verifies baseline behavior - will get API error instead)
 
@@ -1432,7 +1451,7 @@ func TestAC5_TranscriptFileFormat(t *testing.T) {
 	}
 
 	// Read raw file from disk
-	path := filepath.Join(tmpDir, sessionID+".jsonl")
+	path := filepath.Join(tmpDir, "sessions", sessionID, "transcript.jsonl")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("reading transcript file: %v", err)

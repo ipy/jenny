@@ -62,10 +62,9 @@ type SessionMemory struct {
 
 // NewSessionMemory creates a new SessionMemory instance.
 func NewSessionMemory(sessionID string, client APIClient, compactCfg CompactConfig) *SessionMemory {
-	baseDir := filepath.Join(constants.JennyHomeDir(), "session-memory")
-	// AC5: prune old memory files so the directory does not grow without bound.
-	// Best-effort — never block startup on retention errors.
-	cleanupOldSessionMemories(baseDir, sessionMemoryRetention())
+	baseDir := constants.SessionDir(sessionID)
+	memoryFilePath := filepath.Join(baseDir, "memory.md")
+
 	return &SessionMemory{
 		sessionID:        sessionID,
 		memdir:           baseDir,
@@ -74,7 +73,7 @@ func NewSessionMemory(sessionID string, client APIClient, compactCfg CompactConf
 		toolCalls:        0,
 		lastBaseline:     0,
 		lastToolBaseline: 0,
-		memoryFilePath:   filepath.Join(baseDir, sessionID+".md"),
+		memoryFilePath:   memoryFilePath,
 		client:           client,
 		readCache:        tool.NewReadFileCache(),
 	}

@@ -30,6 +30,7 @@ type BashTool struct {
 	mu              sync.Mutex
 	commandCwd      string
 	projectRoot     string
+	sessionID       string
 	backgroundTasks sync.Map
 	taskManager     *TaskManager
 }
@@ -39,6 +40,12 @@ func NewBashTool(skipPermissions bool) *BashTool {
 	return &BashTool{
 		skipPermissions: skipPermissions,
 	}
+}
+
+// WithSessionID sets the session ID for the BashTool.
+func (t *BashTool) WithSessionID(id string) *BashTool {
+	t.sessionID = id
+	return t
 }
 
 // WithSandbox sets the sandbox manager for the BashTool.
@@ -269,10 +276,10 @@ func (t *BashTool) handleOutput(output string) (*ToolResult, error) {
 
 // writeSpillFile writes output to a temp file and returns the path
 func (t *BashTool) writeSpillFile(output string) (string, error) {
-	// Try jenny home directory first, then project root .jenny, then temp
-	if jennyHome := constants.JennyHomeDir(); dirExists(jennyHome) || mkdirAll(jennyHome, 0755) == nil {
-		spillDir := jennyHome
-		f, err := os.CreateTemp(spillDir, "jenny-spill-*")
+	// 1. Try jenny home spills directory (~/.jenny/sessions/<id>/spills or ~/.jenny/spills)
+	spillsDir := constants.SpillsDir(t.sessionID)
+	if dirExists(spillsDir) || mkdirAll(spillsDir, 0755) == nil {
+		f, err := os.CreateTemp(spillsDir, "spill-*")
 		if err == nil {
 			defer f.Close()
 			if _, err := f.WriteString(output); err == nil {
@@ -281,25 +288,38 @@ func (t *BashTool) writeSpillFile(output string) (string, error) {
 		}
 	}
 
-	spillDir := t.projectRoot
-	if jennyDir := filepath.Join(t.projectRoot, ".jenny"); dirExists(jennyDir) {
-		spillDir = jennyDir
-	} else if tmpDir := filepath.Join(os.TempDir(), "jenny-spill"); dirExists(tmpDir) || mkdirAll(tmpDir, 0755) == nil {
-		spillDir = tmpDir
+	// 2. Try project .jenny/spills directory (or .jenny/sessions/<id>/spills if we wanted to be consistent,
+	// but usually project-local .jenny is simpler)
+	projectSpillsDir := filepath.Join(t.projectRoot, ".jenny", "spills")
+	if t.sessionID != "" {
+		projectSpillsDir = filepath.Join(t.projectRoot, ".jenny", "sessions", t.sessionID, "spills")
+	}
+	if dirExists(projectSpillsDir) || mkdirAll(projectSpillsDir, 0755) == nil {
+		f, err := os.CreateTemp(projectSpillsDir, "spill-*")
+		if err == nil {
+			defer f.Close()
+			if _, err := f.WriteString(output); err == nil {
+				return f.Name(), nil
+			}
+		}
 	}
 
-	// Create temp file
-	f, err := os.CreateTemp(spillDir, "jenny-spill-*")
-	if err != nil {
-		return "", fmt.Errorf("failed to create spill file: %w", err)
+	// 3. Fallback to system temp directory (/tmp/jenny-spills/<id> or /tmp/jenny-spills)
+	tmpDir := filepath.Join(os.TempDir(), "jenny-spills")
+	if t.sessionID != "" {
+		tmpDir = filepath.Join(tmpDir, t.sessionID)
 	}
-	defer f.Close()
-
-	if _, err := f.WriteString(output); err != nil {
-		return "", fmt.Errorf("failed to write spill file: %w", err)
+	if dirExists(tmpDir) || mkdirAll(tmpDir, 0755) == nil {
+		f, err := os.CreateTemp(tmpDir, "spill-*")
+		if err == nil {
+			defer f.Close()
+			if _, err := f.WriteString(output); err == nil {
+				return f.Name(), nil
+			}
+		}
 	}
 
-	return f.Name(), nil
+	return "", fmt.Errorf("failed to create spill file in any location")
 }
 
 // isBackgroundExecution checks if run_in_background flag is set

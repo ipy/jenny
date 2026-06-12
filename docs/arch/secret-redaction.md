@@ -16,14 +16,19 @@ gaps: []
 Jenny reads files, runs commands, and fetches URLs. Any tool result may contain API keys, tokens, or passwords that should never reach the LLM. This feature adds a runtime redactor (enabled by default) backed by a **rule-based detector** that mirrors `github.com/zricethezav/gitleaks/v8`'s detection model — rule set, keyword prefilter, per-rule entropy, allowlist, stop words — without taking a runtime dependency on the gitleaks package. Specifically:
 
 - Scans tool results for secrets
-- Replaces detected secrets with `[REDACTED:ID_XXXXX]` placeholders
-- Stores originals in-memory for later recovery
+- Replaces detected secrets with `[REDACTED:<hex>]` placeholders
+- Stores originals in-memory for later recovery (in `recover` mode)
 - Recovers original values when the LLM references placeholders
 
 ## Security Model
 
 - **In-memory only**: Redacted values are never persisted to disk
-- **Default enabled**: Redaction is active unless `JENNY_REDACT_DISABLE=1` is set
+- **Default enabled**: Redaction is active by default in `recover` mode.
+- **Modes**:
+    - `recover`: Redacts secrets and allows recovery in tool inputs (default).
+    - `redact`: Redacts secrets but does NOT allow recovery (one-way).
+    - `disabled`: Disables redaction entirely.
+- **Configuration**: Use `JENNY_REDACT` env var or `-ff redact=<mode>` CLI flag.
 - **LLM instruction**: System prompt instructs LLM to preserve placeholder format
 
 ## API Reference
@@ -38,9 +43,17 @@ type SecretRedactor struct {
     // private fields
 }
 
+// RedactMode defines the behavior of secret redaction.
+type RedactMode string
+
+const (
+    ModeDisabled RedactMode = ""
+    ModeRedact   RedactMode = "redact"
+    ModeRecover  RedactMode = "recover"
+)
+
 // NewSecretRedactor creates a new SecretRedactor.
-// Enabled by default unless JENNY_REDACT_DISABLE=1 is set.
-func NewSecretRedactor() *SecretRedactor
+func NewSecretRedactor(mode RedactMode) *SecretRedactor
 
 // Enabled returns whether redaction is active.
 func (r *SecretRedactor) Enabled() bool
@@ -50,7 +63,7 @@ func (r *SecretRedactor) Enabled() bool
 func (r *SecretRedactor) Redact(content string) string
 
 // Recover replaces placeholders with their original values.
-// Unknown placeholders are left unchanged.
+// Unknown placeholders are left unchanged. Only works in ModeRecover.
 func (r *SecretRedactor) Recover(content string) string
 
 // Reset clears all stored mappings and resets the counter.
@@ -59,11 +72,10 @@ func (r *SecretRedactor) Reset()
 
 ### Placeholder Format
 
-Placeholder format: `[REDACTED:ID_XXXXX]` where `XXXXX` is a zero-padded 5-digit counter (e.g., `ID_00001`).
+Placeholder format: `[REDACTED:<hex>]` where `<hex>` is a random 8-character hex string (e.g., `[REDACTED:a3f1b2c9]`).
 
 - Same secret text → same placeholder ID
 - Different secrets → different IDs
-- Counter increments across calls
 
 ## Engine Integration
 
@@ -102,7 +114,7 @@ if e.secretRedactor != nil && e.secretRedactor.Enabled() {
 When enabled, the following is appended to the system prompt:
 
 ```
-This session has secret redaction enabled. Tool results may contain `[REDACTED:ID_XXXXX]` placeholders. Do not alter, remove, or expand these placeholders.
+This session has secret redaction enabled. Tool results may contain `[REDACTED:<hex>]` placeholders (e.g. `[REDACTED:a3f1b2c9]`). Copy them verbatim — including the full hex suffix — and never simplify, abbreviate, or otherwise modify them.
 ```
 
 ## Configuration
@@ -111,14 +123,21 @@ This session has secret redaction enabled. Tool results may contain `[REDACTED:I
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `JENNY_REDACT_DISABLE` | unset (enabled) | Set to `1` to disable secret redaction |
+| `JENNY_REDACT` | `recover` | Set to `disabled`, `redact`, or `recover`. |
+
+### CLI Flags
+
+Use the feature flag mechanism:
+- `-ff redact=disabled`
+- `-ff redact=redact`
+- `-ff redact=recover`
 
 ### StreamConfig Field
 
 ```go
 type StreamConfig struct {
     // ... existing fields ...
-    RedactEnabled bool // Set based on JENNY_REDACT_DISABLE
+    RedactMode redact.RedactMode
 }
 ```
 

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/git"
+	"github.com/ipy/jenny/internal/redact"
 	"github.com/ipy/jenny/internal/skills"
 	"github.com/ipy/jenny/internal/tool"
 )
@@ -203,14 +204,14 @@ func buildSystemPrompt(cfg StreamConfig, tools []tool.Tool, cwd string) string {
 		}
 	}
 
+	// AC9: Redaction instruction in system prompt when enabled
+	if cfg.RedactMode != redact.ModeDisabled {
+		sections = append(sections, "This session has secret redaction enabled. Tool results may contain `[REDACTED:<hex>]` placeholders (e.g. `[REDACTED:a3f1b2c9]`). Copy them verbatim — including the full hex suffix — and never simplify, abbreviate, or otherwise modify them.")
+	}
+
 	// AC5: Append section (only if not overridden)
 	if appendContent, ok := appendSection(cfg.AppendSystemPrompt, cfg.OverrideSystemPrompt); ok {
 		sections = append(sections, appendContent)
-	}
-
-	// AC9: Redaction instruction in system prompt when enabled
-	if cfg.RedactEnabled {
-		sections = append(sections, "This session has secret redaction enabled. Tool results may contain `[REDACTED:<hex>]` placeholders (e.g. `[REDACTED:a3f1b2c9]`). Copy them verbatim — including the full hex suffix — and never simplify, abbreviate, or otherwise modify them.")
 	}
 
 	// AC1: Trailing newline so the shell prompt does not run onto the last line.

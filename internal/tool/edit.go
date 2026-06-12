@@ -21,11 +21,18 @@ type EditTool struct {
 	readCache    *ReadFileCache
 	allowedPaths []string // If set, edits are restricted to these paths only
 	activator    SkillActivator
+	sessionID    string
 }
 
 // NewEditTool creates a new EditTool.
 func NewEditTool(readCache *ReadFileCache) *EditTool {
 	return &EditTool{readCache: readCache}
+}
+
+// WithSessionID sets the session ID for the EditTool.
+func (t *EditTool) WithSessionID(id string) *EditTool {
+	t.sessionID = id
+	return t
 }
 
 // SetAllowedPaths restricts Edit to only these paths.
@@ -163,7 +170,7 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 		if !allowed {
 			// Path not in allowlist - apply cwd gate with scratchpad exception
 			var pathErr error
-			filePath, pathErr = PathInWorkingDir(resolvedPath, cwd, constants.ScratchpadDir())
+			filePath, pathErr = PathInWorkingDir(resolvedPath, cwd, constants.ScratchpadDir(t.sessionID))
 			if pathErr != nil {
 				return &ToolResult{
 					Content: pathErr.Error(),
@@ -177,7 +184,7 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 	} else {
 		// No allowedPaths restriction - apply cwd gate with scratchpad exception
 		var pathErr error
-		filePath, pathErr = PathInWorkingDir(resolvedPath, cwd, constants.ScratchpadDir())
+		filePath, pathErr = PathInWorkingDir(resolvedPath, cwd, constants.ScratchpadDir(t.sessionID))
 		if pathErr != nil {
 			return &ToolResult{
 				Content: pathErr.Error(),

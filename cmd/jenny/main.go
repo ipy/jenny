@@ -13,6 +13,7 @@ import (
 	"github.com/ipy/jenny/internal/log"
 	"github.com/ipy/jenny/internal/mcp"
 	"github.com/ipy/jenny/internal/plugin"
+	"github.com/ipy/jenny/internal/redact"
 	"github.com/ipy/jenny/internal/session"
 	"github.com/ipy/jenny/internal/skills"
 	"github.com/ipy/jenny/internal/tool"
@@ -297,6 +298,17 @@ func run() error {
 	// Create context
 	ctx := context.Background()
 
+	// Determine redact mode: CLI flag wins over JENNY_REDACT env var.
+	// Default is "recover" if neither is set.
+	redactModeStr := os.Getenv("JENNY_REDACT")
+	if val, ok := flags.FeatureFlags["redact"]; ok {
+		redactModeStr = val
+	}
+	if redactModeStr == "" {
+		redactModeStr = "recover"
+	}
+	redactMode := redact.ParseRedactMode(redactModeStr)
+
 	// Build stream config
 	// AC4: Create ReadFileCache and pass it through StreamConfig for engine-level wiring
 	streamCfg := agent.StreamConfig{
@@ -316,7 +328,7 @@ func run() error {
 		MaxIterations:      flags.MaxIterations,
 		MaxTurns:           flags.MaxTurns,
 		MaxBudgetUSD:       flags.MaxBudgetUsd,
-		RedactEnabled:      os.Getenv("JENNY_REDACT_DISABLE") == "",
+		RedactMode:         redactMode,
 	}
 
 	// AC3-streamconfig-inheritance: Set parent config on runner for named agent inheritance

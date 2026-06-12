@@ -23,11 +23,18 @@ type ReadTool struct {
 	skipPermissions bool
 	readCache       *ReadFileCache
 	activator       SkillActivator
+	sessionID       string
 }
 
 // NewReadTool creates a new ReadTool.
 func NewReadTool(skipPermissions bool, readCache *ReadFileCache) *ReadTool {
 	return &ReadTool{skipPermissions: skipPermissions, readCache: readCache}
+}
+
+// WithSessionID sets the session ID for the ReadTool.
+func (t *ReadTool) WithSessionID(id string) *ReadTool {
+	t.sessionID = id
+	return t
 }
 
 // Name returns the tool name.
@@ -129,7 +136,7 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 	// The file path must be within or equal to cwd, or scratchpad
 	// Use proper path boundary check with separator
 	sep := string(filepath.Separator)
-	if !t.skipPermissions && !strings.HasPrefix(absFilePathClean+sep, constants.ScratchpadDir()+sep) {
+	if !t.skipPermissions && !strings.HasPrefix(absFilePathClean+sep, constants.ScratchpadDir(t.sessionID)+sep) {
 		if !strings.HasPrefix(absFilePathClean+sep, absCwdClean+sep) && absFilePathClean != absCwdClean {
 			return &ToolResult{
 				Content: fmt.Sprintf("Error: Access to '%s' is not allowed. File path would traverse outside working directory.", filePath),
