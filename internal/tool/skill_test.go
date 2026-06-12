@@ -482,6 +482,10 @@ func (a *mockSkillActivator) ActivateForPath(path string) []string {
 	return activated
 }
 
+func (a *mockSkillActivator) RegisterActivation(name string, rootPath string) {
+	// No-op for testing
+}
+
 // mockMCPTool implements Tool interface for testing MCP exclusion
 type mockMCPTool struct {
 	name string

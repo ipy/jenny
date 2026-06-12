@@ -57,6 +57,9 @@ type QueryEngine struct {
 
 	// Secret redaction (AC1: secret redaction)
 	secretRedactor *redact.SecretRedactor
+
+	// Skill activator for tracking active skills in system prompt
+	skillActivator tool.SkillActivator
 }
 
 // QueryEngineOption defines a functional option for QueryEngine.
@@ -73,6 +76,13 @@ func WithClient(client api.Requester) QueryEngineOption {
 func WithCWD(cwd string) QueryEngineOption {
 	return func(e *QueryEngine) {
 		e.cwd = cwd
+	}
+}
+
+// WithSkillActivator sets the skill activator for tracking active skills.
+func WithSkillActivator(activator tool.SkillActivator) QueryEngineOption {
+	return func(e *QueryEngine) {
+		e.skillActivator = activator
 	}
 }
 
@@ -359,4 +369,20 @@ func (e *QueryEngine) persistCompactBoundary(preTokens int, preservedCount int, 
 		return err
 	}
 	return nil
+}
+
+// syncActiveSkills syncs the activated skills from the skill activator to StreamConfig.
+// This should be called after each tool execution to keep the system prompt in sync.
+func (e *QueryEngine) syncActiveSkills() {
+	if e.skillActivator == nil {
+		return
+	}
+
+	// Check if the activator supports GetActivatedSkills
+	type activatorWithSkills interface {
+		GetActivatedSkills() []ActivatedSkill
+	}
+	if activator, ok := e.skillActivator.(activatorWithSkills); ok {
+		e.streamCfg.SetActiveSkills(activator.GetActivatedSkills())
+	}
 }

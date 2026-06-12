@@ -221,8 +221,8 @@ func buildSystemPrompt(cfg StreamConfig, tools []tool.Tool, cwd string) string {
 }
 
 // DynamicSystemSuffix returns the per-turn dynamic sections of the system prompt
-// that should NOT be cached (git status, platform/cwd). These change frequently
-// and re-sending them each turn is cheaper than busting the stable cached prefix.
+// that should NOT be cached (git status, platform/cwd, active skills). These change
+// frequently and re-sending them each turn is cheaper than busting the stable cached prefix.
 // Stable sections (intro, tool list, memory, skills, redaction) are handled separately
 // as the cached system prompt block in provider_anthropic.go.
 func DynamicSystemSuffix(cfg StreamConfig, cwd string) string {
@@ -248,5 +248,26 @@ func DynamicSystemSuffix(cfg StreamConfig, cwd string) string {
 	}
 	sections = append(sections, fmt.Sprintf("Platform: %s\nCwd: %s", platform, cwd))
 
+	// Active skills section — per-session state that changes mid-session,
+	// making it a natural fit for the dynamic suffix.
+	if activeSkills := activeSkillsSection(cfg.ActiveSkills); activeSkills != "" {
+		sections = append(sections, activeSkills)
+	}
+
 	return strings.Join(sections, "\n\n")
+}
+
+// activeSkillsSection returns the "Active Skills" section for the system prompt.
+// Returns empty string if no skills are active.
+func activeSkillsSection(activeSkills []ActivatedSkill) string {
+	if len(activeSkills) == 0 {
+		return ""
+	}
+
+	var lines []string
+	lines = append(lines, "Active Skills:")
+	for _, skill := range activeSkills {
+		lines = append(lines, fmt.Sprintf("- %s: %s", skill.Name, skill.RootPath))
+	}
+	return strings.Join(lines, "\n")
 }

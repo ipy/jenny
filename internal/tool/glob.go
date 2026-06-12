@@ -3,12 +3,12 @@ package tool
 import (
 	"context"
 	"fmt"
+	"github.com/ipy/jenny/internal/tool/ignore"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
-	"github.com/ipy/jenny/internal/tool/ignore"
 )
 
 const (

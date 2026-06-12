@@ -11,6 +11,10 @@ type SkillActivator interface {
 	// ActivateForPath checks if any skill matches the given path and activates it.
 	// Returns the names of activated skills, or nil if none match.
 	ActivateForPath(path string) []string
+
+	// RegisterActivation records a skill activation by name.
+	// The activator should track activations for later retrieval.
+	RegisterActivation(name string, rootPath string)
 }
 
 // LogSkillActivated logs a skill activation event for debugging.

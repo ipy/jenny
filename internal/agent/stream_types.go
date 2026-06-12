@@ -46,6 +46,7 @@ type StreamConfig struct {
 	MemoryContent        string                      // Memory content to inject into system prompt
 	CachedSystemPrompt   string                      // Frozen system prompt from first assembly (cache-friendly)
 	Skills               []skills.Skill              // Discovered skills for manifest
+	ActiveSkills         []ActivatedSkill            // Skills activated this session (survives compaction)
 	IsForkChild          bool                        // True when this session is a fork child (subagent spawned another agent)
 	StructuredSchema     map[string]any              // JSON schema for structured output (AC1, AC4: non-interactive only)
 	StructuredDenyRules  []string                    // Tool names to deny; checked by engine to enforce AC1
@@ -53,6 +54,17 @@ type StreamConfig struct {
 	MaxIterations        int                         // Maximum loop iterations (0 = unlimited)
 	RedactMode           redact.RedactMode           // Secret redaction mode
 	Effort               string                      // Reasoning effort level (low, medium, high) for OpenAI/DeepSeek
+}
+
+// SetActiveSkills sets the active skills list for the system prompt.
+func (cfg *StreamConfig) SetActiveSkills(skills []ActivatedSkill) {
+	cfg.ActiveSkills = skills
+}
+
+// ActivatedSkill tracks a skill that has been activated in the current session.
+type ActivatedSkill struct {
+	Name     string
+	RootPath string
 }
 
 // ToolParam represents a tool parameter for the API.

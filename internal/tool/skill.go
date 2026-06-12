@@ -10,12 +10,19 @@ import (
 
 // SkillTool provides skill activation via the agent's ActivateSkill tool.
 type SkillTool struct {
-	skills []skills.Skill
+	skills    []skills.Skill
+	activator SkillActivator // Optional activator to register skill activations
 }
 
 // NewSkillTool creates a new SkillTool with the given discovered skills.
 func NewSkillTool(skills []skills.Skill) *SkillTool {
 	return &SkillTool{skills: skills}
+}
+
+// WithActivator sets the skill activator for tracking activations.
+func (t *SkillTool) WithActivator(activator SkillActivator) *SkillTool {
+	t.activator = activator
+	return t
 }
 
 // Name returns the tool name.
@@ -79,6 +86,11 @@ func (t *SkillTool) Execute(ctx context.Context, input map[string]any, cwd strin
 	// Return the skill content wrapped in activated_skill tags
 	// Include the root_path as an attribute for path resolution
 	content := fmt.Sprintf("<activated_skill root_path=%q>\n%s\n</activated_skill>", skill.RootPath, skill.Content)
+
+	// Register the activation if an activator is provided
+	if t.activator != nil {
+		t.activator.RegisterActivation(skill.Name, skill.RootPath)
+	}
 
 	return &ToolResult{
 		Content: content,

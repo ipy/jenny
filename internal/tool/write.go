@@ -293,5 +293,3 @@ func PathInWorkingDir(filePath, cwd string, scratchpadDirs ...string) (string, e
 
 	return absFilePath, nil
 }
-
-

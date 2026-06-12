@@ -321,8 +321,13 @@ func (r *Registry) Build() []Tool {
 		}
 
 		// Add Skill tool if skills are discovered (P3).
+		// Wire the activator to track active skills for the system prompt.
 		if len(r.skills) > 0 {
-			r.baseTools = append(r.baseTools, NewSkillTool(r.skills))
+			skillTool := NewSkillTool(r.skills)
+			if r.skillActivator != nil {
+				skillTool.WithActivator(r.skillActivator)
+			}
+			r.baseTools = append(r.baseTools, skillTool)
 		}
 
 		// Add EnterWorktree and ExitWorktree tools if enabled (P4).

@@ -18,56 +18,56 @@ func TestUTF8SafeTruncate(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		input    string
-		maxBytes int
-		want     string
+		name      string
+		input     string
+		maxBytes  int
+		want      string
 		wantValid bool
 	}{
 		{
-			name:     "4-byte emoji at boundary",
-			input:    "Hello 🔥 world",
-			maxBytes: 9, // "Hello 🔥" is 9 bytes; 🔥 alone is 4 bytes
+			name:      "4-byte emoji at boundary",
+			input:     "Hello 🔥 world",
+			maxBytes:  9, // "Hello 🔥" is 9 bytes; 🔥 alone is 4 bytes
 			wantValid: true,
 		},
 		{
-			name:     "ASCII short string fits",
-			input:    "hello",
-			maxBytes: 10,
-			want:     "hello",
+			name:      "ASCII short string fits",
+			input:     "hello",
+			maxBytes:  10,
+			want:      "hello",
 			wantValid: true,
 		},
 		{
-			name:     "ASCII truncation",
-			input:    "hello world",
-			maxBytes: 5,
-			want:     "hello",
+			name:      "ASCII truncation",
+			input:     "hello world",
+			maxBytes:  5,
+			want:      "hello",
 			wantValid: true,
 		},
 		{
-			name:     "emoji-only string",
-			input:    "🔥🔥🔥",
-			maxBytes: 4, // Exactly one emoji
+			name:      "emoji-only string",
+			input:     "🔥🔥🔥",
+			maxBytes:  4, // Exactly one emoji
 			wantValid: true,
 		},
 		{
-			name:     "negative maxBytes",
-			input:    "hello",
-			maxBytes: -1,
-			want:     "",
+			name:      "negative maxBytes",
+			input:     "hello",
+			maxBytes:  -1,
+			want:      "",
 			wantValid: true,
 		},
 		{
-			name:     "zero maxBytes",
-			input:    "hello",
-			maxBytes: 0,
-			want:     "",
+			name:      "zero maxBytes",
+			input:     "hello",
+			maxBytes:  0,
+			want:      "",
 			wantValid: true,
 		},
 		{
-			name:     "3-byte unicode char at boundary",
-			input:    "日本🏠test",
-			maxBytes: 7, // "日本" = 6 bytes; trying to include "🏠" (4 bytes) would overshoot
+			name:      "3-byte unicode char at boundary",
+			input:     "日本🏠test",
+			maxBytes:  7, // "日本" = 6 bytes; trying to include "🏠" (4 bytes) would overshoot
 			wantValid: true,
 		},
 	}
@@ -444,5 +444,3 @@ func TestReadTool_1GiBRejection(t *testing.T) {
 		t.Errorf("AC3 FAIL: small file should succeed, got error: %s", result2.Content)
 	}
 }
-
-

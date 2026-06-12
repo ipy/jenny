@@ -699,6 +699,10 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			return "", fmt.Errorf("executing tools: %w", err)
 		}
 
+		// Sync active skills from the skill activator to StreamConfig
+		// This ensures the system prompt reflects any skills activated during tool execution.
+		e.syncActiveSkills()
+
 		// AC1/AC2: Pre-compute per-tool interrupt status so we can decide whether
 		// to emit the executor's partial result or a synthetic "interrupted"
 		// replacement. We need this decision BEFORE appending to toolResults to
