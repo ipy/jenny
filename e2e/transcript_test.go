@@ -26,7 +26,7 @@ func TestTranscriptCreation(t *testing.T) {
 				ExitCode: 0,
 				FileSystem: []harness.FileSystemExpectation{
 					{
-						Pattern:       "*.jsonl",
+						Pattern:       "sessions/*/transcript.jsonl",
 						ExpectedCount: 1,
 					},
 				},
@@ -54,7 +54,7 @@ func TestTranscriptEntriesValid(t *testing.T) {
 				ExitCode: 0,
 				FileSystem: []harness.FileSystemExpectation{
 					{
-						Pattern: "*.jsonl",
+						Pattern: "sessions/*/transcript.jsonl",
 						JSONL: &harness.JSONLExpectation{
 							AllLinesValidJSON: true,
 							RequiredFields:    []string{"type"},
@@ -87,7 +87,7 @@ func TestTranscriptSessionIDIsUUID(t *testing.T) {
 				// but we added SessionIDMatchesStdout which implicitly checks the stem against the UUID session_id from stdout.
 				FileSystem: []harness.FileSystemExpectation{
 					{
-						Pattern: "*.jsonl",
+						Pattern: "sessions/*/transcript.jsonl",
 						JSONL: &harness.JSONLExpectation{
 							SessionIDMatchesStdout: true,
 						},
@@ -118,7 +118,7 @@ func TestTranscriptNoSessionPersistence(t *testing.T) {
 				ExitCode: 0,
 				FileSystem: []harness.FileSystemExpectation{
 					{
-						Pattern:       "*.jsonl",
+						Pattern:       "sessions/*/transcript.jsonl",
 						ExpectedCount: 0,
 						MustNotExist:  true,
 					},
@@ -147,7 +147,7 @@ func TestTranscriptEntriesHaveUUID(t *testing.T) {
 				ExitCode: 0,
 				FileSystem: []harness.FileSystemExpectation{
 					{
-						Pattern: "*.jsonl",
+						Pattern: "sessions/*/transcript.jsonl",
 						JSONL: &harness.JSONLExpectation{
 							AllLinesHaveUUID: true,
 						},
@@ -211,7 +211,7 @@ func TestTranscriptResume(t *testing.T) {
 		Expected: harness.ExpectedBehavior{
 			FileSystem: []harness.FileSystemExpectation{
 				{
-					Pattern:       "*.jsonl",
+					Pattern:       "sessions/*/transcript.jsonl",
 					ExpectedCount: 1, // still exactly 1 file
 					JSONL: &harness.JSONLExpectation{
 						MinCount: 3, // Initial (system, result) + Resume (system, result) - should be more than a single run
@@ -256,7 +256,7 @@ func TestTranscriptContinue(t *testing.T) {
 		Expected: harness.ExpectedBehavior{
 			FileSystem: []harness.FileSystemExpectation{
 				{
-					Pattern:       "*.jsonl",
+					Pattern:       "sessions/*/transcript.jsonl",
 					ExpectedCount: 1, // still exactly 1 file
 					JSONL: &harness.JSONLExpectation{
 						MinCount: 3,

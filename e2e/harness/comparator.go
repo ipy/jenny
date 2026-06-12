@@ -840,9 +840,11 @@ func checkJSONL(exp *JSONLExpectation, filePath string, data []byte, stdout stri
 			}
 		}
 
-		stem := strings.TrimSuffix(filepath.Base(filePath), ".jsonl")
-		if sid != "" && stem != sid {
-			diffs = append(diffs, DiffDetail{Path: filePath, Expected: sid, Actual: stem, Message: "file stem does not match session_id from stdout"})
+		// The path is typically sessions/<id>/transcript.jsonl
+		dirName := filepath.Base(filepath.Dir(filePath))
+		
+		if sid != "" && dirName != sid {
+			diffs = append(diffs, DiffDetail{Path: filePath, Expected: sid, Actual: dirName, Message: "session dir name does not match session_id from stdout"})
 		}
 	}
 

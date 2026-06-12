@@ -66,7 +66,10 @@ func TestResume_EmptyTranscript_Error(t *testing.T) {
 	sessionID := "sess_empty"
 
 	// Create an empty transcript file
-	path := filepath.Join(tmpDir, sessionID+".jsonl")
+	path := filepath.Join(tmpDir, "sessions", sessionID, "transcript.jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
 	if err := os.WriteFile(path, []byte(""), 0644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
@@ -166,22 +169,22 @@ func TestResume_ForkSession_NoFileCreated(t *testing.T) {
 		t.Errorf("HasChainMessages(loaded) = true, want false (queue-only)")
 	}
 
-	// AC4b: Verify no fork transcript file is created (tmpDir has exactly one .jsonl)
-	dirEntries, err := os.ReadDir(tmpDir)
+	// AC4b: Verify no fork transcript file is created (sessions dir has exactly one entry)
+	dirEntries, err := os.ReadDir(filepath.Join(tmpDir, "sessions"))
 	if err != nil {
 		t.Fatalf("ReadDir() error = %v", err)
 	}
-	var jsonlFiles []string
+	var sessionDirs []string
 	for _, de := range dirEntries {
-		if !de.IsDir() && filepath.Ext(de.Name()) == ".jsonl" {
-			jsonlFiles = append(jsonlFiles, de.Name())
+		if de.IsDir() {
+			sessionDirs = append(sessionDirs, de.Name())
 		}
 	}
-	if len(jsonlFiles) != 1 {
-		t.Errorf("ReadDir tmpDir returned %d .jsonl files, want 1 (no fork created)", len(jsonlFiles))
+	if len(sessionDirs) != 1 {
+		t.Errorf("ReadDir sessions returned %d dirs, want 1 (no fork created)", len(sessionDirs))
 	}
-	if len(jsonlFiles) == 1 && jsonlFiles[0] != sessionID+".jsonl" {
-		t.Errorf("jsonl file = %q, want %q", jsonlFiles[0], sessionID+".jsonl")
+	if len(sessionDirs) == 1 && sessionDirs[0] != sessionID {
+		t.Errorf("session dir = %q, want %q", sessionDirs[0], sessionID)
 	}
 }
 
@@ -233,19 +236,19 @@ func TestResume_NormalTranscript_ForkSession_CreatesFile(t *testing.T) {
 		}
 	}
 
-	// AC5: Verify fork transcript file was created (tmpDir has exactly two .jsonl files)
-	dirEntries, err := os.ReadDir(tmpDir)
+	// AC5: Verify fork transcript file was created (sessions dir has exactly two session dirs)
+	dirEntries, err := os.ReadDir(filepath.Join(tmpDir, "sessions"))
 	if err != nil {
 		t.Fatalf("ReadDir() error = %v", err)
 	}
-	var jsonlFiles []string
+	var sessionDirs []string
 	for _, de := range dirEntries {
-		if !de.IsDir() && filepath.Ext(de.Name()) == ".jsonl" {
-			jsonlFiles = append(jsonlFiles, de.Name())
+		if de.IsDir() {
+			sessionDirs = append(sessionDirs, de.Name())
 		}
 	}
-	if len(jsonlFiles) != 2 {
-		t.Errorf("ReadDir tmpDir returned %d .jsonl files, want 2 (original + fork)", len(jsonlFiles))
+	if len(sessionDirs) != 2 {
+		t.Errorf("ReadDir sessions returned %d dirs, want 2 (original + fork)", len(sessionDirs))
 	}
 }
 
