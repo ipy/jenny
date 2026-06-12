@@ -921,6 +921,14 @@ func TestAC1_MemdirCreatedAtPromptBuild(t *testing.T) {
 	} else {
 		t.Logf("AC1 PASS: MEMORY.md created at %q", indexPath)
 	}
+
+	// Drain the memory extractor so the background extraction goroutine
+	// finishes writing/closing files under the isolated HOME before
+	// t.TempDir() cleanup runs. Without this, RemoveAll races the
+	// goroutine and fails with "directory not empty".
+	drainCtx, drainCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer drainCancel()
+	engine.Drain(drainCtx)
 }
 
 // TestAC1_DenyRuleStructuredOutput tests that when StructuredOutput is denied
