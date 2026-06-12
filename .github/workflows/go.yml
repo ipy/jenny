@@ -81,7 +81,15 @@ jobs:
         # Multi-arch builds. LDFLAGS injects constants.Version so every
         # platform's binary reports the same --version / claude_code_version.
         LDFLAGS="-s -w -X github.com/ipy/jenny/internal/constants.Version=${VERSION}"
-        platforms=("linux/amd64" "linux/arm64" "darwin/amd64" "darwin/arm64" "windows/amd64")
+        
+        # Only cross-compile all platforms on tags or pull requests to save time/resources on main pushes.
+        if [[ "${{ github.ref_type }}" == "tag" || "${{ github.event_name }}" == "pull_request" ]]; then
+          platforms=("linux/amd64" "linux/arm64" "darwin/amd64" "darwin/arm64" "windows/amd64")
+        else
+          # On regular main pushes, just build the native binary for sanity check.
+          platforms=("linux/amd64")
+        fi
+
         for platform in "${platforms[@]}"; do
           platform_split=(${platform//\// })
           GOOS=${platform_split[0]}
