@@ -46,6 +46,8 @@ jenny -p "prompt text"
 | `--append-system-prompt <text>` | Append text after the assembled default system prompt |
 | `--print-system-prompt` | Print the assembled system prompt and exit (no API call) |
 | `--max-iterations <n>` | Maximum raw loop iterations (0 = unlimited) |
+| `--max-turns <n>` | Maximum number of turns (0 = unlimited) |
+| `--max-budget-usd <n>` | Budget limit in USD (0.0 = no limit) |
 
 ## Flag Rules
 

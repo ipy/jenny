@@ -314,6 +314,8 @@ func run() error {
 		AppendSystemPrompt: flags.AppendSystemPrompt,
 		MemoryContent:      agent.LoadInstructionFile(cwd),
 		MaxIterations:      flags.MaxIterations,
+		MaxTurns:           flags.MaxTurns,
+		MaxBudgetUSD:       flags.MaxBudgetUsd,
 		RedactEnabled:      os.Getenv("JENNY_REDACT_DISABLE") == "",
 	}
 

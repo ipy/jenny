@@ -416,10 +416,20 @@ func TestStreamEvent_ThinkingAndSignature(t *testing.T) {
 
 	t.Setenv("ANTHROPIC_BASE_URL", server.URL)
 	t.Setenv("ANTHROPIC_API_KEY", "test-key")
+	t.Setenv("HOME", t.TempDir()) // isolate HOME to avoid races with tests that use bare os.Setenv
 
 	oldStdout := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
+
+	// Start draining the pipe before RunStream to prevent pipe-buffer
+	// deadlocks on overloaded CI runners (Windows in particular).
+	var outputBuf bytes.Buffer
+	done := make(chan struct{})
+	go func() {
+		io.Copy(&outputBuf, r)
+		close(done)
+	}()
 
 	tmpDir := t.TempDir()
 	sessMgr, _ := session.NewManager(tmpDir, false)
@@ -438,9 +448,7 @@ func TestStreamEvent_ThinkingAndSignature(t *testing.T) {
 
 	w.Close()
 	os.Stdout = oldStdout
-
-	var outputBuf bytes.Buffer
-	io.Copy(&outputBuf, r)
+	<-done // wait for the pipe drainer
 	output := outputBuf.String()
 
 	// AC1: check thinking_delta in stream_event

@@ -31,6 +31,8 @@ type Flags struct {
 	CustomSystemPrompt     string // --system-prompt: replaces default system prompt entirely
 	AppendSystemPrompt     string // --append-system-prompt: appended after assembled system prompt
 	MaxIterations          int    // --max-iterations: maximum loop iterations (0 = unlimited)
+	MaxTurns               int    // --max-turns: maximum number of turns (0 = unlimited)
+	MaxBudgetUsd           float64 // --max-budget-usd: budget limit in USD (0.0 = no limit)
 }
 
 // StringSlice implements flag.Value for multiple string values.
@@ -117,6 +119,12 @@ func Parse() (*Flags, error) {
 	var maxIter int
 	flags.IntVar(&maxIter, "max-iterations", 0, "Maximum loop iterations (0 = unlimited)")
 
+	var maxTurns int
+	flags.IntVar(&maxTurns, "max-turns", 0, "Maximum number of turns (0 = unlimited)")
+
+	var maxBudget float64
+	flags.Float64Var(&maxBudget, "max-budget-usd", 0, "Budget limit in USD (0.0 = no limit)")
+
 	// Parse the flags
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		if err == flag.ErrHelp {
@@ -157,6 +165,8 @@ func Parse() (*Flags, error) {
 			CustomSystemPrompt:     customSys,
 			AppendSystemPrompt:     appendSys,
 			MaxIterations:          maxIter,
+			MaxTurns:               maxTurns,
+			MaxBudgetUsd:           maxBudget,
 		}, nil
 	}
 
@@ -202,6 +212,8 @@ func Parse() (*Flags, error) {
 		CustomSystemPrompt:     customSys,
 		AppendSystemPrompt:     appendSys,
 		MaxIterations:          maxIter,
+		MaxTurns:               maxTurns,
+		MaxBudgetUsd:           maxBudget,
 	}, nil
 }
 

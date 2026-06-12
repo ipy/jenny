@@ -375,6 +375,32 @@ if auth := req.Header.Get("Authorization"); auth == "" {
 }
 ```
 
+## Cross-Platform Test Environment Isolation
+
+Tests that isolate `os.UserConfigDir()` must override the platform-appropriate
+env vars. `os.UserConfigDir()` consults:
+
+- `XDG_CONFIG_HOME` on Linux (default: `~/.config`)
+- `APPDATA` (Roaming) on Windows (default: `%APPDATA%`)
+
+Setting `HOME` alone is insufficient on Windows — `os.UserConfigDir()` reads
+`APPDATA` there, and `HOME` is not consulted at all.
+
+The canonical isolation pattern (used in `engine_test.go`):
+
+```go
+tmpHome := t.TempDir()
+t.Setenv("HOME", tmpHome)
+t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, ".config"))
+t.Setenv("APPDATA", filepath.Join(tmpHome, "AppData", "Roaming"))
+t.Setenv("LOCALAPPDATA", filepath.Join(tmpHome, "AppData", "Local"))
+```
+
+Prefer `t.Setenv` (Go 1.17+) over bare `os.Setenv`+`defer os.Unsetenv`.
+`t.Setenv` registers cleanup via `t.Cleanup` and serializes parallel tests
+to prevent env-var races. Bare `os.Setenv` bypasses this serialization and
+can cause hangs on overloaded CI runners.
+
 ## Limitations
 
 `httptest.NewServer` remains the correct tool for the following test scenarios;

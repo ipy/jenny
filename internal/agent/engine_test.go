@@ -292,8 +292,8 @@ func TestQueryEngine_NewQueryEngine(t *testing.T) {
 	if engine.model != "test-model" {
 		t.Errorf("expected model 'test-model', got %q", engine.model)
 	}
-	if engine.maxTurns != 0 {
-		t.Error("maxTurns should be 0 initially")
+	if engine.maxTurns != 5 {
+		t.Errorf("maxTurns should be 5 initially, got %d", engine.maxTurns)
 	}
 }
 
@@ -802,19 +802,16 @@ func TestAC4_QueryEngineWireReadFileCache(t *testing.T) {
 // session is in a git repository, SubmitMessage must create the per-project
 // memory directory under the config home.
 func TestAC1_MemdirCreatedAtPromptBuild(t *testing.T) {
-	// Isolate HOME so memdir's config-home resolution points to a temp dir
-	// and the test can verify the directory exists without polluting the
-	// real user config.
+	// Isolate config dirs so memdir's config-home resolution points to a temp
+	// dir regardless of platform. os.UserConfigDir() consults:
+	//   - XDG_CONFIG_HOME on Linux/Unix
+	//   - APPDATA (Roaming) on Windows
+	// overrides APPDATA on Windows, while HOME is not consulted at all there.
 	tmpHome := t.TempDir()
-	origHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpHome)
-	defer os.Setenv("HOME", origHome)
-
-	// Also isolate XDG_CONFIG_HOME on Linux/Unix systems so UserConfigDir()
-	// points to the isolated HOME instead of a pre-existing XDG path.
-	origXdg := os.Getenv("XDG_CONFIG_HOME")
-	os.Unsetenv("XDG_CONFIG_HOME")
-	defer os.Setenv("XDG_CONFIG_HOME", origXdg)
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, ".config"))
+	t.Setenv("APPDATA", filepath.Join(tmpHome, "AppData", "Roaming"))
+	t.Setenv("LOCALAPPDATA", filepath.Join(tmpHome, "AppData", "Local"))
 
 	// Set git identity so initTestGitRepo can create the initial commit.
 	// On cleanup, use Unsetenv when the original was empty so we don't
@@ -1997,15 +1994,12 @@ func (s *stubMemExtractorForAC10) SendMessage(ctx context.Context, messages []ap
 // IsSubAgent=false), allowing us to verify the call happened.
 func TestRunLoop_EmptyStopReason_MemExtractorCalledWithEmpty(t *testing.T) {
 	// Set up an isolated git repo so memdir can resolve project root
-	// Use the same isolation pattern as TestAC1_MemdirCreatedAtPromptBuild
+	// Use the same isolation pattern as TestAC1_MemdirCreatedAtPromptBuild.
 	tmpHome := t.TempDir()
-	origHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpHome)
-	defer os.Setenv("HOME", origHome)
-
-	origXdg := os.Getenv("XDG_CONFIG_HOME")
-	os.Unsetenv("XDG_CONFIG_HOME")
-	defer os.Setenv("XDG_CONFIG_HOME", origXdg)
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, ".config"))
+	t.Setenv("APPDATA", filepath.Join(tmpHome, "AppData", "Roaming"))
+	t.Setenv("LOCALAPPDATA", filepath.Join(tmpHome, "AppData", "Local"))
 
 	// Set git identity using the correct cleanup pattern
 	gitEnvVars := []string{"GIT_AUTHOR_EMAIL", "GIT_AUTHOR_NAME", "GIT_COMMITTER_EMAIL", "GIT_COMMITTER_NAME"}

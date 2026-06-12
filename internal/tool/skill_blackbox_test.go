@@ -73,7 +73,7 @@ func TestAC1_ReadTool_ActivatesSkillOnPathAccess(t *testing.T) {
 	if !strings.Contains(stdout, `"skill":"my-skill"`) {
 		t.Errorf("expected skill name 'my-skill' in event, got: %s", stdout)
 	}
-	if !strings.Contains(stdout, `"path":"`+fileInSkillDir+`"`) {
+	if !strings.Contains(stdout, `"path":"`+filepath.ToSlash(fileInSkillDir)+`"`) {
 		t.Errorf("expected file path in event, got: %s", stdout)
 	}
 	t.Logf("AC1 PASS: ReadTool emitted skill_activated event: %s", stdout)

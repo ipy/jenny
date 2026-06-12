@@ -2,6 +2,8 @@ package tool
 
 import (
 	"context"
+	"os/exec"
+	"runtime"
 	"testing"
 )
 
@@ -17,11 +19,27 @@ func (t *mockTool) Execute(ctx context.Context, input map[string]any, cwd string
 	return &ToolResult{Content: "mock result"}, nil
 }
 
+// baseToolCount returns the number of tools produced by WithBaseTools() on the
+// current platform. This varies because Windows adds PowerShellTool
+// unconditionally, while Unix uses BashTool. On Windows, BashTool is also added
+// if bash.exe is found in PATH.
+func baseToolCount() int {
+	if runtime.GOOS == "windows" {
+		// Read + PowerShell + Glob + Grep = 4; +1 if bash.exe is in PATH
+		if _, err := exec.LookPath("bash.exe"); err == nil {
+			return 5
+		}
+		return 4
+	}
+	return 4 // Read + Bash + Glob + Grep
+}
+
 func TestRegistry_WithBaseTools(t *testing.T) {
 	tools := NewRegistry().WithBaseTools().Build()
 
-	if len(tools) != 4 {
-		t.Errorf("expected 4 base tools, got %d", len(tools))
+	bt := baseToolCount()
+	if len(tools) != bt {
+		t.Errorf("expected %d base tools, got %d", bt, len(tools))
 	}
 
 	names := make(map[string]bool)
@@ -31,9 +49,6 @@ func TestRegistry_WithBaseTools(t *testing.T) {
 
 	if !names["Read"] {
 		t.Error("expected 'Read' tool")
-	}
-	if !names["Bash"] {
-		t.Error("expected 'Bash' tool")
 	}
 	if !names["Glob"] {
 		t.Error("expected 'Glob' tool")
@@ -49,11 +64,13 @@ func TestRegistry_WithDenyRules(t *testing.T) {
 		WithDenyRules([]string{"Read"}).
 		Build()
 
-	if len(tools) != 3 {
-		t.Errorf("expected 3 tools after denying 'Read', got %d", len(tools))
+	bt := baseToolCount()
+	expected := bt - 1
+	if len(tools) != expected {
+		t.Errorf("expected %d tools after denying 'Read', got %d", expected, len(tools))
 	}
 
-	// Should have bash, Glob, Grep remaining
+	// Should have bash, Glob, Grep remaining (or PowerShell + Glob + Grep on Windows)
 	names := make(map[string]bool)
 	for _, t := range tools {
 		names[t.Name()] = true
@@ -69,9 +86,11 @@ func TestRegistry_DenyRules_NonExistent(t *testing.T) {
 		WithDenyRules([]string{"nonexistent"}).
 		Build()
 
+	bt := baseToolCount()
+
 	// Denying a non-existent tool should be a no-op
-	if len(tools) != 4 {
-		t.Errorf("expected 4 tools when denying non-existent, got %d", len(tools))
+	if len(tools) != bt {
+		t.Errorf("expected %d tools when denying non-existent, got %d", bt, len(tools))
 	}
 }
 
@@ -86,30 +105,23 @@ func TestRegistry_WithMCPTools(t *testing.T) {
 		WithMCPTools(mcpTools).
 		Build()
 
-	if len(tools) != 6 {
-		t.Errorf("expected 6 tools (4 base + 2 MCP), got %d", len(tools))
+	bt := baseToolCount()
+	expected := bt + 2
+	if len(tools) != expected {
+		t.Errorf("expected %d tools (%d base + 2 MCP), got %d", expected, bt, len(tools))
 	}
 
-	// Base tools should come first
+	// Base tools should come first (order: Read, [Bash|PowerShell], Glob, Grep)
 	if tools[0].Name() != "Read" {
 		t.Errorf("expected first tool to be 'Read', got %q", tools[0].Name())
 	}
-	if tools[1].Name() != "Bash" {
-		t.Errorf("expected second tool to be 'Bash', got %q", tools[1].Name())
-	}
-	if tools[2].Name() != "Glob" {
-		t.Errorf("expected third tool to be 'Glob', got %q", tools[2].Name())
-	}
-	if tools[3].Name() != "Grep" {
-		t.Errorf("expected fourth tool to be 'Grep', got %q", tools[3].Name())
-	}
 
 	// MCP tools should come after
-	if tools[4].Name() != "mcp__server__tool1" {
-		t.Errorf("expected fifth tool to be 'mcp__server__tool1', got %q", tools[4].Name())
+	if tools[bt].Name() != "mcp__server__tool1" {
+		t.Errorf("expected tool at index %d to be 'mcp__server__tool1', got %q", bt, tools[bt].Name())
 	}
-	if tools[5].Name() != "mcp__server__tool2" {
-		t.Errorf("expected sixth tool to be 'mcp__server__tool2', got %q", tools[5].Name())
+	if tools[bt+1].Name() != "mcp__server__tool2" {
+		t.Errorf("expected tool at index %d to be 'mcp__server__tool2', got %q", bt+1, tools[bt+1].Name())
 	}
 }
 
@@ -124,8 +136,10 @@ func TestRegistry_BuiltInWins(t *testing.T) {
 		WithMCPTools(mcpTools).
 		Build()
 
-	if len(tools) != 4 {
-		t.Errorf("expected 4 tools (built-in takes precedence), got %d", len(tools))
+	bt := baseToolCount()
+
+	if len(tools) != bt {
+		t.Errorf("expected %d tools (built-in takes precedence), got %d", bt, len(tools))
 	}
 
 	// First tool should still be the built-in read
@@ -140,11 +154,13 @@ func TestRegistry_WithEnabled(t *testing.T) {
 		WithEnabled("Bash", false).
 		Build()
 
-	if len(tools) != 3 {
-		t.Errorf("expected 3 tools after disabling 'Bash', got %d", len(tools))
+	bt := baseToolCount()
+	expected := bt - 1 // Bash removed (PowerShell unaffected on Windows)
+	if len(tools) != expected {
+		t.Errorf("expected %d tools after disabling 'Bash', got %d", expected, len(tools))
 	}
 
-	// Should have read, Glob, Grep remaining
+	// Should have Read, Glob, Grep remaining (plus PowerShell on Windows)
 	names := make(map[string]bool)
 	for _, t := range tools {
 		names[t.Name()] = true
@@ -160,8 +176,10 @@ func TestRegistry_WithEnabled_NotDisabled(t *testing.T) {
 		WithEnabled("Bash", true). // Explicitly enabled (default anyway)
 		Build()
 
-	if len(tools) != 4 {
-		t.Errorf("expected 4 tools, got %d", len(tools))
+	bt := baseToolCount()
+
+	if len(tools) != bt {
+		t.Errorf("expected %d tools, got %d", bt, len(tools))
 	}
 }
 
@@ -171,8 +189,10 @@ func TestRegistry_EmptyDenyList(t *testing.T) {
 		WithDenyRules([]string{}).
 		Build()
 
-	if len(tools) != 4 {
-		t.Errorf("expected 4 tools with empty deny list, got %d", len(tools))
+	bt := baseToolCount()
+
+	if len(tools) != bt {
+		t.Errorf("expected %d tools with empty deny list, got %d", bt, len(tools))
 	}
 }
 
@@ -210,8 +230,10 @@ func TestRegistry_DenyMCPTool(t *testing.T) {
 		WithDenyRules([]string{"mcp__server__tool1"}).
 		Build()
 
-	if len(tools) != 5 {
-		t.Errorf("expected 5 tools (4 base + 1 MCP), got %d", len(tools))
+	bt := baseToolCount()
+	expected := bt + 1 // base + 1 MCP (one denied)
+	if len(tools) != expected {
+		t.Errorf("expected %d tools (%d base + 1 MCP), got %d", expected, bt+1, len(tools))
 	}
 }
 
@@ -228,11 +250,21 @@ func TestRegistry_CombinedFilters(t *testing.T) {
 		WithEnabled("Bash", false).
 		Build()
 
-	if len(tools) != 4 {
-		t.Errorf("expected 4 tools (Glob, Grep + 2 MCP), got %d", len(tools))
+	// Deny Read (-1), disable Bash (-1), add 2 MCP (+2) = bt
+	// On windows: baseToolCount=4 (Read+PowerShell+Glob+Grep) or
+	// 5 (Read+PowerShell+Bash+Glob+Grep). In either case, after
+	// removing Read and Bash, 3 tools remain + 2 MCP = 5.
+	var expected int
+	if runtime.GOOS == "windows" {
+		expected = 5
+	} else {
+		expected = baseToolCount() // 4 on Unix
+	}
+	if len(tools) != expected {
+		t.Errorf("expected %d tools (Glob, Grep + 2 MCP), got %d", expected, len(tools))
 	}
 
-	// Should have Glob, Grep, and2 MCP tools
+	// Should have Glob, Grep, and 2 MCP tools
 	names := make(map[string]bool)
 	for _, t := range tools {
 		names[t.Name()] = true
