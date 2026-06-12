@@ -120,7 +120,7 @@ func (p *anthropicProvider) sendWithRetry(ctx context.Context, fn func(context.C
 
 				isPermanent := statusCode >= 400 && statusCode < 500 &&
 					statusCode != 429 && statusCode != 408 && statusCode != 409
-				
+
 				retryableErr := &RetryableHTTPError{
 					StatusCode:  statusCode,
 					Message:     err.Error(),
@@ -216,6 +216,17 @@ func (p *anthropicProvider) buildMessages(messages []Message, toolResults []Tool
 	sdkMessages := make([]AnthropicMessage, 0, len(messages)+len(toolResults))
 	for _, msg := range messages {
 		contentBlocks := make([]AnthropicContentBlock, 0)
+
+		// AC4: Emit thinking block BEFORE tool_use blocks for multi-turn round-trip.
+		// This is required for Anthropic multi-turn conversations where thinking
+		// blocks must appear before tool_use in the content array.
+		if msg.Thinking != "" {
+			contentBlocks = append(contentBlocks, AnthropicContentBlock{
+				Type:      "thinking",
+				Thinking:  msg.Thinking,
+				Signature: msg.Signature,
+			})
+		}
 
 		if msg.Content != "" {
 			contentBlocks = append(contentBlocks, AnthropicContentBlock{
