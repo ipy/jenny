@@ -95,6 +95,15 @@ Implement in this order:
    - [x] Tool calls mapping ✓
    - [x] True SSE streaming (no buffering) ✓
 
+   4b. - [x] Thinking effort, persistence & DeepSeek reasoning — [`thinking-effort-and-persistence.md`](./arch/thinking-effort-and-persistence.md)
+   - [x] `--effort` CLI flag for OpenAI reasoning effort ✓
+   - [x] Responses API `reasoning_config.effort` ✓
+   - [x] DeepSeek `extra_body` thinking mode ✓
+   - [x] `reasoning_content` parsing and thinking block capture ✓
+   - [x] Thinking/signature persistence in `.jsonl` transcripts ✓
+   - [x] Thinking round-trip for tool calls (AC4) ✓
+   - [x] Backward compatibility for old transcript formats ✓
+
    5. - [x] Core agent loop — [`agent-loop.md`](./arch/agent-loop.md)
 
    - Basic tool_use → execute → tool_result loop
