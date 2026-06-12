@@ -55,7 +55,7 @@ jobs:
             output_name+='.exe'
           fi
           echo "Building $output_name..."
-          GOOS=$GOOS GOARCH=$GOARCH go build -v -o "$output_name" ./cmd/jenny
+          GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="-s -w" -v -o "$output_name" ./cmd/jenny
           
           # Apply executable permissions to Unix binaries
           if [ $GOOS != "windows" ]; then
