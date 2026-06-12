@@ -282,7 +282,7 @@ func TestSubagentType_InvalidTypeError(t *testing.T) {
 		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
 	}
 
-	runner := NewLocalSubagentRunner(nil, nil)
+	runner := NewLocalSubagentRunner(nil, nil, fastClient())
 	params := tool.SubagentParams{
 		Prompt:       "test",
 		SubagentType: "nonexistent",
@@ -312,7 +312,7 @@ func TestLocalSubagentRunner_AC1_InvalidTypeError(t *testing.T) {
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
 
-	runner := NewLocalSubagentRunner(tools, nil)
+	runner := NewLocalSubagentRunner(tools, nil, fastClient())
 
 	params := tool.SubagentParams{
 		Prompt:       "test prompt",
@@ -343,9 +343,6 @@ func TestLocalSubagentRunner_AC1_InvalidTypeError(t *testing.T) {
 }
 
 func TestLocalSubagentRunner_AC3_ParameterPassthrough(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode")
-	}
 	// Test that parameters are forwarded correctly
 	// This is a basic test - full verification would require mocking RunStream
 	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
@@ -357,7 +354,7 @@ func TestLocalSubagentRunner_AC3_ParameterPassthrough(t *testing.T) {
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
 
-	runner := NewLocalSubagentRunner(tools, nil)
+	runner := NewLocalSubagentRunner(tools, nil, fastClient())
 
 	params := tool.SubagentParams{
 		Prompt:       "test prompt",
@@ -373,9 +370,6 @@ func TestLocalSubagentRunner_AC3_ParameterPassthrough(t *testing.T) {
 }
 
 func TestLocalSubagentRunner_AC4_SubagentLifecycle(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode")
-	}
 	// Test that subagent runs in its own context
 	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
 	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
@@ -386,7 +380,7 @@ func TestLocalSubagentRunner_AC4_SubagentLifecycle(t *testing.T) {
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
 
-	runner := NewLocalSubagentRunner(tools, nil)
+	runner := NewLocalSubagentRunner(tools, nil, fastClient())
 
 	params := tool.SubagentParams{
 		Prompt:       "test prompt",
@@ -415,7 +409,7 @@ func TestAsyncSubagentRunner_AC2_AsyncLaunch(t *testing.T) {
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
 
-	runner := NewAsyncSubagentRunner(tools, nil)
+	runner := NewAsyncSubagentRunner(tools, nil, fastClient())
 
 	params := tool.SubagentParams{
 		Prompt:       "test prompt",
@@ -441,9 +435,6 @@ func TestAsyncSubagentRunner_AC2_AsyncLaunch(t *testing.T) {
 }
 
 func TestLocalSubagentRunner_AC4_StreamConfigPropagation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode")
-	}
 	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
 	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
 	if !hasURL || !hasToken {
@@ -451,7 +442,7 @@ func TestLocalSubagentRunner_AC4_StreamConfigPropagation(t *testing.T) {
 	}
 
 	readTool := tool.NewReadTool(false, nil)
-	runner := NewLocalSubagentRunner([]tool.Tool{readTool}, nil)
+	runner := NewLocalSubagentRunner([]tool.Tool{readTool}, nil, fastClient())
 
 	// Set up parent config with all 8 new fields
 	parentCfg := StreamConfig{

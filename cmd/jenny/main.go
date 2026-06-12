@@ -290,8 +290,8 @@ func run() error {
 	for _, name := range flags.DeniedTools {
 		denyRulesMap[name] = true
 	}
-	localRunner := agent.NewLocalSubagentRunner(tools, denyRulesMap)
-	asyncRunner := agent.NewAsyncSubagentRunner(tools, denyRulesMap)
+	localRunner := agent.NewLocalSubagentRunner(tools, denyRulesMap, nil)
+	asyncRunner := agent.NewAsyncSubagentRunner(tools, denyRulesMap, nil)
 	agentTool := tool.NewAgentToolWithSwarms(localRunner, asyncRunner, flags.SwarmsEnabled)
 	tools = append(tools, agentTool)
 
@@ -367,8 +367,8 @@ func buildPrintTools(flags *cli.Flags) []tool.Tool {
 	for _, name := range flags.DeniedTools {
 		denyRulesMap[name] = true
 	}
-	localRunner := agent.NewLocalSubagentRunner(tools, denyRulesMap)
-	asyncRunner := agent.NewAsyncSubagentRunner(tools, denyRulesMap)
+	localRunner := agent.NewLocalSubagentRunner(tools, denyRulesMap, nil)
+	asyncRunner := agent.NewAsyncSubagentRunner(tools, denyRulesMap, nil)
 	agentTool := tool.NewAgentToolWithSwarms(localRunner, asyncRunner, flags.SwarmsEnabled)
 	tools = append(tools, agentTool)
 

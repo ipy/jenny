@@ -18,7 +18,7 @@ import (
 // QueryEngine orchestrates the agent query lifecycle with structured
 // persist-before-API ordering, turn limits, and cost state management.
 type QueryEngine struct {
-	client         *api.Client
+	client         api.Requester
 	sessionManager *session.Manager
 	costState      *CostState
 	tools          []tool.Tool
@@ -59,14 +59,25 @@ type QueryEngine struct {
 	secretRedactor *redact.SecretRedactor
 }
 
-// NewQueryEngine creates a new QueryEngine with the given configuration.
-func NewQueryEngine(cfg StreamConfig, tools []tool.Tool, model string) *QueryEngine {
-	client, err := api.NewClientWithModel(model)
-	if err != nil {
-		// Client creation error will be reported on first API call
-		log.Debug("QueryEngine: API client creation warning", "error", err)
-	}
+// QueryEngineOption defines a functional option for QueryEngine.
+type QueryEngineOption func(*QueryEngine)
 
+// WithClient sets a custom API client for the QueryEngine.
+func WithClient(client api.Requester) QueryEngineOption {
+	return func(e *QueryEngine) {
+		e.client = client
+	}
+}
+
+// WithCWD sets the working directory for the QueryEngine.
+func WithCWD(cwd string) QueryEngineOption {
+	return func(e *QueryEngine) {
+		e.cwd = cwd
+	}
+}
+
+// NewQueryEngine creates a new QueryEngine with the given configuration.
+func NewQueryEngine(cfg StreamConfig, tools []tool.Tool, model string, opts ...QueryEngineOption) *QueryEngine {
 	// AC1/AC4: Inject StructuredOutputTool for non-interactive sessions with schema
 	var structuredTool *tool.StructuredOutputTool
 	if cfg.StructuredSchema != nil && cfg.Enabled {
@@ -155,29 +166,52 @@ func NewQueryEngine(cfg StreamConfig, tools []tool.Tool, model string) *QueryEng
 		}
 	}
 
-	engine := &QueryEngine{
-		client:               client,
+	e := &QueryEngine{
 		sessionManager:       cfg.SessionManager,
 		costState:            costState,
 		tools:                tools,
 		toolParams:           toolParams,
 		streamCfg:            cfg,
-		model:                client.GetModel(), // Use resolved model (from ANTHROPIC_MODEL env var)
 		turnCount:            0,
 		maxTurns:             cfg.MaxTurns,
-		compactConfig:        newCompactConfigForModel(client.GetModel()),
 		compactFailCount:     compactFailCount,
 		structuredOutputTool: structuredTool,
 		secretRedactor:       redact.NewSecretRedactor(cfg.RedactMode),
+		startTime:            time.Now(),
 	}
 
+	// Apply options
+	for _, opt := range opts {
+		opt(e)
+	}
+
+	// Default client if none provided
+	if e.client == nil {
+		client, err := api.NewClientWithModel(model)
+		if err != nil {
+			// Client creation error will be reported on first API call
+			log.Debug("QueryEngine: API client creation warning", "error", err)
+		}
+		e.client = client
+	}
+
+	// Finalize model and compact config
+	if e.model == "" {
+		if model != "" {
+			e.model = model
+		} else if c, ok := e.client.(interface{ GetModel() string }); ok {
+			e.model = c.GetModel()
+		}
+	}
+	e.compactConfig = newCompactConfigForModel(e.model)
+
 	// Wire context into tools
-	engine.WireTools()
+	e.WireTools()
 
 	// Initialize session memory
-	engine.sessionMemory = NewSessionMemory(sessionID, client, engine.compactConfig)
+	e.sessionMemory = NewSessionMemory(sessionID, e.client, e.compactConfig)
 
-	return engine
+	return e
 }
 
 // WireTools injects context (ReadFileCache, SessionID) from StreamConfig into tools.

@@ -4,9 +4,20 @@ import (
 	"context"
 	"testing"
 
+	"github.com/ipy/jenny/internal/api"
 	"github.com/ipy/jenny/internal/agent"
 	"github.com/ipy/jenny/internal/tool"
 )
+
+// fastClient returns an API client configured to fail fast for testing.
+func fastClient() api.Requester {
+	client, _ := api.NewClient()
+	client.SetRetryConfig(api.RetryConfig{
+		MaxRetries:    0,
+		Max529Retries: 0,
+	})
+	return client
+}
 
 // ============================================================================
 // AC1: No nested named teammates
@@ -171,7 +182,7 @@ func TestAC3_NamedAgentHasAccessToParentTools(t *testing.T) {
 
 	// Use LocalSubagentRunner to verify StreamConfig capture
 	readTool := tool.NewReadTool(false, nil)
-	runner := agent.NewLocalSubagentRunner([]tool.Tool{readTool}, nil)
+	runner := agent.NewLocalSubagentRunner([]tool.Tool{readTool}, nil, fastClient())
 
 	// Set parent config with non-zero values before Execute
 	parentCfg := agent.StreamConfig{

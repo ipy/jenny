@@ -17,9 +17,20 @@ func initTestGitRepo(t *testing.T, dir string) {
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("git init failed: %v", err)
 	}
+
+	// Setup local git config instead of relying on env vars to avoid mutating test environment
+	cmd = exec.Command("git", "config", "user.email", "test@example.com")
+	cmd.Dir = dir
+	_ = cmd.Run()
+
+	cmd = exec.Command("git", "config", "user.name", "Test User")
+	cmd.Dir = dir
+	_ = cmd.Run()
+
 	cmd = exec.Command("git", "checkout", "-b", "main")
 	cmd.Dir = dir
 	_ = cmd.Run()
+
 	cmd = exec.Command("git", "commit", "--allow-empty", "-m", "initial commit")
 	cmd.Dir = dir
 	if err := cmd.Run(); err != nil {

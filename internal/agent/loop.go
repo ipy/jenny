@@ -332,7 +332,7 @@ func RunSimple(ctx context.Context, prompt string, tools []tool.Tool, maxIterati
 // RunStream executes the agent loop with streaming JSON output.
 // It outputs NDJSON lines to stdout for each message.
 // Uses SSE streaming for API calls when cfg.Enabled is true.
-func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string, cfg StreamConfig, model string) (string, string, error) {
+func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string, cfg StreamConfig, model string, opts ...QueryEngineOption) (string, string, error) {
 	// Use provided session ID or generate a new one
 	sessionID := cfg.SessionID
 	if sessionID == "" {
@@ -352,7 +352,7 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 
 	// Create QueryEngine - it handles API client creation, cost state restoration,
 	// tool parameter conversion, and the agent loop lifecycle
-	engine := NewQueryEngine(cfg, tools, model)
+	engine := NewQueryEngine(cfg, tools, model, append(opts, WithCWD(cwd))...)
 
 	// Emit system/init line once at start of stream-json mode (AC1-AC6)
 	if cfg.Enabled {

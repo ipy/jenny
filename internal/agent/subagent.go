@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ipy/jenny/internal/api"
 	"github.com/ipy/jenny/internal/git"
 	"github.com/ipy/jenny/internal/session"
 	"github.com/ipy/jenny/internal/tool"
@@ -187,6 +188,7 @@ func ResolveModel(alias string) string {
 
 // LocalSubagentRunner runs subagents in the local process.
 type LocalSubagentRunner struct {
+	client            api.Requester
 	tools             []tool.Tool
 	denyRules         map[string]bool
 	sessionMgr        *session.Manager
@@ -195,14 +197,20 @@ type LocalSubagentRunner struct {
 }
 
 // NewLocalSubagentRunner creates a new LocalSubagentRunner.
-func NewLocalSubagentRunner(tools []tool.Tool, denyRules map[string]bool) *LocalSubagentRunner {
+func NewLocalSubagentRunner(tools []tool.Tool, denyRules map[string]bool, client api.Requester) *LocalSubagentRunner {
 	if denyRules == nil {
 		denyRules = make(map[string]bool)
 	}
 	return &LocalSubagentRunner{
+		client:    client,
 		tools:     tools,
 		denyRules: denyRules,
 	}
+}
+
+// SetClient sets the API client for the runner.
+func (r *LocalSubagentRunner) SetClient(client api.Requester) {
+	r.client = client
 }
 
 // SetSessionManager sets the session manager for transcript persistence.
@@ -348,7 +356,7 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 	}
 
 	// Run the subagent synchronously
-	output, _, err := RunStream(ctx, params.Prompt, subagentTools, cwd, streamCfg, params.Model)
+	output, _, err := RunStream(ctx, params.Prompt, subagentTools, cwd, streamCfg, params.Model, WithClient(r.client))
 
 	// AC4: Interrupt yields partial result - capture output even on cancellation
 	if ctx.Err() != nil {
@@ -376,9 +384,9 @@ type AsyncSubagentRunner struct {
 }
 
 // NewAsyncSubagentRunner creates a new AsyncSubagentRunner.
-func NewAsyncSubagentRunner(tools []tool.Tool, denyRules map[string]bool) *AsyncSubagentRunner {
+func NewAsyncSubagentRunner(tools []tool.Tool, denyRules map[string]bool, client api.Requester) *AsyncSubagentRunner {
 	return &AsyncSubagentRunner{
-		runner: NewLocalSubagentRunner(tools, denyRules),
+		runner: NewLocalSubagentRunner(tools, denyRules, client),
 	}
 }
 

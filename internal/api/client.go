@@ -13,6 +13,26 @@ import (
 	"github.com/ipy/jenny/internal/log"
 )
 
+// Requester defines the interface for an API client capable of sending
+// messages and managing streaming sessions with fallback and retries.
+type Requester interface {
+	SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) (*Response, error)
+	SendMessageStream(
+		ctx context.Context,
+		messages []Message,
+		tools []ToolParam,
+		toolResults []ToolResult,
+		systemPrompt string,
+		systemPromptSuffix string,
+		idleTimeout time.Duration,
+		fallbackTimeout time.Duration,
+		onStreamingFallback func(context.Context) (*Response, error),
+	) (<-chan StreamContentBlock, *StreamResult)
+	SetMaxTokensOverride(maxTokens int)
+	SetRetryConfig(cfg RetryConfig)
+	SetBackground(isBackground bool)
+}
+
 // Client wraps an API provider.
 type Client struct {
 	provider          Provider

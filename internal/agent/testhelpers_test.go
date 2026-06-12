@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ipy/jenny/internal/api"
 	"github.com/ipy/jenny/internal/testutil"
 	"github.com/ipy/jenny/internal/testutil/mockapi"
 )
@@ -211,4 +212,14 @@ func hasToolUseWithID(content []any, want string) bool {
 		}
 	}
 	return false
+}
+
+// fastClient returns an API client configured to fail fast for testing.
+func fastClient() api.Requester {
+	client, _ := api.NewClient()
+	client.SetRetryConfig(api.RetryConfig{
+		MaxRetries:    0,
+		Max529Retries: 0,
+	})
+	return client
 }

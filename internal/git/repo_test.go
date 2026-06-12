@@ -368,6 +368,10 @@ func initGitRepo(t *testing.T, dir string) {
 	// Set initial branch (avoids detached HEAD on some git versions)
 	runGitCommand(dir, "checkout", "-b", "main")
 
+	// Setup local git config
+	_, _ = runGitCommand(dir, "config", "user.email", "test@example.com")
+	_, _ = runGitCommand(dir, "config", "user.name", "Test User")
+
 	// Create initial empty commit
 	_, err = runGitCommand(dir, "commit", "--allow-empty", "-m", "initial commit")
 	if err != nil {

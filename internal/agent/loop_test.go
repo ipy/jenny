@@ -728,7 +728,7 @@ func TestAC1_RecursiveForkBlocked_ViaContext(t *testing.T) {
 	// Create AgentTool with a runner that should never be reached
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewLocalSubagentRunner(tools, nil)
+	runner := NewLocalSubagentRunner(tools, nil, fastClient())
 
 	agentTool := tool.NewAgentTool(runner, nil)
 
@@ -753,9 +753,6 @@ func TestAC1_RecursiveForkBlocked_ViaContext(t *testing.T) {
 }
 
 func TestAC1_RecursiveForkBlocked_NoFalsePositive(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode")
-	}
 	// AC1: Without fork marker in context, recursive fork is NOT blocked.
 	// The agent tool should proceed to execute (and fail with API error, not fork error).
 
@@ -770,7 +767,7 @@ func TestAC1_RecursiveForkBlocked_NoFalsePositive(t *testing.T) {
 
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewLocalSubagentRunner(tools, nil)
+	runner := NewLocalSubagentRunner(tools, nil, fastClient())
 
 	agentTool := tool.NewAgentTool(runner, nil)
 
@@ -801,7 +798,7 @@ func TestAC1_RecursiveForkBlocked_AllSubagentTypes(t *testing.T) {
 	}
 
 	ctx := context.WithValue(context.Background(), tool.ForkChildKey, true)
-	runner := NewLocalSubagentRunner(nil, nil)
+	runner := NewLocalSubagentRunner(nil, nil, fastClient())
 	agentTool := tool.NewAgentTool(runner, nil)
 
 	subagentTypes := []string{"general-purpose", "explore", "plan", "shell", "verification"}
@@ -838,7 +835,7 @@ func TestAC1_ForkChildInStreamConfig(t *testing.T) {
 	// Verify that a second agent call from within that context would be blocked.
 
 	// Confirm IsForkChild is set in subagent stream config
-	runner := NewLocalSubagentRunner(nil, nil)
+	runner := NewLocalSubagentRunner(nil, nil, fastClient())
 	params := tool.SubagentParams{
 		Prompt:       "test",
 		SubagentType: "explore",
@@ -876,7 +873,7 @@ func TestAC2_WorktreeIsolation_MutuallyExclusiveWithCWD(t *testing.T) {
 
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewLocalSubagentRunner(tools, nil)
+	runner := NewLocalSubagentRunner(tools, nil, fastClient())
 
 	params := tool.SubagentParams{
 		Prompt:       "test",
@@ -908,7 +905,7 @@ func TestAC2_WorktreeIsolation_AloneWithoutCWD_Validates(t *testing.T) {
 
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewLocalSubagentRunner(tools, nil)
+	runner := NewLocalSubagentRunner(tools, nil, fastClient())
 
 	params := tool.SubagentParams{
 		Prompt:       "test",
@@ -928,9 +925,6 @@ func TestAC2_WorktreeIsolation_AloneWithoutCWD_Validates(t *testing.T) {
 }
 
 func TestAC2_NoCWD_NoIsolation_Passes(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode")
-	}
 	// AC2: Without isolation and without cwd, normal validation passes
 	// (will fail later due to no API client, not due to validation)
 
@@ -942,7 +936,7 @@ func TestAC2_NoCWD_NoIsolation_Passes(t *testing.T) {
 
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewLocalSubagentRunner(tools, nil)
+	runner := NewLocalSubagentRunner(tools, nil, fastClient())
 
 	params := tool.SubagentParams{
 		Prompt:       "test",
@@ -975,7 +969,7 @@ func TestAC3_AsyncSubagentOutputFile_ReturnsPath(t *testing.T) {
 
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewAsyncSubagentRunner(tools, nil)
+	runner := NewAsyncSubagentRunner(tools, nil, fastClient())
 
 	params := tool.SubagentParams{
 		Prompt:       "test prompt",
@@ -1009,9 +1003,6 @@ func TestAC3_AsyncSubagentOutputFile_ReturnsPath(t *testing.T) {
 }
 
 func TestAC3_AsyncOutputFile_WrittenOnCompletion(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode")
-	}
 	// AC3: After async subagent completes, the output file should exist and contain
 	// valid JSONL with the result/error information.
 
@@ -1023,7 +1014,7 @@ func TestAC3_AsyncOutputFile_WrittenOnCompletion(t *testing.T) {
 
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewAsyncSubagentRunner(tools, nil)
+	runner := NewAsyncSubagentRunner(tools, nil, fastClient())
 
 	params := tool.SubagentParams{
 		Prompt:       "test prompt",
@@ -1092,7 +1083,7 @@ func TestAC3_AsyncOutputFile_ErrorContent(t *testing.T) {
 
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewAsyncSubagentRunner(tools, nil)
+	runner := NewAsyncSubagentRunner(tools, nil, fastClient())
 
 	// Use an invalid subagent type to guarantee failure with a known error
 	params := tool.SubagentParams{
@@ -1157,7 +1148,7 @@ func TestAC4_InterruptCancelledContext_ReturnsOutputPlusError(t *testing.T) {
 
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewLocalSubagentRunner(tools, nil)
+	runner := NewLocalSubagentRunner(tools, nil, fastClient())
 
 	// Create a cancelled context
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1200,7 +1191,7 @@ func TestAC4_InterruptTimeoutContext_ReturnsOutputPlusError(t *testing.T) {
 
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewLocalSubagentRunner(tools, nil)
+	runner := NewLocalSubagentRunner(tools, nil, fastClient())
 
 	// Create a context that's already expired
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
@@ -1231,9 +1222,6 @@ func TestAC4_InterruptTimeoutContext_ReturnsOutputPlusError(t *testing.T) {
 }
 
 func TestAC4_InterruptNormalContext_ReturnsNoCancelError(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode")
-	}
 	// AC4: When context is NOT cancelled, no cancellation error should be returned.
 	// (Verifies baseline behavior - will get API error instead)
 
@@ -1245,7 +1233,7 @@ func TestAC4_InterruptNormalContext_ReturnsNoCancelError(t *testing.T) {
 
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewLocalSubagentRunner(tools, nil)
+	runner := NewLocalSubagentRunner(tools, nil, fastClient())
 
 	// Normal context (not cancelled)
 	ctx := context.Background()
@@ -1589,7 +1577,7 @@ func TestMaxIterations_LoopContractBounded(t *testing.T) {
 func TestMaxIterations_EngineConfigWired(t *testing.T) {
 	// Verify that StreamConfig.MaxIterations is used by QueryEngine
 	cfg := StreamConfig{MaxIterations: 7}
-	engine := NewQueryEngine(cfg, nil, "")
+	engine := NewQueryEngine(cfg, nil, "", WithClient(fastClient()))
 	// Access the internal runLoop's maxIterations via config — the engine
 	// reads e.streamCfg.MaxIterations in runLoop. Verify the config field is preserved.
 	if engine.streamCfg.MaxIterations != 7 {
