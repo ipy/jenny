@@ -78,10 +78,7 @@ func New(cfg Config) (*Memdir, error) {
 		configHome = filepath.Join(home, ".config")
 	}
 
-	sanitizedRoot := strings.ReplaceAll(cfg.ProjectRoot, "/", "-")
-	// Remove leading dashes from sanitized root (e.g., /Users/sin -> Users-sin)
-	sanitizedRoot = strings.TrimPrefix(sanitizedRoot, "-")
-
+	sanitizedRoot := sanitizeAsDirName(cfg.ProjectRoot)
 	memoryPath := filepath.Join(configHome, "projects", sanitizedRoot, "memory")
 
 	return &Memdir{
@@ -102,9 +99,21 @@ func MemoryPathFromProjectRoot(projectRoot string) string {
 		configHome = filepath.Join(home, ".config")
 	}
 
-	sanitizedRoot := strings.ReplaceAll(projectRoot, "/", "-")
-	sanitizedRoot = strings.TrimPrefix(sanitizedRoot, "-")
-	return filepath.Join(configHome, "projects", sanitizedRoot, "memory")
+	return filepath.Join(configHome, "projects", sanitizeAsDirName(projectRoot), "memory")
+}
+
+// sanitizeAsDirName converts an absolute path to a safe directory name by
+// replacing path separators and removing characters that are invalid on
+// Windows (where memory dirs are stored under AppData).
+func sanitizeAsDirName(path string) string {
+	// Replace both forward and back slashes with dashes
+	sanitized := strings.ReplaceAll(path, "/", "-")
+	sanitized = strings.ReplaceAll(sanitized, "\\", "-")
+	// Remove drive letter colon (e.g., "C:" -> "C")
+	sanitized = strings.ReplaceAll(sanitized, ":", "")
+	// Remove leading dashes (e.g., /Users/sin -> Users-sin)
+	sanitized = strings.TrimPrefix(sanitized, "-")
+	return sanitized
 }
 
 // IsDisabled returns true if memdir is disabled based on the disable chain:

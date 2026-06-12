@@ -112,7 +112,7 @@ func platformSection(cwd string) (string, bool) {
 	if cwd == "" {
 		cwd, _ = os.Getwd()
 		if cwd == "" {
-			cwd = "/"
+			cwd, _ = os.UserHomeDir()
 		}
 	}
 	platform := fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH)
@@ -239,7 +239,7 @@ func DynamicSystemSuffix(cfg StreamConfig, cwd string) string {
 	if cwd == "" {
 		cwd, _ = os.Getwd()
 		if cwd == "" {
-			cwd = "/"
+			cwd, _ = os.UserHomeDir()
 		}
 	}
 	sections = append(sections, fmt.Sprintf("Platform: %s\nCwd: %s", platform, cwd))

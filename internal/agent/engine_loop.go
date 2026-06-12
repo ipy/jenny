@@ -34,7 +34,7 @@ func (e *QueryEngine) SubmitMessage(ctx context.Context, prompt string) (string,
 	// Get working directory
 	cwd, err := os.Getwd()
 	if err != nil {
-		cwd = "/"
+		cwd, _ = os.UserHomeDir()
 	}
 	e.mu.Lock()
 	e.cwd = cwd

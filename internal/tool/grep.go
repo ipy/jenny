@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -165,8 +166,8 @@ func (t *GrepTool) Execute(ctx context.Context, input map[string]any, cwd string
 	path := "."
 	if pathVal, ok := input["path"].(string); ok && pathVal != "" {
 		path = pathVal
-		if !strings.HasPrefix(path, "/") {
-			path = cwd + "/" + path
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(cwd, path)
 		}
 	}
 	args = append(args, path)

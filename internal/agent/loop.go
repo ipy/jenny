@@ -148,7 +148,7 @@ func Run(ctx context.Context, prompt string, tools []tool.Tool, cwd string, maxI
 	if cwd == "" {
 		cwd, err = os.Getwd()
 		if err != nil {
-			cwd = "/"
+			cwd, _ = os.UserHomeDir()
 		}
 	}
 
