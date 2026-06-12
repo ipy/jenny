@@ -611,11 +611,23 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		}
 
 		// Persist assistant message to transcript BEFORE tool execution
-		if e.sessionManager != nil && (textOutput.String() != "" || len(toolUseBlocks) > 0) {
+		if e.sessionManager != nil && (textOutput.String() != "" || len(toolUseBlocks) > 0 || len(thinkingBlocks) > 0) {
 			entry := session.TranscriptEntry{
 				Type:    "assistant",
 				Content: textOutput.String(),
 				CWD:     cwd,
+			}
+			// Persist thinking blocks (concatenated text with signature from last block)
+			if len(thinkingBlocks) > 0 {
+				var thinkingText strings.Builder
+				for _, tb := range thinkingBlocks {
+					thinkingText.WriteString(tb.Text)
+				}
+				entry.Thinking = thinkingText.String()
+				// Use signature from last thinking block if present
+				if thinkingBlocks[len(thinkingBlocks)-1].Signature != "" {
+					entry.Signature = thinkingBlocks[len(thinkingBlocks)-1].Signature
+				}
 			}
 			for _, tu := range toolUseBlocks {
 				entry.ToolUse = append(entry.ToolUse, session.ToolUse{

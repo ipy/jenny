@@ -52,6 +52,7 @@ type StreamConfig struct {
 	IsNamedAgent         bool                        // True when this session is a named swarm agent
 	MaxIterations        int                         // Maximum loop iterations (0 = unlimited)
 	RedactMode           redact.RedactMode           // Secret redaction mode
+	Effort               string                      // Reasoning effort level (low, medium, high) for OpenAI/DeepSeek
 }
 
 // ToolParam represents a tool parameter for the API.

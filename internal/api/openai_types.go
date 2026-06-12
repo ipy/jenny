@@ -10,6 +10,7 @@ type OpenAIRequest struct {
 	MaxCompletionTokens *int64                       `json:"max_completion_tokens,omitempty"`
 	Stream              bool                         `json:"stream,omitempty"`
 	StreamOptions       *OpenAIStreamOptions         `json:"stream_options,omitempty"`
+	ReasoningEffort     string                       `json:"reasoning_effort,omitempty"`
 }
 
 // OpenAIMessage represents a message in the OpenAI chat format.

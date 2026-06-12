@@ -195,6 +195,13 @@ func NewQueryEngine(cfg StreamConfig, tools []tool.Tool, model string, opts ...Q
 		e.client = client
 	}
 
+	// Wire thinking config (Effort) from StreamConfig to client/provider
+	if cfg.Effort != "" && e.client != nil {
+		e.client.SetThinkingConfig(api.ThinkingConfig{
+			Effort: cfg.Effort,
+		})
+	}
+
 	// Finalize model and compact config
 	if e.model == "" {
 		if model != "" {

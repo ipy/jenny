@@ -329,6 +329,7 @@ func run() error {
 		MaxTurns:           flags.MaxTurns,
 		MaxBudgetUSD:       flags.MaxBudgetUsd,
 		RedactMode:         redactMode,
+		Effort:             flags.Effort,
 	}
 
 	// AC3-streamconfig-inheritance: Set parent config on runner for named agent inheritance

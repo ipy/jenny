@@ -31,6 +31,7 @@ type Requester interface {
 	SetMaxTokensOverride(maxTokens int)
 	SetRetryConfig(cfg RetryConfig)
 	SetBackground(isBackground bool)
+	SetThinkingConfig(cfg ThinkingConfig)
 }
 
 // Client wraps an API provider.
@@ -175,6 +176,13 @@ func (c *Client) SetMaxTokensOverride(maxTokens int) {
 	}
 }
 
+// SetThinkingConfig sets the thinking configuration for the provider.
+func (c *Client) SetThinkingConfig(cfg ThinkingConfig) {
+	if setter, ok := c.provider.(interface{ SetThinkingConfig(ThinkingConfig) }); ok {
+		setter.SetThinkingConfig(cfg)
+	}
+}
+
 // SendMessage sends a message to the API and returns the response.
 func (c *Client) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) (*Response, error) {
 	return c.provider.SendMessage(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix)
@@ -297,6 +305,12 @@ type Message struct {
 	Content     string            `json:"content,omitempty"`
 	ToolUse     []ToolUseBlock    `json:"tool_use,omitempty"`
 	ToolResults []ToolResultBlock `json:"tool_results,omitempty"`
+
+	// Thinking and Signature are used for reasoning/thinking block persistence
+	// and round-trip through the transcript. They are not serialized to the API
+	// in the standard way - instead, they are used to reconstruct the API request.
+	Thinking  string `json:"thinking,omitempty"`
+	Signature string `json:"signature,omitempty"`
 
 	// Internal fields - not serialized to API
 	IsVirtual bool   `json:"-"`

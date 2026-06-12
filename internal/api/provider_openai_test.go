@@ -975,3 +975,68 @@ func TestOpenAIResponsesProvider_ToolCalls(t *testing.T) {
 		t.Errorf("expected location 'San Francisco', got %v", loc)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// TestOpenAIProvider_ReasoningEffortChat tests reasoning_effort in Chat API
+// BLK1: Effort flag wired to Chat API provider
+// ---------------------------------------------------------------------------
+
+func TestOpenAIProvider_ReasoningEffortChat(t *testing.T) {
+	ms := mockapi.NewMockServer()
+	ms.SetPathHandler("POST /chat/completions", func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		r.Body.Close()
+		var req map[string]any
+		if err := json.Unmarshal(body, &req); err != nil {
+			t.Fatalf("failed to parse request: %v", err)
+		}
+
+		// Verify reasoning_effort is present
+		if req["reasoning_effort"] != "high" {
+			t.Errorf("expected reasoning_effort 'high', got %v", req["reasoning_effort"])
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		resp := `{
+			"id": "chatcmpl-125",
+			"object": "chat.completion",
+			"created": 1677652288,
+			"model": "o3-mini",
+			"choices": [{
+				"index": 0,
+				"message": {
+					"role": "assistant",
+					"content": "The answer is 42."
+				},
+				"finish_reason": "stop"
+			}],
+			"usage": {"prompt_tokens": 10, "completion_tokens": 15}
+		}`
+		w.Write([]byte(resp))
+	})
+	defer ms.Close()
+
+	t.Setenv("OPENAI_BASE_URL", ms.URL())
+	t.Setenv("OPENAI_API_KEY", "test-key")
+	t.Setenv("OPENAI_DEFAULT_MODEL", "o3-mini")
+
+	client, err := NewClientWithModel("")
+	if err != nil {
+		t.Fatalf("NewClientWithModel error = %v", err)
+	}
+
+	// Set thinking config with effort on Chat API provider
+	if setter, ok := client.provider.(interface{ SetThinkingConfig(ThinkingConfig) }); ok {
+		setter.SetThinkingConfig(ThinkingConfig{Effort: "high"})
+	}
+
+	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "What is the answer?"}}, nil, nil, "", "")
+	if err != nil {
+		t.Fatalf("SendMessage error = %v", err)
+	}
+
+	if resp.StopReason != StopReasonEndTurn {
+		t.Errorf("expected stop reason 'end_turn', got %q", resp.StopReason)
+	}
+}

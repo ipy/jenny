@@ -16,10 +16,11 @@ import (
 
 // openAIProvider implements the Provider interface using a lightweight HTTP client.
 type openAIProvider struct {
-	client      *HTTPClient
-	model       string
-	maxTokens   int
-	retryConfig RetryConfig
+	client         *HTTPClient
+	model         string
+	maxTokens     int
+	retryConfig   RetryConfig
+	thinkingEffort string
 }
 
 // newOpenAIProvider creates a new OpenAI provider.
@@ -77,6 +78,13 @@ func (p *openAIProvider) SetMaxTokensOverride(maxTokens int) {
 // SetRetryConfig sets the retry configuration.
 func (p *openAIProvider) SetRetryConfig(cfg RetryConfig) {
 	p.retryConfig = cfg
+}
+
+// SetThinkingConfig sets the thinking configuration.
+func (p *openAIProvider) SetThinkingConfig(cfg ThinkingConfig) {
+	if cfg.Effort != "" {
+		p.thinkingEffort = cfg.Effort
+	}
 }
 
 // SendMessage sends a non-streaming message.
@@ -190,6 +198,7 @@ func (p *openAIProvider) doSendMessage(ctx context.Context, messages []Message, 
 		Messages:            sdkMessages,
 		MaxCompletionTokens: &maxTokens,
 		Tools:               sdkTools,
+		ReasoningEffort:     p.thinkingEffort,
 	}
 
 	url := fmt.Sprintf("%s/chat/completions", os.Getenv("OPENAI_BASE_URL"))
@@ -226,6 +235,10 @@ func (p *openAIProvider) buildMessages(messages []Message, toolResults []ToolRes
 		case "assistant":
 			sdkMsg := OpenAIMessage{Role: "assistant"}
 			sdkMsg.SetContent(msg.Content)
+			// Round-trip thinking content from transcript for multi-turn sessions
+			if msg.Thinking != "" {
+				sdkMsg.ReasoningContent = msg.Thinking
+			}
 			if len(msg.ToolUse) > 0 {
 				sdkMsg.ToolCalls = make([]OpenAIToolCall, 0, len(msg.ToolUse))
 				for _, tu := range msg.ToolUse {
@@ -399,6 +412,7 @@ func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Messa
 			Tools:               sdkTools,
 			Stream:              true,
 			StreamOptions:       &OpenAIStreamOptions{IncludeUsage: true},
+				ReasoningEffort:     p.thinkingEffort,
 		}
 
 		url := fmt.Sprintf("%s/chat/completions", os.Getenv("OPENAI_BASE_URL"))
