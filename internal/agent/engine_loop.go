@@ -302,11 +302,11 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					}
 					log.Debug("Context compaction succeeded", "newMessageCount", len(messages))
 				} else {
-			// Compaction failed - increment failure counter with persistence
-				e.incrementCompactFailCount()
-				e.mu.Lock()
-				log.Warn("Context compaction failed", "error", err, "consecutiveFailures", e.compactFailCount)
-				e.mu.Unlock()
+					// Compaction failed - increment failure counter with persistence
+					e.incrementCompactFailCount()
+					e.mu.Lock()
+					log.Warn("Context compaction failed", "error", err, "consecutiveFailures", e.compactFailCount)
+					e.mu.Unlock()
 				}
 			} else {
 				log.Debug("Auto-compact skipped: circuit breaker tripped")
@@ -426,8 +426,11 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 
 		// Emit ONE consolidated assistant message for all collected content from streaming
 		// (AC1-AC4: one assistant event per API turn, not per tool_use block)
-		e.emitConsolidatedAssistant(sessionID, thinkingBlocks, &textOutput, toolUseBlocks,
-			e.currentMessageID, e.currentStopReason, e.currentStopSequence, toLoopUsage(e.currentUsage), e.model)
+		// Only emit if streaming actually produced content; fallback path emits separately.
+		if textOutput.Len() > 0 || len(toolUseBlocks) > 0 || len(thinkingBlocks) > 0 {
+			e.emitConsolidatedAssistant(sessionID, thinkingBlocks, &textOutput, toolUseBlocks,
+				e.currentMessageID, e.currentStopReason, e.currentStopSequence, toLoopUsage(e.currentUsage), e.model)
+		}
 
 		// Check if streaming completed with error
 		if streamResult.Error != "" && len(streamResult.Blocks) == 0 {
@@ -1004,7 +1007,11 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				data, _ := json.Marshal(msg)
 				fmt.Fprintln(os.Stdout, string(data))
 			}
-			return textOutput.String(), fmt.Errorf("max tokens reached: %s", streamResult.MaxTokensErr.Category)
+			category := api.MaxTokensCategory("unknown")
+		if streamResult.MaxTokensErr != nil {
+			category = streamResult.MaxTokensErr.Category
+		}
+		return textOutput.String(), fmt.Errorf("max tokens reached: %s", category)
 
 		case api.StopReasonStopSeq:
 			if e.streamCfg.Enabled {

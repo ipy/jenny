@@ -466,16 +466,14 @@ func isUserAbortError(errMsg string) bool {
 		return false
 	}
 	lowerMsg := strings.ToLower(errMsg)
-	// Check for context cancellation patterns
+	// Check for Go standard context cancellation messages
 	if strings.Contains(lowerMsg, "context canceled") ||
 		strings.Contains(lowerMsg, "context cancelled") ||
-		strings.Contains(lowerMsg, "canceled") ||
-		strings.Contains(lowerMsg, "cancelled") {
+		strings.Contains(lowerMsg, "context deadline exceeded") {
 		return true
 	}
-	// Check for user interrupt patterns (Esc, SIGINT, etc.)
+	// Check for explicit user interrupt patterns
 	if strings.Contains(lowerMsg, "user interrupt") ||
-		strings.Contains(lowerMsg, "interrupt") ||
 		strings.Contains(lowerMsg, "sigint") ||
 		strings.Contains(lowerMsg, "keyboard interrupt") {
 		return true

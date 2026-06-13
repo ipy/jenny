@@ -2,8 +2,10 @@
 package skills
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 )
 
 // ActivatedSkill records a skill that has been activated in the current session.
@@ -14,6 +16,7 @@ type ActivatedSkill struct {
 
 // PathSkillActivator implements the tool.SkillActivator interface for path-triggered activation.
 type PathSkillActivator struct {
+	mu              sync.Mutex
 	skills          []Skill
 	activatedSkills []ActivatedSkill // Tracks skills that have been activated
 }
@@ -42,6 +45,8 @@ func (a *PathSkillActivator) ActivateForPath(path string) []string {
 // RegisterActivation records a skill activation by name.
 // Implements the tool.SkillActivator interface.
 func (a *PathSkillActivator) RegisterActivation(name string, rootPath string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	// Deduplication: check if already registered
 	for _, s := range a.activatedSkills {
 		if s.Name == name {
@@ -54,13 +59,27 @@ func (a *PathSkillActivator) RegisterActivation(name string, rootPath string) {
 	})
 }
 
-// GetActivatedSkills returns the list of activated skills.
+// GetActivatedSkills returns a copy of the activated skills list.
 func (a *PathSkillActivator) GetActivatedSkills() []ActivatedSkill {
-	return a.activatedSkills
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	result := make([]ActivatedSkill, len(a.activatedSkills))
+	copy(result, a.activatedSkills)
+	return result
 }
 
 // LogSkillActivated logs a skill activation event for debugging.
 // Emits a stream-json event for headless compatibility.
 func LogSkillActivated(skill, path string) {
-	fmt.Fprintf(os.Stdout, `{"type":"skill_activated","skill":%q,"path":%q}`+"\n", skill, path)
+	event := struct {
+		Type  string `json:"type"`
+		Skill string `json:"skill"`
+		Path  string `json:"path"`
+	}{
+		Type:  "skill_activated",
+		Skill: skill,
+		Path:  path,
+	}
+	data, _ := json.Marshal(event)
+	fmt.Fprintln(os.Stdout, string(data))
 }

@@ -93,9 +93,9 @@ func NewQueryEngine(cfg StreamConfig, tools []tool.Tool, model string, opts ...Q
 	// AC1/AC4: Inject StructuredOutputTool for non-interactive sessions with schema
 	var structuredTool *tool.StructuredOutputTool
 	if cfg.StructuredSchema != nil && cfg.Enabled {
-		// AC1: Check deny rules - if StructuredOutput is explicitly denied, panic (unrecoverable config)
+		// AC1: Check deny rules - if StructuredOutput is explicitly denied, return error
 		if slices.Contains(cfg.StructuredDenyRules, "StructuredOutput") {
-			panic("StructuredOutput tool denied but schema is configured")
+			return nil, fmt.Errorf("StructuredOutput tool denied but schema is configured")
 		}
 		// Create the structured output tool
 		structuredTool = tool.NewStructuredOutputTool(cfg.StructuredSchema)

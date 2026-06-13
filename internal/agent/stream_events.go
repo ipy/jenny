@@ -204,18 +204,6 @@ func joinFields(fields []any) string {
 	return result.String()
 }
 
-// joinMessageFields joins fields for JSON serialization with proper comma handling.
-func joinMessageFields(fields []any) string {
-	var result strings.Builder
-	for i, f := range fields {
-		if i > 0 {
-			result.WriteString(",")
-		}
-		result.WriteString(fmt.Sprintf("%v", f))
-	}
-	return result.String()
-}
-
 // TransformStreamEvent transforms an SDK stream event to a minimal JSON representation.
 // This ensures only relevant fields are serialized without zero-value padding.
 func TransformStreamEvent(event any) (json.RawMessage, error) {

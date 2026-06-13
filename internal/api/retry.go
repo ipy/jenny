@@ -87,7 +87,7 @@ func isRetryable(statusCode int, err error) bool {
 		}
 		// Transient network errors are retryable.
 		var netErr net.Error
-		if errors.As(err, &netErr); netErr != nil {
+		if errors.As(err, &netErr) {
 			return true
 		}
 	}

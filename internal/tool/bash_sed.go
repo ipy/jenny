@@ -150,8 +150,8 @@ func parseSedExpression(expr string) (*sedParsed, error) {
 	pattern := parts[0]
 	replacement := parts[1]
 	flags := ""
-	if len(parts) >= 4 {
-		flags = parts[3]
+	if len(parts) >= 3 {
+		flags = parts[2]
 	}
 
 	// Check for 'g' flag (global)

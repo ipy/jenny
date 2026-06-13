@@ -165,11 +165,11 @@ func countMediaInContent(content string) (count int, largestSize int, err error)
 			if base64End >= 20 {
 				cleaned := cleanBase64Fragment(after[:base64End])
 				decoded := make([]byte, base64.StdEncoding.DecodedLen(len(cleaned)))
-				_, decodeErr := base64.StdEncoding.Decode(decoded, []byte(cleaned))
+				n, decodeErr := base64.StdEncoding.Decode(decoded, []byte(cleaned))
 				if decodeErr == nil {
 					count++
-					if len(decoded) > largestSize {
-						largestSize = len(decoded)
+					if n > largestSize {
+						largestSize = n
 					}
 				} else if len(cleaned) > 20 {
 					// Decode failed but we have a substantial base64 fragment.

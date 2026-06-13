@@ -135,13 +135,17 @@ func (t *LSPTool) Execute(ctx context.Context, input map[string]any, cwd string)
 
 	// Parse 1-based coordinates and convert to 0-based for LSP client
 	var line, character int
-	if l, ok := input["line"].(int); ok {
-		// AC1: Convert 1-based to 0-based
+	switch l := input["line"].(type) {
+	case int:
 		line = l - 1
+	case float64:
+		line = int(l) - 1
 	}
-	if c, ok := input["character"].(int); ok {
-		// AC1: Convert 1-based to 0-based
+	switch c := input["character"].(type) {
+	case int:
 		character = c - 1
+	case float64:
+		character = int(c) - 1
 	}
 
 	// Execute the operation

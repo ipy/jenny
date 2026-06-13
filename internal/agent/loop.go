@@ -283,6 +283,7 @@ func Run(ctx context.Context, prompt string, tools []tool.Tool, cwd string, maxI
 					userMsg.ToolResults = append(userMsg.ToolResults, api.ToolResultBlock{
 						ToolUseID: tr.ToolUseID,
 						Content:   tr.Content,
+						IsError:   tr.IsError,
 					})
 				}
 				messages = append(messages, userMsg)
@@ -303,6 +304,7 @@ func Run(ctx context.Context, prompt string, tools []tool.Tool, cwd string, maxI
 					userMsg.ToolResults = append(userMsg.ToolResults, api.ToolResultBlock{
 						ToolUseID: tr.ToolUseID,
 						Content:   tr.Content,
+						IsError:   tr.IsError,
 					})
 				}
 				messages = append(messages, userMsg)
