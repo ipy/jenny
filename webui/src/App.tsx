@@ -22,10 +22,10 @@ import {
   killSession,
   apiPost,
   useToast,
-  useSettings,
   SettingsDialog,
   type SessionMetadata,
 } from './index';
+import { useSettings, type PortalSettings } from './components/feedback/SettingsDialog';
 import './styles/globals.css';
 
 // ── Types ───────────────────────────────────
@@ -49,6 +49,7 @@ function App() {
 function AppContent() {
   const { theme, setTheme } = useTheme();
   const { t, locale, setLocale } = useLocale();
+  const { settings, saveSettings } = useSettings();
   const [activeTab, setActiveTab] = useState<TabId>('start');
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -81,7 +82,7 @@ function AppContent() {
       />
 
       <main style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-        {activeTab === 'start' && <StartTab onSessionCreated={handleSessionCreated} onOpenSettings={() => setShowSettings(true)} />}
+        {activeTab === 'start' && <StartTab onSessionCreated={handleSessionCreated} onOpenSettings={() => setShowSettings(true)} settings={settings} />}
         {activeTab === 'sessions' && <SessionsTab selectedId={selectedSessionId} onSelect={setSelectedSessionId} />}
         {activeTab === 'projects' && <ProjectsTab />}
         {/* Other tabs placeholder */}
@@ -92,7 +93,7 @@ function AppContent() {
         )}
       </main>
 
-      <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} />
+      <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} settings={settings} onSave={saveSettings} />
     </div>
   );
 }
@@ -100,15 +101,15 @@ function AppContent() {
 interface StartTabProps {
   onSessionCreated: (sessionId: string) => void;
   onOpenSettings: () => void;
+  settings: PortalSettings;
 }
 
-function StartTab({ onSessionCreated, onOpenSettings }: StartTabProps) {
+function StartTab({ onSessionCreated, onOpenSettings, settings }: StartTabProps) {
   const { t } = useLocale();
   const [prompt, setPrompt] = useState('');
   const [launching, setLaunching] = useState(false);
   const toast = useToast();
   const { data: stats, loading } = useStats();
-  const { settings } = useSettings();
 
   const formatCost = (cost: number) => {
     if (cost < 0.01) return '$0.00';

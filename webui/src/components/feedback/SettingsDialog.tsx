@@ -53,6 +53,8 @@ export function useSettings() {
 interface SettingsDialogProps {
   open: boolean;
   onClose: () => void;
+  settings: PortalSettings;
+  onSave: (settings: PortalSettings) => void;
 }
 
 const MODEL_OPTIONS = [
@@ -98,9 +100,8 @@ const headerStyle: React.CSSProperties = {
  * AC2: Contains Model dropdown, Working Directory input, Prompt Prefix textarea.
  * AC3: Save persists to localStorage; Cancel/discard discard changes.
  */
-export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
+export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDialogProps) {
   const { t } = useLocale();
-  const { settings, saveSettings } = useSettings();
   const [local, setLocal] = useState<PortalSettings>(settings);
 
   // Reset local state when dialog opens with fresh settings
@@ -113,7 +114,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   if (!open) return null;
 
   const handleSave = () => {
-    saveSettings(local);
+    onSave(local);
     onClose();
   };
 
