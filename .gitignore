@@ -35,9 +35,7 @@ Thumbs.db
 # App specific
 bin/
 dist/
-
-# Frontend build output (canonical location is internal/portal/webui/dist/)
-webui/dist/
+!internal/portal/webui/dist/
 
 /jenny
 /jenny-*
