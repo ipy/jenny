@@ -569,13 +569,22 @@ func TestAC4_ResponsesAPI_ThinkingRoundTrip(t *testing.T) {
 			}
 			if itemMap["type"] == "reasoning" {
 				foundReasoning = true
-				summary, ok := itemMap["summary"].(map[string]any)
+				summaryArr, ok := itemMap["summary"].([]any)
 				if !ok {
-					t.Error("reasoning item missing summary object")
+					t.Errorf("reasoning item summary expected []any, got %T", itemMap["summary"])
 					continue
 				}
-				if summary["text"] != "Previous thinking..." {
-					t.Errorf("reasoning summary text = %v, want 'Previous thinking...'", summary["text"])
+				if len(summaryArr) == 0 {
+					t.Error("reasoning summary array is empty")
+					continue
+				}
+				part, ok := summaryArr[0].(map[string]any)
+				if !ok {
+					t.Error("reasoning summary[0] is not a map")
+					continue
+				}
+				if part["text"] != "Previous thinking..." {
+					t.Errorf("reasoning summary text = %v, want 'Previous thinking...'", part["text"])
 				}
 			}
 		}
@@ -592,7 +601,7 @@ func TestAC4_ResponsesAPI_ThinkingRoundTrip(t *testing.T) {
 				{
 					"id": "reasoning_rt_1",
 					"type": "reasoning",
-					"summary": {"type": "summary", "text": "New thinking..."}
+					"summary": [{"type": "summary_text", "text": "New thinking..."}]
 				},
 				{
 					"id": "msg_rt_1",
@@ -1250,13 +1259,13 @@ func TestRetest_AC4_FullRoundTrip(t *testing.T) {
 				"id": "resp_1",
 				"model": "o3-mini",
 				"output": [
-					{"id": "reason_1", "type": "reasoning", "summary": {"type": "text", "text": "Planning the search..."}},
+					{"id": "reason_1", "type": "reasoning", "summary": [{"type": "summary_text", "text": "Planning the search..."}]},
 					{"id": "msg_1", "type": "message", "role": "assistant",
 					 "content": [
-						{"type": "output_text", "text": "I'll search for information."},
-						{"type": "function_call", "id": "call_f1", "name": "web_search", "arguments": "{\"q\":\"test\"}"}
+						{"type": "output_text", "text": "I'll search for information."}
 					 ]
-					}
+					},
+					{"type": "function_call", "id": "fc_1", "call_id": "call_f1", "name": "web_search", "arguments": "{\"q\":\"test\"}"}
 				],
 				"usage": {"input_tokens": 10, "output_tokens": 30, "total_tokens": 40}
 			}`
@@ -1277,9 +1286,14 @@ func TestRetest_AC4_FullRoundTrip(t *testing.T) {
 			}
 			if itemMap["type"] == "reasoning" {
 				hasReasoning = true
-				summary, _ := itemMap["summary"].(map[string]any)
-				if summary["text"] != "Planning the search..." {
-					t.Errorf("retest-AC4: reasoning text = %v, want 'Planning the search...'", summary["text"])
+				summaryArr, ok := itemMap["summary"].([]any)
+				if !ok || len(summaryArr) == 0 {
+					t.Errorf("retest-AC4: reasoning summary expected non-empty []any, got %T", itemMap["summary"])
+					continue
+				}
+				part, _ := summaryArr[0].(map[string]any)
+				if part["text"] != "Planning the search..." {
+					t.Errorf("retest-AC4: reasoning text = %v, want 'Planning the search...'", part["text"])
 				}
 			}
 		}

@@ -33,6 +33,7 @@ type OpenAIResponsesFunction struct {
 type OpenAIResponsesResponse struct {
 	ID     string                      `json:"id"`
 	Model  string                      `json:"model"`
+	Status string                      `json:"status,omitempty"`
 	Output []OpenAIResponsesOutputItem `json:"output"`
 	Usage  OpenAIResponsesUsage        `json:"usage"`
 }
@@ -45,8 +46,12 @@ type OpenAIResponsesOutputItem struct {
 	Status string `json:"status,omitempty"`
 	// For message type
 	Content []OpenAIResponsesContentBlock `json:"content,omitempty"`
-	// For reasoning type
-	Summary *OpenAIResponsesReasoningSummary `json:"summary,omitempty"`
+	// For reasoning type (array of summary_text parts)
+	Summary []OpenAIResponsesReasoningSummary `json:"summary,omitempty"`
+	// For function_call type (top-level fields)
+	Name      string `json:"name,omitempty"`
+	CallID    string `json:"call_id,omitempty"`
+	Arguments string `json:"arguments,omitempty"`
 }
 
 // OpenAIResponsesReasoningSummary represents the summary of a reasoning block.
@@ -75,4 +80,25 @@ type OpenAIResponsesUsage struct {
 	TotalTokens      int `json:"total_tokens"`
 	PromptTokens     int `json:"prompt_tokens,omitempty"`
 	CompletionTokens int `json:"completion_tokens,omitempty"`
+}
+
+// OpenAIResponsesStreamEvent represents a single event in a Responses API stream.
+type OpenAIResponsesStreamEvent struct {
+	Type        string                   `json:"type"`
+	OutputIndex int                      `json:"output_index,omitempty"`
+	ContentIndex int                     `json:"content_index,omitempty"`
+	ItemID      string                   `json:"item_id,omitempty"`
+	Delta       string                   `json:"delta,omitempty"`
+	Response    *OpenAIResponsesResponse `json:"response,omitempty"`
+	Item        *OpenAIResponsesOutputItem `json:"item,omitempty"`
+	Part        *OpenAIResponsesStreamPart `json:"part,omitempty"`
+	SummaryIndex int                      `json:"summary_index,omitempty"`
+}
+
+// OpenAIResponsesStreamPart represents a part within a stream event.
+type OpenAIResponsesStreamPart struct {
+	Type string `json:"type"`
+	Text string `json:"text,omitempty"`
+	Name string `json:"name,omitempty"`
+	ID   string `json:"id,omitempty"`
 }

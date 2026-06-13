@@ -216,10 +216,11 @@ func (p *openAIResponsesProvider) doSendMessage(ctx context.Context, messages []
 }
 
 // buildInput builds the input for the Responses API from messages.
+// The Responses API uses a flat list of input items. function_call and
+// function_call_output are top-level items, NOT nested inside messages.
 func (p *openAIResponsesProvider) buildInput(messages []Message, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) []any {
 	var input []any
 
-	// Add system message if present
 	if systemPrompt != "" || systemPromptSuffix != "" {
 		fullSystem := systemPrompt
 		if systemPromptSuffix != "" {
@@ -227,7 +228,7 @@ func (p *openAIResponsesProvider) buildInput(messages []Message, toolResults []T
 		}
 		input = append(input, map[string]any{
 			"type": "message",
-			"role": "system",
+			"role": RoleSystem,
 			"content": []map[string]any{
 				{"type": "input_text", "text": fullSystem},
 			},
@@ -236,83 +237,66 @@ func (p *openAIResponsesProvider) buildInput(messages []Message, toolResults []T
 
 	for _, msg := range messages {
 		switch msg.Role {
-		case "user":
+		case RoleUser:
 			if msg.Content != "" {
 				input = append(input, map[string]any{
 					"type": "message",
-					"role": "user",
+					"role": RoleUser,
 					"content": []map[string]any{
 						{"type": "input_text", "text": msg.Content},
 					},
 				})
 			}
+			// Emit function_call_output as top-level items (Responses API format)
+			for _, tr := range msg.ToolResults {
+				input = append(input, map[string]any{
+					"type":    "function_call_output",
+					"call_id": tr.ToolUseID,
+					"output":  tr.Content,
+				})
+			}
 
-		case "assistant":
-			content := []map[string]any{}
-			// Include reasoning (thinking) block if present for round-trip continuity
+		case RoleAssistant:
+			// Emit reasoning as top-level item
 			if msg.Thinking != "" {
 				input = append(input, map[string]any{
 					"type": "reasoning",
-					"summary": map[string]any{
-						"type": "text",
-						"text": msg.Thinking,
+					"summary": []map[string]any{
+						{"type": "summary_text", "text": msg.Thinking},
 					},
 				})
 			}
+			// Emit assistant text as a message
 			if msg.Content != "" {
-				content = append(content, map[string]any{
-					"type": "output_text",
-					"text": msg.Content,
+				input = append(input, map[string]any{
+					"type": "message",
+					"role": RoleAssistant,
+					"content": []map[string]any{
+						{"type": "output_text", "text": msg.Content},
+					},
 				})
 			}
+			// Emit function_call as top-level items (Responses API format)
 			for _, tu := range msg.ToolUse {
 				inputJSON, _ := json.Marshal(tu.Input)
-				content = append(content, map[string]any{
+				input = append(input, map[string]any{
 					"type":      "function_call",
 					"id":        tu.ID,
 					"name":      tu.Name,
 					"arguments": string(inputJSON),
-				})
-			}
-			if len(content) > 0 {
-				input = append(input, map[string]any{
-					"type":    "message",
-					"role":    "assistant",
-					"content": content,
+					"call_id":   tu.ID,
 				})
 			}
 		}
 	}
 
+	// Append standalone tool results as top-level function_call_output items
 	for _, tr := range toolResults {
 		input = append(input, map[string]any{
-			"type": "message",
-			"role": "user",
-			"content": []map[string]any{
-				{
-					"type":    "function_call_output",
-					"call_id": tr.ToolUseID,
-					"output":  tr.Content,
-				},
-			},
+			"type":    "function_call_output",
+			"call_id": tr.ToolUseID,
+			"output":  tr.Content,
 		})
-	}
-
-	// Handle tool results in messages
-	for _, msg := range messages {
-		for _, tr := range msg.ToolResults {
-			input = append(input, map[string]any{
-				"type": "message",
-				"role": "user",
-				"content": []map[string]any{
-					{
-						"type":    "function_call_output",
-						"call_id": tr.ToolUseID,
-						"output":  tr.Content,
-					},
-				},
-			})
-		}
 	}
 
 	return input
@@ -367,13 +351,14 @@ func (p *openAIResponsesProvider) parseResponse(resp *OpenAIResponsesResponse) (
 	for _, item := range resp.Output {
 		switch item.Type {
 		case "reasoning":
-			// Handle reasoning blocks
 			var summaryText string
-			if item.Summary != nil && item.Summary.Text != "" {
-				summaryText = item.Summary.Text
+			for _, s := range item.Summary {
+				if s.Text != "" {
+					summaryText += s.Text
+				}
 			}
 			response.Content = append(response.Content, ContentBlock{
-				Type:     "thinking",
+				Type:     BlockTypeThinking,
 				Thinking: summaryText,
 			})
 
@@ -383,28 +368,29 @@ func (p *openAIResponsesProvider) parseResponse(resp *OpenAIResponsesResponse) (
 				case "output_text":
 					if block.Text != "" {
 						response.Content = append(response.Content, ContentBlock{
-							Type: "text",
+							Type: BlockTypeText,
 							Text: block.Text,
 						})
 					}
-
-				case "function_call":
-					hasToolCalls = true
-					var input map[string]any
-					if block.Arguments != "" {
-						json.Unmarshal([]byte(block.Arguments), &input)
-					}
-					response.Content = append(response.Content, ContentBlock{
-						Type:      "tool_use",
-						ToolID:    block.ID,
-						ToolName:  block.Name,
-						ToolInput: input,
-					})
-
-				case "function_call_output":
-					// Function call outputs are handled as user messages in next turn
 				}
 			}
+
+		case "function_call":
+			hasToolCalls = true
+			var input map[string]any
+			if item.Arguments != "" {
+				json.Unmarshal([]byte(item.Arguments), &input)
+			}
+			callID := item.CallID
+			if callID == "" {
+				callID = item.ID
+			}
+			response.Content = append(response.Content, ContentBlock{
+				Type:      BlockTypeToolUse,
+				ToolID:    callID,
+				ToolName:  item.Name,
+				ToolInput: input,
+			})
 		}
 	}
 
@@ -432,7 +418,8 @@ func isPromptTooLongOpenAIResponses(err error) bool {
 	return strings.Contains(msg, "prompt_too_long") || strings.Contains(msg, "context window exceeds limit")
 }
 
-// SendMessageStream sends a streaming message (not yet implemented for Responses API).
+// SendMessageStream sends a streaming message using the OpenAI Responses API.
+// Emits Anthropic-compatible stream events for consistency with Claude Code output format.
 func (p *openAIResponsesProvider) SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string, idleTimeout time.Duration) (<-chan StreamContentBlock, *StreamResult) {
 	blocksChan := make(chan StreamContentBlock, 10)
 	result := &StreamResult{}
@@ -442,26 +429,516 @@ func (p *openAIResponsesProvider) SendMessageStream(ctx context.Context, message
 
 		log.Debug("OpenAI Responses API streaming message", "model", p.model)
 
-		// For now, fall back to non-streaming
-		resp, err := p.SendMessage(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix)
-		if err != nil {
-			result.Error = err.Error()
-			return
+		messages, tools, _ = NormalizeMessages(messages, tools, Capabilities{SupportsPromptCaching: false})
+
+		input := p.buildInput(messages, toolResults, systemPrompt, systemPromptSuffix)
+
+		var sdkTools []OpenAIResponsesTool
+		if len(tools) > 0 {
+			sdkTools = p.buildTools(tools)
 		}
 
-		// Emit blocks
-		for _, block := range resp.Content {
-			blocksChan <- StreamContentBlock{
-				Block: block,
+		maxTokens := int64(p.maxTokens)
+		if maxTokens == 0 {
+			maxTokens = 64000
+		}
+
+		reqBody := OpenAIResponsesRequest{
+			Model:           p.model,
+			Input:           input,
+			MaxOutputTokens: &maxTokens,
+			Tools:           sdkTools,
+			Stream:          true,
+		}
+
+		if p.effort != "" {
+			reqBody.ReasoningConfig = &OpenAIResponsesReasoningConfig{
+				Effort: p.effort,
 			}
 		}
 
-		result.Blocks = resp.Content
-		result.StopReason = resp.StopReason
-		result.Usage = resp.Usage
-		result.Model = resp.Model
-		result.StreamComplete = true
+		url := fmt.Sprintf("%s/v1/responses", os.Getenv("OPENAI_BASE_URL"))
+		headers := http.Header{}
+		headers.Set("Authorization", fmt.Sprintf("Bearer %s", os.Getenv("OPENAI_API_KEY")))
+
+		if idleTimeout <= 0 {
+			idleTimeout = DefaultIdleTimeout
+		}
+
+		body, err := p.client.StreamRequest(ctx, "POST", url, headers, reqBody)
+		if err != nil {
+			var httpErr *HTTPError
+			if errors.As(err, &httpErr) {
+				result.IsPermanent = httpErr.StatusCode >= 400 && httpErr.StatusCode < 500 &&
+					httpErr.StatusCode != 429 && httpErr.StatusCode != 408 && httpErr.StatusCode != 409
+			}
+			result.Error = err.Error()
+			if isPromptTooLongOpenAIResponses(err) {
+				result.ContextRejected = true
+				result.MaxTokensErr = &MaxTokensError{
+					Category: CategoryContextExhausted,
+					Model:    p.model,
+				}
+			}
+			return
+		}
+		defer body.Close()
+
+		idleTimer := time.NewTimer(idleTimeout)
+		defer idleTimer.Stop()
+
+		watchdogCtx, cancelWatchdog := context.WithCancel(ctx)
+		defer cancelWatchdog()
+
+		go func() {
+			select {
+			case <-idleTimer.C:
+				log.Warn("OpenAI Responses: Idle timeout reached")
+				result.Error = "idle timeout"
+				body.Close()
+			case <-watchdogCtx.Done():
+			}
+		}()
+
+		acc := newResponsesStreamAccumulator()
+		hasCompleted := false
+		scanner := NewSSEScanner(body)
+
+		// Emit message_start
+		messageID := fmt.Sprintf("msg_openai_resp_%s", GenerateShortID())
+		blocksChan <- StreamContentBlock{
+			Type: "stream_event",
+			RawEvent: AnthropicStreamEvent{
+				Type: EventMessageStart,
+				Message: &AnthropicResponse{
+					ID:    messageID,
+					Type:  "message",
+					Role:  RoleAssistant,
+					Model: p.model,
+					Usage: AnthropicUsage{},
+				},
+			},
+		}
+
+		for {
+			data, ok := scanner.Next()
+			if !ok {
+				break
+			}
+
+			if !idleTimer.Stop() {
+				select {
+				case <-idleTimer.C:
+				default:
+				}
+			}
+			idleTimer.Reset(idleTimeout)
+
+			var event OpenAIResponsesStreamEvent
+			if err := json.Unmarshal([]byte(data), &event); err != nil {
+				log.Error("OpenAI Responses: failed to unmarshal event", "error", err, "data", data)
+				continue
+			}
+
+			hasCompleted = p.processResponsesStreamEvent(&event, acc, blocksChan, result) || hasCompleted
+		}
+
+		if scanner.Err() != nil && result.Error == "" {
+			result.Error = scanner.Err().Error()
+		}
+
+		if isPromptTooLongOpenAIResponses(errors.New(result.Error)) {
+			result.ContextRejected = true
+		}
+
+		if !hasCompleted && result.Error == "" {
+			result.Error = "stream incomplete: no completion event"
+		}
+
+		if (result.StopReason == StopReasonMaxTokens || result.ContextRejected) && result.MaxTokensErr == nil {
+			result.MaxTokensErr = &MaxTokensError{
+				Category:     CategoryOutputCapHit,
+				Model:        p.model,
+				OutputTokens: result.Usage.OutputTokens,
+			}
+			if result.ContextRejected {
+				result.MaxTokensErr.Category = CategoryContextExhausted
+			}
+		}
+
+		// Emit message_delta + message_stop
+		stopReasonStr := string(acc.stopReason)
+		blocksChan <- StreamContentBlock{
+			Type: "stream_event",
+			RawEvent: AnthropicStreamEvent{
+				Type: EventMessageDelta,
+				Delta: &AnthropicStreamDelta{
+					StopReason: stopReasonStr,
+				},
+				Usage: &AnthropicUsage{
+					OutputTokens: result.Usage.OutputTokens,
+				},
+			},
+		}
+		blocksChan <- StreamContentBlock{
+			Type: "stream_event",
+			RawEvent: AnthropicStreamEvent{
+				Type: EventMessageStop,
+			},
+		}
+
+		result.StreamComplete = hasCompleted
+		result.Blocks = acc.finalize()
+		result.StopReason = acc.stopReason
+		result.Model = p.model
 	}()
 
 	return blocksChan, result
+}
+
+// processResponsesStreamEvent processes a single OpenAI Responses API stream event
+// and emits Anthropic-compatible stream events.
+func (p *openAIResponsesProvider) processResponsesStreamEvent(event *OpenAIResponsesStreamEvent, acc *responsesStreamAccumulator, blocksChan chan<- StreamContentBlock, result *StreamResult) bool {
+	switch event.Type {
+	case "response.created", "response.in_progress":
+		// Track model from response object
+		if event.Response != nil && event.Response.Model != "" {
+			result.Model = event.Response.Model
+		}
+
+	case "response.output_item.added":
+		if event.Item != nil {
+			id := event.Item.CallID
+			if id == "" {
+				id = event.Item.ID
+			}
+			acc.startOutputItem(event.OutputIndex, event.Item.Type, id)
+			if event.Item.Type == "function_call" && event.Item.Name != "" {
+				item := acc.getOutputItem(event.OutputIndex)
+				if item != nil {
+					item.toolName = event.Item.Name
+				}
+			}
+		}
+
+	case "response.reasoning_summary_text.delta":
+		if event.Delta != "" {
+			if !acc.thinkingStarted {
+				acc.thinkingStarted = true
+				acc.thinkingIndex = acc.nextBlockIndex()
+				blocksChan <- StreamContentBlock{
+					Type: "stream_event",
+					RawEvent: AnthropicStreamEvent{
+						Type:  EventContentBlockStart,
+						Index: acc.thinkingIndex,
+						ContentBlock: &AnthropicContentBlock{
+							Type: BlockTypeThinking,
+						},
+					},
+				}
+			}
+			acc.thinking += event.Delta
+			blocksChan <- StreamContentBlock{
+				Type: "stream_event",
+				RawEvent: AnthropicStreamEvent{
+					Type:  EventContentBlockDelta,
+					Index: acc.thinkingIndex,
+					Delta: &AnthropicStreamDelta{
+						Type:     DeltaTypeThinking,
+						Thinking: event.Delta,
+					},
+				},
+			}
+		}
+
+	case "response.output_text.delta":
+		if event.Delta != "" {
+			// Close thinking if still open
+			if acc.thinkingStarted && !acc.thinkingStopped {
+				acc.thinkingStopped = true
+				blocksChan <- StreamContentBlock{
+					Type: "stream_event",
+					RawEvent: AnthropicStreamEvent{
+						Type:  EventContentBlockStop,
+						Index: acc.thinkingIndex,
+					},
+				}
+				blocksChan <- StreamContentBlock{Block: ContentBlock{
+					Type: BlockTypeThinking, Thinking: acc.thinking,
+				}}
+			}
+			if !acc.contentStarted {
+				acc.contentStarted = true
+				acc.contentIndex = acc.nextBlockIndex()
+				blocksChan <- StreamContentBlock{
+					Type: "stream_event",
+					RawEvent: AnthropicStreamEvent{
+						Type:  EventContentBlockStart,
+						Index: acc.contentIndex,
+						ContentBlock: &AnthropicContentBlock{
+							Type: BlockTypeText,
+							Text: "",
+						},
+					},
+				}
+			}
+			acc.content += event.Delta
+			blocksChan <- StreamContentBlock{
+				Type: "stream_event",
+				RawEvent: AnthropicStreamEvent{
+					Type:  EventContentBlockDelta,
+					Index: acc.contentIndex,
+					Delta: &AnthropicStreamDelta{
+						Type: DeltaTypeText,
+						Text: event.Delta,
+					},
+				},
+			}
+		}
+
+	case "response.function_call_arguments.delta":
+		if event.Delta != "" {
+			// Close thinking/text blocks before tool args
+			if acc.thinkingStarted && !acc.thinkingStopped {
+				acc.thinkingStopped = true
+				blocksChan <- StreamContentBlock{
+					Type: "stream_event",
+					RawEvent: AnthropicStreamEvent{
+						Type:  EventContentBlockStop,
+						Index: acc.thinkingIndex,
+					},
+				}
+				blocksChan <- StreamContentBlock{Block: ContentBlock{
+					Type: BlockTypeThinking, Thinking: acc.thinking,
+				}}
+			}
+			if acc.contentStarted && !acc.contentStopped {
+				acc.contentStopped = true
+				blocksChan <- StreamContentBlock{
+					Type: "stream_event",
+					RawEvent: AnthropicStreamEvent{
+						Type:  EventContentBlockStop,
+						Index: acc.contentIndex,
+					},
+				}
+				blocksChan <- StreamContentBlock{Block: ContentBlock{
+					Type: BlockTypeText, Text: acc.content,
+				}}
+			}
+
+			item := acc.getOutputItem(event.OutputIndex)
+			if item != nil {
+				if !item.toolStarted {
+					item.toolStarted = true
+					item.toolBlockIndex = acc.nextBlockIndex()
+					blocksChan <- StreamContentBlock{
+						Type: "stream_event",
+						RawEvent: AnthropicStreamEvent{
+							Type:  EventContentBlockStart,
+							Index: item.toolBlockIndex,
+							ContentBlock: &AnthropicContentBlock{
+								Type: BlockTypeToolUse,
+								ID:   item.id,
+								Name: item.toolName,
+							},
+						},
+					}
+				}
+				item.args += event.Delta
+				blocksChan <- StreamContentBlock{
+					Type: "stream_event",
+					RawEvent: AnthropicStreamEvent{
+						Type:  EventContentBlockDelta,
+						Index: item.toolBlockIndex,
+						Delta: &AnthropicStreamDelta{
+							Type:        DeltaTypeInputJSON,
+							PartialJSON: event.Delta,
+						},
+					},
+				}
+			}
+		}
+
+	case "response.output_item.done":
+		if event.Item != nil && event.Item.Type == "function_call" {
+			item := acc.getOutputItem(event.OutputIndex)
+			if item != nil && item.toolStarted {
+				blocksChan <- StreamContentBlock{
+					Type: "stream_event",
+					RawEvent: AnthropicStreamEvent{
+						Type:  EventContentBlockStop,
+						Index: item.toolBlockIndex,
+					},
+				}
+				var input map[string]any
+				if item.args != "" {
+					json.Unmarshal([]byte(item.args), &input)
+				}
+				blocksChan <- StreamContentBlock{Block: ContentBlock{
+					Type:      BlockTypeToolUse,
+					ToolID:    item.id,
+					ToolName:  item.toolName,
+					ToolInput: input,
+				}}
+			}
+		}
+
+	case "response.completed":
+		hasToolCalls := false
+		// Close any remaining open blocks
+		if acc.thinkingStarted && !acc.thinkingStopped {
+			acc.thinkingStopped = true
+			blocksChan <- StreamContentBlock{
+				Type: "stream_event",
+				RawEvent: AnthropicStreamEvent{
+					Type:  EventContentBlockStop,
+					Index: acc.thinkingIndex,
+				},
+			}
+			blocksChan <- StreamContentBlock{Block: ContentBlock{
+				Type: BlockTypeThinking, Thinking: acc.thinking,
+			}}
+		}
+		if acc.contentStarted && !acc.contentStopped {
+			acc.contentStopped = true
+			blocksChan <- StreamContentBlock{
+				Type: "stream_event",
+				RawEvent: AnthropicStreamEvent{
+					Type:  EventContentBlockStop,
+					Index: acc.contentIndex,
+				},
+			}
+			blocksChan <- StreamContentBlock{Block: ContentBlock{
+				Type: BlockTypeText, Text: acc.content,
+			}}
+		}
+
+		// Parse final usage from the completed response
+		if event.Response != nil {
+			result.Usage.InputTokens = event.Response.Usage.InputTokens
+			result.Usage.OutputTokens = event.Response.Usage.OutputTokens
+			if event.Response.Usage.PromptTokens > 0 {
+				result.Usage.InputTokens = event.Response.Usage.PromptTokens
+			}
+			if event.Response.Usage.CompletionTokens > 0 {
+				result.Usage.OutputTokens = event.Response.Usage.CompletionTokens
+			}
+
+			// Check output items for tool calls
+			for _, item := range event.Response.Output {
+				if item.Type == "function_call" {
+					hasToolCalls = true
+				}
+			}
+		}
+
+		if hasToolCalls {
+			acc.stopReason = StopReasonToolUse
+		} else {
+			acc.stopReason = StopReasonEndTurn
+		}
+		return true
+
+	case "response.failed":
+		if event.Response != nil {
+			result.Error = fmt.Sprintf("response failed: status=%s", event.Response.Status)
+		} else {
+			result.Error = "response failed"
+		}
+		return true
+
+	case "response.content_part.added":
+		// Track function call name from content_part
+		if event.Part != nil && event.Part.Type == "function_call" {
+			item := acc.getOutputItem(event.OutputIndex)
+			if item != nil {
+				item.toolName = event.Part.Name
+			}
+		}
+	}
+
+	return false
+}
+
+// responsesStreamAccumulator accumulates OpenAI Responses API streaming events.
+type responsesStreamAccumulator struct {
+	content    string
+	thinking   string
+	stopReason StopReason
+	items      map[int]*responsesOutputItem
+
+	blockCounter    int
+	thinkingStarted bool
+	thinkingStopped bool
+	thinkingIndex   int
+	contentStarted  bool
+	contentStopped  bool
+	contentIndex    int
+}
+
+type responsesOutputItem struct {
+	itemType       string
+	id             string
+	toolName       string
+	args           string
+	toolStarted    bool
+	toolBlockIndex int
+}
+
+func newResponsesStreamAccumulator() *responsesStreamAccumulator {
+	return &responsesStreamAccumulator{
+		items: make(map[int]*responsesOutputItem),
+	}
+}
+
+func (acc *responsesStreamAccumulator) nextBlockIndex() int {
+	idx := acc.blockCounter
+	acc.blockCounter++
+	return idx
+}
+
+func (acc *responsesStreamAccumulator) startOutputItem(index int, itemType, id string) {
+	acc.items[index] = &responsesOutputItem{
+		itemType: itemType,
+		id:       id,
+	}
+}
+
+func (acc *responsesStreamAccumulator) getOutputItem(index int) *responsesOutputItem {
+	return acc.items[index]
+}
+
+func (acc *responsesStreamAccumulator) finalize() []ContentBlock {
+	var blocks []ContentBlock
+
+	if acc.thinking != "" {
+		blocks = append(blocks, ContentBlock{
+			Type:     BlockTypeThinking,
+			Thinking: acc.thinking,
+		})
+	}
+
+	if acc.content != "" {
+		blocks = append(blocks, ContentBlock{
+			Type: BlockTypeText,
+			Text: acc.content,
+		})
+	}
+
+	for i := 0; i < len(acc.items); i++ {
+		if item, ok := acc.items[i]; ok && item.itemType == "function_call" && item.id != "" {
+			var input map[string]any
+			if item.args != "" {
+				json.Unmarshal([]byte(item.args), &input)
+			}
+			blocks = append(blocks, ContentBlock{
+				Type:      BlockTypeToolUse,
+				ToolID:    item.id,
+				ToolName:  item.toolName,
+				ToolInput: input,
+			})
+		}
+	}
+
+	return blocks
 }

@@ -228,16 +228,16 @@ func (p *openAIProvider) buildMessages(messages []Message, toolResults []ToolRes
 	var sdkMessages []OpenAIMessage
 
 	if systemPrompt != "" {
-		sdkMsg := OpenAIMessage{Role: "system"}
+		sdkMsg := OpenAIMessage{Role: RoleSystem}
 		sdkMsg.SetContent(systemPrompt)
 		sdkMessages = append(sdkMessages, sdkMsg)
 	}
 
 	for _, msg := range messages {
 		switch msg.Role {
-		case "user":
+		case RoleUser:
 			if msg.Content != "" {
-				sdkMsg := OpenAIMessage{Role: "user"}
+				sdkMsg := OpenAIMessage{Role: RoleUser}
 				sdkMsg.SetContent(msg.Content)
 				sdkMessages = append(sdkMessages, sdkMsg)
 			}
@@ -248,8 +248,8 @@ func (p *openAIProvider) buildMessages(messages []Message, toolResults []ToolRes
 				sdkMessages = append(sdkMessages, sdkMsg)
 			}
 
-		case "assistant":
-			sdkMsg := OpenAIMessage{Role: "assistant"}
+		case RoleAssistant:
+			sdkMsg := OpenAIMessage{Role: RoleAssistant}
 			sdkMsg.SetContent(msg.Content)
 			// Round-trip thinking content from transcript for multi-turn sessions
 			if msg.Thinking != "" {
@@ -345,14 +345,14 @@ func (p *openAIProvider) parseResponse(resp *OpenAIResponse) (*Response, error) 
 
 	if choice.Message.ReasoningContent != "" {
 		response.Content = append(response.Content, ContentBlock{
-			Type:     "thinking",
+			Type:     BlockTypeThinking,
 			Thinking: choice.Message.ReasoningContent,
 		})
 	}
 
 	if content := choice.Message.GetContent(); content != "" {
 		response.Content = append(response.Content, ContentBlock{
-			Type: "text",
+			Type: BlockTypeText,
 			Text: content,
 		})
 	}
@@ -363,7 +363,7 @@ func (p *openAIProvider) parseResponse(resp *OpenAIResponse) (*Response, error) 
 			json.Unmarshal([]byte(tc.Function.Arguments), &input)
 		}
 		response.Content = append(response.Content, ContentBlock{
-			Type:      "tool_use",
+			Type:      BlockTypeToolUse,
 			ToolID:    tc.ID,
 			ToolName:  tc.Function.Name,
 			ToolInput: input,
@@ -481,6 +481,22 @@ func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Messa
 			}
 		}()
 
+		// Emit Anthropic-compatible message_start event
+		messageID := fmt.Sprintf("msg_openai_%s", GenerateShortID())
+		blocksChan <- StreamContentBlock{
+			Type: "stream_event",
+			RawEvent: AnthropicStreamEvent{
+				Type: EventMessageStart,
+				Message: &AnthropicResponse{
+					ID:    messageID,
+					Type:  "message",
+					Role:  RoleAssistant,
+					Model: p.model,
+					Usage: AnthropicUsage{},
+				},
+			},
+		}
+
 		for {
 			data, ok := scanner.Next()
 			if !ok {
@@ -527,6 +543,29 @@ func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Messa
 			}
 		}
 
+		// Emit Anthropic-compatible message_delta with stop_reason and usage
+		stopReasonStr := string(acc.stopReason)
+		blocksChan <- StreamContentBlock{
+			Type: "stream_event",
+			RawEvent: AnthropicStreamEvent{
+				Type: EventMessageDelta,
+				Delta: &AnthropicStreamDelta{
+					StopReason: stopReasonStr,
+				},
+				Usage: &AnthropicUsage{
+					OutputTokens: result.Usage.OutputTokens,
+				},
+			},
+		}
+
+		// Emit Anthropic-compatible message_stop event
+		blocksChan <- StreamContentBlock{
+			Type: "stream_event",
+			RawEvent: AnthropicStreamEvent{
+				Type: EventMessageStop,
+			},
+		}
+
 		result.StreamComplete = hasStopReason
 		result.Blocks = acc.finalize()
 		result.StopReason = acc.stopReason
@@ -536,7 +575,8 @@ func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Messa
 	return blocksChan, result
 }
 
-// processStreamChunk processes a single OpenAI stream chunk.
+// processStreamChunk processes a single OpenAI stream chunk and emits
+// Anthropic-compatible stream events so the output aligns with Claude Code.
 func (p *openAIProvider) processStreamChunk(chunk *OpenAIStreamChunk, acc *openAIStreamAccumulator, blocksChan chan<- StreamContentBlock, result *StreamResult) bool {
 	if chunk.Model != "" {
 		result.Model = chunk.Model
@@ -566,31 +606,186 @@ func (p *openAIProvider) processStreamChunk(chunk *OpenAIStreamChunk, acc *openA
 
 	delta := choice.Delta
 
-	if delta.Content != "" {
-		acc.appendContent(delta.Content)
+	if delta.ReasoningContent != "" {
+		if !acc.thinkingStarted {
+			acc.thinkingStarted = true
+			acc.thinkingIndex = acc.nextBlockIndex()
+			blocksChan <- StreamContentBlock{
+				Type: "stream_event",
+				RawEvent: AnthropicStreamEvent{
+					Type:  EventContentBlockStart,
+					Index: acc.thinkingIndex,
+					ContentBlock: &AnthropicContentBlock{
+						Type: BlockTypeThinking,
+					},
+				},
+			}
+		}
+		acc.appendThinking(delta.ReasoningContent)
 		blocksChan <- StreamContentBlock{
-			Block: ContentBlock{
-				Type: "text",
-				Text: acc.getContent(),
+			Type: "stream_event",
+			RawEvent: AnthropicStreamEvent{
+				Type:  EventContentBlockDelta,
+				Index: acc.thinkingIndex,
+				Delta: &AnthropicStreamDelta{
+					Type:     DeltaTypeThinking,
+					Thinking: delta.ReasoningContent,
+				},
 			},
 		}
 	}
 
-	if delta.ReasoningContent != "" {
-		acc.appendThinking(delta.ReasoningContent)
+	if delta.Content != "" {
+		if acc.thinkingStarted && !acc.thinkingStopped {
+			acc.thinkingStopped = true
+			blocksChan <- StreamContentBlock{
+				Type: "stream_event",
+				RawEvent: AnthropicStreamEvent{
+					Type:  EventContentBlockStop,
+					Index: acc.thinkingIndex,
+				},
+			}
+			blocksChan <- StreamContentBlock{Block: ContentBlock{
+				Type: BlockTypeThinking, Thinking: acc.getThinking(),
+			}}
+		}
+		if !acc.contentStarted {
+			acc.contentStarted = true
+			acc.contentIndex = acc.nextBlockIndex()
+			blocksChan <- StreamContentBlock{
+				Type: "stream_event",
+				RawEvent: AnthropicStreamEvent{
+					Type:  EventContentBlockStart,
+					Index: acc.contentIndex,
+					ContentBlock: &AnthropicContentBlock{
+						Type: BlockTypeText,
+						Text: "",
+					},
+				},
+			}
+		}
+		acc.appendContent(delta.Content)
 		blocksChan <- StreamContentBlock{
-			Block: ContentBlock{
-				Type:     "thinking",
-				Thinking: acc.getThinking(),
+			Type: "stream_event",
+			RawEvent: AnthropicStreamEvent{
+				Type:  EventContentBlockDelta,
+				Index: acc.contentIndex,
+				Delta: &AnthropicStreamDelta{
+					Type: DeltaTypeText,
+					Text: delta.Content,
+				},
 			},
 		}
 	}
 
 	for _, tc := range delta.ToolCalls {
-		acc.appendToolCall(tc.Index, tc.ID, tc.Function.Name, tc.Function.Arguments)
-		if toolBlock := acc.getToolUseBlock(tc.Index); toolBlock != nil {
+		accIdx := tc.Index
+		if tc.ID != "" {
+			// Close pending thinking/text blocks before tool_use
+			if acc.thinkingStarted && !acc.thinkingStopped {
+				acc.thinkingStopped = true
+				blocksChan <- StreamContentBlock{
+					Type: "stream_event",
+					RawEvent: AnthropicStreamEvent{
+						Type:  EventContentBlockStop,
+						Index: acc.thinkingIndex,
+					},
+				}
+				blocksChan <- StreamContentBlock{Block: ContentBlock{
+					Type: BlockTypeThinking, Thinking: acc.getThinking(),
+				}}
+			}
+			if acc.contentStarted && !acc.contentStopped {
+				acc.contentStopped = true
+				blocksChan <- StreamContentBlock{
+					Type: "stream_event",
+					RawEvent: AnthropicStreamEvent{
+						Type:  EventContentBlockStop,
+						Index: acc.contentIndex,
+					},
+				}
+				blocksChan <- StreamContentBlock{Block: ContentBlock{
+					Type: BlockTypeText, Text: acc.getContent(),
+				}}
+			}
+		}
+
+		acc.appendToolCall(accIdx, tc.ID, tc.Function.Name, tc.Function.Arguments)
+
+		if tc.ID != "" {
+			toolIdx := acc.nextBlockIndex()
+			acc.setToolBlockIndex(accIdx, toolIdx)
 			blocksChan <- StreamContentBlock{
-				Block: *toolBlock,
+				Type: "stream_event",
+				RawEvent: AnthropicStreamEvent{
+					Type:  EventContentBlockStart,
+					Index: toolIdx,
+					ContentBlock: &AnthropicContentBlock{
+						Type: BlockTypeToolUse,
+						ID:   tc.ID,
+						Name: tc.Function.Name,
+					},
+				},
+			}
+		}
+
+		if tc.Function.Arguments != "" {
+			toolIdx := acc.getToolBlockIndex(accIdx)
+			blocksChan <- StreamContentBlock{
+				Type: "stream_event",
+				RawEvent: AnthropicStreamEvent{
+					Type:  EventContentBlockDelta,
+					Index: toolIdx,
+					Delta: &AnthropicStreamDelta{
+						Type:        DeltaTypeInputJSON,
+						PartialJSON: tc.Function.Arguments,
+					},
+				},
+			}
+		}
+	}
+
+	if hasStopReason {
+		// Close any open thinking block
+		if acc.thinkingStarted && !acc.thinkingStopped {
+			acc.thinkingStopped = true
+			blocksChan <- StreamContentBlock{
+				Type: "stream_event",
+				RawEvent: AnthropicStreamEvent{
+					Type:  EventContentBlockStop,
+					Index: acc.thinkingIndex,
+				},
+			}
+			blocksChan <- StreamContentBlock{Block: ContentBlock{
+				Type: BlockTypeThinking, Thinking: acc.getThinking(),
+			}}
+		}
+		// Close any open text block
+		if acc.contentStarted && !acc.contentStopped {
+			acc.contentStopped = true
+			blocksChan <- StreamContentBlock{
+				Type: "stream_event",
+				RawEvent: AnthropicStreamEvent{
+					Type:  EventContentBlockStop,
+					Index: acc.contentIndex,
+				},
+			}
+			blocksChan <- StreamContentBlock{Block: ContentBlock{
+				Type: BlockTypeText, Text: acc.getContent(),
+			}}
+		}
+		// Close any open tool blocks
+		for i := 0; i < len(acc.toolCalls); i++ {
+			toolIdx := acc.getToolBlockIndex(i)
+			blocksChan <- StreamContentBlock{
+				Type: "stream_event",
+				RawEvent: AnthropicStreamEvent{
+					Type:  EventContentBlockStop,
+					Index: toolIdx,
+				},
+			}
+			if tb := acc.getToolUseBlock(i); tb != nil {
+				blocksChan <- StreamContentBlock{Block: *tb}
 			}
 		}
 	}
@@ -598,12 +793,23 @@ func (p *openAIProvider) processStreamChunk(chunk *OpenAIStreamChunk, acc *openA
 	return hasStopReason
 }
 
-// openAIStreamAccumulator accumulates streaming chunks.
+// openAIStreamAccumulator accumulates streaming chunks and tracks block indices
+// for Anthropic-format stream event emission.
 type openAIStreamAccumulator struct {
 	content    string
 	thinking   string
 	stopReason StopReason
 	toolCalls  map[int]*toolCallAccumulator
+
+	// Block index tracking for Anthropic-compatible event emission
+	blockCounter    int
+	thinkingStarted bool
+	thinkingStopped bool
+	thinkingIndex   int
+	contentStarted  bool
+	contentStopped  bool
+	contentIndex    int
+	toolBlockIndices map[int]int // OpenAI tool call index -> Anthropic block index
 }
 
 // toolCallAccumulator accumulates tool call arguments.
@@ -616,8 +822,26 @@ type toolCallAccumulator struct {
 
 func newOpenAIStreamAccumulator() *openAIStreamAccumulator {
 	return &openAIStreamAccumulator{
-		toolCalls: make(map[int]*toolCallAccumulator),
+		toolCalls:        make(map[int]*toolCallAccumulator),
+		toolBlockIndices: make(map[int]int),
 	}
+}
+
+func (acc *openAIStreamAccumulator) nextBlockIndex() int {
+	idx := acc.blockCounter
+	acc.blockCounter++
+	return idx
+}
+
+func (acc *openAIStreamAccumulator) setToolBlockIndex(toolIdx, blockIdx int) {
+	acc.toolBlockIndices[toolIdx] = blockIdx
+}
+
+func (acc *openAIStreamAccumulator) getToolBlockIndex(toolIdx int) int {
+	if idx, ok := acc.toolBlockIndices[toolIdx]; ok {
+		return idx
+	}
+	return 0
 }
 
 func (acc *openAIStreamAccumulator) appendContent(text string) {
@@ -667,7 +891,7 @@ func (acc *openAIStreamAccumulator) appendToolCall(index int, id, name, args str
 func (acc *openAIStreamAccumulator) getToolUseBlock(index int) *ContentBlock {
 	if tc, exists := acc.toolCalls[index]; exists && tc.ID != "" {
 		return &ContentBlock{
-			Type:      "tool_use",
+			Type:      BlockTypeToolUse,
 			ToolID:    tc.ID,
 			ToolName:  tc.Name,
 			ToolInput: tc.Input,
@@ -681,14 +905,14 @@ func (acc *openAIStreamAccumulator) finalize() []ContentBlock {
 
 	if acc.thinking != "" {
 		blocks = append(blocks, ContentBlock{
-			Type:     "thinking",
+			Type:     BlockTypeThinking,
 			Thinking: acc.thinking,
 		})
 	}
 
 	if acc.content != "" {
 		blocks = append(blocks, ContentBlock{
-			Type: "text",
+			Type: BlockTypeText,
 			Text: acc.content,
 		})
 	}
@@ -696,7 +920,7 @@ func (acc *openAIStreamAccumulator) finalize() []ContentBlock {
 	for i := 0; i < len(acc.toolCalls); i++ {
 		if tc, exists := acc.toolCalls[i]; exists && tc.ID != "" {
 			blocks = append(blocks, ContentBlock{
-				Type:      "tool_use",
+				Type:      BlockTypeToolUse,
 				ToolID:    tc.ID,
 				ToolName:  tc.Name,
 				ToolInput: tc.Input,

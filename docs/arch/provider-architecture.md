@@ -67,6 +67,12 @@ Jenny now implements a **Surgical HTTP Client** approach:
 - `StreamResult.Error` should be a plain string (not wrapped error type) for downstream compatibility
 - Providers should implement `ProviderWithRetryConfig` to receive shared retry configuration
 
+### Stream Event Normalization
+
+All providers MUST emit `StreamContentBlock` entries with `Type: "stream_event"` carrying an `AnthropicStreamEvent` in `RawEvent`. This means non-Anthropic providers (OpenAI, GenAI) translate their native streaming events into Anthropic-compatible `AnthropicStreamEvent` structs. This ensures the engine loop and `stream-json` output produce identical `stream_event` shapes regardless of backend — matching the Claude Code reference format.
+
+The Anthropic event types emitted are: `message_start`, `content_block_start`, `content_block_delta`, `content_block_stop`, `message_delta`, `message_stop`.
+
 ### Normalization
 
 `NormalizeMessages` is a shared gateway that all providers call. It handles:
@@ -79,12 +85,20 @@ Providers set `SupportsPromptCaching: true` or `false` in `Capabilities` to cont
 
 The `RetryConfig` struct in `retry.go` provides shared retry configuration. Providers should implement `ProviderWithRetryConfig` and call `sendWithRetry` with exponential backoff for HTTP errors. Retryable status codes: 429, 408, 409, 500, 502, 503, 504, 529.
 
-## Shared Types
+## Shared Types and Constants
 
 All types are defined in `client.go`:
 - `Message`, `ToolUseBlock`, `ToolResultBlock`, `ToolResult`, `ToolUse`
 - `Response`, `ContentBlock`, `Usage`, `ToolParam`, `ToolInputSchema`
 - `StreamContentBlock`, `StreamResult`
+
+All content block, event, delta, and role constants are centralized in `anthropic_types.go`:
+- Block types: `BlockTypeText`, `BlockTypeThinking`, `BlockTypeToolUse`, `BlockTypeToolResult`, `BlockTypeRedactedThinking`, `BlockTypeWebSearchResult`
+- SSE event types: `EventMessageStart`, `EventContentBlockStart`, `EventContentBlockDelta`, `EventContentBlockStop`, `EventMessageDelta`, `EventMessageStop`
+- Delta types: `DeltaTypeThinking`, `DeltaTypeText`, `DeltaTypeInputJSON`, `DeltaTypeSignature`
+- Message roles: `RoleUser`, `RoleAssistant`, `RoleSystem`
+
+Providers MUST use these constants rather than string literals for content block types and roles.
 
 ## Environment Variables
 
@@ -92,7 +106,7 @@ All types are defined in `client.go`:
 - `OPENAI_BASE_URL` — API base URL (required)
 - `OPENAI_API_KEY` — API key (required)
 - `OPENAI_DEFAULT_MODEL` — default model (required when using OpenAI provider)
-- `OPENAI_WIRE_API` — wire protocol (`chat` only; `responses` not yet supported)
+- `OPENAI_WIRE_API` — wire protocol: `chat` (default, ChatCompletion API) or `responses` (Responses API). Both support full streaming.
 
 ### Anthropic Provider
 - `ANTHROPIC_BASE_URL` — API base URL

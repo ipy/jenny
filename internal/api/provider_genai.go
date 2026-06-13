@@ -321,6 +321,22 @@ func (p *genaiProvider) SendMessageStream(ctx context.Context, messages []Messag
 			}
 		}()
 
+		// Emit Anthropic-compatible message_start
+		messageID := fmt.Sprintf("msg_genai_%s", GenerateShortID())
+		blocksChan <- StreamContentBlock{
+			Type: "stream_event",
+			RawEvent: AnthropicStreamEvent{
+				Type: EventMessageStart,
+				Message: &AnthropicResponse{
+					ID:    messageID,
+					Type:  "message",
+					Role:  RoleAssistant,
+					Model: p.model,
+					Usage: AnthropicUsage{},
+				},
+			},
+		}
+
 		for {
 			data, ok := scanner.Next()
 			if !ok {
@@ -371,6 +387,27 @@ func (p *genaiProvider) SendMessageStream(ctx context.Context, messages []Messag
 			result.MaxTokensErr = categorizeMaxTokensError(result.Model, result.Usage.OutputTokens, result.ContextRejected)
 		}
 
+		// Emit Anthropic-compatible message_delta and message_stop
+		stopReasonStr := string(acc.stopReason)
+		blocksChan <- StreamContentBlock{
+			Type: "stream_event",
+			RawEvent: AnthropicStreamEvent{
+				Type: EventMessageDelta,
+				Delta: &AnthropicStreamDelta{
+					StopReason: stopReasonStr,
+				},
+				Usage: &AnthropicUsage{
+					OutputTokens: result.Usage.OutputTokens,
+				},
+			},
+		}
+		blocksChan <- StreamContentBlock{
+			Type: "stream_event",
+			RawEvent: AnthropicStreamEvent{
+				Type: EventMessageStop,
+			},
+		}
+
 		result.StreamComplete = hasFinishReason
 		result.Blocks = acc.finalize()
 		result.StopReason = acc.stopReason
@@ -402,27 +439,137 @@ func (p *genaiProvider) processStreamChunk(resp *GenAIResponse, acc *genAIStream
 	for _, cand := range resp.Candidates {
 		for _, part := range cand.Content.Parts {
 			if part.Thought && part.Text != "" {
+				if !acc.thinkingStarted {
+					acc.thinkingStarted = true
+					acc.thinkingIndex = acc.nextBlockIndex()
+					blocksChan <- StreamContentBlock{
+						Type: "stream_event",
+						RawEvent: AnthropicStreamEvent{
+							Type:  EventContentBlockStart,
+							Index: acc.thinkingIndex,
+							ContentBlock: &AnthropicContentBlock{
+								Type: BlockTypeThinking,
+							},
+						},
+					}
+				}
 				acc.appendThinking(part.Text)
 				blocksChan <- StreamContentBlock{
-					Block: ContentBlock{
-						Type:     "thinking",
-						Thinking: acc.getThinking(),
+					Type: "stream_event",
+					RawEvent: AnthropicStreamEvent{
+						Type:  EventContentBlockDelta,
+						Index: acc.thinkingIndex,
+						Delta: &AnthropicStreamDelta{
+							Type:     DeltaTypeThinking,
+							Thinking: part.Text,
+						},
 					},
 				}
 			} else if part.Text != "" {
+				if acc.thinkingStarted && !acc.thinkingStopped {
+					acc.thinkingStopped = true
+					blocksChan <- StreamContentBlock{
+						Type: "stream_event",
+						RawEvent: AnthropicStreamEvent{
+							Type:  EventContentBlockStop,
+							Index: acc.thinkingIndex,
+						},
+					}
+					blocksChan <- StreamContentBlock{Block: ContentBlock{
+						Type: BlockTypeThinking, Thinking: acc.getThinking(),
+					}}
+				}
+				if !acc.contentStarted {
+					acc.contentStarted = true
+					acc.contentIndex = acc.nextBlockIndex()
+					blocksChan <- StreamContentBlock{
+						Type: "stream_event",
+						RawEvent: AnthropicStreamEvent{
+							Type:  EventContentBlockStart,
+							Index: acc.contentIndex,
+							ContentBlock: &AnthropicContentBlock{
+								Type: BlockTypeText,
+								Text: "",
+							},
+						},
+					}
+				}
 				acc.appendContent(part.Text)
 				blocksChan <- StreamContentBlock{
-					Block: ContentBlock{
-						Type: "text",
-						Text: acc.getContent(),
+					Type: "stream_event",
+					RawEvent: AnthropicStreamEvent{
+						Type:  EventContentBlockDelta,
+						Index: acc.contentIndex,
+						Delta: &AnthropicStreamDelta{
+							Type: DeltaTypeText,
+							Text: part.Text,
+						},
 					},
 				}
 			}
 			if part.FunctionCall != nil {
-				acc.appendFunctionCall(part.FunctionCall)
-				if block := acc.getFunctionCallBlock(); block != nil {
-					blocksChan <- StreamContentBlock{Block: *block}
+				// Close pending blocks
+				if acc.thinkingStarted && !acc.thinkingStopped {
+					acc.thinkingStopped = true
+					blocksChan <- StreamContentBlock{
+						Type: "stream_event",
+						RawEvent: AnthropicStreamEvent{Type: EventContentBlockStop, Index: acc.thinkingIndex},
+					}
+					blocksChan <- StreamContentBlock{Block: ContentBlock{
+						Type: BlockTypeThinking, Thinking: acc.getThinking(),
+					}}
 				}
+				if acc.contentStarted && !acc.contentStopped {
+					acc.contentStopped = true
+					blocksChan <- StreamContentBlock{
+						Type: "stream_event",
+						RawEvent: AnthropicStreamEvent{Type: EventContentBlockStop, Index: acc.contentIndex},
+					}
+					blocksChan <- StreamContentBlock{Block: ContentBlock{
+						Type: BlockTypeText, Text: acc.getContent(),
+					}}
+				}
+
+				fcIdx := acc.nextBlockIndex()
+				toolID := fmt.Sprintf("toolu_%s", GenerateShortID())
+				blocksChan <- StreamContentBlock{
+					Type: "stream_event",
+					RawEvent: AnthropicStreamEvent{
+						Type:  EventContentBlockStart,
+						Index: fcIdx,
+						ContentBlock: &AnthropicContentBlock{
+							Type: BlockTypeToolUse,
+							ID:   toolID,
+							Name: part.FunctionCall.Name,
+						},
+					},
+				}
+				if part.FunctionCall.Args != nil {
+					argsJSON, _ := json.Marshal(part.FunctionCall.Args)
+					blocksChan <- StreamContentBlock{
+						Type: "stream_event",
+						RawEvent: AnthropicStreamEvent{
+							Type:  EventContentBlockDelta,
+							Index: fcIdx,
+							Delta: &AnthropicStreamDelta{
+								Type:        DeltaTypeInputJSON,
+								PartialJSON: string(argsJSON),
+							},
+						},
+					}
+				}
+				blocksChan <- StreamContentBlock{
+					Type: "stream_event",
+					RawEvent: AnthropicStreamEvent{Type: EventContentBlockStop, Index: fcIdx},
+				}
+
+				acc.appendFunctionCall(part.FunctionCall)
+				blocksChan <- StreamContentBlock{Block: ContentBlock{
+					Type:      BlockTypeToolUse,
+					ToolID:    toolID,
+					ToolName:  part.FunctionCall.Name,
+					ToolInput: part.FunctionCall.Args,
+				}}
 			}
 		}
 
@@ -442,6 +589,30 @@ func (p *genaiProvider) processStreamChunk(resp *GenAIResponse, acc *genAIStream
 				hasFinishReason = true
 			}
 		}
+
+		// Close any remaining open blocks on finish
+		if hasFinishReason {
+			if acc.thinkingStarted && !acc.thinkingStopped {
+				acc.thinkingStopped = true
+				blocksChan <- StreamContentBlock{
+					Type: "stream_event",
+					RawEvent: AnthropicStreamEvent{Type: EventContentBlockStop, Index: acc.thinkingIndex},
+				}
+				blocksChan <- StreamContentBlock{Block: ContentBlock{
+					Type: BlockTypeThinking, Thinking: acc.getThinking(),
+				}}
+			}
+			if acc.contentStarted && !acc.contentStopped {
+				acc.contentStopped = true
+				blocksChan <- StreamContentBlock{
+					Type: "stream_event",
+					RawEvent: AnthropicStreamEvent{Type: EventContentBlockStop, Index: acc.contentIndex},
+				}
+				blocksChan <- StreamContentBlock{Block: ContentBlock{
+					Type: BlockTypeText, Text: acc.getContent(),
+				}}
+			}
+		}
 	}
 
 	return acc.stopReason, result.Usage, model, hasFinishReason
@@ -454,7 +625,7 @@ func (p *genaiProvider) buildContents(messages []Message, toolResults []ToolResu
 
 	for _, msg := range messages {
 		switch msg.Role {
-		case "user":
+		case RoleUser:
 			parts := make([]GenAIPart, 0, 1+len(msg.ToolResults))
 			if msg.Content != "" {
 				parts = append(parts, GenAIPart{Text: msg.Content})
@@ -469,9 +640,9 @@ func (p *genaiProvider) buildContents(messages []Message, toolResults []ToolResu
 			if len(parts) == 0 {
 				continue
 			}
-			contents = append(contents, GenAIContent{Role: "user", Parts: parts})
+			contents = append(contents, GenAIContent{Role: RoleUser, Parts: parts})
 
-		case "assistant":
+		case RoleAssistant:
 			parts := make([]GenAIPart, 0, 1+len(msg.ToolUse))
 			if msg.Content != "" {
 				parts = append(parts, GenAIPart{Text: msg.Content})
@@ -500,7 +671,7 @@ func (p *genaiProvider) buildContents(messages []Message, toolResults []ToolResu
 		pending = append(pending, functionResponsePart(tr))
 	}
 	if len(pending) > 0 {
-		contents = append(contents, GenAIContent{Role: "user", Parts: pending})
+		contents = append(contents, GenAIContent{Role: RoleUser, Parts: pending})
 	}
 
 	return contents
@@ -605,21 +776,20 @@ func (p *genaiProvider) parseResponse(resp *GenAIResponse) (*Response, error) {
 	for _, part := range cand.Content.Parts {
 		if part.Thought && part.Text != "" {
 			response.Content = append(response.Content, ContentBlock{
-				Type:     "thinking",
+				Type:     BlockTypeThinking,
 				Thinking: part.Text,
 			})
 			continue
 		}
 		if part.Text != "" {
 			response.Content = append(response.Content, ContentBlock{
-				Type: "text",
+				Type: BlockTypeText,
 				Text: part.Text,
 			})
 		}
 		if part.FunctionCall != nil {
 			response.Content = append(response.Content, ContentBlock{
-				Type:      "tool_use",
-				ToolID:    "", // Gemini REST API function calls don't always have IDs in the same way
+				Type:      BlockTypeToolUse,
 				ToolName:  part.FunctionCall.Name,
 				ToolInput: part.FunctionCall.Args,
 			})
@@ -654,10 +824,24 @@ type genAIStreamAccumulator struct {
 	thinking   string
 	stopReason StopReason
 	funcCalls  map[int]*GenAIFunctionCall
+
+	blockCounter    int
+	thinkingStarted bool
+	thinkingStopped bool
+	thinkingIndex   int
+	contentStarted  bool
+	contentStopped  bool
+	contentIndex    int
 }
 
 func newGenAIStreamAccumulator() *genAIStreamAccumulator {
 	return &genAIStreamAccumulator{funcCalls: make(map[int]*GenAIFunctionCall)}
+}
+
+func (acc *genAIStreamAccumulator) nextBlockIndex() int {
+	idx := acc.blockCounter
+	acc.blockCounter++
+	return idx
 }
 
 func (acc *genAIStreamAccumulator) appendContent(s string) { acc.content += s }
@@ -677,36 +861,18 @@ func (acc *genAIStreamAccumulator) appendFunctionCall(fc *GenAIFunctionCall) {
 	acc.funcCalls[idx] = fc
 }
 
-func (acc *genAIStreamAccumulator) getFunctionCallBlock() *ContentBlock {
-	idx := len(acc.funcCalls) - 1
-	if idx < 0 {
-		return nil
-	}
-	fc, ok := acc.funcCalls[idx]
-	if !ok || fc == nil {
-		return nil
-	}
-	return &ContentBlock{
-		Type:      "tool_use",
-		ToolID:    "",
-		ToolName:  fc.Name,
-		ToolInput: fc.Args,
-	}
-}
-
 func (acc *genAIStreamAccumulator) finalize() []ContentBlock {
 	var blocks []ContentBlock
 	if acc.thinking != "" {
-		blocks = append(blocks, ContentBlock{Type: "thinking", Thinking: acc.thinking})
+		blocks = append(blocks, ContentBlock{Type: BlockTypeThinking, Thinking: acc.thinking})
 	}
 	if acc.content != "" {
-		blocks = append(blocks, ContentBlock{Type: "text", Text: acc.content})
+		blocks = append(blocks, ContentBlock{Type: BlockTypeText, Text: acc.content})
 	}
 	for i := 0; i < len(acc.funcCalls); i++ {
 		if fc, ok := acc.funcCalls[i]; ok && fc != nil {
 			blocks = append(blocks, ContentBlock{
-				Type:      "tool_use",
-				ToolID:    "",
+				Type:      BlockTypeToolUse,
 				ToolName:  fc.Name,
 				ToolInput: fc.Args,
 			})

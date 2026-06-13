@@ -38,17 +38,17 @@ func (m MinimalContentBlock) MarshalJSON() ([]byte, error) {
 	fields := []any{`"type":` + encodeString(m.Type)}
 
 	switch m.Type {
-	case "thinking":
+	case api.BlockTypeThinking:
 		if m.Thinking != "" {
 			fields = append(fields, `"thinking":`+encodeString(m.Thinking))
 		}
 		if m.Signature != "" {
 			fields = append(fields, `"signature":`+encodeString(m.Signature))
 		}
-	case "text":
+	case api.BlockTypeText:
 		// Always include text field even when empty (per reference format for content_block_start)
 		fields = append(fields, `"text":`+encodeString(m.Text))
-	case "tool_use":
+	case api.BlockTypeToolUse:
 		fields = append(fields, `"id":`+encodeString(m.ID))
 		fields = append(fields, `"name":`+encodeString(m.Name))
 		if m.Input != nil {
@@ -58,7 +58,7 @@ func (m MinimalContentBlock) MarshalJSON() ([]byte, error) {
 			}
 			fields = append(fields, `"input":`+string(inputBytes))
 		}
-	case "redacted_thinking":
+	case api.BlockTypeRedactedThinking:
 		if m.Text != "" {
 			fields = append(fields, `"data":`+encodeString(m.Text))
 		}
@@ -82,7 +82,7 @@ func (m MinimalDelta) MarshalJSON() ([]byte, error) {
 	var fields []any
 
 	switch m.Type {
-	case "thinking_delta":
+	case api.DeltaTypeThinking:
 		fields = []any{`"type":"thinking_delta"`}
 		if m.Thinking != "" {
 			fields = append(fields, `"thinking":`+encodeString(m.Thinking))
@@ -90,22 +90,22 @@ func (m MinimalDelta) MarshalJSON() ([]byte, error) {
 		if m.Signature != "" {
 			fields = append(fields, `"signature":`+encodeString(m.Signature))
 		}
-	case "text_delta":
+	case api.DeltaTypeText:
 		fields = []any{`"type":"text_delta"`}
 		if m.Text != "" {
 			fields = append(fields, `"text":`+encodeString(m.Text))
 		}
-	case "input_json_delta":
+	case api.DeltaTypeInputJSON:
 		fields = []any{`"type":"input_json_delta"`}
 		if m.PartialJSON != "" {
 			fields = append(fields, `"partial_json":`+encodeString(m.PartialJSON))
 		}
-	case "signature_delta":
+	case api.DeltaTypeSignature:
 		fields = []any{`"type":"signature_delta"`}
 		if m.Signature != "" {
 			fields = append(fields, `"signature":`+encodeString(m.Signature))
 		}
-	case "message_delta":
+	case api.EventMessageDelta:
 		// Reference format: delta has stop_reason/stop_sequence directly, no nested type field
 		// Always include stop_reason and stop_sequence (possibly null)
 		fields = []any{}
@@ -209,17 +209,17 @@ func joinFields(fields []any) string {
 func TransformStreamEvent(event any) (json.RawMessage, error) {
 	if anthropicEvent, ok := event.(api.AnthropicStreamEvent); ok {
 		switch anthropicEvent.Type {
-		case "message_start":
+		case api.EventMessageStart:
 			return transformMessageStart(anthropicEvent)
-		case "content_block_start":
+		case api.EventContentBlockStart:
 			return transformContentBlockStart(anthropicEvent)
-		case "content_block_delta":
+		case api.EventContentBlockDelta:
 			return transformContentBlockDelta(anthropicEvent)
-		case "content_block_stop":
+		case api.EventContentBlockStop:
 			return transformContentBlockStop(anthropicEvent)
-		case "message_delta":
+		case api.EventMessageDelta:
 			return transformMessageDelta(anthropicEvent)
-		case "message_stop":
+		case api.EventMessageStop:
 			return transformMessageStop(anthropicEvent)
 		}
 	}
@@ -228,9 +228,6 @@ func TransformStreamEvent(event any) (json.RawMessage, error) {
 }
 
 func transformMessageStart(e api.AnthropicStreamEvent) (json.RawMessage, error) {
-	// Build minimal message using proper struct with MarshalJSON
-	// Always populate all usage fields (even with 0 values) per reference format
-	// Field order: input_tokens, cache_creation_input_tokens, cache_read_input_tokens, output_tokens
 	usage := &StreamUsage{
 		InputTokens:              e.Message.Usage.InputTokens,
 		CacheCreationInputTokens: e.Message.Usage.CacheCreationInputTokens,
@@ -243,11 +240,11 @@ func transformMessageStart(e api.AnthropicStreamEvent) (json.RawMessage, error) 
 		Type    string         `json:"type"`
 		Message MinimalMessage `json:"message"`
 	}{
-		Type: "message_start",
+		Type: api.EventMessageStart,
 		Message: MinimalMessage{
 			ID:      e.Message.ID,
 			Type:    "message",
-			Role:    "assistant",
+			Role:    api.RoleAssistant,
 			Model:   e.Message.Model,
 			Content: []any{},
 			Usage:   usage,
@@ -265,19 +262,15 @@ func transformMessageStart(e api.AnthropicStreamEvent) (json.RawMessage, error) 
 }
 
 func transformContentBlockStart(e api.AnthropicStreamEvent) (json.RawMessage, error) {
-	// Build minimal content_block based on type using struct with custom MarshalJSON
 	cb := MinimalContentBlock{Type: e.ContentBlock.Type}
 
 	switch e.ContentBlock.Type {
-	case "thinking":
-		// Always include thinking and signature in content_block_start (empty if not yet streamed)
-		// Reference format includes these even if empty
+	case api.BlockTypeThinking:
 		cb.Thinking = e.ContentBlock.Thinking
 		cb.Signature = e.ContentBlock.Signature
-	case "text":
-		// Always include text field even when empty (per reference format for content_block_start)
+	case api.BlockTypeText:
 		cb.Text = e.ContentBlock.Text
-	case "tool_use":
+	case api.BlockTypeToolUse:
 		cb.ID = e.ContentBlock.ID
 		cb.Name = e.ContentBlock.Name
 		if e.ContentBlock.Input != nil {
@@ -285,13 +278,12 @@ func transformContentBlockStart(e api.AnthropicStreamEvent) (json.RawMessage, er
 		}
 	}
 
-	// Reference order: type, index, content_block
 	msg := struct {
 		Type         string              `json:"type"`
 		Index        int                 `json:"index"`
 		ContentBlock MinimalContentBlock `json:"content_block"`
 	}{
-		Type:         "content_block_start",
+		Type:         api.EventContentBlockStart,
 		Index:        e.Index,
 		ContentBlock: cb,
 	}
@@ -299,29 +291,18 @@ func transformContentBlockStart(e api.AnthropicStreamEvent) (json.RawMessage, er
 }
 
 func transformContentBlockDelta(e api.AnthropicStreamEvent) (json.RawMessage, error) {
-	// Build minimal delta using struct with custom MarshalJSON
 	delta := MinimalDelta{Type: e.Delta.Type}
 
 	switch e.Delta.Type {
-	case "thinking_delta":
-		if e.Delta.Thinking != "" {
-			delta.Thinking = e.Delta.Thinking
-		}
-		if e.Delta.Signature != "" {
-			delta.Signature = e.Delta.Signature
-		}
-	case "text_delta":
-		if e.Delta.Text != "" {
-			delta.Text = e.Delta.Text
-		}
-	case "input_json_delta":
-		if e.Delta.PartialJSON != "" {
-			delta.PartialJSON = e.Delta.PartialJSON
-		}
-	case "signature_delta":
-		if e.Delta.Signature != "" {
-			delta.Signature = e.Delta.Signature
-		}
+	case api.DeltaTypeThinking:
+		delta.Thinking = e.Delta.Thinking
+		delta.Signature = e.Delta.Signature
+	case api.DeltaTypeText:
+		delta.Text = e.Delta.Text
+	case api.DeltaTypeInputJSON:
+		delta.PartialJSON = e.Delta.PartialJSON
+	case api.DeltaTypeSignature:
+		delta.Signature = e.Delta.Signature
 	}
 
 	msg := struct {
@@ -329,7 +310,7 @@ func transformContentBlockDelta(e api.AnthropicStreamEvent) (json.RawMessage, er
 		Index int          `json:"index"`
 		Delta MinimalDelta `json:"delta"`
 	}{
-		Type:  "content_block_delta",
+		Type:  api.EventContentBlockDelta,
 		Index: e.Index,
 		Delta: delta,
 	}
@@ -338,15 +319,14 @@ func transformContentBlockDelta(e api.AnthropicStreamEvent) (json.RawMessage, er
 
 func transformContentBlockStop(e api.AnthropicStreamEvent) (json.RawMessage, error) {
 	event := contentBlockStopEvent{
-		Type:  "content_block_stop",
+		Type:  api.EventContentBlockStop,
 		Index: e.Index,
 	}
 	return json.Marshal(event)
 }
 
 func transformMessageDelta(e api.AnthropicStreamEvent) (json.RawMessage, error) {
-	// Always emit delta for message_delta (per reference format)
-	delta := MinimalDelta{Type: "message_delta"}
+	delta := MinimalDelta{Type: api.EventMessageDelta}
 	if e.Delta.StopReason != "" {
 		delta.StopReason = e.Delta.StopReason
 	}
@@ -360,7 +340,7 @@ func transformMessageDelta(e api.AnthropicStreamEvent) (json.RawMessage, error) 
 		Delta MinimalDelta `json:"delta"`
 		Usage *StreamUsage `json:"usage,omitempty"`
 	}{
-		Type:  "message_delta",
+		Type:  api.EventMessageDelta,
 		Delta: delta,
 	}
 
@@ -382,7 +362,7 @@ func transformMessageDelta(e api.AnthropicStreamEvent) (json.RawMessage, error) 
 
 func transformMessageStop(e api.AnthropicStreamEvent) (json.RawMessage, error) {
 	event := messageStopEvent{
-		Type: "message_stop",
+		Type: api.EventMessageStop,
 	}
 	return json.Marshal(event)
 }

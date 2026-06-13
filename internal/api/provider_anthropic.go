@@ -187,14 +187,14 @@ func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Messag
 	if systemPrompt != "" || systemPromptSuffix != "" {
 		if systemPrompt != "" {
 			reqBody.System = append(reqBody.System, AnthropicContentBlock{
-				Type:         "text",
+				Type:         BlockTypeText,
 				Text:         systemPrompt,
 				CacheControl: &AnthropicCacheControl{Type: "ephemeral"},
 			})
 		}
 		if systemPromptSuffix != "" {
 			reqBody.System = append(reqBody.System, AnthropicContentBlock{
-				Type: "text",
+				Type: BlockTypeText,
 				Text: systemPromptSuffix,
 			})
 		}
@@ -217,12 +217,9 @@ func (p *anthropicProvider) buildMessages(messages []Message, toolResults []Tool
 	for _, msg := range messages {
 		contentBlocks := make([]AnthropicContentBlock, 0)
 
-		// AC4: Emit thinking block BEFORE tool_use blocks for multi-turn round-trip.
-		// This is required for Anthropic multi-turn conversations where thinking
-		// blocks must appear before tool_use in the content array.
 		if msg.Thinking != "" {
 			contentBlocks = append(contentBlocks, AnthropicContentBlock{
-				Type:      "thinking",
+				Type:      BlockTypeThinking,
 				Thinking:  msg.Thinking,
 				Signature: msg.Signature,
 			})
@@ -230,14 +227,14 @@ func (p *anthropicProvider) buildMessages(messages []Message, toolResults []Tool
 
 		if msg.Content != "" {
 			contentBlocks = append(contentBlocks, AnthropicContentBlock{
-				Type: "text",
+				Type: BlockTypeText,
 				Text: msg.Content,
 			})
 		}
 
 		for _, tu := range msg.ToolUse {
 			contentBlocks = append(contentBlocks, AnthropicContentBlock{
-				Type:  "tool_use",
+				Type:  BlockTypeToolUse,
 				ID:    tu.ID,
 				Name:  tu.Name,
 				Input: tu.Input,
@@ -246,7 +243,7 @@ func (p *anthropicProvider) buildMessages(messages []Message, toolResults []Tool
 
 		for _, tr := range msg.ToolResults {
 			block := AnthropicContentBlock{
-				Type:      "tool_result",
+				Type:      BlockTypeToolResult,
 				ToolUseID: tr.ToolUseID,
 			}
 			block.SetContent(tr.Content)
@@ -264,7 +261,7 @@ func (p *anthropicProvider) buildMessages(messages []Message, toolResults []Tool
 
 	for _, tr := range toolResults {
 		block := AnthropicContentBlock{
-			Type:      "tool_result",
+			Type:      BlockTypeToolResult,
 			ToolUseID: tr.ToolUseID,
 		}
 		block.SetContent(tr.Content)
@@ -272,7 +269,7 @@ func (p *anthropicProvider) buildMessages(messages []Message, toolResults []Tool
 			block.IsError = true
 		}
 		sdkMessages = append(sdkMessages, AnthropicMessage{
-			Role:    "user",
+			Role:    RoleUser,
 			Content: []AnthropicContentBlock{block},
 		})
 	}
@@ -320,18 +317,18 @@ func (p *anthropicProvider) parseResponse(resp *AnthropicResponse) (*Response, e
 
 	for _, block := range resp.Content {
 		switch block.Type {
-		case "text":
+		case BlockTypeText:
 			response.Content = append(response.Content, ContentBlock{
-				Type: "text",
+				Type: BlockTypeText,
 				Text: block.Text,
 			})
-		case "thinking":
+		case BlockTypeThinking:
 			response.Content = append(response.Content, ContentBlock{
-				Type:      "thinking",
+				Type:      BlockTypeThinking,
 				Thinking:  block.Thinking,
 				Signature: block.Signature,
 			})
-		case "tool_use":
+		case BlockTypeToolUse:
 			var input map[string]any
 			if inputVal, ok := block.Input.(map[string]any); ok {
 				input = inputVal
@@ -339,7 +336,7 @@ func (p *anthropicProvider) parseResponse(resp *AnthropicResponse) (*Response, e
 				input = make(map[string]any)
 			}
 			response.Content = append(response.Content, ContentBlock{
-				Type:      "tool_use",
+				Type:      BlockTypeToolUse,
 				ToolID:    block.ID,
 				ToolName:  block.Name,
 				ToolInput: input,
@@ -400,15 +397,15 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 		if systemPrompt != "" || systemPromptSuffix != "" {
 			if systemPrompt != "" {
 				reqBody.System = append(reqBody.System, AnthropicContentBlock{
-					Type:         "text",
-					Text:         systemPrompt,
-					CacheControl: &AnthropicCacheControl{Type: "ephemeral"},
-				})
-			}
-			if systemPromptSuffix != "" {
-				reqBody.System = append(reqBody.System, AnthropicContentBlock{
-					Type: "text",
-					Text: systemPromptSuffix,
+				Type:         BlockTypeText,
+				Text:         systemPrompt,
+				CacheControl: &AnthropicCacheControl{Type: "ephemeral"},
+			})
+		}
+		if systemPromptSuffix != "" {
+			reqBody.System = append(reqBody.System, AnthropicContentBlock{
+				Type: BlockTypeText,
+				Text: systemPromptSuffix,
 				})
 			}
 		}
@@ -482,72 +479,72 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 				RawEvent: event,
 			}
 
-			switch event.Type {
-			case "message_start":
-				hasMessageStart = true
-				if event.Message != nil {
-					acc.setModel(event.Message.Model)
-					acc.setUsage(Usage{
-						InputTokens:              event.Message.Usage.InputTokens,
-						CacheReadInputTokens:     event.Message.Usage.CacheReadInputTokens,
-						CacheCreationInputTokens: event.Message.Usage.CacheCreationInputTokens,
-					})
-				}
-
-			case "content_block_start":
-				index := event.Index
-				if event.ContentBlock != nil {
-					acc.setBlockType(index, event.ContentBlock.Type)
-					if event.ContentBlock.Type == "tool_use" {
-						acc.blocks[index].ToolID = event.ContentBlock.ID
-						acc.blocks[index].ToolName = event.ContentBlock.Name
-					}
-					if event.ContentBlock.Type == "thinking" {
-						acc.setBlockType(index, "thinking")
-						acc.appendThinking(index, event.ContentBlock.Thinking)
-					}
-				}
-
-			case "content_block_delta":
-				index := event.Index
-				if event.Delta != nil {
-					if event.Delta.Text != "" {
-						acc.appendText(index, event.Delta.Text)
-					}
-					if event.Delta.Thinking != "" {
-						acc.setBlockType(index, "thinking")
-						acc.appendThinking(index, event.Delta.Thinking)
-					}
-					if event.Delta.Signature != "" {
-						acc.appendSignature(index, event.Delta.Signature)
-					}
-					if event.Delta.PartialJSON != "" {
-						acc.appendToolInputJSON(index, event.Delta.PartialJSON)
-					}
-				}
-
-			case "content_block_stop":
-				index := event.Index
-				acc.finalizeToolInput(index)
-				acc.ensureBlock(index)
-				blocksChan <- StreamContentBlock{Block: acc.blocks[index]}
-
-			case "message_delta":
-				if event.Usage != nil {
-					acc.setUsage(Usage{
-						InputTokens:              event.Usage.InputTokens,
-						OutputTokens:             event.Usage.OutputTokens,
-						CacheReadInputTokens:     event.Usage.CacheReadInputTokens,
-						CacheCreationInputTokens: event.Usage.CacheCreationInputTokens,
-					})
-				}
-				if event.Delta != nil && event.Delta.StopReason != "" {
-					acc.setStopReason(StopReason(event.Delta.StopReason))
-				}
-
-			case "message_stop":
-				hasMessageStop = true
+		switch event.Type {
+		case EventMessageStart:
+			hasMessageStart = true
+			if event.Message != nil {
+				acc.setModel(event.Message.Model)
+				acc.setUsage(Usage{
+					InputTokens:              event.Message.Usage.InputTokens,
+					CacheReadInputTokens:     event.Message.Usage.CacheReadInputTokens,
+					CacheCreationInputTokens: event.Message.Usage.CacheCreationInputTokens,
+				})
 			}
+
+		case EventContentBlockStart:
+			index := event.Index
+			if event.ContentBlock != nil {
+				acc.setBlockType(index, event.ContentBlock.Type)
+				if event.ContentBlock.Type == BlockTypeToolUse {
+					acc.blocks[index].ToolID = event.ContentBlock.ID
+					acc.blocks[index].ToolName = event.ContentBlock.Name
+				}
+				if event.ContentBlock.Type == BlockTypeThinking {
+					acc.setBlockType(index, BlockTypeThinking)
+					acc.appendThinking(index, event.ContentBlock.Thinking)
+				}
+			}
+
+		case EventContentBlockDelta:
+			index := event.Index
+			if event.Delta != nil {
+				if event.Delta.Text != "" {
+					acc.appendText(index, event.Delta.Text)
+				}
+				if event.Delta.Thinking != "" {
+					acc.setBlockType(index, BlockTypeThinking)
+					acc.appendThinking(index, event.Delta.Thinking)
+				}
+				if event.Delta.Signature != "" {
+					acc.appendSignature(index, event.Delta.Signature)
+				}
+				if event.Delta.PartialJSON != "" {
+					acc.appendToolInputJSON(index, event.Delta.PartialJSON)
+				}
+			}
+
+		case EventContentBlockStop:
+			index := event.Index
+			acc.finalizeToolInput(index)
+			acc.ensureBlock(index)
+			blocksChan <- StreamContentBlock{Block: acc.blocks[index]}
+
+		case EventMessageDelta:
+			if event.Usage != nil {
+				acc.setUsage(Usage{
+					InputTokens:              event.Usage.InputTokens,
+					OutputTokens:             event.Usage.OutputTokens,
+					CacheReadInputTokens:     event.Usage.CacheReadInputTokens,
+					CacheCreationInputTokens: event.Usage.CacheCreationInputTokens,
+				})
+			}
+			if event.Delta != nil && event.Delta.StopReason != "" {
+				acc.setStopReason(StopReason(event.Delta.StopReason))
+			}
+
+		case EventMessageStop:
+			hasMessageStop = true
+		}
 		}
 
 		if scanner.Err() != nil && result.Error == "" {

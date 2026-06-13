@@ -920,7 +920,7 @@ func TestOpenAIResponsesProvider_ReasoningEffort(t *testing.T) {
 				{
 					"id": "reasoning_1",
 					"type": "reasoning",
-					"summary": {"type": "summary", "text": "I need to think about this..."}
+					"summary": [{"type": "summary_text", "text": "I need to think about this..."}]
 				},
 				{
 					"id": "msg_1",
@@ -993,17 +993,11 @@ func TestOpenAIResponsesProvider_ToolCalls(t *testing.T) {
 			"model": "o3-mini",
 			"output": [
 				{
-					"id": "msg_1",
-					"type": "message",
-					"role": "assistant",
-					"content": [
-						{
-							"type": "function_call",
-							"id": "call_abc123",
-							"name": "get_weather",
-							"arguments": "{\"location\":\"San Francisco\"}"
-						}
-					]
+					"type": "function_call",
+					"id": "fc_1",
+					"call_id": "call_abc123",
+					"name": "get_weather",
+					"arguments": "{\"location\":\"San Francisco\"}"
 				}
 			],
 			"usage": {"input_tokens": 10, "output_tokens": 20}

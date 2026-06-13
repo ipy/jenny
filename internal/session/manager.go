@@ -19,6 +19,21 @@ import (
 	"github.com/ipy/jenny/internal/log"
 )
 
+// Transcript entry type constants.
+const (
+	EntryTypeUser        = "user"
+	EntryTypeAssistant   = "assistant"
+	EntryTypeToolResult  = "tool_result"
+	EntryTypeState       = "state"
+	EntryTypeSystem      = "system"
+	EntryTypeProgress    = "progress"
+)
+
+// Transcript entry subtype constants.
+const (
+	SubtypeCompactBoundary = "compact_boundary"
+)
+
 // TranscriptEntry represents a single turn in the conversation transcript.
 type TranscriptEntry struct {
 	Type      string    `json:"type"`
@@ -87,7 +102,7 @@ type Manager struct {
 // progressTypes are entry types that are not chain participants and should be
 // filtered when loading transcripts for chain rebuild.
 var progressTypes = map[string]bool{
-	"progress":            true,
+	EntryTypeProgress:     true,
 	"bash_progress":       true,
 	"powershell_progress": true,
 	"mcp_progress":        true,
@@ -245,7 +260,7 @@ func (m *Manager) UserMessageExists(sessionID string, content string) (bool, err
 		return false, err
 	}
 	for _, entry := range entries {
-		if entry.Type == "user" && entry.Content == content {
+		if entry.Type == EntryTypeUser && entry.Content == content {
 			return true, nil
 		}
 	}
@@ -359,7 +374,7 @@ func (m *Manager) LoadCompactFailCount(sessionID string) (int, error) {
 		}
 		// Track the most recent state entry (regardless of count value)
 		// to properly handle reset-to-zero after successful compaction
-		if entry.Type == "state" {
+		if entry.Type == EntryTypeState {
 			latestCount = entry.CompactFailCount
 		}
 	}
@@ -436,7 +451,7 @@ func (m *Manager) AppendSystemPrompt(sessionID string, systemPrompt string) erro
 		return nil
 	}
 	return m.AppendEntry(sessionID, TranscriptEntry{
-		Type:         "state",
+		Type:         EntryTypeState,
 		SystemPrompt: systemPrompt,
 	})
 }
@@ -455,7 +470,7 @@ func (m *Manager) LoadSystemPrompt(sessionID string) (string, error) {
 
 	var latest string
 	for _, entry := range entries {
-		if entry.Type == "state" && entry.SystemPrompt != "" {
+		if entry.Type == EntryTypeState && entry.SystemPrompt != "" {
 			latest = entry.SystemPrompt
 		}
 	}
@@ -510,7 +525,7 @@ func (m *Manager) LoadPostBoundaryMessages(sessionID string) ([]TranscriptEntry,
 		if progressTypes[entry.Type] {
 			continue
 		}
-		if entry.Type == "system" && entry.Subtype == "compact_boundary" {
+		if entry.Type == EntryTypeSystem && entry.Subtype == SubtypeCompactBoundary {
 			lastBoundaryIdx = len(entries)
 		}
 		entries = append(entries, entry)

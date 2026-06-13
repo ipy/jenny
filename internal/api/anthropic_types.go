@@ -2,6 +2,41 @@ package api
 
 import "encoding/json"
 
+// Content block type constants (Anthropic-canonical, used across all providers).
+const (
+	BlockTypeText              = "text"
+	BlockTypeThinking          = "thinking"
+	BlockTypeRedactedThinking  = "redacted_thinking"
+	BlockTypeToolUse           = "tool_use"
+	BlockTypeToolResult        = "tool_result"
+	BlockTypeWebSearchResult   = "web_search_tool_result"
+)
+
+// SSE stream event type constants (Anthropic-canonical).
+const (
+	EventMessageStart     = "message_start"
+	EventContentBlockStart = "content_block_start"
+	EventContentBlockDelta = "content_block_delta"
+	EventContentBlockStop  = "content_block_stop"
+	EventMessageDelta     = "message_delta"
+	EventMessageStop      = "message_stop"
+)
+
+// Delta type constants within content_block_delta events.
+const (
+	DeltaTypeThinking    = "thinking_delta"
+	DeltaTypeText        = "text_delta"
+	DeltaTypeInputJSON   = "input_json_delta"
+	DeltaTypeSignature   = "signature_delta"
+)
+
+// Message role constants.
+const (
+	RoleUser      = "user"
+	RoleAssistant = "assistant"
+	RoleSystem    = "system"
+)
+
 // AnthropicRequest represents a request to the Anthropic Messages API.
 type AnthropicRequest struct {
 	Model         string                  `json:"model"`

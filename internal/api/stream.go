@@ -2,9 +2,18 @@
 package api
 
 import (
+	crypto_rand "crypto/rand"
 	"encoding/json"
+	"fmt"
 	"time"
 )
+
+// GenerateShortID generates a short random hex ID for synthetic message IDs.
+func GenerateShortID() string {
+	b := make([]byte, 12)
+	_, _ = crypto_rand.Read(b)
+	return fmt.Sprintf("%x", b)
+}
 
 // DefaultIdleTimeout is the default timeout for idle watchdog (30 seconds).
 const DefaultIdleTimeout = 30 * time.Second

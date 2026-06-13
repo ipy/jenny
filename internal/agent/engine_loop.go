@@ -52,7 +52,7 @@ func (e *QueryEngine) SubmitMessage(ctx context.Context, prompt string) (string,
 		}
 		if !skipUserPersist {
 			if err := sessionManager.AppendEntry(sessionID, session.TranscriptEntry{
-				Type:    "user",
+				Type:    session.EntryTypeUser,
 				Content: prompt,
 				CWD:     cwd,
 			}); err != nil {
@@ -85,14 +85,14 @@ func (e *QueryEngine) SubmitMessage(ctx context.Context, prompt string) (string,
 	if len(historyMessages) > 0 {
 		// Use history and append the new prompt as a user message
 		messages = append(historyMessages, api.Message{
-			Role:    "user",
+			Role:    api.RoleUser,
 			Content: prompt,
 		})
 	} else {
 		// Start fresh with just the user message
 		messages = []api.Message{
 			{
-				Role:    "user",
+				Role:    api.RoleUser,
 				Content: prompt,
 			},
 		}
@@ -247,7 +247,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		completions := e.drainTaskCompletions()
 		if len(completions) > 0 {
 			userMsg := api.Message{
-				Role:        "user",
+				Role:        api.RoleUser,
 				ToolResults: make([]api.ToolResultBlock, 0, len(completions)),
 			}
 			for _, c := range completions {
@@ -357,7 +357,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			// Handle raw stream_event passthrough
 			if block.Type == "stream_event" && e.streamCfg.Enabled && e.streamCfg.IncludePartial {
 				// Capture message ID from MessageStartEvent
-				if msgStart, ok := block.RawEvent.(api.AnthropicStreamEvent); ok && msgStart.Type == "message_start" && msgStart.Message != nil {
+				if msgStart, ok := block.RawEvent.(api.AnthropicStreamEvent); ok && msgStart.Type == api.EventMessageStart && msgStart.Message != nil {
 					e.currentMessageID = msgStart.Message.ID
 					e.currentUsage = api.Usage{
 						InputTokens:              msgStart.Message.Usage.InputTokens,
@@ -366,7 +366,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					}
 				}
 				// Capture stop_reason and usage from MessageDeltaEvent
-				if msgDelta, ok := block.RawEvent.(api.AnthropicStreamEvent); ok && msgDelta.Type == "message_delta" && msgDelta.Delta != nil {
+				if msgDelta, ok := block.RawEvent.(api.AnthropicStreamEvent); ok && msgDelta.Type == api.EventMessageDelta && msgDelta.Delta != nil {
 					e.currentStopReason = msgDelta.Delta.StopReason
 					e.currentStopSequence = msgDelta.Delta.StopSequence
 					if msgDelta.Usage != nil && msgDelta.Usage.OutputTokens > 0 {
@@ -394,23 +394,23 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			}
 
 			switch block.Block.Type {
-			case "text":
+			case api.BlockTypeText:
 				// AC1: Redact secrets from text output before writing
 				if e.secretRedactor != nil && e.secretRedactor.Enabled() {
 					textOutput.WriteString(e.secretRedactor.Redact(block.Block.Text))
 				} else {
 					textOutput.WriteString(block.Block.Text)
 				}
-			case "thinking":
+			case api.BlockTypeThinking:
 				thinkingBlocks = append(thinkingBlocks, thinkingBlock{Text: block.Block.Thinking, Signature: block.Block.Signature})
-			case "tool_use":
+			case api.BlockTypeToolUse:
 				// Collect tool_use blocks for the assistant message
 				toolUseBlocks = append(toolUseBlocks, api.ToolUseBlock{
 					ID:    block.Block.ToolID,
 					Name:  block.Block.ToolName,
 					Input: block.Block.ToolInput,
 				})
-			case "web_search_tool_result":
+			case api.BlockTypeWebSearchResult:
 				// AC5: Process web search results and surface error codes
 				if block.Block.WebSearchResult != nil && block.Block.WebSearchResult.IsError {
 					// Surface server error code as a tool result
@@ -527,23 +527,23 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 
 			for _, block := range streamResult.Blocks {
 				switch block.Type {
-				case "text":
+				case api.BlockTypeText:
 					// AC1: Redact secrets from text output in fallback path
 					if e.secretRedactor != nil && e.secretRedactor.Enabled() {
 						textOutput.WriteString(e.secretRedactor.Redact(block.Text))
 					} else {
 						textOutput.WriteString(block.Text)
 					}
-				case "thinking":
+				case api.BlockTypeThinking:
 					thinkingBlocks = append(thinkingBlocks, thinkingBlock{Text: block.Thinking, Signature: block.Signature})
-				case "tool_use":
+				case api.BlockTypeToolUse:
 					// Collect tool_use blocks for the assistant message
 					toolUseBlocks = append(toolUseBlocks, api.ToolUseBlock{
 						ID:    block.ToolID,
 						Name:  block.ToolName,
 						Input: block.ToolInput,
 					})
-				case "web_search_tool_result":
+				case api.BlockTypeWebSearchResult:
 					// AC5: Process web search results and surface error codes in fallback
 					if block.WebSearchResult != nil && block.WebSearchResult.IsError {
 						toolResults = append(toolResults, api.ToolResult{
@@ -573,7 +573,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					toolResultContent = result.Text
 				}
 				userContent := []map[string]any{
-					{"type": "tool_result", "tool_use_id": result.WebSearchResult.ToolUseID, "content": toolResultContent},
+					{"type": api.BlockTypeToolResult, "tool_use_id": result.WebSearchResult.ToolUseID, "content": toolResultContent},
 				}
 				// Format tool_use_result for user event
 				var toolUseResult any
@@ -603,7 +603,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 
 		// Build and append assistant message with text, tool_use, and thinking blocks
 		assistantMsg := api.Message{
-			Role:    "assistant",
+			Role:    api.RoleAssistant,
 			Content: textOutput.String(),
 		}
 		if len(thinkingBlocks) > 0 {
@@ -627,7 +627,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		// Persist assistant message to transcript BEFORE tool execution
 		if e.sessionManager != nil && (textOutput.String() != "" || len(toolUseBlocks) > 0 || len(thinkingBlocks) > 0) {
 			entry := session.TranscriptEntry{
-				Type:    "assistant",
+				Type:    session.EntryTypeAssistant,
 				Content: textOutput.String(),
 				CWD:     cwd,
 			}
@@ -753,7 +753,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			// Persist tool result to transcript AFTER assistant message
 			if e.sessionManager != nil {
 				if err := e.sessionManager.AppendEntry(sessionID, session.TranscriptEntry{
-					Type:    "tool_result",
+					Type:    session.EntryTypeToolResult,
 					ToolID:  emitToolUseID,
 					Content: emitContent,
 					IsError: emitIsError,
@@ -779,7 +779,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 
 				// Output user message wrapper for the tool result (AC3)
 				userContent := []map[string]any{
-					{"type": "tool_result", "tool_use_id": emitToolUseID, "content": emitContent, "is_error": emitIsError},
+					{"type": api.BlockTypeToolResult, "tool_use_id": emitToolUseID, "content": emitContent, "is_error": emitIsError},
 				}
 				// Format tool_use_result for user event
 				var toolUseResult any
@@ -1127,7 +1127,7 @@ func seedReadFileCacheFromTranscript(cache *tool.ReadFileCache, sessionManager *
 
 	// Now iterate through tool_result entries and match them to Read tool_use
 	for _, entry := range entries {
-		if entry.Type == "tool_result" && !entry.IsError {
+		if entry.Type == session.EntryTypeToolResult && !entry.IsError {
 			if toolUseEntry, ok := readToolUses[entry.ToolID]; ok {
 				// Find the specific tool_use that matches entry.ToolID
 				var tu *session.ToolUse
