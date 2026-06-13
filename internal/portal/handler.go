@@ -438,6 +438,37 @@ func (p *Portal) handleSessionAction(w http.ResponseWriter, r *http.Request) {
 			PID:       cmd.Process.Pid,
 		})
 
+	case "delete":
+		sessionDir := constants.SessionDir(sessionID)
+
+		// Check if session directory exists
+		if _, err := os.Stat(sessionDir); os.IsNotExist(err) {
+			http.Error(w, `{"error":"session not found"}`, http.StatusNotFound)
+			return
+		}
+
+		// Check if session is running — refuse deletion if alive
+		pidPath := filepath.Join(sessionDir, "pid")
+		if pidData, err := os.ReadFile(pidPath); err == nil {
+			if pid, err := strconv.Atoi(strings.TrimSpace(string(pidData))); err == nil {
+				if proc, err := os.FindProcess(pid); err == nil {
+					if proc.Signal(syscall.Signal(0)) == nil {
+						http.Error(w, `{"error":"session is running, kill it first"}`, http.StatusConflict)
+						return
+					}
+				}
+			}
+		}
+
+		// Remove the entire session directory
+		if err := os.RemoveAll(sessionDir); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
+
 	default:
 		http.Error(w, fmt.Sprintf(`{"error":"unknown action: %s"}`, action), http.StatusBadRequest)
 	}

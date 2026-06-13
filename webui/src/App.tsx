@@ -22,6 +22,7 @@ import {
   killSession,
   apiPost,
   useToast,
+  useConfirm,
   SettingsDialog,
   type SessionMetadata,
 } from './index';
@@ -190,7 +191,7 @@ interface SessionsTabProps {
 
 function SessionsTab({ selectedId: externalSelectedId, onSelect: externalOnSelect }: SessionsTabProps) {
   const [internalSelectedId, setInternalSelectedId] = useState<string | null>(null);
-  const { data: sessions, loading } = useSessions();
+  const { data: sessions, loading, refetch } = useSessions();
 
   // Use external props if provided, otherwise use internal state
   const selectedId = externalSelectedId !== undefined ? externalSelectedId : internalSelectedId;
@@ -206,6 +207,12 @@ function SessionsTab({ selectedId: externalSelectedId, onSelect: externalOnSelec
       badge: <Badge variant={s.status === 'running' ? 'success' : 'default'} dot={s.status === 'running'}>{s.status}</Badge>
     };
   }) ?? [];
+
+  // Handle session deletion - deselect and refresh list
+  const handleSessionDeleted = () => {
+    setSelectedId(null);
+    refetch();
+  };
 
   return (
     <SplitPane
@@ -224,7 +231,7 @@ function SessionsTab({ selectedId: externalSelectedId, onSelect: externalOnSelec
       }
       detail={
         selectedId ? (
-          <SessionDetail session={sessions?.find(s => s.id === selectedId)} />
+          <SessionDetail session={sessions?.find(s => s.id === selectedId)} onDeleted={handleSessionDeleted} />
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-text-dim)' }}>
             Select a session to view details
@@ -244,12 +251,14 @@ function formatTimeAgo(timestamp: number): string {
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 
-function SessionDetail({ session }: { session?: SessionMetadata }) {
+function SessionDetail({ session, onDeleted }: { session?: SessionMetadata; onDeleted?: () => void }) {
   const [entries, setEntries] = useState<any[]>([]);
   const [showResumeInput, setShowResumeInput] = useState(false);
   const [resumePrompt, setResumePrompt] = useState('');
   const [resuming, setResuming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const toast = useToast();
+  const { confirm } = useConfirm();
   const isRunning = session?.status === 'running';
 
   // Connect to SSE stream for real-time updates
@@ -271,6 +280,31 @@ function SessionDetail({ session }: { session?: SessionMetadata }) {
       toast.addToast({ kind: 'error', title: 'Failed to resume session', message: err instanceof Error ? err.message : 'Unknown error' });
     } finally {
       setResuming(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!session?.id || deleting) return;
+
+    const confirmed = await confirm({
+      title: 'Delete Session',
+      message: 'Are you sure you want to delete this session? This action cannot be undone.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      dangerous: true,
+    });
+
+    if (!confirmed) return;
+
+    setDeleting(true);
+    try {
+      await apiPost(`/api/sessions/${session.id}/delete`, {});
+      toast.addToast({ kind: 'success', title: 'Session deleted' });
+      onDeleted?.();
+    } catch (err) {
+      toast.addToast({ kind: 'error', title: 'Failed to delete session', message: err instanceof Error ? err.message : 'Unknown error' });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -303,7 +337,12 @@ function SessionDetail({ session }: { session?: SessionMetadata }) {
           ) : (
             <Button variant="primary" size="sm" onClick={() => setShowResumeInput(true)}>Resume</Button>
           )}
-          <Button variant="ghost" size="sm">Delete</Button>
+          {/* Delete button is hidden for running sessions */}
+          {!isRunning && (
+            <Button variant="ghost" size="sm" onClick={handleDelete} disabled={deleting}>
+              {deleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          )}
         </div>
       </header>
 

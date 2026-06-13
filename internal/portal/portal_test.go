@@ -1087,3 +1087,207 @@ func TestStartSession_WithCWD(t *testing.T) {
 
 	t.Log("AC2 PASS: backend accepts optional cwd field on start session")
 }
+
+// TestDeleteSession verifies AC1: delete endpoint removes session directory.
+func TestDeleteSession(t *testing.T) {
+	origJennyHome := os.Getenv("JENNY_HOME")
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Setenv("JENNY_HOME", tmpDir)
+	defer func() {
+		os.RemoveAll(tmpDir)
+		os.Setenv("JENNY_HOME", origJennyHome)
+	}()
+
+	// Create mock session
+	sessionID := "test-delete-session"
+	sessionDir := filepath.Join(tmpDir, "sessions", sessionID)
+	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	transcriptPath := filepath.Join(sessionDir, "transcript.jsonl")
+	if err := os.WriteFile(transcriptPath, []byte(`{"type":"state","cwd":"/test"}`+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Shutdown(ctx)
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", p.port)
+
+	// Test delete
+	resp, err := http.Post(baseURL+"/api/sessions/"+sessionID+"/delete?token="+p.authToken, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Errorf("delete should return 200, got %d: %s", resp.StatusCode, string(bodyBytes))
+		return
+	}
+	resp.Body.Close()
+
+	// Verify directory is gone
+	if _, err := os.Stat(sessionDir); !os.IsNotExist(err) {
+		t.Error("session directory should be deleted")
+	}
+
+	// Test deleting non-existent session returns 404
+	resp, err = http.Post(baseURL+"/api/sessions/nonexistent/delete?token="+p.authToken, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("deleting nonexistent session should return 404, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	t.Log("AC1 PASS: delete endpoint removes session directory")
+}
+
+// TestDeleteRunningSession verifies AC1: deleting running session returns 409.
+func TestDeleteRunningSession(t *testing.T) {
+	origJennyHome := os.Getenv("JENNY_HOME")
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Setenv("JENNY_HOME", tmpDir)
+	defer func() {
+		os.RemoveAll(tmpDir)
+		os.Setenv("JENNY_HOME", origJennyHome)
+	}()
+
+	// Create session with pid pointing to our own process (which is alive)
+	sessionID := "test-running-session"
+	sessionDir := filepath.Join(tmpDir, "sessions", sessionID)
+	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	pidPath := filepath.Join(sessionDir, "pid")
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(os.Getpid())), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Shutdown(ctx)
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", p.port)
+
+	// Test delete on running session returns 409
+	resp, err := http.Post(baseURL+"/api/sessions/"+sessionID+"/delete?token="+p.authToken, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusConflict {
+		t.Errorf("deleting running session should return 409, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Verify directory still exists
+	if _, err := os.Stat(sessionDir); os.IsNotExist(err) {
+		t.Error("session directory should still exist after failed delete")
+	}
+
+	t.Log("AC1 PASS: deleting running session returns 409")
+}
+
+// TestDeletedSessionNotInList verifies AC2: after deletion, session no longer appears in list.
+func TestDeletedSessionNotInList(t *testing.T) {
+	origJennyHome := os.Getenv("JENNY_HOME")
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Setenv("JENNY_HOME", tmpDir)
+	defer func() {
+		os.RemoveAll(tmpDir)
+		os.Setenv("JENNY_HOME", origJennyHome)
+	}()
+
+	// Create mock session
+	sessionID := "test-list-after-delete"
+	sessionDir := filepath.Join(tmpDir, "sessions", sessionID)
+	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	transcriptPath := filepath.Join(sessionDir, "transcript.jsonl")
+	if err := os.WriteFile(transcriptPath, []byte(`{"type":"state","cwd":"/test"}`+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Shutdown(ctx)
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", p.port)
+
+	// Verify session appears in list before delete
+	resp, err := http.Get(baseURL + "/api/sessions?token=" + p.authToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sessionsBefore []SessionMeta
+	if err := json.NewDecoder(resp.Body).Decode(&sessionsBefore); err != nil {
+		resp.Body.Close()
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	foundBefore := false
+	for _, s := range sessionsBefore {
+		if s.ID == sessionID {
+			foundBefore = true
+			break
+		}
+	}
+	if !foundBefore {
+		t.Fatal("session should be in list before delete")
+	}
+
+	// Delete the session
+	resp, err = http.Post(baseURL+"/api/sessions/"+sessionID+"/delete?token="+p.authToken, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	// Verify session no longer appears in list
+	resp, err = http.Get(baseURL + "/api/sessions?token=" + p.authToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sessionsAfter []SessionMeta
+	if err := json.NewDecoder(resp.Body).Decode(&sessionsAfter); err != nil {
+		resp.Body.Close()
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	foundAfter := false
+	for _, s := range sessionsAfter {
+		if s.ID == sessionID {
+			foundAfter = true
+			break
+		}
+	}
+	if foundAfter {
+		t.Error("session should not appear in list after deletion")
+	}
+
+	t.Log("AC2 PASS: deleted session no longer appears in sessions list")
+}
