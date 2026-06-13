@@ -124,10 +124,42 @@ func TestAC2_HealthEndpoint(t *testing.T) {
 }
 
 // TestAC7_IdleTimeout verifies AC7: portal exits after idle timeout.
-// Note: This test is skipped because it triggers os.Exit which can't be caught.
-// The idle timeout behavior is verified manually.
+// Uses injectable exit function to avoid os.Exit panic in tests.
 func TestAC7_IdleTimeout(t *testing.T) {
-	t.Skip("Skipping idle timeout test - it triggers os.Exit which panics in tests")
+	// Create temp jenny dir
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Track if exit was called
+	exitCalled := false
+	exitFunc := func() {
+		exitCalled = true
+	}
+
+	ctx := context.Background()
+	p, err := startWithConfigForTest(ctx, tmpDir, 100*time.Millisecond, exitFunc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Shutdown(ctx)
+
+	// Wait for idle timeout to trigger
+	time.Sleep(200 * time.Millisecond)
+
+	if !exitCalled {
+		t.Error("AC7 FAIL: exit function should have been called after idle timeout")
+	}
+
+	// Verify lockfile was deleted
+	lockPath := filepath.Join(tmpDir, "portal.lock")
+	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
+		t.Errorf("AC7 FAIL: lockfile should be deleted after idle timeout, got error: %v", err)
+	}
+
+	t.Log("AC7 PASS: portal exits after idle timeout and deletes lockfile")
 }
 
 // TestAC8_DoubleStart verifies AC8: second portal start fails with appropriate error.
@@ -278,6 +310,70 @@ func TestStatsEndpoint(t *testing.T) {
 	}
 
 	t.Log("AC6 PASS: stats endpoint returns valid stats structure")
+}
+
+// TestAC6_TokenCount verifies AC6: stats endpoint correctly counts tokens (not double-counting).
+func TestAC6_TokenCount(t *testing.T) {
+	// Set JENNY_HOME to temp dir so we get a clean session directory
+	origJennyHome := os.Getenv("JENNY_HOME")
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Setenv("JENNY_HOME", tmpDir)
+	defer func() {
+		os.RemoveAll(tmpDir)
+		os.Setenv("JENNY_HOME", origJennyHome)
+	}()
+
+	// Create a mock session with known token counts
+	sessionID := "test-token-session"
+	sessionDir := filepath.Join(tmpDir, "sessions", sessionID)
+	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create transcript with known token counts: 100 + 200 + 300 = 600
+	transcriptPath := filepath.Join(sessionDir, "transcript.jsonl")
+	tokenEntries := []string{
+		`{"type":"assistant","token_count":100}`,
+		`{"type":"assistant","token_count":200}`,
+		`{"type":"assistant","token_count":300}`,
+	}
+	transcriptData := []byte(strings.Join(tokenEntries, "\n") + "\n")
+	if err := os.WriteFile(transcriptPath, transcriptData, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Shutdown(ctx)
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", p.port)
+
+	resp, err := http.Get(baseURL + "/api/stats?token=" + p.authToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("stats endpoint should return 200, got %d", resp.StatusCode)
+	}
+
+	var stats Stats
+	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	// Verify total_tokens is 600 (not 1200 which would be double-counting)
+	if stats.TotalTokens != 600 {
+		t.Errorf("AC6 FAIL: total_tokens should be 600, got %d", stats.TotalTokens)
+	}
+
+	t.Log("AC6 PASS: token counting is correct (not double-counted)")
 }
 
 // TestKillSession verifies AC5: kill endpoint terminates session.

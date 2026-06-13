@@ -447,33 +447,12 @@ func (p *Portal) handleStats(w http.ResponseWriter, r *http.Request) {
 				stats.TotalCostUSD += cost.TotalCost
 			}
 		}
-
-		// Read tokens from transcript
-		transcriptPath := filepath.Join(constants.SessionDir(id), "transcript.jsonl")
-		if data, err := os.ReadFile(transcriptPath); err == nil {
-			lines := splitLines(string(data))
-			for _, line := range lines {
-				if line == "" {
-					continue
-				}
-				var entry struct {
-					Type  string `json:"type"`
-					Token int    `json:"token_count,omitempty"`
-				}
-				if json.Unmarshal([]byte(line), &entry) == nil {
-					if entry.Token > 0 {
-						stats.TotalTokens += entry.Token
-					}
-				}
-			}
-		}
 	}
 
-	// Sort tokens for consistent output
+	// Read tokens from transcript for sorting (for consistent output)
 	tokens := make([]int, 0)
 	for _, id := range sessionIDs {
-		sessionDir := constants.SessionDir(id)
-		transcriptPath := filepath.Join(sessionDir, "transcript.jsonl")
+		transcriptPath := filepath.Join(constants.SessionDir(id), "transcript.jsonl")
 		if data, err := os.ReadFile(transcriptPath); err == nil {
 			lines := splitLines(string(data))
 			for _, line := range lines {

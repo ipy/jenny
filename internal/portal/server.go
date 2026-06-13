@@ -19,8 +19,24 @@ import (
 	"time"
 )
 
+// flock attempts to acquire an exclusive lock on a file.
+// Returns the file handle and nil on success, or nil and an error on failure.
+// The lock is released when the file is closed.
+func flock(path string) (*os.File, error) {
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		return nil, err
+	}
+	err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	return f, nil
+}
+
 // webuiDist is the embedded webui build output.
-//go:embed webui/dist/*
+//go:embed webui/dist
 var webuiDist embed.FS
 
 // embedFS is the filesystem used for serving static files.
@@ -51,6 +67,7 @@ type Portal struct {
 	lastAccess  time.Time
 	lockPath    string
 	pid         int
+	exitFunc    func() // injectable exit function for testing
 }
 
 // LockfileData represents the lockfile contents.
@@ -65,24 +82,19 @@ func Start(ctx context.Context, jennyDir string) (*Portal, error) {
 	return startWithConfig(ctx, jennyDir, 10*time.Minute)
 }
 
+// startWithConfigForTest creates a portal with injectable exit function (for testing).
+func startWithConfigForTest(ctx context.Context, jennyDir string, idleTimeout time.Duration, exitFunc func()) (*Portal, error) {
+	p, err := startWithConfig(ctx, jennyDir, idleTimeout)
+	if err != nil {
+		return nil, err
+	}
+	p.exitFunc = exitFunc
+	return p, nil
+}
+
 // startWithConfig creates and starts a portal with a custom idle timeout (for testing).
 func startWithConfig(ctx context.Context, jennyDir string, idleTimeout time.Duration) (*Portal, error) {
 	lockPath := filepath.Join(jennyDir, "portal.lock")
-
-	// Check for existing lockfile
-	if data, err := os.ReadFile(lockPath); err == nil {
-		var lf LockfileData
-		if json.Unmarshal(data, &lf) == nil {
-			// Check if the pid is alive
-			if proc, err := os.FindProcess(lf.PID); err == nil {
-				if err := proc.Signal(syscall.Signal(0)); err == nil {
-					return nil, fmt.Errorf("portal already running on port %d", lf.Port)
-				}
-			}
-			// Stale lockfile - clean it up
-			os.Remove(lockPath)
-		}
-	}
 
 	// Generate auth token (64 hex chars from 32 random bytes)
 	tokenBytes := make([]byte, 32)
@@ -132,10 +144,10 @@ func startWithConfig(ctx context.Context, jennyDir string, idleTimeout time.Dura
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	// Write lockfile
-	if err := p.writeLockfile(); err != nil {
+	// Write lockfile with flock to prevent TOCTOU race
+	if err := p.writeLockfileWithLock(); err != nil {
 		p.server.Shutdown(context.Background())
-		return nil, fmt.Errorf("writing lockfile: %w", err)
+		return nil, err
 	}
 
 	// Start idle timer
@@ -143,6 +155,73 @@ func startWithConfig(ctx context.Context, jennyDir string, idleTimeout time.Dura
 	go p.runIdleMonitor(ctx)
 
 	return p, nil
+}
+
+// writeLockfileWithLock writes the lockfile and acquires an exclusive flock.
+// This prevents the TOCTOU race between checking and writing the lockfile.
+// If another portal is running, it will be detected here.
+func (p *Portal) writeLockfileWithLock() error {
+	// Write our lockfile content to a temp file first
+	lf := LockfileData{
+		PID:       p.pid,
+		Port:      p.port,
+		AuthToken: p.authToken,
+	}
+
+	data, err := json.Marshal(lf)
+	if err != nil {
+		return fmt.Errorf("marshaling lockfile: %w", err)
+	}
+
+	// Write to temp file
+	tmpPath := p.lockPath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		return fmt.Errorf("writing temp lockfile: %w", err)
+	}
+
+	// Try to acquire exclusive lock on the lockfile path
+	// This will fail if another process has it locked
+	lockFile, err := flock(p.lockPath)
+	if err != nil {
+		// Another process has the lockfile locked - portal is running
+		os.Remove(tmpPath)
+		
+		// Read existing lockfile to get port for error message
+		if existingData, readErr := os.ReadFile(p.lockPath); readErr == nil {
+			var existingLF LockfileData
+			if json.Unmarshal(existingData, &existingLF) == nil {
+				return fmt.Errorf("portal already running on port %d", existingLF.Port)
+			}
+		}
+		return fmt.Errorf("portal already running")
+	}
+	defer lockFile.Close()
+
+	// We have the lock - check if it's stale or fresh
+	// Read the existing lockfile (if any) to check PID
+	if existingData, err := os.ReadFile(p.lockPath); err == nil {
+		var existingLF LockfileData
+		if json.Unmarshal(existingData, &existingLF) == nil {
+			// Check if the existing PID is alive
+			if proc, err := os.FindProcess(existingLF.PID); err == nil {
+				if err := proc.Signal(syscall.Signal(0)); err == nil {
+					// Existing portal is still running - we lost the race
+					return fmt.Errorf("portal already running on port %d", existingLF.Port)
+				}
+			}
+			// Stale lockfile - clean it up
+			os.Remove(p.lockPath)
+		}
+	}
+
+	// Atomically rename our temp file to the lockfile
+	if err := os.Rename(tmpPath, p.lockPath); err != nil {
+		os.Remove(tmpPath)
+		// Another process might have won the race
+		return fmt.Errorf("portal already running")
+	}
+
+	return nil
 }
 
 // Port returns the port the server is listening on.
@@ -183,7 +262,11 @@ func (p *Portal) resetIdleTimer() {
 	p.idleTimer = time.AfterFunc(p.idleTimeout, func() {
 		// Timer expired - exit
 		os.Remove(p.lockPath)
-		os.Exit(0)
+		if p.exitFunc != nil {
+			p.exitFunc()
+		} else {
+			os.Exit(0)
+		}
 	})
 }
 
@@ -202,7 +285,12 @@ func (p *Portal) runIdleMonitor(ctx context.Context) {
 			p.mu.Unlock()
 			if idle >= p.idleTimeout {
 				os.Remove(p.lockPath)
-				os.Exit(0)
+				if p.exitFunc != nil {
+					p.exitFunc()
+				} else {
+					os.Exit(0)
+				}
+				return
 			}
 		}
 	}
