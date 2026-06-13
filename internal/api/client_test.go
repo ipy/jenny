@@ -927,6 +927,81 @@ func TestClient_NoTools_NoToolsCacheControl_NoPanic(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// AC6b: Message rolling cache — last message's last content block has cache_control
+// ---------------------------------------------------------------------------
+
+func TestClient_Messages_LastBlockHasCacheControl(t *testing.T) {
+	var capturedBody []byte
+	ms := mockapi.NewMockServer()
+	ms.SetPathHandler("POST /v1/messages", func(w http.ResponseWriter, r *http.Request) {
+		capturedBody, _ = io.ReadAll(r.Body)
+		r.Body.Close()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		resp := `{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"model":"m","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}}`
+		w.Write([]byte(resp))
+	})
+	defer ms.Close()
+
+	t.Setenv("ANTHROPIC_BASE_URL", ms.URL())
+	t.Setenv("ANTHROPIC_API_KEY", "test-key-0000000000000000")
+
+	client, _ := NewClientWithModel("m")
+	client.SetMaxTokensOverride(8192)
+
+	msgs := []Message{
+		{Role: RoleUser, Content: "Hello"},
+		{Role: RoleAssistant, Content: "Hi there", ToolUse: []ToolUseBlock{
+			{ID: "tool_1", Name: "Bash", Input: map[string]any{"command": "ls"}},
+		}},
+		{Role: RoleUser, ToolResults: []ToolResultBlock{
+			{ToolUseID: "tool_1", Content: "file1.txt"},
+		}},
+	}
+	_, err := client.SendMessage(context.Background(), msgs, nil, nil, "sys", "")
+	if err != nil {
+		t.Fatalf("SendMessage error = %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(capturedBody, &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	messagesArr, ok := parsed["messages"].([]any)
+	if !ok || len(messagesArr) != 3 {
+		t.Fatalf("expected 3 messages, got %v", len(messagesArr))
+	}
+
+	// messages[0] (user text) should NOT have cache_control
+	msg0 := messagesArr[0].(map[string]any)
+	msg0Content := msg0["content"].([]any)
+	if _, has := msg0Content[0].(map[string]any)["cache_control"]; has {
+		t.Error("messages[0] content[0] should NOT have cache_control")
+	}
+
+	// messages[1] (assistant with text + tool_use) — last content block (tool_use) should NOT have cache_control
+	msg1 := messagesArr[1].(map[string]any)
+	msg1Content := msg1["content"].([]any)
+	lastBlock1 := msg1Content[len(msg1Content)-1].(map[string]any)
+	if _, has := lastBlock1["cache_control"]; has {
+		t.Error("messages[1] last block should NOT have cache_control (not the last message)")
+	}
+
+	// messages[2] (user with tool_result) — last content block SHOULD have cache_control
+	msg2 := messagesArr[2].(map[string]any)
+	msg2Content := msg2["content"].([]any)
+	lastBlock2 := msg2Content[len(msg2Content)-1].(map[string]any)
+	cc, ok := lastBlock2["cache_control"].(map[string]any)
+	if !ok {
+		t.Fatal("messages[2] last block missing cache_control")
+	}
+	if cc["type"] != "ephemeral" {
+		t.Errorf("cache_control.type = %q, want ephemeral", cc["type"])
+	}
+}
+
+// ---------------------------------------------------------------------------
 // AC7: Usage tokens regression (cache_read and cache_creation)
 // ---------------------------------------------------------------------------
 

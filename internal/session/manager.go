@@ -32,6 +32,7 @@ const (
 // Transcript entry subtype constants.
 const (
 	SubtypeCompactBoundary = "compact_boundary"
+	SubtypeSystemReminder  = "system_reminder"
 )
 
 // TranscriptEntry represents a single turn in the conversation transcript.
@@ -69,6 +70,7 @@ type CompactMetadata struct {
 	Trigger          string `json:"trigger"`
 	PreTokens        int    `json:"pre_tokens"`
 	PreservedSegment int    `json:"preserved_segment"`
+	Summary          string `json:"summary,omitempty"`
 }
 
 // ToolUse represents a tool call in the transcript.

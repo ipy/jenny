@@ -5,153 +5,109 @@ import (
 )
 
 func TestActiveSkillsSection_Empty(t *testing.T) {
-	// AC6: No Active Skills section when no skills are active
-	cfg := StreamConfig{
-		ActiveSkills: nil,
-	}
-
-	suffix := DynamicSystemSuffix(cfg, "/tmp")
-
-	// Should not contain Active Skills
-	if containsActiveSkillsSection(suffix) {
-		t.Error("Active Skills section should not be present when no skills are active")
+	result := activeSkillsSection(nil)
+	if result != "" {
+		t.Errorf("activeSkillsSection(nil) should return empty, got %q", result)
 	}
 }
 
 func TestActiveSkillsSection_WithSkills(t *testing.T) {
-	// AC1: Active Skills section appears when skills are activated
-	cfg := StreamConfig{
-		ActiveSkills: []ActivatedSkill{
-			{Name: "readme-writer", RootPath: "/path/to/readme-writer"},
-		},
+	skills := []ActivatedSkill{
+		{Name: "readme-writer", RootPath: "/path/to/readme-writer"},
 	}
+	result := activeSkillsSection(skills)
 
-	suffix := DynamicSystemSuffix(cfg, "/tmp")
-
-	// Should contain Active Skills section
-	if !containsActiveSkillsSection(suffix) {
-		t.Error("Active Skills section should be present when skills are active")
+	if !containsActiveSkillsSection(result) {
+		t.Error("activeSkillsSection should contain 'Active Skills:' header")
 	}
-
-	// Should contain the skill name
-	if !containsSubstring(suffix, "readme-writer") {
-		t.Error("suffix should contain skill name 'readme-writer'")
+	if !containsSubstring(result, "readme-writer") {
+		t.Error("should contain skill name")
 	}
-
-	// Should contain the skill path
-	if !containsSubstring(suffix, "/path/to/readme-writer") {
-		t.Error("suffix should contain skill root path")
+	if !containsSubstring(result, "/path/to/readme-writer") {
+		t.Error("should contain skill root path")
 	}
 }
 
 func TestActiveSkillsSection_MultipleSkills(t *testing.T) {
-	// AC5: Multiple skills are all shown
-	cfg := StreamConfig{
-		ActiveSkills: []ActivatedSkill{
-			{Name: "readme-writer", RootPath: "/path/to/readme-writer"},
-			{Name: "code-review", RootPath: "/path/to/code-review"},
-		},
+	skills := []ActivatedSkill{
+		{Name: "readme-writer", RootPath: "/path/to/readme-writer"},
+		{Name: "code-review", RootPath: "/path/to/code-review"},
 	}
+	result := activeSkillsSection(skills)
 
-	suffix := DynamicSystemSuffix(cfg, "/tmp")
-
-	// Should contain both skills
-	if !containsSubstring(suffix, "readme-writer") {
-		t.Error("suffix should contain 'readme-writer'")
+	if !containsSubstring(result, "readme-writer") {
+		t.Error("should contain 'readme-writer'")
 	}
-	if !containsSubstring(suffix, "code-review") {
-		t.Error("suffix should contain 'code-review'")
+	if !containsSubstring(result, "code-review") {
+		t.Error("should contain 'code-review'")
 	}
 }
 
 func TestActiveSkillsSection_Format(t *testing.T) {
-	// Test the exact format of the Active Skills section
-	cfg := StreamConfig{
-		ActiveSkills: []ActivatedSkill{
-			{Name: "test-skill", RootPath: "/absolute/path/to/test-skill"},
-		},
+	skills := []ActivatedSkill{
+		{Name: "test-skill", RootPath: "/absolute/path/to/test-skill"},
 	}
+	result := activeSkillsSection(skills)
 
-	suffix := DynamicSystemSuffix(cfg, "/tmp")
-
-	// Should contain the exact format: "- skill-name: /path"
 	expected := "Active Skills:\n- test-skill: /absolute/path/to/test-skill"
-	if !containsSubstring(suffix, expected) {
-		t.Errorf("suffix should contain exact format %q, got: %s", expected, suffix)
+	if result != expected {
+		t.Errorf("format mismatch:\ngot:  %q\nwant: %q", result, expected)
 	}
 }
 
-func TestActiveSkillsSection_CacheFriendly(t *testing.T) {
-	// AC4: Dynamic suffix changes when active skills change, but cached prefix stays stable
-	// Build prompt without active skills
-	cfg1 := StreamConfig{
-		ActiveSkills: nil,
+func TestDynamicSystemSuffix_AlwaysEmpty(t *testing.T) {
+	// DynamicSystemSuffix is intentionally empty. Active skills are communicated
+	// through virtual messages in the message chain, not via system prompt suffix.
+	tests := []struct {
+		name string
+		cfg  StreamConfig
+	}{
+		{"no skills", StreamConfig{}},
+		{"with skills", StreamConfig{ActiveSkills: []ActivatedSkill{
+			{Name: "test", RootPath: "/test"},
+		}}},
+		{"custom prompt", StreamConfig{CustomSystemPrompt: "custom"}},
 	}
-
-	// Build prompt with active skills
-	cfg2 := StreamConfig{
-		ActiveSkills: []ActivatedSkill{
-			{Name: "new-skill", RootPath: "/path/to/new-skill"},
-		},
-	}
-
-	// The suffix changes when active skills are added
-	suffix1 := DynamicSystemSuffix(cfg1, "/tmp")
-	suffix2 := DynamicSystemSuffix(cfg2, "/tmp")
-
-	// Suffixes should be different when active skills change
-	if suffix1 == suffix2 {
-		t.Error("DynamicSystemSuffix should change when ActiveSkills changes")
-	}
-
-	// The suffix with active skills should have Active Skills section
-	if !containsActiveSkillsSection(suffix2) {
-		t.Error("suffix with active skills should contain Active Skills section")
-	}
-
-	// Verify empty suffix doesn't have Active Skills section
-	if containsActiveSkillsSection(suffix1) {
-		t.Error("suffix without active skills should not have Active Skills section")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := DynamicSystemSuffix(tt.cfg, "/tmp")
+			if result != "" {
+				t.Errorf("DynamicSystemSuffix should always be empty, got %q", result)
+			}
+		})
 	}
 }
 
-func TestActiveSkillsSection_CompactionSurvival(t *testing.T) {
-	// AC3: Active Skills survive context compaction
-	// Since ActiveSkills lives in StreamConfig (process memory), it survives compaction
-	// which only modifies the message chain. This test verifies the mechanism.
-
+func TestActiveSkills_SurviveCompaction_InStreamConfig(t *testing.T) {
+	// ActiveSkills live in StreamConfig (process memory), not the message chain.
+	// Compaction only modifies messages. After compaction, StreamConfig.ActiveSkills
+	// is unchanged and will be re-injected as a virtual message.
 	cfg := StreamConfig{
 		ActiveSkills: []ActivatedSkill{
 			{Name: "persistent-skill", RootPath: "/persistent/path"},
 		},
 	}
 
-	// Simulate compaction - StreamConfig.ActiveSkills is NOT modified
-	// (compaction only calls compactMessages which works on the messages slice)
-
-	// After compaction, the active skills should still be there
-	suffix := DynamicSystemSuffix(cfg, "/tmp")
-
-	if !containsActiveSkillsSection(suffix) {
-		t.Error("Active Skills should survive compaction - they live in StreamConfig, not message chain")
+	// Simulate compaction — only messages change, StreamConfig is untouched
+	if len(cfg.ActiveSkills) != 1 {
+		t.Error("ActiveSkills should survive compaction in StreamConfig")
+	}
+	if cfg.ActiveSkills[0].Name != "persistent-skill" {
+		t.Error("ActiveSkills data should be intact after compaction")
 	}
 }
 
 func TestSetActiveSkills(t *testing.T) {
-	// Test that SetActiveSkills correctly updates the ActiveSkills field
 	cfg := StreamConfig{}
-
 	skills := []ActivatedSkill{
 		{Name: "skill-1", RootPath: "/path/1"},
 		{Name: "skill-2", RootPath: "/path/2"},
 	}
-
 	cfg.SetActiveSkills(skills)
 
 	if len(cfg.ActiveSkills) != 2 {
 		t.Errorf("expected 2 active skills, got %d", len(cfg.ActiveSkills))
 	}
-
 	if cfg.ActiveSkills[0].Name != "skill-1" {
 		t.Errorf("expected skill name 'skill-1', got %s", cfg.ActiveSkills[0].Name)
 	}

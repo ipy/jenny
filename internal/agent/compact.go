@@ -199,10 +199,22 @@ func readEnvInt(key string, defaultVal int) int {
 
 // compactMessages performs context compaction on the message chain.
 // It returns the compacted messages and any error encountered.
+//
+// Strategy order:
+//  1. In-session compaction (shares system+tools+message cache with main session)
+//  2. Session-memory compaction (when enabled)
+//  3. Fork summary agent (independent call, no cache sharing)
 func (e *QueryEngine) compactMessages(ctx context.Context, messages []api.Message, cfg CompactConfig, systemPrompt string) ([]api.Message, error) {
 	log.Debug("Starting context compaction", "messageCount", len(messages))
 
-	// Step 1: Try session-memory compaction first (when enabled)
+	// Step 1: In-session compaction — reuses the cached system prompt + tools prefix
+	compacted, err := e.inSessionCompact(ctx, messages, systemPrompt)
+	if err == nil {
+		return compacted, nil
+	}
+	log.Debug("In-session compaction failed, trying fallback", "error", err)
+
+	// Step 2: Session-memory compaction (when enabled)
 	if cfg.SessionMemoryEnabled {
 		compacted, err := e.trySessionMemoryCompact(ctx, messages, cfg, systemPrompt)
 		if err == nil {
@@ -211,14 +223,68 @@ func (e *QueryEngine) compactMessages(ctx context.Context, messages []api.Messag
 		log.Debug("Session memory compaction not available, falling back to summary agent")
 	}
 
-	// Step 2: Fork summary agent
+	// Step 3: Fork summary agent (independent call, no cache sharing)
 	return e.forkSummaryAgent(ctx, messages, cfg, systemPrompt)
+}
+
+// inSessionCompactPrompt is the instruction appended to the message chain
+// for in-session compaction. It reuses the session's system prompt and tools
+// so the entire prefix is a cache hit.
+const inSessionCompactPrompt = `The context window is approaching its limit. Provide a comprehensive summary of our entire conversation so far.
+
+Include:
+- All key decisions and conclusions
+- Code changes made with file paths
+- Outstanding tasks or unresolved questions
+- Important technical details and constraints
+
+Output ONLY the summary text. Do not call any tools.`
+
+// inSessionCompact performs compaction by appending a summary instruction to the
+// existing message chain, sharing the cached system prompt + tools + message
+// prefix with the main session. Only the appended instruction is cold content.
+func (e *QueryEngine) inSessionCompact(ctx context.Context, messages []api.Message, systemPrompt string) ([]api.Message, error) {
+	compactMsg := api.Message{
+		Role:    api.RoleUser,
+		Content: inSessionCompactPrompt,
+	}
+	messagesWithInstruction := make([]api.Message, len(messages), len(messages)+1)
+	copy(messagesWithInstruction, messages)
+	messagesWithInstruction = append(messagesWithInstruction, compactMsg)
+
+	resp, err := e.client.SendMessage(ctx, messagesWithInstruction, e.toolParams, nil, systemPrompt, "")
+	if err != nil {
+		return nil, fmt.Errorf("in-session compaction API call: %w", err)
+	}
+
+	e.mu.Lock()
+	AccumulateUsage(e.costState, e.model, resp.Usage)
+	e.mu.Unlock()
+
+	// Reject if the model made tool calls instead of producing a summary
+	for _, block := range resp.Content {
+		if block.Type == api.BlockTypeToolUse {
+			return nil, fmt.Errorf("model produced tool_use during in-session compaction")
+		}
+	}
+
+	var summary strings.Builder
+	for _, block := range resp.Content {
+		if block.Type == api.BlockTypeText {
+			summary.WriteString(block.Text)
+		}
+	}
+
+	if summary.Len() == 0 {
+		return nil, fmt.Errorf("empty summary from in-session compaction")
+	}
+
+	return buildCompactedChain(messages, summary.String()), nil
 }
 
 // trySessionMemoryCompact attempts compaction via session memory.
 // Currently returns ErrNotImplemented.
 func (e *QueryEngine) trySessionMemoryCompact(ctx context.Context, messages []api.Message, cfg CompactConfig, systemPrompt string) ([]api.Message, error) {
-	// Session memory compaction is P3 - return not implemented
 	return nil, fmt.Errorf("session memory compaction not implemented")
 }
 
@@ -248,17 +314,20 @@ func (e *QueryEngine) forkSummaryAgent(ctx context.Context, messages []api.Messa
 		resp, err := e.client.SendMessage(ctx, summaryMessages, nil, nil, summarySystemPrompt, "")
 		if err != nil {
 			lastErr = err
-			// Check if it's a prompt-too-long error
 			if isPromptTooLongError(err) {
-				continue // Retry with fewer messages
+				continue
 			}
 			return nil, err
 		}
 
-		// Extract summary text from response
+		// Track compaction cost
+		e.mu.Lock()
+		AccumulateUsage(e.costState, e.model, resp.Usage)
+		e.mu.Unlock()
+
 		var summaryText strings.Builder
 		for _, block := range resp.Content {
-			if block.Type == "text" {
+			if block.Type == api.BlockTypeText {
 				summaryText.WriteString(block.Text)
 			}
 		}
@@ -268,8 +337,6 @@ func (e *QueryEngine) forkSummaryAgent(ctx context.Context, messages []api.Messa
 			continue
 		}
 
-		// Build compacted chain:
-		// boundaryMarker → summaryMessages → messagesToKeep → attachments → hookResults
 		return buildCompactedChain(messages, summaryText.String()), nil
 	}
 
@@ -399,11 +466,27 @@ func buildCompactedChain(originalMessages []api.Message, summary string) []api.M
 
 	var result []api.Message
 	result = append(result, api.Message{
-		Role:    "system",
-		Content: fmt.Sprintf("[Context boundary: earlier conversation summarized]\n\nPrevious summary:\n%s", summary),
+		Role:    api.RoleSystem,
+		Content: compactSummaryPrefix + summary,
 	})
 	result = append(result, originalMessages...)
 	return result
+}
+
+// compactSummaryPrefix is the prefix added by buildCompactedChain to the boundary marker.
+const compactSummaryPrefix = "[Context boundary: earlier conversation summarized]\n\nPrevious summary:\n"
+
+// extractCompactSummary extracts the summary text from the compacted chain's
+// boundary marker (first message). Returns empty string if no summary found.
+func extractCompactSummary(compacted []api.Message) string {
+	if len(compacted) == 0 {
+		return ""
+	}
+	content := compacted[0].Content
+	if strings.HasPrefix(content, compactSummaryPrefix) {
+		return content[len(compactSummaryPrefix):]
+	}
+	return content
 }
 
 // normalizeCompactedChain applies post-compact normalization to ensure

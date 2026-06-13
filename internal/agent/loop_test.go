@@ -410,6 +410,49 @@ func TestRebuildMessages(t *testing.T) {
 			},
 		},
 		{
+			name: "compact boundary with summary restored as system message",
+			entries: []session.TranscriptEntry{
+				{Type: "system", Subtype: "compact_boundary", CompactMetadata: &session.CompactMetadata{
+					Trigger:  "auto",
+					Summary:  "User asked to list files. Assistant used Bash tool. Found 2 files.",
+				}},
+				{Type: "user", Content: "What were those files?"},
+				{Type: "assistant", Content: "file1.txt and file2.txt"},
+			},
+			wantLen: 3,
+			validate: func(t *testing.T, msgs []api.Message) {
+				if msgs[0].Role != "system" {
+					t.Errorf("expected system role, got %q", msgs[0].Role)
+				}
+				want := "[Context boundary: earlier conversation summarized]\n\nPrevious summary:\nUser asked to list files. Assistant used Bash tool. Found 2 files."
+				if msgs[0].Content != want {
+					t.Errorf("compact boundary content mismatch:\ngot:  %q\nwant: %q", msgs[0].Content, want)
+				}
+			},
+		},
+		{
+			name: "system_reminder restored as virtual user message",
+			entries: []session.TranscriptEntry{
+				{Type: "user", Content: "Hello"},
+				{Type: "assistant", Content: "Hi"},
+				{Type: "system", Subtype: "system_reminder", Content: "Active Skills:\n- go-dev: /path/to/go-dev"},
+				{Type: "user", Content: "Next question"},
+			},
+			wantLen: 4,
+			validate: func(t *testing.T, msgs []api.Message) {
+				reminder := msgs[2]
+				if reminder.Role != "user" {
+					t.Errorf("system_reminder should be restored as user role, got %q", reminder.Role)
+				}
+				if !reminder.IsVirtual {
+					t.Error("system_reminder should be restored as IsVirtual=true")
+				}
+				if reminder.Content != "[system]: Active Skills:\n- go-dev: /path/to/go-dev" {
+					t.Errorf("system_reminder content mismatch: %q", reminder.Content)
+				}
+			},
+		},
+		{
 			name: "assistant with thinking and signature",
 			entries: []session.TranscriptEntry{
 				{Type: "user", Content: "Plan a trip"},

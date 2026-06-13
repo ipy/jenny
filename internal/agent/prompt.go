@@ -220,41 +220,13 @@ func buildSystemPrompt(cfg StreamConfig, tools []tool.Tool, cwd string) string {
 	return strings.Join(sections, "\n\n") + "\n"
 }
 
-// DynamicSystemSuffix returns the per-turn dynamic sections of the system prompt
-// that should NOT be cached (git status, platform/cwd, active skills). These change
-// frequently and re-sending them each turn is cheaper than busting the stable cached prefix.
-// Stable sections (intro, tool list, memory, skills, redaction) are handled separately
-// as the cached system prompt block in provider_anthropic.go.
+// DynamicSystemSuffix is intentionally empty. All dynamic content (active skills,
+// cwd changes, date changes) is communicated through virtual user messages in the
+// message chain instead of via the system prompt. This ensures the system prompt
+// prefix is byte-stable across turns, preventing cache invalidation of the entire
+// message chain when the suffix changes.
 func DynamicSystemSuffix(cfg StreamConfig, cwd string) string {
-	// CustomSystemPrompt overrides everything — no dynamic suffix in that case
-	if cfg.CustomSystemPrompt != "" {
-		return ""
-	}
-
-	var sections []string
-
-	// Git status — only included if in a git repo
-	if gitStatus, ok := gitStatusSection(cwd); ok {
-		sections = append(sections, gitStatus)
-	}
-
-	// Platform + cwd (date excluded — it is already in the cached prefix)
-	platform := fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH)
-	if cwd == "" {
-		cwd, _ = os.Getwd()
-		if cwd == "" {
-			cwd, _ = os.UserHomeDir()
-		}
-	}
-	sections = append(sections, fmt.Sprintf("Platform: %s\nCwd: %s", platform, cwd))
-
-	// Active skills section — per-session state that changes mid-session,
-	// making it a natural fit for the dynamic suffix.
-	if activeSkills := activeSkillsSection(cfg.ActiveSkills); activeSkills != "" {
-		sections = append(sections, activeSkills)
-	}
-
-	return strings.Join(sections, "\n\n")
+	return ""
 }
 
 // activeSkillsSection returns the "Active Skills" section for the system prompt.

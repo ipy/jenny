@@ -2532,7 +2532,7 @@ func TestAC2_PersistCompactBoundary_LogsError(t *testing.T) {
 	t.Cleanup(func() { log.SetOutput(os.Stderr) })
 
 	// persistCompactBoundary should return an error (not panic or silently swallow it)
-	err = engine.persistCompactBoundary(5000, 3, "auto")
+	err = engine.persistCompactBoundary(5000, 3, "auto", "test summary")
 	if err == nil {
 		t.Error("AC2 FAIL: expected error from persistCompactBoundary when AppendEntry fails, got nil")
 	} else {

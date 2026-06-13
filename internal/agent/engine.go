@@ -6,6 +6,7 @@ package agent
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -361,17 +362,18 @@ func (e *QueryEngine) getTaskManager() *tool.TaskManager {
 // persistCompactBoundary persists a compaction boundary entry to the transcript.
 // This is called after successful context compaction to record the boundary for
 // future session resume filtering. Returns an error if the write fails.
-func (e *QueryEngine) persistCompactBoundary(preTokens int, preservedCount int, trigger string) error {
+func (e *QueryEngine) persistCompactBoundary(preTokens int, preservedCount int, trigger string, summary string) error {
 	if e.sessionManager == nil || e.streamCfg.SessionID == "" {
 		return nil
 	}
 	entry := session.TranscriptEntry{
-		Type:    "system",
-		Subtype: "compact_boundary",
+		Type:    session.EntryTypeSystem,
+		Subtype: session.SubtypeCompactBoundary,
 		CompactMetadata: &session.CompactMetadata{
 			Trigger:          trigger,
 			PreTokens:        preTokens,
 			PreservedSegment: preservedCount,
+			Summary:          summary,
 		},
 		CWD: e.cwd,
 	}
@@ -380,6 +382,48 @@ func (e *QueryEngine) persistCompactBoundary(preTokens int, preservedCount int, 
 		return err
 	}
 	return nil
+}
+
+// detectResumeChanges compares the current environment against the frozen
+// system prompt and returns reminder strings for anything that changed.
+// The frozen system prompt captures cwd, date, and platform at session start;
+// on resume these may differ (e.g., next day, different directory).
+func (e *QueryEngine) detectResumeChanges(currentCWD string) []string {
+	frozen := e.streamCfg.CachedSystemPrompt
+	if frozen == "" {
+		return nil
+	}
+
+	var reminders []string
+
+	currentDate := time.Now().Format("2006-01-02")
+	if !strings.Contains(frozen, "Date: "+currentDate) {
+		reminders = append(reminders, "The current date is "+currentDate+".")
+	}
+
+	if currentCWD != "" && !strings.Contains(frozen, "Cwd: "+currentCWD) {
+		reminders = append(reminders, "The working directory is now "+currentCWD+".")
+	}
+
+	return reminders
+}
+
+// persistSystemReminder persists a system_reminder entry to the transcript.
+// These are restored as virtual user messages on resume, keeping the message
+// chain structurally identical without polluting the system prompt prefix.
+func (e *QueryEngine) persistSystemReminder(sessionID string, content string) {
+	if e.sessionManager == nil || sessionID == "" {
+		return
+	}
+	entry := session.TranscriptEntry{
+		Type:    session.EntryTypeSystem,
+		Subtype: session.SubtypeSystemReminder,
+		Content: content,
+		CWD:     e.cwd,
+	}
+	if err := e.sessionManager.AppendEntry(sessionID, entry); err != nil {
+		log.Error("Failed to persist system reminder", "error", err)
+	}
 }
 
 // syncActiveSkills syncs the activated skills from the skill activator to StreamConfig.

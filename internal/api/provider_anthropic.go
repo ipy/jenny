@@ -212,6 +212,9 @@ func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Messag
 }
 
 // buildMessages converts api.Message slices to Anthropic format.
+// The last content block of the last non-empty message is marked with
+// cache_control: ephemeral to enable rolling prefix caching. On turn N+1
+// the prefix up to the previous turn's marker matches the cache from turn N.
 func (p *anthropicProvider) buildMessages(messages []Message, toolResults []ToolResult) []AnthropicMessage {
 	sdkMessages := make([]AnthropicMessage, 0, len(messages)+len(toolResults))
 	for _, msg := range messages {
@@ -274,7 +277,25 @@ func (p *anthropicProvider) buildMessages(messages []Message, toolResults []Tool
 		})
 	}
 
+	// Rolling cache marker: mark the last content block of the last non-empty
+	// message so the entire message history prefix is cached between turns.
+	markLastMessageForCaching(sdkMessages)
+
 	return sdkMessages
+}
+
+// markLastMessageForCaching adds cache_control: ephemeral to the last content
+// block of the last message that has content. This enables Anthropic's prefix
+// caching to cover the entire conversation history, with only newly appended
+// messages incurring fresh processing on each turn.
+func markLastMessageForCaching(messages []AnthropicMessage) {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if len(messages[i].Content) > 0 {
+			last := len(messages[i].Content) - 1
+			messages[i].Content[last].CacheControl = &AnthropicCacheControl{Type: "ephemeral"}
+			return
+		}
+	}
 }
 
 // buildTools converts api.ToolParam slices to Anthropic format.

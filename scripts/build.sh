@@ -70,5 +70,5 @@ NATIVE_BINARY="jenny-$HOST_GOOS-$HOST_GOARCH"
 [ "$HOST_GOOS" = "windows" ] && NATIVE_BINARY+='.exe'
 
 if [ -f "$NATIVE_BINARY" ]; then
-  $NATIVE_BINARY --version
+  ./$NATIVE_BINARY --version
 fi

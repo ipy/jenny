@@ -83,13 +83,29 @@ func (e *QueryEngine) SubmitMessage(ctx context.Context, prompt string) (string,
 	// Build messages slice - use history if resuming, otherwise start fresh
 	var messages []api.Message
 	if len(historyMessages) > 0 {
-		// Use history and append the new prompt as a user message
-		messages = append(historyMessages, api.Message{
+		messages = historyMessages
+
+		// Inject system reminders for environment changes detected on resume.
+		// These go as virtual user messages before the new user message so the
+		// model sees them in context without polluting the system prompt prefix.
+		if isResume {
+			reminders := e.detectResumeChanges(cwd)
+			for _, r := range reminders {
+				msg := api.Message{
+					Role:      api.RoleUser,
+					Content:   "[system]: " + r,
+					IsVirtual: true,
+				}
+				messages = append(messages, msg)
+				e.persistSystemReminder(sessionID, r)
+			}
+		}
+
+		messages = append(messages, api.Message{
 			Role:    api.RoleUser,
 			Content: prompt,
 		})
 	} else {
-		// Start fresh with just the user message
 		messages = []api.Message{
 			{
 				Role:    api.RoleUser,
@@ -291,14 +307,21 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				// Attempt compaction
 				compacted, err := e.compactMessages(ctx, messages, e.compactConfig, systemPrompt)
 				if err == nil {
-					// Compaction succeeded - normalize the compacted chain
+					summaryText := extractCompactSummary(compacted)
 					messages = normalizeCompactedChain(compacted)
-					// Subtract 1 from len(compacted) because preservedCount tracks actual
-					// preserved messages, not the boundary marker (which is len-1 of compacted)
 					preservedCount := len(compacted) - 1
-					// Persist compaction boundary to transcript for resume filtering
-					if err := e.persistCompactBoundary(preCompactTokens, preservedCount, "auto"); err != nil {
+					if err := e.persistCompactBoundary(preCompactTokens, preservedCount, "auto", summaryText); err != nil {
 						log.Error("Failed to persist compaction boundary", "error", err)
+					}
+					// Re-inject active skills after compaction since the activation
+					// tool results may have been summarized away.
+					if reminder := activeSkillsSection(e.streamCfg.ActiveSkills); reminder != "" {
+						messages = append(messages, api.Message{
+							Role:      api.RoleUser,
+							Content:   "[system]: " + reminder,
+							IsVirtual: true,
+						})
+						e.persistSystemReminder(sessionID, reminder)
 					}
 					log.Debug("Context compaction succeeded", "newMessageCount", len(messages))
 				} else {
@@ -702,9 +725,22 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			return "", fmt.Errorf("executing tools: %w", err)
 		}
 
-		// Sync active skills from the skill activator to StreamConfig
-		// This ensures the system prompt reflects any skills activated during tool execution.
+		// Sync active skills and inject a reminder message if they changed.
+		// Active skills info lives in the message chain (not system prompt suffix)
+		// so changes don't invalidate the cached system prefix.
+		prevSkillCount := len(e.streamCfg.ActiveSkills)
 		e.syncActiveSkills()
+		if len(e.streamCfg.ActiveSkills) != prevSkillCount {
+			if reminder := activeSkillsSection(e.streamCfg.ActiveSkills); reminder != "" {
+				reminderMsg := api.Message{
+					Role:      api.RoleUser,
+					Content:   "[system]: " + reminder,
+					IsVirtual: true,
+				}
+				messages = append(messages, reminderMsg)
+				e.persistSystemReminder(sessionID, reminder)
+			}
+		}
 
 		// AC1/AC2: Pre-compute per-tool interrupt status so we can decide whether
 		// to emit the executor's partial result or a synthetic "interrupted"

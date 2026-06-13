@@ -115,7 +115,21 @@ func RebuildMessages(entries []session.TranscriptEntry) []api.Message {
 				messages = append(messages, *currentAssistant)
 				currentAssistant = nil
 			}
-			if entry.Content != "" {
+			switch {
+			case entry.Subtype == session.SubtypeCompactBoundary && entry.CompactMetadata != nil && entry.CompactMetadata.Summary != "":
+				messages = append(messages, api.Message{
+					Role:    api.RoleSystem,
+					Content: compactSummaryPrefix + entry.CompactMetadata.Summary,
+				})
+			case entry.Subtype == session.SubtypeSystemReminder && entry.Content != "":
+				// Restore system_reminder as a virtual user message so it appears
+				// in the message chain identically to when it was first injected.
+				messages = append(messages, api.Message{
+					Role:      api.RoleUser,
+					Content:   "[system]: " + entry.Content,
+					IsVirtual: true,
+				})
+			case entry.Content != "":
 				messages = append(messages, api.Message{
 					Role:    api.RoleSystem,
 					Content: entry.Content,

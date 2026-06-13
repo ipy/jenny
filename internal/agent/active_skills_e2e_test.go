@@ -203,13 +203,10 @@ func TestActiveSkills_E2E_ThroughCompaction(t *testing.T) {
 		t.Errorf("Expected 'go-developer', got %s", activatedSkills[0].Name)
 	}
 
-	// Verify DynamicSystemSuffix contains "Active Skills:" with the skill
-	suffix := DynamicSystemSuffix(engine.streamCfg, tmpDir)
-	if !containsActiveSkillsSection(suffix) {
-		t.Error("AC1 FAIL: DynamicSystemSuffix should contain 'Active Skills:' after activation")
-	}
-	if !containsSubstring(suffix, "go-developer") {
-		t.Error("AC1 FAIL: DynamicSystemSuffix should contain skill name 'go-developer'")
+	// Verify activeSkillsSection produces correct reminder text
+	reminder := activeSkillsSection(engine.streamCfg.ActiveSkills)
+	if !containsSubstring(reminder, "go-developer") {
+		t.Error("AC1 FAIL: activeSkillsSection should contain skill name 'go-developer'")
 	}
 
 	// Now simulate compaction by invoking compactMessages directly
@@ -249,13 +246,10 @@ func TestActiveSkills_E2E_ThroughCompaction(t *testing.T) {
 		t.Errorf("AC1 FAIL: ActiveSkills should be unchanged after compaction, got %d", len(engine.streamCfg.ActiveSkills))
 	}
 
-	// Verify DynamicSystemSuffix STILL contains the skill after compaction
-	suffixAfterCompaction := DynamicSystemSuffix(engine.streamCfg, tmpDir)
-	if !containsActiveSkillsSection(suffixAfterCompaction) {
-		t.Error("AC1 FAIL: DynamicSystemSuffix should STILL contain 'Active Skills:' after compaction")
-	}
-	if !containsSubstring(suffixAfterCompaction, "go-developer") {
-		t.Error("AC1 FAIL: DynamicSystemSuffix should STILL contain skill name after compaction")
+	// Active skills survive compaction in StreamConfig and can be re-injected
+	reminderAfter := activeSkillsSection(engine.streamCfg.ActiveSkills)
+	if !containsSubstring(reminderAfter, "go-developer") {
+		t.Error("AC1 FAIL: activeSkillsSection should still contain 'go-developer' after compaction")
 	}
 
 	t.Log("AC1 PASS: Full pipeline e2e through compaction verified")
@@ -581,13 +575,10 @@ func TestActiveSkills_AccumulateAcrossTurns(t *testing.T) {
 		t.Errorf("AC4 FAIL: Expected 'go-developer', got %s", activatedSkills1[0].Name)
 	}
 
-	// Verify DynamicSystemSuffix reflects skill-A
-	suffix1 := DynamicSystemSuffix(engine.streamCfg, tmpDir)
-	if !containsActiveSkillsSection(suffix1) {
-		t.Error("AC4 FAIL: Suffix should contain 'Active Skills:' after turn 1")
-	}
-	if !containsSubstring(suffix1, "go-developer") {
-		t.Error("AC4 FAIL: Suffix should contain 'go-developer' after turn 1")
+	// Verify activeSkillsSection reflects skill-A
+	reminder1 := activeSkillsSection(engine.streamCfg.ActiveSkills)
+	if !containsSubstring(reminder1, "go-developer") {
+		t.Error("AC4 FAIL: activeSkillsSection should contain 'go-developer' after turn 1")
 	}
 
 	// Turn 2: explicit activation for skill-B (python-developer)
@@ -750,18 +741,14 @@ func TestCompaction_PreservesNonCompactedFields(t *testing.T) {
 func TestActiveSkills_GracefulDegradation(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Test case 1: nil ActiveSkills
-	cfg1 := StreamConfig{ActiveSkills: nil}
-	suffix1 := DynamicSystemSuffix(cfg1, tmpDir)
-	if containsActiveSkillsSection(suffix1) {
-		t.Error("AC6 FAIL: Active Skills section should not be present for nil skills")
+	// Test case 1: nil ActiveSkills → empty reminder
+	if r := activeSkillsSection(nil); r != "" {
+		t.Error("AC6 FAIL: activeSkillsSection should return empty for nil skills")
 	}
 
-	// Test case 2: empty ActiveSkills slice
-	cfg2 := StreamConfig{ActiveSkills: []ActivatedSkill{}}
-	suffix2 := DynamicSystemSuffix(cfg2, tmpDir)
-	if containsActiveSkillsSection(suffix2) {
-		t.Error("AC6 FAIL: Active Skills section should not be present for empty skills")
+	// Test case 2: empty ActiveSkills slice → empty reminder
+	if r := activeSkillsSection([]ActivatedSkill{}); r != "" {
+		t.Error("AC6 FAIL: activeSkillsSection should return empty for empty skills")
 	}
 
 	// Test case 3: Activator with no matching skills
@@ -775,21 +762,15 @@ func TestActiveSkills_GracefulDegradation(t *testing.T) {
 	}
 	activator := skills.NewPathSkillActivator(testSkills)
 
-	// Activate with non-matching path
 	nonMatchingPath := "/some/path/file.py"
 	activated := activator.ActivateForPath(nonMatchingPath)
 	if len(activated) != 0 {
 		t.Error("AC6 FAIL: Non-matching path should not activate any skill")
 	}
 
-	// Verify no active skills section when activator returns empty
-	activatedSkills := activator.GetActivatedSkills()
-	cfg3 := StreamConfig{ActiveSkills: []ActivatedSkill{}}
-	if len(activatedSkills) == 0 {
-		suffix3 := DynamicSystemSuffix(cfg3, tmpDir)
-		if containsActiveSkillsSection(suffix3) {
-			t.Error("AC6 FAIL: No Active Skills section should appear when activator returns empty")
-		}
+	// DynamicSystemSuffix is always empty regardless of skills
+	if DynamicSystemSuffix(StreamConfig{}, tmpDir) != "" {
+		t.Error("AC6 FAIL: DynamicSystemSuffix should always be empty")
 	}
 
 	t.Log("AC6 PASS: Graceful degradation for empty/nil skills")
@@ -805,15 +786,13 @@ func TestActiveSkills_NoRegression(t *testing.T) {
 			{Name: "test-skill", RootPath: tmpDir + "/test-skill"},
 		},
 	}
-	suffix := DynamicSystemSuffix(cfg, tmpDir)
-
-	if !containsActiveSkillsSection(suffix) {
+	// activeSkillsSection (not suffix) should produce skill text
+	result := activeSkillsSection(cfg.ActiveSkills)
+	if !containsActiveSkillsSection(result) {
 		t.Error("AC7 FAIL: containsActiveSkillsSection should detect Active Skills section")
 	}
-
-	// Test containsSubstring helper
-	if !containsSubstring(suffix, "test-skill") {
-		t.Error("AC7 FAIL: containsSubstring should find skill name in suffix")
+	if !containsSubstring(result, "test-skill") {
+		t.Error("AC7 FAIL: containsSubstring should find skill name")
 	}
 
 	// Test BuildDenialKey
@@ -823,11 +802,9 @@ func TestActiveSkills_NoRegression(t *testing.T) {
 		t.Error("AC7 FAIL: BuildDenialKey should produce deterministic keys")
 	}
 
-	// Test DynamicSystemSuffix with no skills
-	cfgNoSkills := StreamConfig{}
-	suffixNoSkills := DynamicSystemSuffix(cfgNoSkills, tmpDir)
-	if containsActiveSkillsSection(suffixNoSkills) {
-		t.Error("AC7 FAIL: No Active Skills section should appear when no skills are active")
+	// DynamicSystemSuffix is always empty (skills go through messages)
+	if DynamicSystemSuffix(cfg, tmpDir) != "" {
+		t.Error("AC7 FAIL: DynamicSystemSuffix should be empty")
 	}
 
 	t.Log("AC7 PASS: No regression on existing unit test helpers")
