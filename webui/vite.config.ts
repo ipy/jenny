@@ -4,4 +4,7 @@ import preact from '@preact/preset-vite'
 export default defineConfig({
   plugins: [preact()],
   base: './',
+  build: {
+    outDir: '../internal/portal/webui/dist',
+  },
 })

@@ -244,11 +244,20 @@ func (p *Portal) Shutdown(ctx context.Context) error {
 		p.idleTimer.Stop()
 	}
 
+	// Remove URL file first (if any)
+	urlPath := p.lockPath[:len(p.lockPath)-len("portal.lock")] + "portal.url"
+	os.Remove(urlPath)
+
 	// Remove lockfile
 	os.Remove(p.lockPath)
 
 	// Shutdown server
 	return p.server.Shutdown(ctx)
+}
+
+// PortalURLFile returns the path to the portal URL file.
+func (p *Portal) PortalURLFile() string {
+	return p.lockPath[:len(p.lockPath)-len("portal.lock")] + "portal.url"
 }
 
 // resetIdleTimer resets the idle timeout timer.
@@ -261,6 +270,9 @@ func (p *Portal) resetIdleTimer() {
 	}
 	p.idleTimer = time.AfterFunc(p.idleTimeout, func() {
 		// Timer expired - exit
+		// Clean up URL file and lockfile
+		urlPath := p.lockPath[:len(p.lockPath)-len("portal.lock")] + "portal.url"
+		os.Remove(urlPath)
 		os.Remove(p.lockPath)
 		if p.exitFunc != nil {
 			p.exitFunc()

@@ -487,6 +487,9 @@ func (p *Portal) handleStatic(w http.ResponseWriter, r *http.Request) {
 		path = "/index.html"
 	}
 
+	// fs.FS paths must not have a leading slash.
+	cleanPath := strings.TrimPrefix(path, "/")
+
 	// Get sub-fs for webui/dist
 	subFS, err := getSubFS()
 	if err != nil {
@@ -495,10 +498,10 @@ func (p *Portal) handleStatic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Try to serve from embedded dist
-	content, err := subFS.Open(path)
+	content, err := subFS.Open(cleanPath)
 	if err != nil {
 		// Fallback to index.html for SPA routing
-		content, err = subFS.Open("/index.html")
+		content, err = subFS.Open("index.html")
 		if err != nil {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
@@ -513,7 +516,7 @@ func (p *Portal) handleStatic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if stat.IsDir() {
-		indexContent, err := subFS.Open("/index.html")
+		indexContent, err := subFS.Open("index.html")
 		if err != nil {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return

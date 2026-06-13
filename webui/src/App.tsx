@@ -118,11 +118,11 @@ function StartTab() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
           <GlassPanel interactive style={{ padding: '1rem' }}>
             <div style={{ fontWeight: 600 }}>jenny</div>
-            <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>/Users/sin/work/agents/jenny</div>
+            <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>PLACEHOLDER</div>
           </GlassPanel>
           <GlassPanel interactive style={{ padding: '1rem' }}>
             <div style={{ fontWeight: 600 }}>glimpse-ui</div>
-            <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>/Users/sin/work/glimpse-ui</div>
+            <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>PLACEHOLDER</div>
           </GlassPanel>
         </div>
       </section>
@@ -241,7 +241,7 @@ function ProjectsTab() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <h3 style={{ margin: 0 }}>jenny</h3>
-              <code style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>/Users/sin/work/agents/jenny</code>
+              <code style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>PLACEHOLDER</code>
             </div>
             <Badge variant="success">Active</Badge>
           </div>

@@ -121,7 +121,7 @@ func sanitizeAsDirName(path string) string {
 	sanitized = strings.ReplaceAll(sanitized, "\\", "-")
 	// Remove drive letter colon (e.g., "C:" -> "C")
 	sanitized = strings.ReplaceAll(sanitized, ":", "")
-	// Remove leading dashes (e.g., /Users/sin -> Users-sin)
+	// Remove leading dashes (e.g., /Users/user -> Users-user)
 	sanitized = strings.TrimPrefix(sanitized, "-")
 	return sanitized
 }

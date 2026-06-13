@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -502,4 +503,144 @@ func TestProcessLiveness(t *testing.T) {
 	}
 
 	t.Log("PASS: process liveness detection works correctly")
+}
+
+// TestAC6_ServeHTML verifies AC6: GET / serves index.html from embedded webui dist.
+func TestAC6_ServeHTML(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	ctx := context.Background()
+	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Shutdown(ctx)
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", p.port)
+
+	// Test GET / without auth (should still serve HTML)
+	resp, err := http.Get(baseURL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("AC6 FAIL: GET / should return 200, got %d", resp.StatusCode)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if !strings.Contains(contentType, "text/html") {
+		t.Errorf("AC6 FAIL: Content-Type should be text/html, got %s", contentType)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(string(body), "<title>Glimpse UI") {
+		t.Errorf("AC6 FAIL: response body should contain '<title>Glimpse UI', got: %s", string(body)[:200])
+	}
+
+	t.Log("AC6 PASS: GET / serves index.html with correct content-type and title")
+}
+
+// TestAC7_EmptyStats verifies AC7: stats endpoint returns zeroed JSON when no sessions exist.
+func TestAC7_EmptyStats(t *testing.T) {
+	// Set JENNY_HOME to temp dir so we get a clean session directory
+	origJennyHome := os.Getenv("JENNY_HOME")
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Setenv("JENNY_HOME", tmpDir)
+	defer func() {
+		os.RemoveAll(tmpDir)
+		os.Setenv("JENNY_HOME", origJennyHome)
+	}()
+
+	ctx := context.Background()
+	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Shutdown(ctx)
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", p.port)
+
+	resp, err := http.Get(baseURL + "/api/stats?token=" + p.authToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("AC7 FAIL: stats endpoint should return 200, got %d", resp.StatusCode)
+	}
+
+	var stats Stats
+	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify all fields are zeroed
+	if stats.TotalSessions != 0 {
+		t.Errorf("AC7 FAIL: total_sessions should be 0, got %d", stats.TotalSessions)
+	}
+	if stats.ActiveSessions != 0 {
+		t.Errorf("AC7 FAIL: active_sessions should be 0, got %d", stats.ActiveSessions)
+	}
+	if stats.TotalCostUSD != 0 {
+		t.Errorf("AC7 FAIL: total_cost_usd should be 0, got %f", stats.TotalCostUSD)
+	}
+	if stats.TotalTokens != 0 {
+		t.Errorf("AC7 FAIL: total_tokens should be 0, got %d", stats.TotalTokens)
+	}
+
+	t.Log("AC7 PASS: stats endpoint returns zeroed JSON when no sessions exist")
+}
+
+// TestAC3_URLFileCleanup verifies AC3: portal URL file is deleted on shutdown.
+func TestAC3_URLFileCleanup(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	ctx := context.Background()
+	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	urlFile := p.PortalURLFile()
+
+	// Manually create URL file (simulating non-interactive mode)
+	url := fmt.Sprintf("http://127.0.0.1:%d?token=%s", p.port, p.authToken)
+	if err := os.WriteFile(urlFile, []byte(url+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify URL file exists
+	if _, err := os.Stat(urlFile); os.IsNotExist(err) {
+		t.Fatal("AC3 FAIL: URL file should exist before shutdown")
+	}
+
+	// Shutdown portal
+	if err := p.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify URL file is deleted
+	if _, err := os.Stat(urlFile); !os.IsNotExist(err) {
+		t.Error("AC3 FAIL: URL file should be deleted after shutdown")
+	}
+
+	t.Log("AC3 PASS: portal URL file is deleted on shutdown")
 }
