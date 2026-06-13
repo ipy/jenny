@@ -234,7 +234,7 @@ function SessionsTab({ selectedId: externalSelectedId, onSelect: externalOnSelec
     const timeAgo = formatTimeAgo(s.start_time);
     return {
       id: s.id,
-      title: s.cwd ? s.cwd.split('/').filter(Boolean).pop() || s.id : s.id,
+      title: s.cwd ? s.cwd.split(/[\\/]/).filter(Boolean).pop() || s.id : s.id,
       subtitle: `${timeAgo} · ${s.status}`,
       badge: <Badge variant={s.status === 'running' ? 'success' : 'default'} dot={s.status === 'running'}>{s.status}</Badge>
     };
@@ -430,7 +430,7 @@ function useProjectGroups(sessions: SessionMetadata[]): ProjectGroup[] {
   return Object.entries(groups)
     .map(([path, sessionList]) => ({
       path,
-      name: path ? path.split('/').filter(Boolean).pop() || path : 'General',
+      name: path ? path.split(/[\\/]/).filter(Boolean).pop() || path : 'General',
       totalSessions: sessionList.length,
       totalCost: sessionList.reduce((sum, s) => sum + (s.total_cost || 0), 0),
       isActive: sessionList.some(s => s.status === 'running'),
