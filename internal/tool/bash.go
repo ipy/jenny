@@ -117,8 +117,16 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 	}
 	t.mu.Unlock()
 
-	// Handle sed simulation (AC5) - before any security checks
+	// Handle sed simulation (AC5) - after security checks but before timeout/background
 	if isSedInPlace(command) {
+		// Validate path in sed command is within working directory
+		gate := NewCommandGate(t.skipPermissions)
+		if err := gate.CheckCommand(command); err != nil {
+			return &ToolResult{
+				Content: fmt.Sprintf("Security error: %v", err),
+				IsError: true,
+			}, nil
+		}
 		return t.executeSed(command, t.commandCwd)
 	}
 

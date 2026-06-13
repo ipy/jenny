@@ -1008,10 +1008,10 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				fmt.Fprintln(os.Stdout, string(data))
 			}
 			category := api.MaxTokensCategory("unknown")
-		if streamResult.MaxTokensErr != nil {
-			category = streamResult.MaxTokensErr.Category
-		}
-		return textOutput.String(), fmt.Errorf("max tokens reached: %s", category)
+			if streamResult.MaxTokensErr != nil {
+				category = streamResult.MaxTokensErr.Category
+			}
+			return textOutput.String(), fmt.Errorf("max tokens reached: %s", category)
 
 		case api.StopReasonStopSeq:
 			if e.streamCfg.Enabled {

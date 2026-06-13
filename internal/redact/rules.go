@@ -254,9 +254,8 @@ func defaultRules() []Rule {
 	}
 }
 
-// allKeywords returns the deduplicated, lowercased union of every rule's
-// keyword set. Used by keywordPresence to build the prefilter set.
-func allKeywords() []string {
+// cachedAllKeywords is computed once from the static rule set.
+var cachedAllKeywords = func() []string {
 	seen := make(map[string]struct{})
 	for _, r := range defaultRules() {
 		for _, kw := range r.Keywords {
@@ -268,4 +267,10 @@ func allKeywords() []string {
 		out = append(out, kw)
 	}
 	return out
+}()
+
+// allKeywords returns the deduplicated, lowercased union of every rule's
+// keyword set. Used by keywordPresence to build the prefilter set.
+func allKeywords() []string {
+	return cachedAllKeywords
 }

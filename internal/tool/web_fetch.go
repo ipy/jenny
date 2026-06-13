@@ -482,9 +482,10 @@ func (t *WebFetchTool) checkBlocklist(ctx context.Context, hostname string) ([]s
 
 	addrs, err := net.DefaultResolver.LookupHost(resolveCtx, hostname)
 	if err != nil {
-		// DNS resolution failure — allow the fetch; the HTTP request will fail
-		// naturally if the host is unreachable.
-		return nil, nil
+		// DNS resolution failure — block the fetch to prevent DNS rebinding attacks.
+		// If we allow it, the HTTP client would do its own resolution which could
+		// return a private IP on the second try.
+		return nil, fmt.Errorf("DNS resolution failed for %s: %w", hostname, err)
 	}
 
 	for _, addr := range addrs {

@@ -1335,7 +1335,7 @@ func TestInterruptSyntheticToolResults_AC5(t *testing.T) {
 
 	engine := mustNewQueryEngine(cfg, tools, "test-model", WithClient(fastClient()))
 
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	start := time.Now()

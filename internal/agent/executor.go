@@ -104,6 +104,15 @@ func BuildDenialKey(toolName string, input map[string]any) string {
 	return sb.String()
 }
 
+// isSecurityGateDenial returns true if the ToolResult content indicates
+// a security gate denial (not an OS-level permission error).
+func isSecurityGateDenial(content string) bool {
+	lower := strings.ToLower(content)
+	return strings.Contains(lower, "not allowed") ||
+		strings.Contains(lower, "security error") ||
+		strings.Contains(lower, "is blocked")
+}
+
 // Execute runs all tool use blocks according to concurrency rules.
 // It partitions tools into parallel batches (for concurrency-safe tools) and
 // serial execution (for Write/Edit/Bash), collects results in request order.
@@ -270,9 +279,8 @@ func (e *ToolExecutor) executeParallel(parentCtx context.Context, batch []toolUs
 
 			execResult, err := tw.tool.Execute(ctx, tw.block.Input, e.cwd)
 
-			// Check if this was a permission denial (error message contains "permission")
-			if err != nil && strings.Contains(strings.ToLower(err.Error()), "permission") {
-				// Record the denial for cross-turn caching
+			// Check if this was a security gate denial via ToolResult
+			if err == nil && execResult != nil && execResult.IsError && isSecurityGateDenial(execResult.Content) {
 				if e.streamCfg != nil {
 					e.streamCfg.AddPermissionDenial(denialKey)
 				}
@@ -340,9 +348,8 @@ func (e *ToolExecutor) executeSerial(parentCtx context.Context, batch []toolUseW
 
 		execResult, err := tw.tool.Execute(ctx, tw.block.Input, e.cwd)
 
-		// Check if this was a permission denial (error message contains "permission")
-		if err != nil && strings.Contains(strings.ToLower(err.Error()), "permission") {
-			// Record the denial for cross-turn caching
+		// Check if this was a security gate denial via ToolResult
+		if err == nil && execResult != nil && execResult.IsError && isSecurityGateDenial(execResult.Content) {
 			if e.streamCfg != nil {
 				e.streamCfg.AddPermissionDenial(denialKey)
 			}

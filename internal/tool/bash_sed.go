@@ -76,6 +76,14 @@ func (t *BashTool) executeSed(command string, cwd string) (*ToolResult, error) {
 	}
 	filePath = filepath.Clean(filePath)
 
+	// Validate path is within working directory
+	if !strings.HasPrefix(filePath+string(filepath.Separator), cwd+string(filepath.Separator)) && filePath != cwd {
+		return &ToolResult{
+			Content: fmt.Sprintf("sed: access to '%s' is not allowed: path outside working directory", filePath),
+			IsError: true,
+		}, nil
+	}
+
 	// Read file
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -141,18 +149,15 @@ func parseSedExpression(expr string) (*sedParsed, error) {
 	delimiter := expr[1]
 	rest := expr[2:]
 
-	// Find the three parts separated by delimiter
-	parts := strings.SplitN(rest, string(delimiter), 4)
+	// Split on delimiter respecting backslash-escaped delimiters
+	parts := splitSedParts(rest, delimiter)
 	if len(parts) < 3 {
 		return nil, fmt.Errorf("invalid sed expression: could not parse pattern/replacement")
 	}
 
 	pattern := parts[0]
 	replacement := parts[1]
-	flags := ""
-	if len(parts) >= 3 {
-		flags = parts[2]
-	}
+	flags := parts[2]
 
 	// Check for 'g' flag (global)
 	global := strings.Contains(flags, "g")
@@ -162,4 +167,37 @@ func parseSedExpression(expr string) (*sedParsed, error) {
 		replacement: replacement,
 		global:      global,
 	}, nil
+}
+
+// splitSedParts splits a sed expression body on unescaped delimiters.
+func splitSedParts(s string, delimiter byte) []string {
+	var parts []string
+	var current strings.Builder
+	escaped := false
+
+	for i := 0; i < len(s); i++ {
+		if escaped {
+			current.WriteByte(s[i])
+			escaped = false
+			continue
+		}
+		if s[i] == '\\' {
+			current.WriteByte(s[i])
+			escaped = true
+			continue
+		}
+		if s[i] == delimiter {
+			parts = append(parts, current.String())
+			current.Reset()
+			if len(parts) == 3 {
+				// Remaining is flags
+				current.WriteString(s[i+1:])
+				break
+			}
+			continue
+		}
+		current.WriteByte(s[i])
+	}
+	parts = append(parts, current.String())
+	return parts
 }

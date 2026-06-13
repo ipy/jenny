@@ -304,7 +304,7 @@ func (m *Memdir) ValidatePath(path string) error {
 	}
 
 	// Check for path traversal
-	if !strings.HasPrefix(absTargetPath, absMemoryPath) {
+	if !strings.HasPrefix(absTargetPath, absMemoryPath+string(filepath.Separator)) && absTargetPath != absMemoryPath {
 		return fmt.Errorf("path traversal rejected: %s", path)
 	}
 

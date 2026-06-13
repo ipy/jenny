@@ -14,7 +14,7 @@ import (
 
 func TestBashTool_Execute(t *testing.T) {
 	tool := NewBashTool(false)
-	cwd := "/tmp"
+	cwd := t.TempDir()
 
 	tests := []struct {
 		name    string
@@ -45,7 +45,7 @@ func TestBashTool_Execute(t *testing.T) {
 		{
 			name: "ls command",
 			input: map[string]any{
-				"command": "ls /tmp",
+				"command": fmt.Sprintf("ls %s", cwd),
 			},
 			wantErr: false,
 			checkFn: func(r *ToolResult) bool {
@@ -113,23 +113,25 @@ func TestBashTool_Execute(t *testing.T) {
 
 func TestBashTool_ReadOnlyEnforcement(t *testing.T) {
 	tool := NewBashTool(false)
-	cwd := "/tmp"
+	cwd := t.TempDir()
+	testFile := filepath.Join(cwd, "test.txt")
+	os.WriteFile(testFile, []byte("test"), 0644)
 
 	// These commands should be allowed (read-only AND within working directory)
 	allowedCommands := []string{
-		"ls /tmp",                 // /tmp is cwd - within working directory
-		"pwd",                     // no file path
-		"whoami",                  // no file path
-		"echo hello",              // no file path
-		"date",                    // no file path
-		"cat ./test.txt",          // relative path within cwd
-		"head -n 5 /tmp/test.txt", // path inside /tmp
-		"tail -n 5 /tmp/test.txt", // path inside /tmp
-		"grep root /tmp/passwd",   // path inside /tmp
-		"find /tmp -name '*.txt'", // path inside /tmp
-		"wc -l /tmp/test.txt",     // path inside /tmp
-		"which ls",                // command lookup - doesn't access the file
-		"type cat",                // command lookup - doesn't access the file
+		fmt.Sprintf("ls %s", cwd),           // cwd - within working directory
+		"pwd",                               // no file path
+		"whoami",                            // no file path
+		"echo hello",                        // no file path
+		"date",                              // no file path
+		"cat ./test.txt",                    // relative path within cwd
+		fmt.Sprintf("head -n 5 %s", testFile), // path inside cwd
+		fmt.Sprintf("tail -n 5 %s", testFile), // path inside cwd
+		fmt.Sprintf("grep test %s", testFile), // path inside cwd
+		fmt.Sprintf("find %s -name '*.txt'", cwd), // path inside cwd
+		fmt.Sprintf("wc -l %s", testFile),     // path inside cwd
+		"which ls",                          // command lookup - doesn't access the file
+		"type cat",                          // command lookup - doesn't access the file
 	}
 
 	for _, cmd := range allowedCommands {
@@ -147,13 +149,13 @@ func TestBashTool_ReadOnlyEnforcement(t *testing.T) {
 
 	// These commands should be blocked (write operations or outside cwd)
 	blockedCommands := []string{
-		"rm -rf /tmp/test",
-		"touch /tmp/test.txt",
-		"echo hello > /tmp/test.txt",
-		"mkdir /tmp/testdir",
-		"chmod 777 /tmp/test",
-		"mv /tmp/a /tmp/b",
-		"cp /tmp/a /tmp/b",
+		fmt.Sprintf("rm -rf %s/test", cwd),
+		fmt.Sprintf("touch %s/test.txt", cwd),
+		fmt.Sprintf("echo hello > %s/test.txt", cwd),
+		fmt.Sprintf("mkdir %s/testdir", cwd),
+		fmt.Sprintf("chmod 777 %s/test", cwd),
+		fmt.Sprintf("mv %s/a %s/b", cwd, cwd),
+		fmt.Sprintf("cp %s/a %s/b", cwd, cwd),
 		// Commands accessing paths outside working directory
 		"cat /etc/passwd",
 		"head -n 5 /etc/passwd",
@@ -179,7 +181,7 @@ func TestBashTool_ReadOnlyEnforcement(t *testing.T) {
 
 func TestBashTool_Timeout(t *testing.T) {
 	tool := NewBashTool(false)
-	cwd := "/tmp"
+	cwd := t.TempDir()
 
 	// Use sleep 1 with timeout 0.5 seconds to ensure context deadline fires
 	// before sleep completes (~500ms deadline vs 1000ms sleep).

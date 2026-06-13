@@ -251,9 +251,6 @@ func (t *WriteTool) Execute(ctx context.Context, input map[string]any, cwd strin
 
 	// Generate patch diff (AC4)
 	oldContent := entry.Content
-	if oldContent == "" && exists {
-		oldContent = ""
-	}
 	diff := GenerateUnifiedDiff(oldContent, content, filePath)
 
 	// Update readFileCache after successful write (AC5)

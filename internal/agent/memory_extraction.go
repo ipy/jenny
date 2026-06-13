@@ -236,7 +236,7 @@ func (me *MemoryExtractor) isUnderAutoMem(filePath string) bool {
 	if absPath == absMemdir {
 		return false
 	}
-	return strings.HasPrefix(absPath, absMemdir)
+	return strings.HasPrefix(absPath, absMemdir+string(filepath.Separator))
 }
 
 // advanceCursor advances the extraction cursor after successful extraction or skip.
@@ -468,7 +468,7 @@ func (me *MemoryExtractor) processExtractionResponse(ctx context.Context, resp *
 			}
 
 			// AC4: Explicit path guard - reject Edit/Write outside auto-mem
-			if t.Name() == "edit" || t.Name() == "write" {
+			if t.Name() == "Edit" || t.Name() == "Write" {
 				if filePath, ok := block.ToolUse.Args["file_path"].(string); ok {
 					if !me.isUnderAutoMem(filePath) {
 						log.Warn("Extraction tool rejected: path outside auto-mem", "tool", t.Name(), "path", filePath)

@@ -97,10 +97,6 @@ func filterOrphanedThinking(messages []api.Message) []api.Message {
 					hasContentAfter = true
 					break
 				}
-				if messages[j].Role == "assistant" && messages[j].Content != "" && !isThinkingOnlyContent(messages[j].Content) {
-					hasContentAfter = true
-					break
-				}
 			}
 			if !hasContentAfter {
 				// Keep message but clear thinking-only content

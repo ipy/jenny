@@ -241,6 +241,12 @@ func (p *openAIProvider) buildMessages(messages []Message, toolResults []ToolRes
 				sdkMsg.SetContent(msg.Content)
 				sdkMessages = append(sdkMessages, sdkMsg)
 			}
+			// Emit embedded tool results immediately after user message
+			for _, tr := range msg.ToolResults {
+				sdkMsg := OpenAIMessage{Role: "tool", ToolCallID: tr.ToolUseID}
+				sdkMsg.SetContent(tr.Content)
+				sdkMessages = append(sdkMessages, sdkMsg)
+			}
 
 		case "assistant":
 			sdkMsg := OpenAIMessage{Role: "assistant"}
@@ -267,18 +273,11 @@ func (p *openAIProvider) buildMessages(messages []Message, toolResults []ToolRes
 		}
 	}
 
+	// Append standalone tool results (passed separately from messages)
 	for _, tr := range toolResults {
 		sdkMsg := OpenAIMessage{Role: "tool", ToolCallID: tr.ToolUseID}
 		sdkMsg.SetContent(tr.Content)
 		sdkMessages = append(sdkMessages, sdkMsg)
-	}
-
-	for _, msg := range messages {
-		for _, tr := range msg.ToolResults {
-			sdkMsg := OpenAIMessage{Role: "tool", ToolCallID: tr.ToolUseID}
-			sdkMsg.SetContent(tr.Content)
-			sdkMessages = append(sdkMessages, sdkMsg)
-		}
 	}
 
 	return sdkMessages

@@ -288,24 +288,6 @@ func isPromptTooLongError(err error) bool {
 		strings.Contains(errStr, "413")
 }
 
-// buildSummaryPrompt builds a prompt for the summary agent describing what to summarize.
-func buildSummaryPrompt(messages []api.Message) string {
-	var sb strings.Builder
-	sb.WriteString("Please summarize the following conversation concisely. ")
-	sb.WriteString("Focus on key points, decisions, and any outstanding tasks.\n\n")
-
-	for _, msg := range messages {
-		switch msg.Role {
-		case "user":
-			sb.WriteString(fmt.Sprintf("User: %s\n", truncateContent(msg.Content, 500)))
-		case "assistant":
-			sb.WriteString(fmt.Sprintf("Assistant: %s\n", truncateContent(msg.Content, 1000)))
-		}
-	}
-
-	return sb.String()
-}
-
 // truncateContent truncates content to a maximum number of runes.
 func truncateContent(content string, maxLen int) string {
 	runes := []rune(content)

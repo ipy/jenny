@@ -158,11 +158,9 @@ func (g *CommandGate) CheckPipelineSegments(command string) error {
 			continue
 		}
 
-		// Check for redirection operators in segment (makes it mutating)
-		if strings.ContainsAny(segment, ">|") {
-			if strings.Contains(segment, ">") || strings.Contains(segment, ">>") {
-				return fmt.Errorf("output redirection is not allowed for security reasons")
-			}
+		// Check for redirection operators in segment
+		if strings.Contains(segment, ">") || strings.Contains(segment, ">>") {
+			return fmt.Errorf("output redirection is not allowed for security reasons")
 		}
 
 		// Check if segment's first word is in read-only allowlist

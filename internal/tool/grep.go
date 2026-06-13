@@ -113,7 +113,7 @@ func (t *GrepTool) InputSchema() map[string]any {
 				"description": "Timeout in seconds (default: 30)",
 			},
 		},
-		"required": []any{"pattern"},
+		"required": []string{"pattern"},
 	}
 }
 

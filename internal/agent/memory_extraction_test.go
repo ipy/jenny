@@ -447,12 +447,13 @@ func TestAC4_EditScopedToAutoMem(t *testing.T) {
 	t.Run("EditRejectsPathOutsideMemdir", func(t *testing.T) {
 		autoMemDir := filepath.Join(tmpDir, "memory")
 		os.MkdirAll(autoMemDir, 0755)
+		outsideFile := filepath.Join(tmpDir, "outside_memdir.txt")
 
 		for _, tl := range tools {
 			if tl.Name() == "edit" {
 				// Try to execute Edit with a path outside memdir
 				result, err := tl.Execute(context.Background(), map[string]any{
-					"file_path":  "/tmp/outside_memdir.txt",
+					"file_path":  outsideFile,
 					"old_string": "test",
 					"new_string": "replaced",
 				}, autoMemDir)
@@ -468,7 +469,7 @@ func TestAC4_EditScopedToAutoMem(t *testing.T) {
 			if tl.Name() == "write" {
 				// Try to execute Write with a path outside memdir
 				result, err := tl.Execute(context.Background(), map[string]any{
-					"file_path": "/tmp/outside_memdir.txt",
+					"file_path": outsideFile,
 					"content":   "test content",
 				}, autoMemDir)
 				if err != nil {
@@ -487,6 +488,7 @@ func TestAC4_EditScopedToAutoMem(t *testing.T) {
 	t.Run("ProcessExtractionRejectsPathOutsideMemdir", func(t *testing.T) {
 		autoMemDir := filepath.Join(tmpDir, "memory")
 		os.MkdirAll(autoMemDir, 0755)
+		outsideFile := filepath.Join(tmpDir, "outside_memdir_test.txt")
 
 		mockClient := &mockExtractionAPIClient{}
 		me := NewMemoryExtractor(mockClient, cfg).WithMemdir(tmpDir)
@@ -501,7 +503,7 @@ func TestAC4_EditScopedToAutoMem(t *testing.T) {
 						ID:   "tool_1",
 						Name: "edit",
 						Args: map[string]any{
-							"file_path":  "/tmp/outside_memdir.txt",
+							"file_path":  outsideFile,
 							"old_string": "test",
 							"new_string": "replaced",
 						},
@@ -511,7 +513,6 @@ func TestAC4_EditScopedToAutoMem(t *testing.T) {
 		}
 
 		// Create a temp file outside auto-mem to verify the edit was NOT applied
-		outsideFile := "/tmp/outside_memdir_test.txt"
 		os.WriteFile(outsideFile, []byte("test"), 0644)
 		defer os.Remove(outsideFile)
 
