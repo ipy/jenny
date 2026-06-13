@@ -30,6 +30,7 @@ import {
 import { useSettings, type PortalSettings } from './components/feedback/SettingsDialog';
 import { SkillsTab, type SkillInfo } from './components/SkillsTab';
 import { MCPServersTab, type MCPServerInfo } from './components/MCPServersTab';
+import { PluginsTab, type PluginInfo } from './components/PluginsTab';
 import './styles/globals.css';
 
 // ── Types ───────────────────────────────────
@@ -75,6 +76,9 @@ function AppContent() {
   // Fetch MCP servers data for the MCP tab
   const { data: mcpServers, loading: mcpServersLoading } = useApi<MCPServerInfo[]>('/api/mcp/servers');
 
+  // Fetch plugins data for the Plugins tab
+  const { data: plugins, loading: pluginsLoading } = useApi<PluginInfo[]>('/api/plugins');
+
   // Callback to handle session creation and navigate to sessions tab
   const handleSessionCreated = (sessionId: string) => {
     setSelectedSessionId(sessionId);
@@ -108,8 +112,9 @@ function AppContent() {
         {activeTab === 'projects' && <ProjectsTab onNavigate={(tab) => setActiveTab(tab as TabId)} onFilter={(cwd) => { setProjectFilter(cwd); setActiveTab('sessions'); }} />}
         {activeTab === 'skills' && <SkillsTab skills={skills ?? []} loading={skillsLoading} />}
         {activeTab === 'mcp' && <MCPServersTab servers={mcpServers ?? []} loading={mcpServersLoading} />}
+        {activeTab === 'plugins' && <PluginsTab plugins={plugins ?? []} loading={pluginsLoading} />}
         {/* Other tabs placeholder */}
-        {['plugins', 'marketplace'].includes(activeTab) && (
+        {['marketplace'].includes(activeTab) && (
           <div style={{ padding: '2rem', textAlign: 'center' }}>
             <EmptyState title={t('portal.coming_soon')} hint={t('portal.coming_soon.hint')} />
           </div>

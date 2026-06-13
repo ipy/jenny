@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/constants"
+	"github.com/ipy/jenny/internal/git"
 	"github.com/ipy/jenny/internal/session"
 )
 
@@ -55,6 +56,14 @@ type MCPServerInfo struct {
 	Enabled bool     `json:"enabled"`
 }
 
+// PluginInfo represents a plugin's metadata for the API response.
+type PluginInfo struct {
+	Name        string `json:"name"`
+	Version     string `json:"version"`
+	Description string `json:"description"`
+	RootPath    string `json:"root_path"`
+}
+
 // setupRoutes sets up the HTTP routes for the portal.
 func (p *Portal) setupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/health", p.withAuth(p.handleHealth))
@@ -65,6 +74,7 @@ func (p *Portal) setupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/stats", p.withAuth(p.handleStats))
 	mux.HandleFunc("GET /api/skills", p.withAuth(p.handleListSkills))
 	mux.HandleFunc("GET /api/mcp/servers", p.withAuth(p.handleListMCPServers))
+	mux.HandleFunc("GET /api/plugins", p.withAuth(p.handleListPlugins))
 	mux.HandleFunc("GET /", p.handleStatic)
 	mux.HandleFunc("/", p.handleStatic)
 }
@@ -883,4 +893,72 @@ func (p *Portal) handleListSkills(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(skills)
+}
+
+// handleListPlugins handles GET /api/plugins.
+// It discovers plugins from marker directories (.jenny-plugin, .claude-plugin, .codex-plugin)
+// in the project root.
+func (p *Portal) handleListPlugins(w http.ResponseWriter, r *http.Request) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = "."
+	}
+
+	// Use git root for better project detection, fallback to cwd
+	gitRoot, err := git.GetRoot(cwd)
+	if err != nil {
+		gitRoot = cwd
+	}
+
+	var result []PluginInfo
+
+	// Check each marker directory
+	for _, dirName := range []string{constants.PluginDirName, ".claude-plugin", ".codex-plugin"} {
+		markerDir := filepath.Join(gitRoot, dirName)
+		entries, err := os.ReadDir(markerDir)
+		if err != nil {
+			continue // Dir may not exist
+		}
+
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			pluginDir := filepath.Join(markerDir, entry.Name())
+			manifestPath := filepath.Join(pluginDir, "plugin.json")
+
+			data, readErr := os.ReadFile(manifestPath)
+			if readErr != nil {
+				continue
+			}
+
+			var manifest struct {
+				Name        string `json:"name"`
+				Version     string `json:"version"`
+				Description string `json:"description"`
+			}
+			if json.Unmarshal(data, &manifest) != nil {
+				continue
+			}
+
+			name := manifest.Name
+			if name == "" {
+				name = entry.Name()
+			}
+
+			result = append(result, PluginInfo{
+				Name:        name,
+				Version:     manifest.Version,
+				Description: manifest.Description,
+				RootPath:    pluginDir,
+			})
+		}
+	}
+
+	if result == nil {
+		result = []PluginInfo{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }

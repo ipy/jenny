@@ -1755,3 +1755,101 @@ func TestListMCPServers_RequiresAuth(t *testing.T) {
 
 	t.Log("PASS: mcp servers endpoint requires auth token")
 }
+
+func TestListPlugins(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create a mock plugin under .jenny-plugin marker dir
+	pluginDir := filepath.Join(tmpDir, ".jenny-plugin", "test-plugin")
+	os.MkdirAll(pluginDir, 0755)
+	manifest := map[string]string{
+		"name":        "Test Plugin",
+		"version":     "1.0.0",
+		"description": "A test plugin for testing",
+	}
+	manifestData, _ := json.Marshal(manifest)
+	os.WriteFile(filepath.Join(pluginDir, "plugin.json"), manifestData, 0644)
+
+	// Override cwd for the handler
+	origDir, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(origDir)
+
+	ctx := context.Background()
+	// startWithConfig uses tmpDir as constants.JennyHomeDir override
+	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Shutdown(ctx)
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", p.port)
+	resp, err := http.Get(baseURL + "/api/plugins?token=" + p.authToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var plugins []PluginInfo
+	json.NewDecoder(resp.Body).Decode(&plugins)
+
+	if len(plugins) != 1 {
+		t.Fatalf("expected 1 plugin, got %d", len(plugins))
+	}
+	if plugins[0].Name != "Test Plugin" {
+		t.Errorf("expected name 'Test Plugin', got %q", plugins[0].Name)
+	}
+	if plugins[0].Version != "1.0.0" {
+		t.Errorf("expected version '1.0.0', got %q", plugins[0].Version)
+	}
+
+	t.Log("AC1 PASS: plugins list returns installed plugins with metadata")
+}
+
+func TestListPlugins_Empty(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Override cwd for the handler
+	origDir, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(origDir)
+
+	ctx := context.Background()
+	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Shutdown(ctx)
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", p.port)
+	resp, err := http.Get(baseURL + "/api/plugins?token=" + p.authToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var plugins []PluginInfo
+	json.NewDecoder(resp.Body).Decode(&plugins)
+
+	if len(plugins) != 0 {
+		t.Fatalf("expected 0 plugins, got %d", len(plugins))
+	}
+
+	t.Log("AC1 PASS: plugins list returns [] when no plugins are installed")
+}
