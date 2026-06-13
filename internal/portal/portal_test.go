@@ -1473,3 +1473,222 @@ func TestListSkills_RequiresAuth(t *testing.T) {
 
 	t.Log("PASS: skills endpoint requires auth token")
 }
+
+// TestListMCPServers verifies AC1: GET /api/mcp/servers returns configured MCP servers.
+func TestListMCPServers(t *testing.T) {
+	origJennyHome := os.Getenv("JENNY_HOME")
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Setenv("JENNY_HOME", tmpDir)
+	defer func() {
+		os.RemoveAll(tmpDir)
+		os.Setenv("JENNY_HOME", origJennyHome)
+	}()
+
+	// Create mcp.json with 2 servers (one enabled, one disabled)
+	mcpConfig := `{
+		"filesystem": {
+			"command": "npx",
+			"args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+			"disabled": false
+		},
+		"github": {
+			"command": "uvx",
+			"args": ["mcp-server-github"],
+			"disabled": true
+		}
+	}`
+	mcpPath := filepath.Join(tmpDir, "mcp.json")
+	if err := os.WriteFile(mcpPath, []byte(mcpConfig), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Shutdown(ctx)
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", p.port)
+	resp, err := http.Get(baseURL + "/api/mcp/servers?token=" + p.authToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var servers []MCPServerInfo
+	if err := json.NewDecoder(resp.Body).Decode(&servers); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(servers) != 2 {
+		t.Fatalf("expected 2 servers, got %d", len(servers))
+	}
+
+	// Find filesystem server (enabled)
+	var filesystem *MCPServerInfo
+	var github *MCPServerInfo
+	for i := range servers {
+		if servers[i].Name == "filesystem" {
+			filesystem = &servers[i]
+		}
+		if servers[i].Name == "github" {
+			github = &servers[i]
+		}
+	}
+
+	if filesystem == nil {
+		t.Fatal("filesystem server not found")
+	}
+	if filesystem.Command != "npx" {
+		t.Errorf("expected command 'npx', got %q", filesystem.Command)
+	}
+	if len(filesystem.Args) != 3 {
+		t.Errorf("expected 3 args, got %d", len(filesystem.Args))
+	}
+	if !filesystem.Enabled {
+		t.Error("filesystem server should be enabled")
+	}
+
+	if github == nil {
+		t.Fatal("github server not found")
+	}
+	if github.Command != "uvx" {
+		t.Errorf("expected command 'uvx', got %q", github.Command)
+	}
+	if github.Enabled {
+		t.Error("github server should be disabled")
+	}
+
+	t.Log("AC1 PASS: mcp servers endpoint returns configured servers")
+}
+
+// TestListMCPServers_Empty verifies mcp servers endpoint returns [] when no mcp.json.
+func TestListMCPServers_Empty(t *testing.T) {
+	origJennyHome := os.Getenv("JENNY_HOME")
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Setenv("JENNY_HOME", tmpDir)
+	defer func() {
+		os.RemoveAll(tmpDir)
+		os.Setenv("JENNY_HOME", origJennyHome)
+	}()
+
+	ctx := context.Background()
+	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Shutdown(ctx)
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", p.port)
+	resp, err := http.Get(baseURL + "/api/mcp/servers?token=" + p.authToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var servers []MCPServerInfo
+	if err := json.NewDecoder(resp.Body).Decode(&servers); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(servers) != 0 {
+		t.Fatalf("expected 0 servers, got %d", len(servers))
+	}
+
+	t.Log("AC1 PASS: mcp servers endpoint returns [] when no mcp.json")
+}
+
+// TestListMCPServers_InvalidJSON verifies mcp servers endpoint returns 400 for invalid JSON.
+func TestListMCPServers_InvalidJSON(t *testing.T) {
+	origJennyHome := os.Getenv("JENNY_HOME")
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Setenv("JENNY_HOME", tmpDir)
+	defer func() {
+		os.RemoveAll(tmpDir)
+		os.Setenv("JENNY_HOME", origJennyHome)
+	}()
+
+	// Create invalid mcp.json
+	mcpPath := filepath.Join(tmpDir, "mcp.json")
+	if err := os.WriteFile(mcpPath, []byte("invalid json"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Shutdown(ctx)
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", p.port)
+	resp, err := http.Get(baseURL + "/api/mcp/servers?token=" + p.authToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid JSON, got %d", resp.StatusCode)
+	}
+
+	t.Log("PASS: mcp servers endpoint returns 400 for invalid JSON")
+}
+
+// TestListMCPServers_RequiresAuth verifies mcp servers endpoint requires auth.
+func TestListMCPServers_RequiresAuth(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	ctx := context.Background()
+	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Shutdown(ctx)
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", p.port)
+
+	// Test without token
+	resp, err := http.Get(baseURL + "/api/mcp/servers")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401 without token, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Test with wrong token
+	resp, err = http.Get(baseURL + "/api/mcp/servers?token=wrongtoken")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401 with wrong token, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	t.Log("PASS: mcp servers endpoint requires auth token")
+}

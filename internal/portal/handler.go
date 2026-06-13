@@ -47,6 +47,14 @@ type Stats struct {
 	TotalTokens    int     `json:"total_tokens"`
 }
 
+// MCPServerInfo represents a configured MCP server for the API response.
+type MCPServerInfo struct {
+	Name    string   `json:"name"`
+	Command string   `json:"command"`
+	Args    []string `json:"args"`
+	Enabled bool     `json:"enabled"`
+}
+
 // setupRoutes sets up the HTTP routes for the portal.
 func (p *Portal) setupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/health", p.withAuth(p.handleHealth))
@@ -56,6 +64,7 @@ func (p *Portal) setupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/sessions/", p.withAuth(p.handleSessionAction))
 	mux.HandleFunc("GET /api/stats", p.withAuth(p.handleStats))
 	mux.HandleFunc("GET /api/skills", p.withAuth(p.handleListSkills))
+	mux.HandleFunc("GET /api/mcp/servers", p.withAuth(p.handleListMCPServers))
 	mux.HandleFunc("GET /", p.handleStatic)
 	mux.HandleFunc("/", p.handleStatic)
 }
@@ -747,49 +756,7 @@ func sessionExists(sessionID string) bool {
 	return err == nil
 }
 
-// handleListSkills handles GET /api/skills.
-func (p *Portal) handleListSkills(w http.ResponseWriter, r *http.Request) {
-	skillsDir := filepath.Join(constants.JennyHomeDir(), "skills")
 
-	entries, err := os.ReadDir(skillsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte("[]"))
-			return
-		}
-		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
-		return
-	}
-
-	var skills []SkillInfo
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		skillPath := filepath.Join(skillsDir, entry.Name())
-
-		// Read README.md or SKILL.md for description
-		desc := readSkillDescription(skillPath)
-
-		// Read .activation-glob if present
-		glob := readActivationGlob(skillPath)
-
-		skills = append(skills, SkillInfo{
-			Name:           entry.Name(),
-			Description:    desc,
-			Path:           skillPath,
-			ActivationGlob: glob,
-		})
-	}
-
-	if skills == nil {
-		skills = []SkillInfo{}
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(skills)
-}
 
 // readSkillDescription reads the description from a skill directory.
 // It tries SKILL.md first (for skills that follow the new format), then README.md, README, or skill.md.
@@ -823,4 +790,97 @@ func readActivationGlob(skillPath string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(data))
+}
+
+// handleListMCPServers handles GET /api/mcp/servers.
+func (p *Portal) handleListMCPServers(w http.ResponseWriter, r *http.Request) {
+	configPath := filepath.Join(constants.JennyHomeDir(), "mcp.json")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte("[]"))
+			return
+		}
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	var config map[string]struct {
+		Command  string   `json:"command"`
+		Args     []string `json:"args"`
+		Disabled bool     `json:"disabled,omitempty"`
+	}
+	if err := json.Unmarshal(data, &config); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	var servers []MCPServerInfo
+	for name, server := range config {
+		args := server.Args
+		if args == nil {
+			args = []string{}
+		}
+		servers = append(servers, MCPServerInfo{
+			Name:    name,
+			Command: server.Command,
+			Args:    args,
+			Enabled: !server.Disabled,
+		})
+	}
+	if servers == nil {
+		servers = []MCPServerInfo{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(servers)
+}
+
+// handleListSkills handles GET /api/skills.
+func (p *Portal) handleListSkills(w http.ResponseWriter, r *http.Request) {
+	homeDir := constants.JennyHomeDir()
+	skillsDir := filepath.Join(homeDir, "skills")
+
+	entries, err := os.ReadDir(skillsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte("[]"))
+			return
+		}
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	var skills []SkillInfo
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		skillPath := filepath.Join(skillsDir, entry.Name())
+
+		// Read README.md or SKILL.md for description
+		desc := readSkillDescription(skillPath)
+
+		// Read .activation-glob if present
+		glob := readActivationGlob(skillPath)
+
+		// Replace home dir with tilde-prefixed path for display
+		displayPath := strings.Replace(skillPath, homeDir, "~/.jenny", 1)
+
+		skills = append(skills, SkillInfo{
+			Name:           entry.Name(),
+			Description:    desc,
+			Path:           displayPath,
+			ActivationGlob: glob,
+		})
+	}
+
+	if skills == nil {
+		skills = []SkillInfo{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(skills)
 }

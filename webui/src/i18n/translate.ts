@@ -59,6 +59,8 @@ const translations: Record<Locale, Messages> = {
     'portal.no_projects': 'No projects yet',
     'portal.no_projects.hint': 'Start a session to see it here.',
     'portal.show_all': 'Show all',
+    'portal.no_mcp_servers': 'No MCP servers configured',
+    'portal.no_mcp_servers.hint': 'Configure MCP servers in ~/.jenny/mcp.json.',
   },
   'zh-Hans': {
     // Common
@@ -107,6 +109,8 @@ const translations: Record<Locale, Messages> = {
     'portal.no_projects': '暂无项目',
     'portal.no_projects.hint': '启动一个会话即可在此查看。',
     'portal.show_all': '显示全部',
+    'portal.no_mcp_servers': '未配置 MCP 服务器',
+    'portal.no_mcp_servers.hint': '在 ~/.jenny/mcp.json 中配置 MCP 服务器。',
   },
   'zh-Hant': {
     // Common
@@ -155,6 +159,8 @@ const translations: Record<Locale, Messages> = {
     'portal.no_projects': '尚無專案',
     'portal.no_projects.hint': '啟動一個會話即可在此查看。',
     'portal.show_all': '顯示全部',
+    'portal.no_mcp_servers': '未設定 MCP 伺服器',
+    'portal.no_mcp_servers.hint': '在 ~/.jenny/mcp.json 中設定 MCP 伺服器。',
   },
 };
 
