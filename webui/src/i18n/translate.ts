@@ -61,6 +61,14 @@ const translations: Record<Locale, Messages> = {
     'portal.show_all': 'Show all',
     'portal.no_mcp_servers': 'No MCP servers configured',
     'portal.no_mcp_servers.hint': 'Configure MCP servers in ~/.jenny/mcp.json.',
+    'portal.installed': '{count} installed',
+    'portal.marketplace_description': '{count} assets installed total',
+    // Marketplace
+    'marketplace.skills_desc': 'Skills add specialized knowledge and capabilities to Jenny.',
+    'marketplace.mcp_desc': 'MCP servers connect Jenny to external tools and services.',
+    'marketplace.plugins_desc': 'Plugins extend Jenny with custom functionality.',
+    'marketplace.empty_title': 'No assets installed yet',
+    'marketplace.empty_hint': "Assets like Skills, MCP servers, and Plugins extend Jenny's capabilities. Install them to get started.",
   },
   'zh-Hans': {
     // Common
@@ -111,6 +119,14 @@ const translations: Record<Locale, Messages> = {
     'portal.show_all': '显示全部',
     'portal.no_mcp_servers': '未配置 MCP 服务器',
     'portal.no_mcp_servers.hint': '在 ~/.jenny/mcp.json 中配置 MCP 服务器。',
+    'portal.installed': '{count} 个已安装',
+    'portal.marketplace_description': '共 {count} 个资产已安装',
+    // Marketplace
+    'marketplace.skills_desc': '技能为 Jenny 添加专业知识和能力。',
+    'marketplace.mcp_desc': 'MCP 服务器连接 Jenny 与外部工具和服务。',
+    'marketplace.plugins_desc': '插件扩展 Jenny 的自定义功能。',
+    'marketplace.empty_title': '暂无资产',
+    'marketplace.empty_hint': '技能、MCP 服务器和插件等资产可以扩展 Jenny 的能力。安装它们以开始使用。',
   },
   'zh-Hant': {
     // Common
@@ -161,6 +177,14 @@ const translations: Record<Locale, Messages> = {
     'portal.show_all': '顯示全部',
     'portal.no_mcp_servers': '未設定 MCP 伺服器',
     'portal.no_mcp_servers.hint': '在 ~/.jenny/mcp.json 中設定 MCP 伺服器。',
+    'portal.installed': '{count} 個已安裝',
+    'portal.marketplace_description': '共 {count} 個資產已安裝',
+    // Marketplace
+    'marketplace.skills_desc': '技能為 Jenny 新增專業知識和能力。',
+    'marketplace.mcp_desc': 'MCP 伺服器連接 Jenny 與外部工具和服務。',
+    'marketplace.plugins_desc': '插件擴展 Jenny 的自訂功能。',
+    'marketplace.empty_title': '尚無資產',
+    'marketplace.empty_hint': '技能、MCP 伺服器和插件等資產可以擴展 Jenny 的能力。安裝它們以開始使用。',
   },
 };
 

@@ -113,11 +113,8 @@ function AppContent() {
         {activeTab === 'skills' && <SkillsTab skills={skills ?? []} loading={skillsLoading} />}
         {activeTab === 'mcp' && <MCPServersTab servers={mcpServers ?? []} loading={mcpServersLoading} />}
         {activeTab === 'plugins' && <PluginsTab plugins={plugins ?? []} loading={pluginsLoading} />}
-        {/* Other tabs placeholder */}
-        {['marketplace'].includes(activeTab) && (
-          <div style={{ padding: '2rem', textAlign: 'center' }}>
-            <EmptyState title={t('portal.coming_soon')} hint={t('portal.coming_soon.hint')} />
-          </div>
+        {activeTab === 'marketplace' && (
+          <MarketplaceTab onNavigate={(tab) => setActiveTab(tab as TabId)} />
         )}
       </main>
 
@@ -509,6 +506,95 @@ function ProjectsTab({ onNavigate, onFilter }: ProjectsTabProps) {
                 <div style={{ fontWeight: 600 }}>${group.totalCost.toFixed(2)}</div>
               </div>
             </div>
+          </GlassPanel>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Marketplace Tab ────────────────────────────────────────────
+
+interface MarketplaceTabProps {
+  onNavigate: (tab: string) => void;
+}
+
+function MarketplaceTab({ onNavigate }: MarketplaceTabProps) {
+  const { data: skills } = useApi<SkillInfo[]>('/api/skills');
+  const { data: mcps } = useApi<MCPServerInfo[]>('/api/mcp/servers');
+  const { data: plugins } = useApi<PluginInfo[]>('/api/plugins');
+  const { t } = useLocale();
+
+  const categories = [
+    {
+      id: 'skills',
+      name: t('portal.skills'),
+      count: skills?.length ?? 0,
+      icon: '⚡',
+      description: t('marketplace.skills_desc'),
+    },
+    {
+      id: 'mcp',
+      name: t('portal.mcp'),
+      count: mcps?.length ?? 0,
+      icon: '🔌',
+      description: t('marketplace.mcp_desc'),
+    },
+    {
+      id: 'plugins',
+      name: t('portal.plugins'),
+      count: plugins?.length ?? 0,
+      icon: '🧩',
+      description: t('marketplace.plugins_desc'),
+    },
+  ];
+
+  const totalInstalled = categories.reduce((sum, c) => sum + c.count, 0);
+
+  if (totalInstalled === 0) {
+    return (
+      <div style={{ padding: '4rem 2rem', textAlign: 'center' }}>
+        <EmptyState
+          title={t('marketplace.empty_title')}
+          hint={t('marketplace.empty_hint')}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: '2rem', maxWidth: '900px', margin: '0 auto' }}>
+      <div style={{ marginBottom: '2rem' }}>
+        <h2 style={{ marginBottom: '0.5rem' }}>{t('portal.marketplace')}</h2>
+        <p style={{ color: 'var(--color-text-muted)', margin: 0 }}>
+          {t('portal.marketplace_description', { count: totalInstalled })}
+        </p>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+        {categories.map((cat) => (
+          <GlassPanel
+            key={cat.id}
+            interactive
+            style={{ padding: '1.5rem', cursor: 'pointer' }}
+            onClick={() => onNavigate(cat.id)}
+          >
+            <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>{cat.icon}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>{cat.name}</h3>
+              <Badge variant={cat.count > 0 ? 'success' : 'default'}>
+                {t('portal.installed', { count: cat.count })}
+              </Badge>
+            </div>
+            <p
+              style={{
+                margin: '0.75rem 0 0',
+                color: 'var(--color-text-muted)',
+                fontSize: '0.875rem',
+              }}
+            >
+              {cat.description}
+            </p>
           </GlassPanel>
         ))}
       </div>
