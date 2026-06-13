@@ -543,8 +543,8 @@ func TestAC6_ServeHTML(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(string(body), "<title>Glimpse UI") {
-		t.Errorf("AC6 FAIL: response body should contain '<title>Glimpse UI', got: %s", string(body)[:200])
+	if !strings.Contains(string(body), "<title>Jenny Portal") {
+		t.Errorf("AC6 FAIL: response body should contain '<title>Jenny Portal', got: %s", string(body)[:200])
 	}
 
 	t.Log("AC6 PASS: GET / serves index.html with correct content-type and title")
