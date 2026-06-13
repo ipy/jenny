@@ -46,3 +46,8 @@ references/
 
 # Agent transcripts
 internal/agent/transcripts/*.jsonl
+
+# Frontend
+node_modules/
+.eslintcache
+vite.config.ts.timestamp-*

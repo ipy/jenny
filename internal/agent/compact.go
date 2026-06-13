@@ -33,6 +33,11 @@ const (
 
 	// minAutoCompactBuffer is the floor for the auto-compact buffer.
 	minAutoCompactBuffer = 13_000
+
+	// MIN_SAFETY_OVERHEAD is the minimum overhead reserved for system prompt,
+	// tools definition, and compaction instruction when estimating if in-session
+	// compaction would overflow the context window.
+	MIN_SAFETY_OVERHEAD = 30_000
 )
 
 // CompactConfig holds configuration for compaction.
@@ -348,10 +353,11 @@ func isPromptTooLongError(err error) bool {
 	if err == nil {
 		return false
 	}
-	errStr := err.Error()
+	errStr := strings.ToLower(err.Error())
 	return strings.Contains(errStr, "prompt too long") ||
 		strings.Contains(errStr, "too many tokens") ||
 		strings.Contains(errStr, "context length") ||
+		strings.Contains(errStr, "context window") ||
 		strings.Contains(errStr, "413")
 }
 
