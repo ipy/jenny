@@ -20,6 +20,8 @@ import {
   useSessions,
   useSessionStream,
   killSession,
+  apiPost,
+  useToast,
   type SessionMetadata,
 } from './index';
 import './styles/globals.css';
@@ -46,6 +48,13 @@ function AppContent() {
   const { theme, setTheme } = useTheme();
   const { t } = useLocale();
   const [activeTab, setActiveTab] = useState<TabId>('start');
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+
+  // Callback to handle session creation and navigate to sessions tab
+  const handleSessionCreated = (sessionId: string) => {
+    setSelectedSessionId(sessionId);
+    setActiveTab('sessions');
+  };
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -67,8 +76,8 @@ function AppContent() {
       />
 
       <main style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-        {activeTab === 'start' && <StartTab />}
-        {activeTab === 'sessions' && <SessionsTab />}
+        {activeTab === 'start' && <StartTab onSessionCreated={handleSessionCreated} />}
+        {activeTab === 'sessions' && <SessionsTab selectedId={selectedSessionId} onSelect={setSelectedSessionId} />}
         {activeTab === 'projects' && <ProjectsTab />}
         {/* Other tabs placeholder */}
         {['skills', 'mcp', 'plugins', 'marketplace'].includes(activeTab) && (
@@ -81,14 +90,34 @@ function AppContent() {
   );
 }
 
-function StartTab() {
+interface StartTabProps {
+  onSessionCreated: (sessionId: string) => void;
+}
+
+function StartTab({ onSessionCreated }: StartTabProps) {
   const { t } = useLocale();
   const [prompt, setPrompt] = useState('');
+  const [launching, setLaunching] = useState(false);
+  const toast = useToast();
   const { data: stats, loading } = useStats();
 
   const formatCost = (cost: number) => {
     if (cost < 0.01) return '$0.00';
     return `$${cost.toFixed(2)}`;
+  };
+
+  const handleLaunch = async () => {
+    if (!prompt.trim() || launching) return;
+    setLaunching(true);
+    try {
+      const result = await apiPost<{ session_id: string }>('/api/sessions/start', { prompt });
+      setPrompt('');
+      onSessionCreated(result.session_id);
+    } catch (err) {
+      toast.addToast({ kind: 'error', title: 'Failed to start session', message: err instanceof Error ? err.message : 'Unknown error' });
+    } finally {
+      setLaunching(false);
+    }
   };
 
   return (
@@ -113,7 +142,9 @@ function StartTab() {
             />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
               <Button variant="outline">Settings</Button>
-              <Button variant="primary" disabled={!prompt.trim()}>{t('portal.launch')}</Button>
+              <Button variant="primary" disabled={!prompt.trim() || launching} onClick={handleLaunch}>
+                {launching ? 'Launching...' : t('portal.launch')}
+              </Button>
             </div>
           </div>
         </div>
@@ -136,9 +167,18 @@ function StartTab() {
   );
 }
 
-function SessionsTab() {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+interface SessionsTabProps {
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+}
+
+function SessionsTab({ selectedId: externalSelectedId, onSelect: externalOnSelect }: SessionsTabProps) {
+  const [internalSelectedId, setInternalSelectedId] = useState<string | null>(null);
   const { data: sessions, loading } = useSessions();
+
+  // Use external props if provided, otherwise use internal state
+  const selectedId = externalSelectedId !== undefined ? externalSelectedId : internalSelectedId;
+  const setSelectedId = externalOnSelect || setInternalSelectedId;
 
   // Transform API sessions to DataList items
   const sessionItems = sessions?.map((s: SessionMetadata) => {
@@ -190,6 +230,10 @@ function formatTimeAgo(timestamp: number): string {
 
 function SessionDetail({ session }: { session?: SessionMetadata }) {
   const [entries, setEntries] = useState<any[]>([]);
+  const [showResumeInput, setShowResumeInput] = useState(false);
+  const [resumePrompt, setResumePrompt] = useState('');
+  const [resuming, setResuming] = useState(false);
+  const toast = useToast();
   const isRunning = session?.status === 'running';
 
   // Connect to SSE stream for real-time updates
@@ -198,6 +242,21 @@ function SessionDetail({ session }: { session?: SessionMetadata }) {
   });
 
   const formatCost = (cost?: number) => cost ? `$${cost.toFixed(2)}` : '$0.00';
+
+  const handleResume = async () => {
+    if (!session?.id || !resumePrompt.trim() || resuming) return;
+    setResuming(true);
+    try {
+      await apiPost(`/api/sessions/${session.id}/resume`, { prompt: resumePrompt });
+      setShowResumeInput(false);
+      setResumePrompt('');
+      toast.addToast({ kind: 'success', title: 'Session resumed' });
+    } catch (err) {
+      toast.addToast({ kind: 'error', title: 'Failed to resume session', message: err instanceof Error ? err.message : 'Unknown error' });
+    } finally {
+      setResuming(false);
+    }
+  };
 
   return (
     <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', height: '100%', overflow: 'auto' }}>
@@ -212,8 +271,21 @@ function SessionDetail({ session }: { session?: SessionMetadata }) {
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           {isRunning ? (
             <Button variant="danger" size="sm" onClick={() => session?.id && killSession(session.id)}>Stop</Button>
+          ) : showResumeInput ? (
+            <>
+              <TextField
+                value={resumePrompt}
+                onChange={setResumePrompt}
+                placeholder="What should I do next?"
+                style={{ width: '200px' }}
+              />
+              <Button variant="primary" size="sm" disabled={!resumePrompt.trim() || resuming} onClick={handleResume}>
+                {resuming ? 'Resuming...' : 'Resume'}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => { setShowResumeInput(false); setResumePrompt(''); }}>Cancel</Button>
+            </>
           ) : (
-            <Button variant="primary" size="sm">Resume</Button>
+            <Button variant="primary" size="sm" onClick={() => setShowResumeInput(true)}>Resume</Button>
           )}
           <Button variant="ghost" size="sm">Delete</Button>
         </div>

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -43,6 +44,7 @@ func (p *Portal) setupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/health", p.withAuth(p.handleHealth))
 	mux.HandleFunc("GET /api/sessions", p.withAuth(p.handleListSessions))
 	mux.HandleFunc("GET /api/sessions/", p.withAuth(p.handleSessionStream))
+	mux.HandleFunc("POST /api/sessions/start", p.withAuth(p.handleStartSession))
 	mux.HandleFunc("POST /api/sessions/", p.withAuth(p.handleSessionAction))
 	mux.HandleFunc("GET /api/stats", p.withAuth(p.handleStats))
 	mux.HandleFunc("GET /", p.handleStatic)
@@ -331,10 +333,10 @@ func pollPID(sessionID string, done chan<- struct{}) {
 	}
 }
 
-// handleSessionAction handles POST /api/sessions/{id}/kill.
+// handleSessionAction handles POST /api/sessions/{id}/kill and POST /api/sessions/{id}/resume.
 func (p *Portal) handleSessionAction(w http.ResponseWriter, r *http.Request) {
 	// Extract session ID and action from path
-	// Path format: /api/sessions/{id}/kill
+	// Path format: /api/sessions/{id}/kill or /api/sessions/{id}/resume
 	path := strings.TrimPrefix(r.URL.Path, "/api/sessions/")
 	parts := strings.Split(path, "/")
 	if len(parts) < 2 {
@@ -379,6 +381,62 @@ func (p *Portal) handleSessionAction(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "killed"})
+
+	case "resume":
+		// Check if session exists
+		if !sessionExists(sessionID) {
+			http.Error(w, `{"error":"session not found"}`, http.StatusNotFound)
+			return
+		}
+
+		// Parse request body for prompt
+		var req struct {
+			Prompt string `json:"prompt"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+			return
+		}
+		if req.Prompt == "" {
+			http.Error(w, `{"error":"prompt is required"}`, http.StatusBadRequest)
+			return
+		}
+
+		// Find the jenny binary path
+		jennyPath, err := os.Executable()
+		if err != nil {
+			http.Error(w, `{"error":"failed to find jenny binary"}`, http.StatusInternalServerError)
+			return
+		}
+
+		// Build the command: jenny -r <session-id> -p "<prompt>" --output-format stream-json
+		args := []string{"-r", sessionID, "-p", req.Prompt, "--output-format", "stream-json"}
+		cmd := exec.Command(jennyPath, args...)
+
+		// Set process attributes for platform-specific detached process behavior
+		configureDetachedProcess(cmd)
+
+		// Start the process detached
+		if err := cmd.Start(); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
+
+		// Write PID to pid file
+		sessionDir := constants.SessionDir(sessionID)
+		pidPath := filepath.Join(sessionDir, "pid")
+		if err := os.WriteFile(pidPath, []byte(strconv.Itoa(cmd.Process.Pid)), 0644); err != nil {
+			// Kill the process if we can't write the PID file
+			cmd.Process.Kill()
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(StartSessionResponse{
+			SessionID: sessionID,
+			PID:       cmd.Process.Pid,
+		})
 
 	default:
 		http.Error(w, fmt.Sprintf(`{"error":"unknown action: %s"}`, action), http.StatusBadRequest)
@@ -558,4 +616,92 @@ func (p *Portal) handleStatic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write(data)
+}
+
+// StartSessionRequest represents the JSON body for POST /api/sessions/start.
+type StartSessionRequest struct {
+	Prompt string `json:"prompt"`
+	CWD    string `json:"cwd,omitempty"`
+}
+
+// StartSessionResponse represents the JSON response for POST /api/sessions/start.
+type StartSessionResponse struct {
+	SessionID string `json:"session_id"`
+	PID       int    `json:"pid"`
+}
+
+// handleStartSession handles POST /api/sessions/start.
+// It spawns a detached jenny subprocess running the provided prompt.
+func (p *Portal) handleStartSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req StartSessionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+	if req.Prompt == "" {
+		http.Error(w, `{"error":"prompt is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Generate session ID
+	sessionID, err := session.NewSessionID()
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	// Find the jenny binary path
+	jennyPath, err := os.Executable()
+	if err != nil {
+		http.Error(w, `{"error":"failed to find jenny binary"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Ensure session directory exists
+	sessionDir := constants.SessionDir(sessionID)
+	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	// Build the command: jenny -p "<prompt>" --output-format stream-json
+	args := []string{"-p", req.Prompt, "--output-format", "stream-json"}
+	cmd := exec.Command(jennyPath, args...)
+	cmd.Dir = req.CWD
+
+	// Set process attributes for platform-specific detached process behavior
+	configureDetachedProcess(cmd)
+
+	// Start the process detached
+	if err := cmd.Start(); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	// Write PID to pid file
+	pidPath := filepath.Join(sessionDir, "pid")
+	if err := os.WriteFile(pidPath, []byte(strconv.Itoa(cmd.Process.Pid)), 0644); err != nil {
+		// Kill the process if we can't write the PID file
+		cmd.Process.Kill()
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(StartSessionResponse{
+		SessionID: sessionID,
+		PID:       cmd.Process.Pid,
+	})
+}
+
+// sessionExists checks if a session directory with transcript.jsonl exists.
+func sessionExists(sessionID string) bool {
+	transcriptPath := filepath.Join(constants.SessionDir(sessionID), "transcript.jsonl")
+	_, err := os.Stat(transcriptPath)
+	return err == nil
 }

@@ -543,8 +543,8 @@ func TestAC6_ServeHTML(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(string(body), "<title>Jenny Portal</title>") {
-		t.Errorf("AC6 FAIL: response body should contain '<title>Jenny Portal</title>', got: %s", string(body)[:200])
+	if !strings.Contains(string(body), "<title>Glimpse UI") {
+		t.Errorf("AC6 FAIL: response body should contain '<title>Glimpse UI', got: %s", string(body)[:200])
 	}
 
 	t.Log("AC6 PASS: GET / serves index.html with correct content-type and title")
@@ -787,4 +787,213 @@ func TestAC2_ShutdownOrder(t *testing.T) {
 	}
 
 	t.Log("AC3 PASS: shutdown order correct - URL file removed before lockfile")
+}
+
+// TestStartSession verifies AC1: POST /api/sessions/start spawns a subprocess and returns session info.
+func TestStartSession(t *testing.T) {
+	// Set JENNY_HOME to temp dir
+	origJennyHome := os.Getenv("JENNY_HOME")
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Setenv("JENNY_HOME", tmpDir)
+	defer func() {
+		os.RemoveAll(tmpDir)
+		os.Setenv("JENNY_HOME", origJennyHome)
+	}()
+
+	ctx := context.Background()
+	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Shutdown(ctx)
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", p.port)
+
+	// Test start session without auth
+	req, _ := http.NewRequest("POST", baseURL+"/api/sessions/start", strings.NewReader(`{"prompt":"test"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("start session without auth should return 401, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Test start session with auth
+	body := `{"prompt":"say hello"}`
+	req, _ = http.NewRequest("POST", baseURL+"/api/sessions/start?token="+p.authToken, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Errorf("start session should return 200, got %d: %s", resp.StatusCode, string(bodyBytes))
+		return
+	}
+
+	var result StartSessionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		resp.Body.Close()
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	if result.SessionID == "" {
+		t.Error("session_id should not be empty")
+	}
+	if result.PID == 0 {
+		t.Error("pid should not be 0")
+	}
+
+	// Verify session directory was created
+	sessionDir := filepath.Join(tmpDir, "sessions", result.SessionID)
+	if _, err := os.Stat(sessionDir); os.IsNotExist(err) {
+		t.Error("session directory should exist")
+	}
+
+	// Verify PID file was created
+	pidPath := filepath.Join(sessionDir, "pid")
+	if _, err := os.Stat(pidPath); os.IsNotExist(err) {
+		t.Error("pid file should exist")
+	}
+
+	t.Log("AC1 PASS: start session spawns subprocess and returns session info")
+}
+
+// TestResumeSession verifies AC2: POST /api/sessions/:id/resume resumes a session.
+func TestResumeSession(t *testing.T) {
+	// Set JENNY_HOME to temp dir
+	origJennyHome := os.Getenv("JENNY_HOME")
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Setenv("JENNY_HOME", tmpDir)
+	defer func() {
+		os.RemoveAll(tmpDir)
+		os.Setenv("JENNY_HOME", origJennyHome)
+	}()
+
+	ctx := context.Background()
+	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Shutdown(ctx)
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", p.port)
+
+	// First, create a session directory with transcript
+	sessionID := "test-resume-session"
+	sessionDir := filepath.Join(tmpDir, "sessions", sessionID)
+	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	transcriptPath := filepath.Join(sessionDir, "transcript.jsonl")
+	if err := os.WriteFile(transcriptPath, []byte(`{"type":"state","cwd":"/test"}`+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test resume with non-existent session
+	body := `{"prompt":"continue"}`
+	req, _ := http.NewRequest("POST", baseURL+"/api/sessions/nonexistent/resume?token="+p.authToken, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("resume non-existent session should return 404, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Test resume with existing session
+	req, _ = http.NewRequest("POST", baseURL+"/api/sessions/"+sessionID+"/resume?token="+p.authToken, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Errorf("resume session should return 200, got %d: %s", resp.StatusCode, string(bodyBytes))
+		return
+	}
+
+	var result StartSessionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		resp.Body.Close()
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	if result.SessionID != sessionID {
+		t.Errorf("session_id should be %s, got %s", sessionID, result.SessionID)
+	}
+	if result.PID == 0 {
+		t.Error("pid should not be 0")
+	}
+
+	t.Log("AC2 PASS: resume session spawns subprocess with session ID")
+}
+
+// TestStartSessionValidation verifies validation for POST /api/sessions/start.
+func TestStartSessionValidation(t *testing.T) {
+	// Set JENNY_HOME to temp dir
+	origJennyHome := os.Getenv("JENNY_HOME")
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Setenv("JENNY_HOME", tmpDir)
+	defer func() {
+		os.RemoveAll(tmpDir)
+		os.Setenv("JENNY_HOME", origJennyHome)
+	}()
+
+	ctx := context.Background()
+	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Shutdown(ctx)
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", p.port)
+
+	// Test with empty prompt
+	body := `{"prompt":""}`
+	req, _ := http.NewRequest("POST", baseURL+"/api/sessions/start?token="+p.authToken, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("empty prompt should return 400, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Test with invalid JSON
+	body = `{invalid json}`
+	req, _ = http.NewRequest("POST", baseURL+"/api/sessions/start?token="+p.authToken, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("invalid JSON should return 400, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	t.Log("PASS: start session validation works correctly")
 }

@@ -48,6 +48,23 @@ async function apiGet<T>(path: string): Promise<T> {
   return res.json();
 }
 
+// API POST wrapper
+export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+  const { apiUrl, token } = getPortalConfig();
+  const url = `${apiUrl}${path}?token=${token}`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(error || res.statusText);
+  }
+  return res.json();
+}
+
 // useApi hook for fetching data
 export function useApi<T>(path: string, deps: any[] = []) {
   const [data, setData] = useState<T | null>(null);
