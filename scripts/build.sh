@@ -3,6 +3,7 @@ set -e
 
 # Usage: ./scripts/build.sh <version> <platform_set>
 # platform_set: "all" or "native"
+# Requires: go, upx (optional, skips compression if unavailable)
 
 VERSION=$1
 PLATFORM_SET=$2
@@ -29,12 +30,45 @@ for platform in "${platforms[@]}"; do
     output_name+='.exe'
   fi
   echo "Building $output_name (version=$VERSION)..."
-  GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="$LDFLAGS" -v -o "$output_name" ./cmd/jenny
+  CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -ldflags="$LDFLAGS" -trimpath -o "$output_name" ./cmd/jenny
 
   if [ "$GOOS" != "windows" ]; then
     chmod +x "$output_name"
   fi
 done
 
+# UPX compression (skipped if upx not available or on macOS for release binaries)
+if command -v upx &>/dev/null; then
+  echo ""
+  echo "Applying UPX compression..."
+  for binary in jenny-linux-amd64 jenny-linux-arm64; do
+    [ -f "$binary" ] || continue
+    # Skip if already UPX packed (idempotent)
+    if upx -t "$binary" &>/dev/null; then
+      echo "  $binary: already packed ($(du -sh "$binary" | cut -f1))"
+      continue
+    fi
+    upx -9 "$binary"
+    chmod +x "$binary"
+    echo "  $binary: $(du -sh "$binary" | cut -f1)"
+  done
+  # macOS binaries: only compress locally if explicitly needed; skip for release
+  # to avoid --force-macos causing issues on user machines
+else
+  echo ""
+  echo "UPX not found — skipping binary compression."
+  echo "Install UPX to reduce binary size: brew install upx (macOS) / apt install upx-ucl (Linux)"
+fi
+
+echo ""
 echo "Build complete."
-./jenny-linux-amd64 --version
+
+# Verify native binary builds correctly (version check)
+HOST_GOOS=$(go env GOOS)
+HOST_GOARCH=$(go env GOARCH)
+NATIVE_BINARY="jenny-$HOST_GOOS-$HOST_GOARCH"
+[ "$HOST_GOOS" = "windows" ] && NATIVE_BINARY+='.exe'
+
+if [ -f "$NATIVE_BINARY" ]; then
+  $NATIVE_BINARY --version
+fi
