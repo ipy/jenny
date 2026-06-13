@@ -154,7 +154,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setLocal({ ...local, workingDir: settings.workingDir })}
+                onClick={() => setLocal({ ...local, workingDir: DEFAULT_SETTINGS.workingDir })}
               >
                 Use current
               </Button>
