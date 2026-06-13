@@ -45,7 +45,7 @@ func TestBashTool_Execute(t *testing.T) {
 		{
 			name: "ls command",
 			input: map[string]any{
-				"command": fmt.Sprintf("ls %s", cwd),
+				"command": fmt.Sprintf("ls %s", filepath.ToSlash(cwd)),
 			},
 			wantErr: false,
 			checkFn: func(r *ToolResult) bool {

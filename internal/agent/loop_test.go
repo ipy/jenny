@@ -918,14 +918,16 @@ func TestAC2_WorktreeIsolation_MutuallyExclusiveWithCWD(t *testing.T) {
 
 func TestAC2_WorktreeIsolation_AloneWithoutCWD_Validates(t *testing.T) {
 	// AC2: When isolation=worktree is set WITHOUT cwd, the validation should pass.
-	// It then requires a git repo. Since we're in a test without a proper git repo
-	// context, it should fail with a git-related error (not the mutual exclusion error).
+	// It then requires a git repo. Run from a non-git temp dir so git.GetRoot fails.
 
 	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
 	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
 	if !hasURL || !hasToken {
 		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
 	}
+
+	// Change to a non-git temp directory so git.GetRoot("") fails
+	t.Chdir(t.TempDir())
 
 	readTool := tool.NewReadTool(false, nil)
 	tools := []tool.Tool{readTool}

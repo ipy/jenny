@@ -443,7 +443,10 @@ func (t *GrepTool) executeInProcess(ctx context.Context, input map[string]any, p
 
 	truncated := false
 	if len(output) > maxResultSizeChars {
-		output = output[:maxResultSizeChars]
+		runes := []rune(output)
+		if len(runes) > maxResultSizeChars {
+			output = string(runes[:maxResultSizeChars])
+		}
 		truncated = true
 		output += "\n[output truncated]"
 	}

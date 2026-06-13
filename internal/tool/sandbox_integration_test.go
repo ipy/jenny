@@ -25,7 +25,7 @@ func TestBashTool_AC1_NoSandboxConfigured(t *testing.T) {
 	bash := NewBashTool(true)
 	result, err := bash.Execute(context.Background(), map[string]any{
 		"command": "echo ac1_no_sb",
-	}, "/tmp")
+	}, os.TempDir())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestBashTool_AC1_ActiveSandboxWrapsCommand(t *testing.T) {
 	bash := NewBashTool(true).WithSandbox(sb)
 	result, err := bash.Execute(context.Background(), map[string]any{
 		"command": "echo ac1_wrapped",
-	}, "/tmp")
+	}, os.TempDir())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestBashTool_AC1_ExcludedCommandBypassesSandbox(t *testing.T) {
 	bash := NewBashTool(true).WithSandbox(sb)
 	_, err := bash.Execute(context.Background(), map[string]any{
 		"command": "echo ac1_excluded",
-	}, "/tmp")
+	}, os.TempDir())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestBashTool_AC1_DangerouslyDisableSandboxBypasses(t *testing.T) {
 	result, err := bash.Execute(context.Background(), map[string]any{
 		"command":                   "echo ac1_optout",
 		"dangerouslyDisableSandbox": true,
-	}, "/tmp")
+	}, os.TempDir())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestBashTool_AC1_InactiveSandboxDoesNotWrap(t *testing.T) {
 	bash := NewBashTool(true).WithSandbox(sb)
 	result, err := bash.Execute(context.Background(), map[string]any{
 		"command": "echo ac1_inactive",
-	}, "/tmp")
+	}, os.TempDir())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -526,7 +526,7 @@ func TestRegistry_WithSandboxWiring(t *testing.T) {
 	// Can't directly read unexported fields, so test behavior:
 	result, err := bashTool.Execute(context.Background(), map[string]any{
 		"command": "echo wired_test",
-	}, "/tmp")
+	}, os.TempDir())
 	if err != nil {
 		t.Fatalf("bash execute: %v", err)
 	}
@@ -635,7 +635,7 @@ func TestBashTool_AC1_Unhappy_SandboxWrapError(t *testing.T) {
 	bash := NewBashTool(true).WithSandbox(sb)
 	result, err := bash.Execute(context.Background(), map[string]any{
 		"command": "echo blocked_by_sandbox",
-	}, "/tmp")
+	}, os.TempDir())
 	if err != nil {
 		t.Fatalf("expected no top-level error, got: %v", err)
 	}
@@ -655,7 +655,7 @@ func TestBashTool_AC1_Unhappy_NilSandboxInactive(t *testing.T) {
 	bash := NewBashTool(true)
 	result, err := bash.Execute(context.Background(), map[string]any{
 		"command": "echo no_sandbox_ok",
-	}, "/tmp")
+	}, os.TempDir())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

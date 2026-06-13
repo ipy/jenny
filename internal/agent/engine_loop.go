@@ -1116,7 +1116,7 @@ func seedReadFileCacheFromTranscript(cache *tool.ReadFileCache, sessionManager *
 	// Build a map of tool_use ID -> tool_use entry for Read tools
 	readToolUses := make(map[string]session.TranscriptEntry)
 	for _, entry := range entries {
-		if entry.Type == "tool_use" && len(entry.ToolUse) > 0 {
+		if entry.Type == "assistant" && len(entry.ToolUse) > 0 {
 			for _, tu := range entry.ToolUse {
 				if tu.Name == "Read" {
 					readToolUses[tu.ID] = entry
