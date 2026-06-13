@@ -50,16 +50,16 @@ type StreamConfig struct {
 	Skills               []skills.Skill              // Discovered skills for manifest
 	ActiveSkills         []ActivatedSkill            // Skills activated this session (survives compaction)
 	// Non-compacted: survives context compaction.
-	PermissionDenials    []string // Denied tool executions (toolName + inputKey pairs) for cross-turn caching
+	PermissionDenials []string // Denied tool executions (toolName + inputKey pairs) for cross-turn caching
 	// Non-compacted: survives context compaction.
-	DiscoveredSkillNames []string // Skill names discovered during execution for cross-turn persistence
-	IsForkChild          bool     // True when this session is a fork child (subagent spawned another agent)
-	StructuredSchema     map[string]any              // JSON schema for structured output (AC1, AC4: non-interactive only)
-	StructuredDenyRules  []string                    // Tool names to deny; checked by engine to enforce AC1
-	IsNamedAgent         bool                        // True when this session is a named swarm agent
-	MaxIterations        int                         // Maximum loop iterations (0 = unlimited)
-	RedactMode           redact.RedactMode           // Secret redaction mode
-	Effort               string                      // Reasoning effort level (low, medium, high) for OpenAI/DeepSeek
+	DiscoveredSkillNames []string          // Skill names discovered during execution for cross-turn persistence
+	IsForkChild          bool              // True when this session is a fork child (subagent spawned another agent)
+	StructuredSchema     map[string]any    // JSON schema for structured output (AC1, AC4: non-interactive only)
+	StructuredDenyRules  []string          // Tool names to deny; checked by engine to enforce AC1
+	IsNamedAgent         bool              // True when this session is a named swarm agent
+	MaxIterations        int               // Maximum loop iterations (0 = unlimited)
+	RedactMode           redact.RedactMode // Secret redaction mode
+	Effort               string            // Reasoning effort level (low, medium, high) for OpenAI/DeepSeek
 }
 
 // SetActiveSkills sets the active skills list for the system prompt.

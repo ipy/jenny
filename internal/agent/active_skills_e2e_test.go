@@ -78,9 +78,9 @@ func newMockStreamServerForCompaction(t *testing.T, turn1Events, turn2Events []s
 		if !req.Stream {
 			// Non-streaming response for fallback
 			resp := api.AnthropicResponse{
-				Type: "message",
-				Role: "assistant",
-				Model: "test-model",
+				Type:       "message",
+				Role:       "assistant",
+				Model:      "test-model",
 				StopReason: "end_turn",
 				Usage: api.AnthropicUsage{
 					InputTokens:  100,
@@ -131,7 +131,7 @@ func TestActiveSkills_E2E_ThroughCompaction(t *testing.T) {
 	testSkills := []skills.Skill{
 		{
 			Name:           "go-developer",
-			Description:   "Go development skill",
+			Description:    "Go development skill",
 			RootPath:       "/test/go-developer",
 			ActivationGlob: "**/*.go",
 		},
@@ -179,7 +179,7 @@ func TestActiveSkills_E2E_ThroughCompaction(t *testing.T) {
 		Enabled:        false, // Non-streaming for simpler testing
 		SessionManager: sessMgr,
 		SessionID:      "test-e2e-compaction",
-		MaxIterations:  3,    // Limit iterations to avoid infinite loop
+		MaxIterations:  3, // Limit iterations to avoid infinite loop
 	}
 
 	// Create QueryEngine with skill activator
@@ -500,13 +500,13 @@ func TestActiveSkills_AccumulateAcrossTurns(t *testing.T) {
 	testSkills := []skills.Skill{
 		{
 			Name:           "go-developer",
-			Description:   "Go development skill",
+			Description:    "Go development skill",
 			RootPath:       tmpDir + "/go-developer",
 			ActivationGlob: "**/*.go",
 		},
 		{
 			Name:           "python-developer",
-			Description:   "Python development skill",
+			Description:    "Python development skill",
 			RootPath:       tmpDir + "/python-developer",
 			ActivationGlob: "**/*.py",
 		},
@@ -755,7 +755,7 @@ func TestActiveSkills_GracefulDegradation(t *testing.T) {
 	testSkills := []skills.Skill{
 		{
 			Name:           "go-developer",
-			Description:   "Go development skill",
+			Description:    "Go development skill",
 			RootPath:       "/test/go-developer",
 			ActivationGlob: "**/*.go",
 		},

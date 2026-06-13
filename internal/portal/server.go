@@ -20,6 +20,7 @@ import (
 )
 
 // webuiDist is the embedded webui build output.
+//
 //go:embed webui/dist
 var webuiDist embed.FS
 
@@ -169,7 +170,7 @@ func (p *Portal) writeLockfileWithLock() error {
 	if err != nil {
 		// Another process has the lockfile locked - portal is running
 		os.Remove(tmpPath)
-		
+
 		// Read existing lockfile to get port for error message
 		if existingData, readErr := os.ReadFile(p.lockPath); readErr == nil {
 			var existingLF LockfileData

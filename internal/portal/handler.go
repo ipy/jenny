@@ -793,8 +793,6 @@ func sessionExists(sessionID string) bool {
 	return err == nil
 }
 
-
-
 // readSkillDescription reads the description from a skill directory.
 // It tries SKILL.md first (for skills that follow the new format), then README.md, README, or skill.md.
 func readSkillDescription(skillPath string) string {

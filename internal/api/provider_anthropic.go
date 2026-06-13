@@ -418,15 +418,15 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 		if systemPrompt != "" || systemPromptSuffix != "" {
 			if systemPrompt != "" {
 				reqBody.System = append(reqBody.System, AnthropicContentBlock{
-				Type:         BlockTypeText,
-				Text:         systemPrompt,
-				CacheControl: &AnthropicCacheControl{Type: "ephemeral"},
-			})
-		}
-		if systemPromptSuffix != "" {
-			reqBody.System = append(reqBody.System, AnthropicContentBlock{
-				Type: BlockTypeText,
-				Text: systemPromptSuffix,
+					Type:         BlockTypeText,
+					Text:         systemPrompt,
+					CacheControl: &AnthropicCacheControl{Type: "ephemeral"},
+				})
+			}
+			if systemPromptSuffix != "" {
+				reqBody.System = append(reqBody.System, AnthropicContentBlock{
+					Type: BlockTypeText,
+					Text: systemPromptSuffix,
 				})
 			}
 		}
@@ -500,72 +500,72 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 				RawEvent: event,
 			}
 
-		switch event.Type {
-		case EventMessageStart:
-			hasMessageStart = true
-			if event.Message != nil {
-				acc.setModel(event.Message.Model)
-				acc.setUsage(Usage{
-					InputTokens:              event.Message.Usage.InputTokens,
-					CacheReadInputTokens:     event.Message.Usage.CacheReadInputTokens,
-					CacheCreationInputTokens: event.Message.Usage.CacheCreationInputTokens,
-				})
-			}
+			switch event.Type {
+			case EventMessageStart:
+				hasMessageStart = true
+				if event.Message != nil {
+					acc.setModel(event.Message.Model)
+					acc.setUsage(Usage{
+						InputTokens:              event.Message.Usage.InputTokens,
+						CacheReadInputTokens:     event.Message.Usage.CacheReadInputTokens,
+						CacheCreationInputTokens: event.Message.Usage.CacheCreationInputTokens,
+					})
+				}
 
-		case EventContentBlockStart:
-			index := event.Index
-			if event.ContentBlock != nil {
-				acc.setBlockType(index, event.ContentBlock.Type)
-				if event.ContentBlock.Type == BlockTypeToolUse {
-					acc.blocks[index].ToolID = event.ContentBlock.ID
-					acc.blocks[index].ToolName = event.ContentBlock.Name
+			case EventContentBlockStart:
+				index := event.Index
+				if event.ContentBlock != nil {
+					acc.setBlockType(index, event.ContentBlock.Type)
+					if event.ContentBlock.Type == BlockTypeToolUse {
+						acc.blocks[index].ToolID = event.ContentBlock.ID
+						acc.blocks[index].ToolName = event.ContentBlock.Name
+					}
+					if event.ContentBlock.Type == BlockTypeThinking {
+						acc.setBlockType(index, BlockTypeThinking)
+						acc.appendThinking(index, event.ContentBlock.Thinking)
+					}
 				}
-				if event.ContentBlock.Type == BlockTypeThinking {
-					acc.setBlockType(index, BlockTypeThinking)
-					acc.appendThinking(index, event.ContentBlock.Thinking)
-				}
-			}
 
-		case EventContentBlockDelta:
-			index := event.Index
-			if event.Delta != nil {
-				if event.Delta.Text != "" {
-					acc.appendText(index, event.Delta.Text)
+			case EventContentBlockDelta:
+				index := event.Index
+				if event.Delta != nil {
+					if event.Delta.Text != "" {
+						acc.appendText(index, event.Delta.Text)
+					}
+					if event.Delta.Thinking != "" {
+						acc.setBlockType(index, BlockTypeThinking)
+						acc.appendThinking(index, event.Delta.Thinking)
+					}
+					if event.Delta.Signature != "" {
+						acc.appendSignature(index, event.Delta.Signature)
+					}
+					if event.Delta.PartialJSON != "" {
+						acc.appendToolInputJSON(index, event.Delta.PartialJSON)
+					}
 				}
-				if event.Delta.Thinking != "" {
-					acc.setBlockType(index, BlockTypeThinking)
-					acc.appendThinking(index, event.Delta.Thinking)
-				}
-				if event.Delta.Signature != "" {
-					acc.appendSignature(index, event.Delta.Signature)
-				}
-				if event.Delta.PartialJSON != "" {
-					acc.appendToolInputJSON(index, event.Delta.PartialJSON)
-				}
-			}
 
-		case EventContentBlockStop:
-			index := event.Index
-			acc.finalizeToolInput(index)
-			acc.ensureBlock(index)
-			blocksChan <- StreamContentBlock{Block: acc.blocks[index]}
+			case EventContentBlockStop:
+				index := event.Index
+				acc.finalizeToolInput(index)
+				acc.ensureBlock(index)
+				blocksChan <- StreamContentBlock{Block: acc.blocks[index]}
 
-		case EventMessageDelta:
-			if event.Usage != nil {
-				acc.setUsage(Usage{
-					InputTokens:              event.Usage.InputTokens,
-					OutputTokens:             event.Usage.OutputTokens,
-					CacheReadInputTokens:     event.Usage.CacheReadInputTokens,
-					CacheCreationInputTokens: event.Usage.CacheCreationInputTokens,
-				})
-			}
-			if event.Delta != nil && event.Delta.StopReason != "" {
-				acc.setStopReason(StopReason(event.Delta.StopReason))
-			}
+			case EventMessageDelta:
+				if event.Usage != nil {
+					acc.setUsage(Usage{
+						InputTokens:              event.Usage.InputTokens,
+						OutputTokens:             event.Usage.OutputTokens,
+						CacheReadInputTokens:     event.Usage.CacheReadInputTokens,
+						CacheCreationInputTokens: event.Usage.CacheCreationInputTokens,
+					})
+				}
+				if event.Delta != nil && event.Delta.StopReason != "" {
+					acc.setStopReason(StopReason(event.Delta.StopReason))
+				}
 
-		case EventMessageStop:
-			hasMessageStop = true
-		}
+			case EventMessageStop:
+				hasMessageStop = true
+			}
 		}
 
 		if scanner.Err() != nil && result.Error == "" {

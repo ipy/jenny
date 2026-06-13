@@ -802,13 +802,13 @@ type openAIStreamAccumulator struct {
 	toolCalls  map[int]*toolCallAccumulator
 
 	// Block index tracking for Anthropic-compatible event emission
-	blockCounter    int
-	thinkingStarted bool
-	thinkingStopped bool
-	thinkingIndex   int
-	contentStarted  bool
-	contentStopped  bool
-	contentIndex    int
+	blockCounter     int
+	thinkingStarted  bool
+	thinkingStopped  bool
+	thinkingIndex    int
+	contentStarted   bool
+	contentStopped   bool
+	contentIndex     int
 	toolBlockIndices map[int]int // OpenAI tool call index -> Anthropic block index
 }
 

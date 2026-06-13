@@ -55,7 +55,7 @@ func (e *QueryEngine) handleStopReason(
 		}
 		result, err := e.finalizeAsEndTurn(ctx, resp, textOutput, sessionID, assistantMsg, *messages)
 		return result, err, false
-		}
+	}
 }
 
 // handleStopEndTurn processes the end_turn stop reason: validates structured

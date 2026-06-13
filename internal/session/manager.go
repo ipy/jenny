@@ -21,12 +21,12 @@ import (
 
 // Transcript entry type constants.
 const (
-	EntryTypeUser        = "user"
-	EntryTypeAssistant   = "assistant"
-	EntryTypeToolResult  = "tool_result"
-	EntryTypeState       = "state"
-	EntryTypeSystem      = "system"
-	EntryTypeProgress    = "progress"
+	EntryTypeUser       = "user"
+	EntryTypeAssistant  = "assistant"
+	EntryTypeToolResult = "tool_result"
+	EntryTypeState      = "state"
+	EntryTypeSystem     = "system"
+	EntryTypeProgress   = "progress"
 )
 
 // Transcript entry subtype constants.

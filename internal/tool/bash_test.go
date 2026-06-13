@@ -119,19 +119,19 @@ func TestBashTool_ReadOnlyEnforcement(t *testing.T) {
 
 	// These commands should be allowed (read-only AND within working directory)
 	allowedCommands := []string{
-		fmt.Sprintf("ls %s", cwd),           // cwd - within working directory
-		"pwd",                               // no file path
-		"whoami",                            // no file path
-		"echo hello",                        // no file path
-		"date",                              // no file path
-		"cat ./test.txt",                    // relative path within cwd
+		fmt.Sprintf("ls %s", cwd),             // cwd - within working directory
+		"pwd",                                 // no file path
+		"whoami",                              // no file path
+		"echo hello",                          // no file path
+		"date",                                // no file path
+		"cat ./test.txt",                      // relative path within cwd
 		fmt.Sprintf("head -n 5 %s", testFile), // path inside cwd
 		fmt.Sprintf("tail -n 5 %s", testFile), // path inside cwd
 		fmt.Sprintf("grep test %s", testFile), // path inside cwd
 		fmt.Sprintf("find %s -name '*.txt'", cwd), // path inside cwd
-		fmt.Sprintf("wc -l %s", testFile),     // path inside cwd
-		"which ls",                          // command lookup - doesn't access the file
-		"type cat",                          // command lookup - doesn't access the file
+		fmt.Sprintf("wc -l %s", testFile),         // path inside cwd
+		"which ls",                                // command lookup - doesn't access the file
+		"type cat",                                // command lookup - doesn't access the file
 	}
 
 	for _, cmd := range allowedCommands {

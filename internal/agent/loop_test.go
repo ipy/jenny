@@ -413,8 +413,8 @@ func TestRebuildMessages(t *testing.T) {
 			name: "compact boundary with summary restored as system message",
 			entries: []session.TranscriptEntry{
 				{Type: "system", Subtype: "compact_boundary", CompactMetadata: &session.CompactMetadata{
-					Trigger:  "auto",
-					Summary:  "User asked to list files. Assistant used Bash tool. Found 2 files.",
+					Trigger: "auto",
+					Summary: "User asked to list files. Assistant used Bash tool. Found 2 files.",
 				}},
 				{Type: "user", Content: "What were those files?"},
 				{Type: "assistant", Content: "file1.txt and file2.txt"},

@@ -508,7 +508,7 @@ func (p *genaiProvider) processStreamChunk(resp *GenAIResponse, acc *genAIStream
 				if acc.thinkingStarted && !acc.thinkingStopped {
 					acc.thinkingStopped = true
 					blocksChan <- StreamContentBlock{
-						Type: "stream_event",
+						Type:     "stream_event",
 						RawEvent: AnthropicStreamEvent{Type: EventContentBlockStop, Index: acc.thinkingIndex},
 					}
 					blocksChan <- StreamContentBlock{Block: ContentBlock{
@@ -518,7 +518,7 @@ func (p *genaiProvider) processStreamChunk(resp *GenAIResponse, acc *genAIStream
 				if acc.contentStarted && !acc.contentStopped {
 					acc.contentStopped = true
 					blocksChan <- StreamContentBlock{
-						Type: "stream_event",
+						Type:     "stream_event",
 						RawEvent: AnthropicStreamEvent{Type: EventContentBlockStop, Index: acc.contentIndex},
 					}
 					blocksChan <- StreamContentBlock{Block: ContentBlock{
@@ -555,7 +555,7 @@ func (p *genaiProvider) processStreamChunk(resp *GenAIResponse, acc *genAIStream
 					}
 				}
 				blocksChan <- StreamContentBlock{
-					Type: "stream_event",
+					Type:     "stream_event",
 					RawEvent: AnthropicStreamEvent{Type: EventContentBlockStop, Index: fcIdx},
 				}
 
@@ -591,7 +591,7 @@ func (p *genaiProvider) processStreamChunk(resp *GenAIResponse, acc *genAIStream
 			if acc.thinkingStarted && !acc.thinkingStopped {
 				acc.thinkingStopped = true
 				blocksChan <- StreamContentBlock{
-					Type: "stream_event",
+					Type:     "stream_event",
 					RawEvent: AnthropicStreamEvent{Type: EventContentBlockStop, Index: acc.thinkingIndex},
 				}
 				blocksChan <- StreamContentBlock{Block: ContentBlock{
@@ -601,7 +601,7 @@ func (p *genaiProvider) processStreamChunk(resp *GenAIResponse, acc *genAIStream
 			if acc.contentStarted && !acc.contentStopped {
 				acc.contentStopped = true
 				blocksChan <- StreamContentBlock{
-					Type: "stream_event",
+					Type:     "stream_event",
 					RawEvent: AnthropicStreamEvent{Type: EventContentBlockStop, Index: acc.contentIndex},
 				}
 				blocksChan <- StreamContentBlock{Block: ContentBlock{

@@ -612,4 +612,3 @@ func mustGetMtime(t *testing.T, path string) time.Time {
 	}
 	return info.ModTime()
 }
-

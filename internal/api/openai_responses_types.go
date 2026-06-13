@@ -84,15 +84,15 @@ type OpenAIResponsesUsage struct {
 
 // OpenAIResponsesStreamEvent represents a single event in a Responses API stream.
 type OpenAIResponsesStreamEvent struct {
-	Type        string                   `json:"type"`
-	OutputIndex int                      `json:"output_index,omitempty"`
-	ContentIndex int                     `json:"content_index,omitempty"`
-	ItemID      string                   `json:"item_id,omitempty"`
-	Delta       string                   `json:"delta,omitempty"`
-	Response    *OpenAIResponsesResponse `json:"response,omitempty"`
-	Item        *OpenAIResponsesOutputItem `json:"item,omitempty"`
-	Part        *OpenAIResponsesStreamPart `json:"part,omitempty"`
-	SummaryIndex int                      `json:"summary_index,omitempty"`
+	Type         string                     `json:"type"`
+	OutputIndex  int                        `json:"output_index,omitempty"`
+	ContentIndex int                        `json:"content_index,omitempty"`
+	ItemID       string                     `json:"item_id,omitempty"`
+	Delta        string                     `json:"delta,omitempty"`
+	Response     *OpenAIResponsesResponse   `json:"response,omitempty"`
+	Item         *OpenAIResponsesOutputItem `json:"item,omitempty"`
+	Part         *OpenAIResponsesStreamPart `json:"part,omitempty"`
+	SummaryIndex int                        `json:"summary_index,omitempty"`
 }
 
 // OpenAIResponsesStreamPart represents a part within a stream event.

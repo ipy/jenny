@@ -1203,4 +1203,3 @@ func TestOpenAIProvider_DeepSeekThinking(t *testing.T) {
 		t.Error("reasoning_content was not correctly parsed into a thinking block")
 	}
 }
-
