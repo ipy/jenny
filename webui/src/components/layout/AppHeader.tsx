@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Theme } from '../../types';
 import type { Locale } from '../../i18n/translate';
 
@@ -234,6 +234,12 @@ export function AppHeader({
 
 // ── LocaleSwitcher ─────────────────────────
 
+const LOCALE_OPTIONS: { value: Locale; label: string }[] = [
+  { value: 'en', label: 'EN' },
+  { value: 'zh-Hans', label: '中文' },
+  { value: 'zh-Hant', label: '繁中' },
+];
+
 function LocaleSwitcher({
   locale,
   onLocaleChange,
@@ -241,56 +247,133 @@ function LocaleSwitcher({
   locale: Locale;
   onLocaleChange: (locale: Locale) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close on click outside or Escape key
+  useEffect(() => {
+    if (!open) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [open]);
+
+  const handleSelect = useCallback((l: Locale) => {
+    onLocaleChange(l);
+    setOpen(false);
+  }, [onLocaleChange]);
+
   return (
-    <div
-      role="group"
-      aria-label="Language"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        padding: '2px',
-        gap: '2px',
-        border: '1px solid var(--color-border)',
-        borderRadius: '8px',
-        background: 'var(--color-glass-subtle)',
-        flexShrink: 0,
-      }}
-    >
-      {([
-        { value: 'en' as Locale, label: 'EN' },
-        { value: 'zh-Hans' as Locale, label: '中文' },
-        { value: 'zh-Hant' as Locale, label: '繁中' },
-      ] as { value: Locale; label: string }[]).map((opt) => {
-        const active = locale === opt.value;
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => onLocaleChange(opt.value)}
-            aria-pressed={active}
-            className="focus-ring"
-            style={{
-              height: '28px',
-              padding: '0 8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: '6px',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '10px',
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-              transition: 'all 0.2s',
-              color: active ? 'var(--color-primary)' : 'var(--color-text-dim)',
-              background: active ? 'oklch(0.55 0.18 285 / 0.15)' : 'transparent',
-            }}
-          >
-            {opt.label}
-          </button>
-        );
-      })}
+    <div ref={containerRef} style={{ position: 'relative', flexShrink: 0 }}>
+      {/* Globe icon button trigger */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Change language"
+        className="focus-ring"
+        style={{
+          width: '28px',
+          height: '28px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: '8px',
+          border: '1px solid var(--color-border)',
+          background: open ? 'oklch(0.55 0.18 285 / 0.15)' : 'var(--color-glass-subtle)',
+          cursor: 'pointer',
+          fontSize: '14px',
+          transition: 'all 0.2s',
+          color: open ? 'var(--color-primary)' : 'var(--color-text-dim)',
+        }}
+      >
+        {/* Globe emoji icon */}
+        <span aria-hidden="true" style={{ fontSize: '15px', lineHeight: 1 }}>🌐</span>
+      </button>
+
+      {/* Dropdown menu */}
+      {open && (
+        <div
+          role="listbox"
+          aria-label="Language options"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            right: 0,
+            minWidth: '120px',
+            padding: '4px',
+            borderRadius: '10px',
+            background: 'var(--color-glass)',
+            border: '1px solid var(--color-glass-border)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            boxShadow: '0 8px 32px oklch(0 0 0 / 0.3)',
+            zIndex: 50,
+          }}
+        >
+          {LOCALE_OPTIONS.map((opt) => {
+            const active = locale === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                role="option"
+                aria-selected={active}
+                onClick={() => handleSelect(opt.value)}
+                className="focus-ring"
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: active ? 700 : 500,
+                  transition: 'all 0.15s',
+                  color: active ? 'var(--color-primary)' : 'var(--color-text)',
+                  background: active ? 'oklch(0.55 0.18 285 / 0.12)' : 'transparent',
+                  textAlign: 'left',
+                }}
+                onMouseEnter={(e) => {
+                  if (!active) {
+                    (e.currentTarget as HTMLElement).style.background = 'var(--color-glass-hover)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!active) {
+                    (e.currentTarget as HTMLElement).style.background = 'transparent';
+                  }
+                }}
+              >
+                {/* Active checkmark */}
+                {active && (
+                  <span style={{ color: 'var(--color-primary)', fontSize: '10px' }}>✓</span>
+                )}
+                {/* No left padding when active (checkmark provides alignment) */}
+                <span style={{ paddingLeft: active ? '0' : '18px' }}>{opt.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
