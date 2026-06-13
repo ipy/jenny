@@ -69,6 +69,7 @@ function AppContent() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [projectFilter, setProjectFilter] = useState<string>('');
   const [showSettings, setShowSettings] = useState(false);
+  const [marketplaceBrowseView, setMarketplaceBrowseView] = useState(false);
 
   // Fetch skills data for the Skills tab
   const { data: skills, loading: skillsLoading } = useApi<SkillInfo[]>('/api/skills');
@@ -99,7 +100,10 @@ function AppContent() {
           { id: 'marketplace', label: t('portal.marketplace') },
         ]}
         activeTab={activeTab}
-        onTabChange={(id) => setActiveTab(id as TabId)}
+        onTabChange={(id) => {
+          setActiveTab(id as TabId);
+          setMarketplaceBrowseView(false);
+        }}
         theme={theme}
         onThemeChange={setTheme}
         locale={locale}
@@ -114,7 +118,11 @@ function AppContent() {
         {activeTab === 'mcp' && <MCPServersTab servers={mcpServers ?? []} loading={mcpServersLoading} />}
         {activeTab === 'plugins' && <PluginsTab plugins={plugins ?? []} loading={pluginsLoading} />}
         {activeTab === 'marketplace' && (
-          <MarketplaceTab onNavigate={(tab) => setActiveTab(tab as TabId)} />
+          marketplaceBrowseView ? (
+            <MarketplaceBrowseView onBack={() => setMarketplaceBrowseView(false)} />
+          ) : (
+            <MarketplaceTab onNavigate={(tab) => setActiveTab(tab as TabId)} onBrowse={() => setMarketplaceBrowseView(true)} />
+          )
         )}
       </main>
 
@@ -122,7 +130,6 @@ function AppContent() {
     </div>
   );
 }
-
 interface StartTabProps {
   onSessionCreated: (sessionId: string) => void;
   onOpenSettings: () => void;
@@ -515,11 +522,21 @@ function ProjectsTab({ onNavigate, onFilter }: ProjectsTabProps) {
 
 // ── Marketplace Tab ────────────────────────────────────────────
 
-interface MarketplaceTabProps {
-  onNavigate: (tab: string) => void;
+// Marketplace item type from API
+interface MarketplaceItem {
+  name: string;
+  type: 'skill' | 'plugin' | 'mcp';
+  description: string;
+  version: string;
+  download_url: string;
 }
 
-function MarketplaceTab({ onNavigate }: MarketplaceTabProps) {
+interface MarketplaceTabProps {
+  onNavigate: (tab: string) => void;
+  onBrowse: () => void;
+}
+
+function MarketplaceTab({ onNavigate, onBrowse }: MarketplaceTabProps) {
   const { data: skills } = useApi<SkillInfo[]>('/api/skills');
   const { data: mcps } = useApi<MCPServerInfo[]>('/api/mcp/servers');
   const { data: plugins } = useApi<PluginInfo[]>('/api/plugins');
@@ -558,17 +575,23 @@ function MarketplaceTab({ onNavigate }: MarketplaceTabProps) {
           title={t('marketplace.empty_title')}
           hint={t('marketplace.empty_hint')}
         />
+        <div style={{ marginTop: '1.5rem' }}>
+          <Button variant="primary" onClick={onBrowse}>Browse Marketplace</Button>
+        </div>
       </div>
     );
   }
 
   return (
     <div style={{ padding: '2rem', maxWidth: '900px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '2rem' }}>
-        <h2 style={{ marginBottom: '0.5rem' }}>{t('portal.marketplace')}</h2>
-        <p style={{ color: 'var(--color-text-muted)', margin: 0 }}>
-          {t('portal.marketplace_description', { count: totalInstalled })}
-        </p>
+      <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h2 style={{ marginBottom: '0.5rem' }}>{t('portal.marketplace')}</h2>
+          <p style={{ color: 'var(--color-text-muted)', margin: 0 }}>
+            {t('portal.marketplace_description', { count: totalInstalled })}
+          </p>
+        </div>
+        <Button variant="outline" onClick={onBrowse}>Browse</Button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
@@ -600,6 +623,208 @@ function MarketplaceTab({ onNavigate }: MarketplaceTabProps) {
       </div>
     </div>
   );
+}
+
+// ── Marketplace Browse View ─────────────────────────────────────
+
+interface MarketplaceBrowseViewProps {
+  onBack: () => void;
+}
+
+function MarketplaceBrowseView({ onBack }: MarketplaceBrowseViewProps) {
+  const { t } = useLocale();
+  const toast = useToast();
+  const [items, setItems] = React.useState<MarketplaceItem[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [installed, setInstalled] = React.useState<Set<string>>(new Set());
+  const [installing, setInstalling] = React.useState<string | null>(null);
+
+  // Fetch marketplace items
+  React.useEffect(() => {
+    const fetchItems = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch(`/api/marketplace/browse?token=${getToken()}`);
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+        const data = await response.json();
+        setItems(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch marketplace');
+        toast.addToast({ kind: 'error', title: 'Failed to load marketplace', message: err instanceof Error ? err.message : 'Unknown error' });
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchItems();
+  }, []);
+
+  // Get installed names from existing data
+  React.useEffect(() => {
+    const updateInstalled = async () => {
+      try {
+        const skillsRes = await fetch(`/api/skills?token=${getToken()}`);
+        if (skillsRes.ok) {
+          const skills: SkillInfo[] = await skillsRes.json();
+          const names = new Set<string>(skills.map((s) => s.name));
+          setInstalled(names);
+        }
+      } catch {
+        // Ignore errors
+      }
+    };
+    updateInstalled();
+  }, []);
+
+  const handleInstall = async (item: MarketplaceItem) => {
+    if (installed.has(item.name) || installing) return;
+
+    setInstalling(item.name);
+    try {
+      const response = await fetch(`/api/marketplace/install?token=${getToken()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: item.type,
+          name: item.name,
+          download_url: item.download_url,
+        }),
+      });
+
+      if (response.ok) {
+        setInstalled((prev) => new Set([...prev, item.name]));
+        toast.addToast({ kind: 'success', title: 'Installed', message: `${item.name} has been installed.` });
+      } else if (response.status === 409) {
+        // Already installed
+        setInstalled((prev) => new Set([...prev, item.name]));
+        toast.addToast({ kind: 'info', title: 'Already installed', message: `${item.name} is already installed.` });
+      } else {
+        throw new Error(await response.text());
+      }
+    } catch (err) {
+      toast.addToast({ kind: 'error', title: 'Install failed', message: err instanceof Error ? err.message : 'Unknown error' });
+    } finally {
+      setInstalling(null);
+    }
+  };
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'skill':
+        return '⚡';
+      case 'mcp':
+        return '🔌';
+      case 'plugin':
+        return '🧩';
+      default:
+        return '📦';
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ padding: '4rem 2rem', textAlign: 'center' }}>
+        <div style={{ color: 'var(--color-text-dim)' }}>{t('common.loading')}</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: '2rem', maxWidth: '900px', margin: '0 auto' }}>
+        <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <Button variant="ghost" onClick={onBack}>← Back</Button>
+        </div>
+        <EmptyState
+          title={t('common.error')}
+          hint={error}
+        />
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <div style={{ padding: '2rem', maxWidth: '900px', margin: '0 auto' }}>
+        <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <Button variant="ghost" onClick={onBack}>← Back</Button>
+        </div>
+        <EmptyState
+          title="No items available"
+          hint="No items found in the marketplace."
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: '2rem', maxWidth: '900px', margin: '0 auto' }}>
+      <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <Button variant="ghost" onClick={onBack}>← Back</Button>
+        <h2 style={{ margin: 0 }}>{t('portal.marketplace')}</h2>
+      </div>
+
+      <div style={{ display: 'grid', gap: '1rem' }}>
+        {items.map((item) => {
+          const isInstalled = installed.has(item.name);
+          const isInstalling = installing === item.name;
+
+          return (
+            <GlassPanel key={`${item.type}-${item.name}`} style={{ padding: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ flex: 1, overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                    <span style={{ fontSize: '1.25rem' }}>{getTypeIcon(item.type)}</span>
+                    <h3 style={{ margin: 0 }}>{item.name}</h3>
+                    <Badge variant="default">{item.version}</Badge>
+                    <Badge variant="default">{item.type}</Badge>
+                  </div>
+                  <p
+                    style={{
+                      margin: '0.5rem 0',
+                      color: 'var(--color-text-muted)',
+                      fontSize: '0.875rem',
+                      overflow: 'hidden',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                    }}
+                  >
+                    {item.description || '(no description)'}
+                  </p>
+                </div>
+                <div style={{ marginLeft: '1rem' }}>
+                  {isInstalled ? (
+                    <Button variant="primary" disabled>
+                      Installed
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="primary"
+                      disabled={isInstalling}
+                      onClick={() => handleInstall(item)}
+                    >
+                      {isInstalling ? 'Installing...' : 'Install'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </GlassPanel>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Helper to get token from URL
+function getToken(): string {
+  if (typeof window === 'undefined') return '';
+  const params = new URLSearchParams(window.location.search);
+  return params.get('token') || '';
 }
 
 export default App;
