@@ -77,6 +77,7 @@ export { Portal, type PortalProps } from './components/feedback/Portal';
 export { ConfirmProvider } from './components/feedback/Confirm';
 export { ToastProvider } from './components/feedback/ToastDisplay';
 export { MutationFeedback, type MutationFeedbackProps } from './components/feedback/MutationFeedback';
+export { SettingsDialog, useSettings, type PortalSettings } from './components/feedback/SettingsDialog';
 
 // ── Data Display ────────────────────────────
 export {

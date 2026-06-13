@@ -22,6 +22,8 @@ import {
   killSession,
   apiPost,
   useToast,
+  useSettings,
+  SettingsDialog,
   type SessionMetadata,
 } from './index';
 import './styles/globals.css';
@@ -49,6 +51,7 @@ function AppContent() {
   const { t, locale, setLocale } = useLocale();
   const [activeTab, setActiveTab] = useState<TabId>('start');
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
 
   // Callback to handle session creation and navigate to sessions tab
   const handleSessionCreated = (sessionId: string) => {
@@ -78,7 +81,7 @@ function AppContent() {
       />
 
       <main style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-        {activeTab === 'start' && <StartTab onSessionCreated={handleSessionCreated} />}
+        {activeTab === 'start' && <StartTab onSessionCreated={handleSessionCreated} onOpenSettings={() => setShowSettings(true)} />}
         {activeTab === 'sessions' && <SessionsTab selectedId={selectedSessionId} onSelect={setSelectedSessionId} />}
         {activeTab === 'projects' && <ProjectsTab />}
         {/* Other tabs placeholder */}
@@ -88,20 +91,24 @@ function AppContent() {
           </div>
         )}
       </main>
+
+      <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} />
     </div>
   );
 }
 
 interface StartTabProps {
   onSessionCreated: (sessionId: string) => void;
+  onOpenSettings: () => void;
 }
 
-function StartTab({ onSessionCreated }: StartTabProps) {
+function StartTab({ onSessionCreated, onOpenSettings }: StartTabProps) {
   const { t } = useLocale();
   const [prompt, setPrompt] = useState('');
   const [launching, setLaunching] = useState(false);
   const toast = useToast();
   const { data: stats, loading } = useStats();
+  const { settings } = useSettings();
 
   const formatCost = (cost: number) => {
     if (cost < 0.01) return '$0.00';
@@ -112,7 +119,13 @@ function StartTab({ onSessionCreated }: StartTabProps) {
     if (!prompt.trim() || launching) return;
     setLaunching(true);
     try {
-      const result = await apiPost<{ session_id: string }>('/api/sessions/start', { prompt });
+      // Merge settings into API body (AC4)
+      const body: Record<string, string> = {
+        prompt: settings.promptPrefix ? `${settings.promptPrefix}\n${prompt}` : prompt,
+      };
+      if (settings.model) body.model = settings.model;
+      if (settings.workingDir) body.cwd = settings.workingDir;
+      const result = await apiPost<{ session_id: string }>('/api/sessions/start', body);
       setPrompt('');
       onSessionCreated(result.session_id);
     } catch (err) {
@@ -143,7 +156,7 @@ function StartTab({ onSessionCreated }: StartTabProps) {
               rows={4}
             />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
-              <Button variant="outline">Settings</Button>
+              <Button variant="outline" onClick={onOpenSettings}>{t('portal.settings')}</Button>
               <Button variant="primary" disabled={!prompt.trim() || launching} onClick={handleLaunch}>
                 {launching ? 'Launching...' : t('portal.launch')}
               </Button>
