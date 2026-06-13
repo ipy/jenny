@@ -2,9 +2,10 @@
 title: WebUI Portal
 slug: webui-portal
 priority: P1
-status: in-progress
+status: complete
 spec: complete
 code: complete
+version: "0.4.0"
 package: internal/portal
 depends_on:
   - agent-loop
