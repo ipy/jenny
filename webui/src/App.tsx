@@ -31,47 +31,53 @@ type TabId = 'start' | 'sessions' | 'projects' | 'skills' | 'mcp' | 'plugins' | 
 // ── Components ──────────────────────────────
 
 function App() {
+  return (
+    <ToastProvider>
+      <ConfirmProvider>
+        <LocaleProvider>
+          <AppContent />
+        </LocaleProvider>
+      </ConfirmProvider>
+    </ToastProvider>
+  );
+}
+
+function AppContent() {
   const { theme, setTheme } = useTheme();
   const { t } = useLocale();
   const [activeTab, setActiveTab] = useState<TabId>('start');
 
   return (
-    <ToastProvider>
-      <ConfirmProvider>
-        <LocaleProvider>
-          <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-            <AppHeader
-              brand="Jenny Portal"
-              tabs={[
-                { id: 'start', label: t('portal.start') },
-                { id: 'sessions', label: t('portal.sessions') },
-                { id: 'projects', label: t('portal.projects') },
-                { id: 'skills', label: t('portal.skills') },
-                { id: 'mcp', label: t('portal.mcp') },
-                { id: 'plugins', label: t('portal.plugins') },
-                { id: 'marketplace', label: t('portal.marketplace') },
-              ]}
-              activeTab={activeTab}
-              onTabChange={(id) => setActiveTab(id as TabId)}
-              theme={theme}
-              onThemeChange={setTheme}
-            />
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <AppHeader
+        brand="Jenny Portal"
+        tabs={[
+          { id: 'start', label: t('portal.start') },
+          { id: 'sessions', label: t('portal.sessions') },
+          { id: 'projects', label: t('portal.projects') },
+          { id: 'skills', label: t('portal.skills') },
+          { id: 'mcp', label: t('portal.mcp') },
+          { id: 'plugins', label: t('portal.plugins') },
+          { id: 'marketplace', label: t('portal.marketplace') },
+        ]}
+        activeTab={activeTab}
+        onTabChange={(id) => setActiveTab(id as TabId)}
+        theme={theme}
+        onThemeChange={setTheme}
+      />
 
-            <main style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-              {activeTab === 'start' && <StartTab />}
-              {activeTab === 'sessions' && <SessionsTab />}
-              {activeTab === 'projects' && <ProjectsTab />}
-              {/* Other tabs placeholder */}
-              {['skills', 'mcp', 'plugins', 'marketplace'].includes(activeTab) && (
-                <div style={{ padding: '2rem', textAlign: 'center' }}>
-                  <EmptyState title={t('portal.coming_soon')} hint={t('portal.coming_soon.hint')} />
-                </div>
-              )}
-            </main>
+      <main style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        {activeTab === 'start' && <StartTab />}
+        {activeTab === 'sessions' && <SessionsTab />}
+        {activeTab === 'projects' && <ProjectsTab />}
+        {/* Other tabs placeholder */}
+        {['skills', 'mcp', 'plugins', 'marketplace'].includes(activeTab) && (
+          <div style={{ padding: '2rem', textAlign: 'center' }}>
+            <EmptyState title={t('portal.coming_soon')} hint={t('portal.coming_soon.hint')} />
           </div>
-        </LocaleProvider>
-      </ConfirmProvider>
-    </ToastProvider>
+        )}
+      </main>
+    </div>
   );
 }
 
