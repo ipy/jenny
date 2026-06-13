@@ -22,7 +22,7 @@ type ModelPricing struct {
 
 // DefaultPricing is the pricing table for known models.
 // Rates are per-token in USD. All entries include source citations.
-// CNY-denominated prices are converted at ~7.2 CNY/USD (June 2026 approximation).
+// CNY-denominated prices are converted at ~6.77 CNY/USD (June 2026 approximation).
 var DefaultPricing = map[string]ModelPricing{
 	// -------------------------------------------------------------------------
 	// Anthropic Claude models — source: claude.com/pricing#api (June 2026)
@@ -38,10 +38,38 @@ var DefaultPricing = map[string]ModelPricing{
 		InputUSD:         0.000005,    // $5.00/1M input
 		OutputUSD:        0.000025,    // $25.00/1M output
 		CacheReadUSD:     0.0000005,   // $0.50/1M cache read
-		CacheCreationUSD: 0.00000375,  // $3.75/1M cache creation
+		CacheCreationUSD: 0.00000625, // $6.25/1M cache creation
 		// source: claude.com/pricing#api
 	},
 	"claude-haiku-4-20250514": {
+		InputUSD:         0.000001,    // $1.00/1M input
+		OutputUSD:        0.000005,    // $5.00/1M output
+		CacheReadUSD:     0.0000001,   // $0.10/1M cache read
+		CacheCreationUSD: 0.0000003,   // $0.30/1M cache creation
+		// source: claude.com/pricing#api
+	},
+	"claude-fable-5": {
+		InputUSD:         0.00001,     // $10.00/1M input
+		OutputUSD:        0.00005,     // $50.00/1M output
+		CacheReadUSD:     0.000001,    // $1.00/1M cache read
+		CacheCreationUSD: 0.0000125,   // $12.50/1M cache creation
+		// source: claude.com/pricing#api
+	},
+	"claude-sonnet-4.6": {
+		InputUSD:         0.000003,    // $3.00/1M input
+		OutputUSD:        0.000015,    // $15.00/1M output
+		CacheReadUSD:     0.0000003,   // $0.30/1M cache read
+		CacheCreationUSD: 0.00000375,  // $3.75/1M cache creation
+		// source: claude.com/pricing#api
+	},
+	"claude-opus-4.8": {
+		InputUSD:         0.000005,    // $5.00/1M input
+		OutputUSD:        0.000025,    // $25.00/1M output
+		CacheReadUSD:     0.0000005,   // $0.50/1M cache read
+		CacheCreationUSD: 0.00000625, // $6.25/1M cache creation
+		// source: claude.com/pricing#api
+	},
+	"claude-haiku-4.5": {
 		InputUSD:         0.000001,    // $1.00/1M input
 		OutputUSD:        0.000005,    // $5.00/1M output
 		CacheReadUSD:     0.0000001,   // $0.10/1M cache read
@@ -94,162 +122,169 @@ var DefaultPricing = map[string]ModelPricing{
 		// source: api-docs.deepseek.com/quick_start/pricing
 	},
 	// -------------------------------------------------------------------------
-	// Google Gemini models — source: cloud.google.com/vertex-ai/generative-ai/pricing (June 2026)
+	// Google Gemini models — source: ai.google.dev/gemini-api/docs/pricing (June 2026)
 	// Standard tier, <=200K input tokens
 	// -------------------------------------------------------------------------
-	"gemini-2.5-flash": {
-		InputUSD:         0.0000003,    // $0.30/1M input (text/image/video/audio)
-		OutputUSD:        0.0000025,    // $2.50/1M output
-		CacheReadUSD:     0.00000003,   // $0.03/1M cached input
+	"gemini-3.5-flash": {
+		InputUSD:         0.0000015,    // $1.50/1M input (text/image/video/audio)
+		OutputUSD:        0.000009,    // $9.00/1M output
+		CacheReadUSD:     0.00000015,  // $0.15/1M cached input
 		CacheCreationUSD: 0,           // Not published
-		// source: cloud.google.com/vertex-ai/generative-ai/pricing
+		// source: ai.google.dev/gemini-api/docs/pricing
 	},
-	"gemini-2.1-pro": {
-		InputUSD:         0.00000125,   // $1.25/1M input
-		OutputUSD:        0.00001,      // $10.00/1M output
-		CacheReadUSD:     0.000000125,  // $0.125/1M cached input
-		CacheCreationUSD: 0,           // Not published
-		// source: cloud.google.com/vertex-ai/generative-ai/pricing
+	"gemini-3.1-pro": {
+		InputUSD:         0.000002,     // $2.00/1M input
+		OutputUSD:        0.000012,     // $12.00/1M output
+		CacheReadUSD:     0.0000002,    // $0.20/1M cached input
+		CacheCreationUSD: 0,            // Not published
+		// source: ai.google.dev/gemini-api/docs/pricing
+	},
+	"gemini-3.1-flash-lite": {
+		InputUSD:         0.00000025,   // $0.25/1M input
+		OutputUSD:        0.0000015,    // $1.50/1M output
+		CacheReadUSD:     0.000000025,  // $0.025/1M cached input
+		CacheCreationUSD: 0,            // Not published
+		// source: ai.google.dev/gemini-api/docs/pricing
 	},
 	// -------------------------------------------------------------------------
 	// MiniMax models — source: platform.minimaxi.com/docs/guides/pricing-paygo (June 2026)
-	// Prices published in CNY; converted at ~7.2 CNY/USD (June 2026 approximation)
+	// Prices published in CNY; converted at ~6.77 CNY/USD (June 2026 approximation)
 	// -------------------------------------------------------------------------
 	"minimax-m3": {
-		InputUSD:         0.000000584,   // ¥4.20/1M → $0.584/1M input (≤512K, standard tier)
-		OutputUSD:        0.000002333,   // ¥16.80/1M → $2.333/1M output
-		CacheReadUSD:     0.000000117,   // ¥0.84/1M → $0.117/1M cache read
+		InputUSD:         0.000000620,  // ¥4.20/1M → $0.620/1M input (≤512K, standard tier)
+		OutputUSD:        0.000002481,  // ¥16.80/1M → $2.481/1M output
+		CacheReadUSD:     0.000000124,  // ¥0.84/1M → $0.124/1M cache read
 		CacheCreationUSD: 0,            // N/A
 		// source: platform.minimaxi.com/docs/guides/pricing-paygo
 	},
 	"minimax-m2.7": {
-		InputUSD:         0.000000303,   // ¥2.18/1M → $0.303/1M input
-		OutputUSD:        0.000001167,   // ¥8.40/1M → $1.167/1M output
-		CacheReadUSD:     0.000000058,   // ¥0.42/1M → $0.058/1M cache read
-		CacheCreationUSD: 0.000000083,   // ¥0.60/1M → $0.083/1M cache write
+		InputUSD:         0.000000322,  // ¥2.18/1M → $0.322/1M input
+		OutputUSD:        0.000001240,  // ¥8.40/1M → $1.240/1M output
+		CacheReadUSD:     0.000000062,  // ¥0.42/1M → $0.062/1M cache read
+		CacheCreationUSD: 0.000000089,  // ¥0.60/1M → $0.089/1M cache write
 		// source: platform.minimaxi.com/docs/guides/pricing-paygo
 	},
 	"minimax-m2.7-highspeed": {
-		InputUSD:         0.000000584,   // ¥4.20/1M → $0.584/1M input (1.5x standard)
-		OutputUSD:        0.000002333,   // ¥16.80/1M → $2.333/1M output
-		CacheReadUSD:     0.000000058,   // ¥0.42/1M → $0.058/1M cache read
-		CacheCreationUSD: 0.000000083,   // ¥0.60/1M → $0.083/1M cache write
+		InputUSD:         0.000000620,  // ¥4.20/1M → $0.620/1M input (1.5x standard)
+		OutputUSD:        0.000002481,  // ¥16.80/1M → $2.481/1M output
+		CacheReadUSD:     0.000000062,  // ¥0.42/1M → $0.062/1M cache read
+		CacheCreationUSD: 0.000000089,  // ¥0.60/1M → $0.089/1M cache write
 		// source: platform.minimaxi.com/docs/guides/pricing-paygo
 	},
 	"minimax-m2.5": {
-		InputUSD:         0.000000292,   // ¥2.10/1M → $0.292/1M input
-		OutputUSD:        0.000001167,   // ¥8.40/1M → $1.167/1M output
-		CacheReadUSD:     0.000000029,   // ¥0.21/1M → $0.029/1M cache read
-		CacheCreationUSD: 0.000000069,   // ¥0.50/1M → $0.069/1M cache write
+		InputUSD:         0.000000310,  // ¥2.10/1M → $0.310/1M input
+		OutputUSD:        0.000001240,  // ¥8.40/1M → $1.240/1M output
+		CacheReadUSD:     0.000000031,  // ¥0.21/1M → $0.031/1M cache read
+		CacheCreationUSD: 0.000000074,  // ¥0.50/1M → $0.074/1M cache write
 		// source: platform.minimaxi.com/docs/guides/pricing-paygo
 	},
 	// -------------------------------------------------------------------------
 	// Kimi/Moonshot models — source: platform.kimi.com/docs/pricing/chat-k26 (June 2026)
-	// Prices published in CNY; converted at ~7.2 CNY/USD (June 2026 approximation)
+	// Prices published in CNY; converted at ~6.77 CNY/USD (June 2026 approximation)
 	// -------------------------------------------------------------------------
 	"kimi-k2.7-code": {
-		InputUSD:         0.000000833,   // ¥6.00/1M → $0.833/1M input
-		OutputUSD:        0.000004722,   // ¥34.00/1M → $4.722/1M output
-		CacheReadUSD:     0.000000833,   // ¥6.00/1M → $0.833/1M cache read (same as input)
+		InputUSD:         0.000000886,  // ¥6.00/1M → $0.886/1M input
+		OutputUSD:        0.000005023,  // ¥34.00/1M → $5.023/1M output
+		CacheReadUSD:     0.000000886,  // ¥6.00/1M → $0.886/1M cache read (same as input)
 		CacheCreationUSD: 0,            // Not published
 		// source: platform.kimi.com/docs/pricing/chat-k26
 	},
 	"kimi-k2.6": {
-		InputUSD:         0.000000625,   // ¥4.50/1M → $0.625/1M input
-		OutputUSD:        0.000003611,   // ¥26.00/1M → $3.611/1M output
-		CacheReadUSD:     0.000000625,   // ¥4.50/1M → $0.625/1M cache read (same as input)
+		InputUSD:         0.000000664,  // ¥4.50/1M → $0.664/1M input
+		OutputUSD:        0.000003840,  // ¥26.00/1M → $3.840/1M output
+		CacheReadUSD:     0.000000664,  // ¥4.50/1M → $0.664/1M cache read (same as input)
 		CacheCreationUSD: 0,            // Not published
 		// source: platform.kimi.com/docs/pricing/chat-k26
 	},
 	"kimi-k2.5": {
-		InputUSD:         0.000000486,   // ¥3.50/1M → $0.486/1M input
-		OutputUSD:        0.000002917,   // ¥21.00/1M → $2.917/1M output
-		CacheReadUSD:     0.000000486,   // ¥3.50/1M → $0.486/1M cache read (same as input)
+		InputUSD:         0.000000517,  // ¥3.50/1M → $0.517/1M input
+		OutputUSD:        0.000003101,  // ¥21.00/1M → $3.101/1M output
+		CacheReadUSD:     0.000000517,  // ¥3.50/1M → $0.517/1M cache read (same as input)
 		CacheCreationUSD: 0,            // Not published
 		// source: platform.kimi.com/docs/pricing/chat-k25
 	},
 	"moonshot-v1-8k": {
-		InputUSD:         0.000000069,   // ¥0.50/1M → $0.069/1M input
-		OutputUSD:        0.000000417,   // ¥3.00/1M → $0.417/1M output
-		CacheReadUSD:     0.000000069,   // ¥0.50/1M → $0.069/1M cache read (same as input)
+		InputUSD:         0.000000074,  // ¥0.50/1M → $0.074/1M input
+		OutputUSD:        0.000000443,  // ¥3.00/1M → $0.443/1M output
+		CacheReadUSD:     0.000000074,  // ¥0.50/1M → $0.074/1M cache read (same as input)
 		CacheCreationUSD: 0,            // Not published
 		// source: platform.kimi.com/docs/pricing/chat-v1
 	},
 	"moonshot-v1-32k": {
-		InputUSD:         0.000000139,   // ¥1.00/1M → $0.139/1M input
-		OutputUSD:        0.000000417,   // ¥3.00/1M → $0.417/1M output
-		CacheReadUSD:     0.000000139,   // ¥1.00/1M → $0.139/1M cache read (same as input)
+		InputUSD:         0.000000148,  // ¥1.00/1M → $0.148/1M input
+		OutputUSD:        0.000000443,  // ¥3.00/1M → $0.443/1M output
+		CacheReadUSD:     0.000000148,  // ¥1.00/1M → $0.148/1M cache read (same as input)
 		CacheCreationUSD: 0,            // Not published
 		// source: platform.kimi.com/docs/pricing/chat-v1
 	},
 	"moonshot-v1-128k": {
-		InputUSD:         0.000000278,   // ¥2.00/1M → $0.278/1M input
-		OutputUSD:        0.000000417,   // ¥3.00/1M → $0.417/1M output
-		CacheReadUSD:     0.000000278,   // ¥2.00/1M → $0.278/1M cache read (same as input)
+		InputUSD:         0.000000296,  // ¥2.00/1M → $0.296/1M input
+		OutputUSD:        0.000000443,  // ¥3.00/1M → $0.443/1M output
+		CacheReadUSD:     0.000000296,  // ¥2.00/1M → $0.296/1M cache read (same as input)
 		CacheCreationUSD: 0,            // Not published
 		// source: platform.kimi.com/docs/pricing/chat-v1
 	},
 	// -------------------------------------------------------------------------
-	// Qwen/Alibaba models — source: www.qwencloud.com/models (June 2026)
+	// Qwen/Alibaba models — source: docs.qwencloud.com/developer-guides/getting-started/pricing (June 2026)
 	// -------------------------------------------------------------------------
 	"qwen-3.7-max": {
 		InputUSD:         0.0000025,    // $2.50/1M input (standard tier)
 		OutputUSD:        0.0000075,    // $7.50/1M output
 		CacheReadUSD:     0.00000025,   // $0.25/1M cache read (implicit cache)
 		CacheCreationUSD: 0.000003125,  // $3.125/1M cache creation (explicit)
-		// source: www.qwencloud.com/models/qwen3.7-max
+		// source: docs.qwencloud.com/developer-guides/getting-started/pricing
 	},
-	"qwen-3.5-27b": {
-		InputUSD:         0.0000003,    // $0.30/1M input
-		OutputUSD:        0.0000024,    // $2.40/1M output
-		CacheReadUSD:     0,           // Not published
-		CacheCreationUSD: 0,            // Not published
-		// source: www.qwencloud.com/models/qwen3.5-27b
+	"qwen-3.7-plus": {
+		InputUSD:         0.0000004,    // $0.40/1M input (standard tier)
+		OutputUSD:        0.0000016,    // $1.60/1M output
+		CacheReadUSD:     0.00000004,   // $0.04/1M cache read (implicit cache)
+		CacheCreationUSD: 0.0000005,    // $0.50/1M cache creation (explicit)
+		// source: docs.qwencloud.com/developer-guides/getting-started/pricing
 	},
-	"qwen-turbo": {
-		InputUSD:         0.0000001,    // $0.10/1M input
-		OutputUSD:        0.0000006,    // $0.60/1M output
-		CacheReadUSD:     0,           // Not published
+	"qwen-3.6-flash": {
+		InputUSD:         0.00000025,   // $0.25/1M input
+		OutputUSD:        0.0000015,    // $1.50/1M output
+		CacheReadUSD:     0,            // Not published
 		CacheCreationUSD: 0,            // Not published
-		// source: alibabacloud.com
+		// source: docs.qwencloud.com/developer-guides/getting-started/pricing
 	},
 	// -------------------------------------------------------------------------
 	// Tencent Hunyuan models — source: cloud.tencent.com/document/product/1729/97731 (June 2026)
-	// Prices published in CNY; converted at ~7.2 CNY/USD (June 2026 approximation)
+	// Prices published in CNY; converted at ~6.77 CNY/USD (June 2026 approximation)
 	// -------------------------------------------------------------------------
 	"hunyuan-turbos": {
-		InputUSD:         0.000000111,   // ¥0.80/1M → $0.111/1M input
-		OutputUSD:        0.000000278,   // ¥2.00/1M → $0.278/1M output
-		CacheReadUSD:     0,           // Not published
-		CacheCreationUSD: 0,           // Not published
+		InputUSD:         0.000000118,  // ¥0.80/1M → $0.118/1M input
+		OutputUSD:        0.000000295,  // ¥2.00/1M → $0.295/1M output
+		CacheReadUSD:     0,            // Not published
+		CacheCreationUSD: 0,            // Not published
 		// source: cloud.tencent.com/document/product/1729/97731
 	},
 	"hunyuan-t1": {
-		InputUSD:         0.000000139,   // ¥1.00/1M → $0.139/1M input
-		OutputUSD:        0.000000556,   // ¥4.00/1M → $0.556/1M output
-		CacheReadUSD:     0,           // Not published
-		CacheCreationUSD: 0,           // Not published
+		InputUSD:         0.000000148,  // ¥1.00/1M → $0.148/1M input
+		OutputUSD:        0.000000591,  // ¥4.00/1M → $0.591/1M output
+		CacheReadUSD:     0,            // Not published
+		CacheCreationUSD: 0,            // Not published
 		// source: cloud.tencent.com/document/product/1729/97731
 	},
 	"hunyuan-hy-2.0-instruct": {
-		InputUSD:         0.000000442,   // ¥3.18/1M → $0.442/1M input (≤32K tokens)
-		OutputUSD:        0.000001104,   // ¥7.95/1M → $1.104/1M output
-		CacheReadUSD:     0,           // Not published
-		CacheCreationUSD: 0,           // Not published
+		InputUSD:         0.000000470,  // ¥3.18/1M → $0.470/1M input (≤32K tokens)
+		OutputUSD:        0.000001174,  // ¥7.95/1M → $1.174/1M output
+		CacheReadUSD:     0,            // Not published
+		CacheCreationUSD: 0,            // Not published
 		// source: cloud.tencent.com/document/product/1729/97731
 	},
 	"hunyuan-hy-2.0-think": {
-		InputUSD:         0.000000552,   // ¥3.975/1M → $0.552/1M input (≤32K tokens)
-		OutputUSD:        0.000002208,   // ¥15.90/1M → $2.208/1M output
-		CacheReadUSD:     0,           // Not published
-		CacheCreationUSD: 0,           // Not published
+		InputUSD:         0.000000587,  // ¥3.975/1M → $0.587/1M input (≤32K tokens)
+		OutputUSD:        0.000002349,  // ¥15.90/1M → $2.349/1M output
+		CacheReadUSD:     0,            // Not published
+		CacheCreationUSD: 0,            // Not published
 		// source: cloud.tencent.com/document/product/1729/97731
 	},
 	"hunyuan-a13b": {
-		InputUSD:         0.000000069,   // ¥0.50/1M → $0.069/1M input
-		OutputUSD:        0.000000278,   // ¥2.00/1M → $0.278/1M output
-		CacheReadUSD:     0,           // Not published
-		CacheCreationUSD: 0,           // Not published
+		InputUSD:         0.000000074,  // ¥0.50/1M → $0.074/1M input
+		OutputUSD:        0.000000295,  // ¥2.00/1M → $0.295/1M output
+		CacheReadUSD:     0,            // Not published
+		CacheCreationUSD: 0,            // Not published
 		// source: cloud.tencent.com/document/product/1729/97731
 	},
 }

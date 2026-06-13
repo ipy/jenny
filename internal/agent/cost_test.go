@@ -771,8 +771,8 @@ func TestPricing_AC1_ClaudeUSDRates(t *testing.T) {
 func TestPricing_AC2_NewModelFamilies(t *testing.T) {
 	newModels := []string{
 		"deepseek-v4-pro",
-		"gemini-2.5-flash",
-		"gemini-2.1-pro",
+		"gemini-3.5-flash",
+		"gemini-3.1-pro",
 		"minimax-m3",
 		"kimi-k2.6",
 		"qwen-3.7-max",
@@ -834,4 +834,189 @@ func TestPricing_AC4_UnknownModelFallback(t *testing.T) {
 	}
 
 	t.Log("AC4 PASS: unknown model fallback correct")
+}
+
+// TestPricing_Gemini35Flash verifies Gemini 3.5 Flash pricing (AC2).
+func TestPricing_Gemini35Flash(t *testing.T) {
+	p := GetModelPricing("gemini-3.5-flash")
+
+	// Input: $1.50/1M
+	if p.InputUSD != 0.0000015 {
+		t.Errorf("gemini-3.5-flash InputUSD = %f, want 0.0000015", p.InputUSD)
+	}
+	// Output: $9.00/1M
+	if p.OutputUSD != 0.000009 {
+		t.Errorf("gemini-3.5-flash OutputUSD = %f, want 0.000009", p.OutputUSD)
+	}
+	// Cache read: $0.15/1M
+	if p.CacheReadUSD != 0.00000015 {
+		t.Errorf("gemini-3.5-flash CacheReadUSD = %f, want 0.00000015", p.CacheReadUSD)
+	}
+
+	t.Log("PASS: Gemini 3.5 Flash pricing correct")
+}
+
+// TestPricing_Gemini31Pro verifies Gemini 3.1 Pro pricing (AC3).
+func TestPricing_Gemini31Pro(t *testing.T) {
+	p := GetModelPricing("gemini-3.1-pro")
+
+	// Input: $2.00/1M
+	if p.InputUSD != 0.000002 {
+		t.Errorf("gemini-3.1-pro InputUSD = %f, want 0.000002", p.InputUSD)
+	}
+	// Output: $12.00/1M
+	if p.OutputUSD != 0.000012 {
+		t.Errorf("gemini-3.1-pro OutputUSD = %f, want 0.000012", p.OutputUSD)
+	}
+	// Cache read: $0.20/1M
+	if p.CacheReadUSD != 0.0000002 {
+		t.Errorf("gemini-3.1-pro CacheReadUSD = %f, want 0.0000002", p.CacheReadUSD)
+	}
+
+	t.Log("PASS: Gemini 3.1 Pro pricing correct")
+}
+
+// TestPricing_Qwen37Plus verifies Qwen 3.7 Plus pricing (AC4).
+func TestPricing_Qwen37Plus(t *testing.T) {
+	p := GetModelPricing("qwen-3.7-plus")
+
+	// Input: $0.40/1M
+	if p.InputUSD != 0.0000004 {
+		t.Errorf("qwen-3.7-plus InputUSD = %f, want 0.0000004", p.InputUSD)
+	}
+	// Output: $1.60/1M
+	if p.OutputUSD != 0.0000016 {
+		t.Errorf("qwen-3.7-plus OutputUSD = %f, want 0.0000016", p.OutputUSD)
+	}
+
+	t.Log("PASS: Qwen 3.7 Plus pricing correct")
+}
+
+// TestPricing_Qwen36Flash verifies Qwen 3.6 Flash pricing (AC5).
+func TestPricing_Qwen36Flash(t *testing.T) {
+	p := GetModelPricing("qwen-3.6-flash")
+
+	// Input: $0.25/1M
+	if p.InputUSD != 0.00000025 {
+		t.Errorf("qwen-3.6-flash InputUSD = %f, want 0.00000025", p.InputUSD)
+	}
+	// Output: $1.50/1M
+	if p.OutputUSD != 0.0000015 {
+		t.Errorf("qwen-3.6-flash OutputUSD = %f, want 0.0000015", p.OutputUSD)
+	}
+
+	t.Log("PASS: Qwen 3.6 Flash pricing correct")
+}
+
+// TestPricing_ClaudeOpus4CacheCreation verifies Opus 4 CacheCreation is $6.25/MTok (AC6).
+func TestPricing_ClaudeOpus4CacheCreation(t *testing.T) {
+	p := GetModelPricing("claude-opus-4-20250514")
+
+	// Cache creation: $6.25/1M (not $3.75)
+	if p.CacheCreationUSD != 0.00000625 {
+		t.Errorf("claude-opus-4-20250514 CacheCreationUSD = %f, want 0.00000625", p.CacheCreationUSD)
+	}
+
+	t.Log("PASS: Claude Opus 4 CacheCreationUSD correct at $6.25/MTok")
+}
+
+// TestPricing_AnthropicAliases verifies new Anthropic model aliases (AC7).
+func TestPricing_AnthropicAliases(t *testing.T) {
+	// claude-sonnet-4.6 → same as claude-sonnet-4-20250514
+	sonnet46 := GetModelPricing("claude-sonnet-4.6")
+	sonnet4 := GetModelPricing("claude-sonnet-4-20250514")
+	if sonnet46.InputUSD != sonnet4.InputUSD {
+		t.Errorf("claude-sonnet-4.6 InputUSD = %f, want %f (same as sonnet-4)", sonnet46.InputUSD, sonnet4.InputUSD)
+	}
+
+	// claude-opus-4.8 → same as claude-opus-4-20250514
+	opus48 := GetModelPricing("claude-opus-4.8")
+	opus4 := GetModelPricing("claude-opus-4-20250514")
+	if opus48.InputUSD != opus4.InputUSD {
+		t.Errorf("claude-opus-4.8 InputUSD = %f, want %f (same as opus-4)", opus48.InputUSD, opus4.InputUSD)
+	}
+
+	// claude-haiku-4.5 → same as claude-haiku-4-20250514
+	haiku45 := GetModelPricing("claude-haiku-4.5")
+	haiku4 := GetModelPricing("claude-haiku-4-20250514")
+	if haiku45.InputUSD != haiku4.InputUSD {
+		t.Errorf("claude-haiku-4.5 InputUSD = %f, want %f (same as haiku-4)", haiku45.InputUSD, haiku4.InputUSD)
+	}
+
+	// claude-fable-5
+	fable5 := GetModelPricing("claude-fable-5")
+	if fable5.InputUSD != 0.00001 {
+		t.Errorf("claude-fable-5 InputUSD = %f, want 0.00001", fable5.InputUSD)
+	}
+	if fable5.OutputUSD != 0.00005 {
+		t.Errorf("claude-fable-5 OutputUSD = %f, want 0.00005", fable5.OutputUSD)
+	}
+
+	t.Log("PASS: Anthropic model aliases correct")
+}
+
+// TestPricing_CNYConversionRate verifies CNY models converted at 6.77 (AC1).
+func TestPricing_CNYConversionRate(t *testing.T) {
+	cnyRate := 6.77
+
+	tests := []struct {
+		model     string
+		cnyPer1M  float64
+		usdPer1M  float64
+	}{
+		{"minimax-m3", 4.20, 4.20 / cnyRate},
+		{"kimi-k2.7-code", 6.00, 6.00 / cnyRate},
+		{"hunyuan-turbos", 0.80, 0.80 / cnyRate},
+	}
+
+	for _, tt := range tests {
+		p := GetModelPricing(tt.model)
+		expectedUSD := tt.usdPer1M / 1_000_000 // per-token USD
+
+		// Verify within ±2%
+		ratio := p.InputUSD / expectedUSD
+		if ratio < 0.98 || ratio > 1.02 {
+			t.Errorf("%s CNY conversion: InputUSD = %f, expected ~%f (ratio=%.4f)", tt.model, p.InputUSD, expectedUSD, ratio)
+		}
+	}
+
+	t.Log("PASS: CNY models converted at 6.77 CNY/USD")
+}
+
+// TestPricing_AC7_CustomPricingOverride verifies config-based pricing override (AC7).
+func TestPricing_AC7_CustomPricingOverride(t *testing.T) {
+	tmpDir := t.TempDir()
+	origWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(origWd)
+
+	// Override valid JSON
+	jennyDir := filepath.Join(tmpDir, ".jenny")
+	os.MkdirAll(jennyDir, 0755)
+	overrideData := map[string]ModelPricing{
+		"claude-sonnet-4-20250514": {InputUSD: 0.000001, OutputUSD: 0.000008},
+	}
+	data, _ := json.Marshal(overrideData)
+	os.WriteFile(filepath.Join(jennyDir, "pricing.json"), data, 0644)
+	LoadCustomPricing(tmpDir)
+	p := GetModelPricing("claude-sonnet-4-20250514")
+	if p.InputUSD != 0.000001 {
+		t.Errorf("AC7 FAIL: override InputUSD = %f, want 0.000001", p.InputUSD)
+	}
+
+	// Unaffected model
+	p2 := GetModelPricing("claude-opus-4-20250514")
+	if p2.InputUSD != 0.000005 {
+		t.Errorf("AC7 FAIL: unaffected opus InputUSD = %f, want 0.000005", p2.InputUSD)
+	}
+
+	// Malformed JSON
+	os.WriteFile(filepath.Join(jennyDir, "pricing.json"), []byte("{invalid"), 0644)
+	ResetCustomPricing()
+	LoadCustomPricing(tmpDir)
+	p3 := GetModelPricing("claude-sonnet-4-20250514")
+	if p3.InputUSD != 0.000003 {
+		t.Errorf("AC7 FAIL: after bad JSON, InputUSD = %f, want 0.000003", p3.InputUSD)
+	}
+	t.Log("AC7 PASS: pricing override works correctly")
 }
