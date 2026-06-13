@@ -23,6 +23,8 @@ export type {
 export { useTheme } from './hooks/useTheme';
 export { useConfirm } from './hooks/useConfirm';
 export { useToast } from './hooks/useToast';
+export { useApi, useStats, useSessions, useSessionStream, killSession } from './hooks/useApi';
+export type { SessionMetadata, Stats } from './hooks/useApi';
 
 // ── i18n ────────────────────────────────────
 export { LocaleProvider, useLocale } from './i18n/locale-context';

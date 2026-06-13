@@ -784,3 +784,286 @@ func TestAC6_IsPromptTooLongError_AllSubstrings(t *testing.T) {
 	}
 	t.Log("AC6 PASS: all required substrings matched by isPromptTooLongError")
 }
+
+// ============================================================
+// AC3 — 175K messages in 200K window: forkSummaryAgent retries, succeeds
+// ============================================================
+
+// mockAC3Client simulates a compaction API that returns a prompt-too-long error
+// on the first forkSummaryAgent call (identified by summary systemPrompt) and
+// succeeds on retry.
+type mockAC3Client struct {
+	mockCompactClient
+}
+
+func (m *mockAC3Client) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+	m.calls++
+	// forkSummaryAgent uses summarySystemPrompt; first such call returns prompt-too-long
+	if strings.Contains(systemPrompt, "summarizes conversations concisely") && m.calls == 1 {
+		return nil, fmt.Errorf("context window exceeds limit (2013)")
+	}
+	return &api.Response{
+		Content: []api.ContentBlock{
+			{Type: api.BlockTypeText, Text: "Summary of the conversation including key decisions and code changes."},
+		},
+		StopReason: "end_turn",
+		Model:      "test-model",
+		Usage:      api.Usage{InputTokens: 100, OutputTokens: 10},
+	}, nil
+}
+
+// TestAC3_175KTokensForkRetries verifies that with ~175K tokens in a 200K context window,
+// inSessionCompact is skipped, forkSummaryAgent retries after dropping groups, and
+// compaction succeeds with a valid summary + preserved trailing messages.
+func TestAC3_175KTokensForkRetries(t *testing.T) {
+	cfg := CompactConfig{
+		ModelContextWindow:   200_000,
+		ModelMaxOutputTokens: 20_000,
+	}
+
+	autoCompactThreshold := cfg.autoCompactThreshold()
+	if autoCompactThreshold != 155_000 {
+		t.Fatalf("expected autoCompactThreshold=155000, got %d", autoCompactThreshold)
+	}
+
+	maxMessagesTokens := cfg.effectiveContextWindow() - MIN_SAFETY_OVERHEAD - SUMMARY_MAX_TOKENS
+	if maxMessagesTokens != 130_000 {
+		t.Fatalf("expected maxMessagesTokens=130000, got %d", maxMessagesTokens)
+	}
+
+	// Build a message chain with ~175K tokens across multiple API rounds.
+	// Each round: user (bulk text) + assistant (with tool_use) + user (tool_results).
+	var messages []api.Message
+	roundCount := 5
+	charsPerUserMsg := 140_000 // ~35K tokens each, 5 rounds ≈ 175K tokens
+
+	for i := range roundCount {
+		content := strings.Repeat("x", charsPerUserMsg)
+		messages = append(messages, api.Message{Role: "user", Content: content})
+		messages = append(messages, api.Message{
+			Role:    "assistant",
+			Content: fmt.Sprintf("Response to round %d with details and analysis.", i),
+			ToolUse: []api.ToolUseBlock{{ID: fmt.Sprintf("call_%d", i), Name: "Read", Input: map[string]any{"path": "file.txt"}}},
+		})
+		messages = append(messages, api.Message{
+			Role:        "user",
+			ToolResults: []api.ToolResultBlock{{ToolUseID: fmt.Sprintf("call_%d", i), Content: "tool result data"}},
+		})
+	}
+
+	estimated := estimateTokens(messages)
+	t.Logf("AC3: estimated tokens = %d, autoCompactThreshold = %d, maxMessagesTokens = %d",
+		estimated, autoCompactThreshold, maxMessagesTokens)
+
+	if estimated < 150_000 {
+		t.Fatalf("AC3 FAIL: test messages only have %d estimated tokens, need ~175K", estimated)
+	}
+
+	if !cfg.checkCompactThreshold(estimated, "user") {
+		t.Error("AC3 FAIL: estimated tokens should trigger auto-compact")
+	}
+
+	mock := &mockAC3Client{}
+	engine := &QueryEngine{
+		client:    mock,
+		costState: &CostState{ModelUsage: make(map[string]ModelUsage)},
+	}
+
+	result, err := engine.compactMessages(context.Background(), messages, cfg, "test system prompt")
+	if err != nil {
+		t.Fatalf("AC3 FAIL: compactMessages should succeed via forkSummaryAgent retry, got error: %v", err)
+	}
+
+	if mock.calls < 2 {
+		t.Errorf("AC3 FAIL: expected forkSummaryAgent to retry (calls >= 2), got %d calls", mock.calls)
+	}
+
+	if len(result) == 0 {
+		t.Fatal("AC3 FAIL: compacted result should not be empty")
+	}
+	if result[0].Role != "system" {
+		t.Errorf("AC3 FAIL: first message role = %q, want 'system'", result[0].Role)
+	}
+	if !strings.Contains(result[0].Content, "[Context boundary") {
+		t.Error("AC3 FAIL: first message should contain context boundary marker")
+	}
+	if !strings.Contains(result[0].Content, "Summary of the conversation") {
+		t.Error("AC3 FAIL: first message should contain summary text")
+	}
+
+	if len(result) < 2 {
+		t.Fatal("AC3 FAIL: compacted chain should have trailing messages")
+	}
+	trailingCount := len(result) - 1
+	// buildCompactedChain keeps messagesToKeep=10, but the tool_use/tool_result
+	// pairing guard may shift the cut earlier, keeping up to 11 trailing messages
+	// (or fewer if the original chain is shorter than messagesToKeep).
+	if trailingCount < 1 || trailingCount > 15 {
+		t.Errorf("AC3 FAIL: expected 1-15 trailing messages, got %d", trailingCount)
+	}
+	if trailingCount < 1 {
+		t.Error("AC3 FAIL: expected at least 1 trailing message")
+	}
+
+	t.Logf("AC3 PASS: compactMessages succeeded (calls=%d, trailingMsgs=%d, summary present=true)",
+		mock.calls, trailingCount)
+}
+
+// ============================================================
+// AC4 — 1M context window models still use inSessionCompact
+// ============================================================
+
+// mockAC4Client tracks whether inSessionCompact was called by checking the systemPrompt.
+// inSessionCompact passes the original systemPrompt from compactMessages ("test system prompt"),
+// while forkSummaryAgent uses its own summarySystemPrompt.
+type mockAC4Client struct {
+	mockCompactClient
+	inSessionCompactCalled bool
+}
+
+func (m *mockAC4Client) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+	m.calls++
+	// inSessionCompact passes the original systemPrompt (same as compactMessages received),
+	// while forkSummaryAgent uses summarySystemPrompt.
+	if !strings.Contains(systemPrompt, "summarizes conversations concisely") {
+		m.inSessionCompactCalled = true
+	}
+	return &api.Response{
+		Content: []api.ContentBlock{
+			{Type: api.BlockTypeText, Text: "Summary for AC4 test"},
+		},
+		StopReason: "end_turn",
+		Model:      "test-model",
+		Usage:      api.Usage{InputTokens: 100, OutputTokens: 10},
+	}, nil
+}
+
+// TestAC4_DeepSeek1MWindowUsesInSessionCompact verifies that models with 1M context
+// windows continue to use inSessionCompact when messages are well within the
+// safety overhead margin.
+func TestAC4_DeepSeek1MWindowUsesInSessionCompact(t *testing.T) {
+	cfg := CompactConfig{
+		ModelContextWindow:   1_000_000,
+		ModelMaxOutputTokens: 8_192,
+	}
+
+	maxMessagesTokens := cfg.effectiveContextWindow() - MIN_SAFETY_OVERHEAD - SUMMARY_MAX_TOKENS
+	if maxMessagesTokens != 941_808 {
+		t.Fatalf("expected maxMessagesTokens=941808 for deepseek, got %d", maxMessagesTokens)
+	}
+
+	content := strings.Repeat("hello world ", 33_334)
+	messages := []api.Message{
+		{Role: "user", Content: content},
+	}
+
+	estimated := estimateTokens(messages)
+	if estimated > maxMessagesTokens {
+		t.Fatalf("AC4 FAIL: test setup error: estimated %d exceeds maxMessagesTokens %d", estimated, maxMessagesTokens)
+	}
+	t.Logf("AC4: estimated tokens = %d, maxMessagesTokens = %d, within margin", estimated, maxMessagesTokens)
+
+	mock := &mockAC4Client{}
+	engine := &QueryEngine{
+		client:    mock,
+		costState: &CostState{ModelUsage: make(map[string]ModelUsage)},
+	}
+
+	_, err := engine.compactMessages(context.Background(), messages, cfg, "test system prompt")
+	if err != nil {
+		t.Fatalf("AC4 FAIL: compactMessages should succeed for 1M-window model, got error: %v", err)
+	}
+
+	if !mock.inSessionCompactCalled {
+		t.Error("AC4 FAIL: inSessionCompact was NOT called for deepseek model with messages within margin")
+	}
+	if mock.calls == 0 {
+		t.Error("AC4 FAIL: no API call was made at all")
+	}
+
+	t.Logf("AC4 PASS: inSessionCompact was called for 1M-window model (total calls=%d)", mock.calls)
+}
+
+// ============================================================
+// AC5 — forkSummaryAgent exhausts all retries, returns underlying error
+// ============================================================
+
+// mockAC5Client always returns a prompt-too-long error for forkSummaryAgent calls
+// (nil tools) so retries are exhausted.
+type mockAC5Client struct {
+	mockCompactClient
+}
+
+func (m *mockAC5Client) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+	m.calls++
+	if tools == nil {
+		return nil, fmt.Errorf("context window exceeds limit (2013)")
+	}
+	return &api.Response{
+		Content: []api.ContentBlock{
+			{Type: api.BlockTypeText, Text: "Summary"},
+		},
+		StopReason: "end_turn",
+		Model:      "test-model",
+		Usage:      api.Usage{InputTokens: 100, OutputTokens: 10},
+	}, nil
+}
+
+// TestAC5_ForkRetriesExhaustedReturnsUnderlyingError verifies that when the
+// forkSummaryAgent retry group-dropping exhausts all retries, compactMessages
+// returns the underlying error (not a generic "compaction failed" error).
+func TestAC5_ForkRetriesExhaustedReturnsUnderlyingError(t *testing.T) {
+	cfg := CompactConfig{
+		ModelContextWindow:   200_000,
+		ModelMaxOutputTokens: 20_000,
+	}
+
+	var messages []api.Message
+	for i := range 6 {
+		content := strings.Repeat("large message content for round ", 8_000)
+		messages = append(messages, api.Message{Role: "user", Content: content})
+		messages = append(messages, api.Message{
+			Role:    "assistant",
+			Content: fmt.Sprintf("Response to round %d", i),
+			ToolUse: []api.ToolUseBlock{{ID: fmt.Sprintf("call_%d", i), Name: "Read", Input: map[string]any{}}},
+		})
+		messages = append(messages, api.Message{
+			Role:        "user",
+			ToolResults: []api.ToolResultBlock{{ToolUseID: fmt.Sprintf("call_%d", i), Content: "result"}},
+		})
+	}
+
+	estimated := estimateTokens(messages)
+	maxMessagesTokens := cfg.effectiveContextWindow() - MIN_SAFETY_OVERHEAD - SUMMARY_MAX_TOKENS
+	if estimated <= maxMessagesTokens {
+		t.Fatalf("AC5 FAIL: test setup: estimated %d should exceed maxMessagesTokens %d", estimated, maxMessagesTokens)
+	}
+	t.Logf("AC5: estimated tokens = %d, maxMessagesTokens = %d", estimated, maxMessagesTokens)
+
+	mock := &mockAC5Client{}
+	engine := &QueryEngine{
+		client:    mock,
+		costState: &CostState{ModelUsage: make(map[string]ModelUsage)},
+	}
+
+	_, err := engine.compactMessages(context.Background(), messages, cfg, "test system prompt")
+	if err == nil {
+		t.Fatal("AC5 FAIL: compactMessages should return error when forkSummaryAgent exhausts retries")
+	}
+
+	errStr := err.Error()
+	if strings.Contains(errStr, "compaction failed") {
+		t.Error("AC5 FAIL: error should not be generic 'compaction failed' — must propagate underlying error")
+	}
+	if !strings.Contains(errStr, "context window") {
+		t.Errorf("AC5 FAIL: error should contain underlying error 'context window', got: %q", errStr)
+	}
+	if !strings.Contains(errStr, "3 attempts") && !strings.Contains(errStr, "retries") {
+		t.Errorf("AC5 FAIL: error should indicate retries exhausted (got: %q)", errStr)
+	}
+	if mock.calls < 3 {
+		t.Errorf("AC5 FAIL: expected at least 3 API calls (3 retry attempts), got %d", mock.calls)
+	}
+
+	t.Logf("AC5 PASS: compactMessages returned underlying error %q (calls=%d)", errStr, mock.calls)
+}

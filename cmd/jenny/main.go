@@ -55,6 +55,11 @@ func loadEnvFiles(cwd string) {
 }
 
 func run() error {
+	// Check for portal subcommand before parsing flags
+	if len(os.Args) >= 2 && os.Args[1] == "portal" {
+		return runPortal(context.Background())
+	}
+
 	// AC9: load .env files (and .jenny/.env) before parsing flags so any
 	// env-driven flag behaviour or pre-flight checks see the merged env.
 	// Best-effort: missing or malformed .env is not an error.

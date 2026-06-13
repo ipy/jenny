@@ -16,24 +16,17 @@ import {
   TextField,
   Button,
   EmptyState,
+  useStats,
+  useSessions,
+  useSessionStream,
+  killSession,
+  type SessionMetadata,
 } from './index';
 import './styles/globals.css';
 
 // ── Types ───────────────────────────────────
 
 type TabId = 'start' | 'sessions' | 'projects' | 'skills' | 'mcp' | 'plugins' | 'marketplace';
-
-interface SessionMetadata {
-  id: string;
-  status: 'running' | 'exited';
-  pid?: number;
-  cwd: string;
-  model: string;
-  startTime: number;
-  endTime?: number;
-  totalTokens?: number;
-  totalCost?: number;
-}
 
 // ── Components ──────────────────────────────
 
@@ -85,14 +78,20 @@ function App() {
 function StartTab() {
   const { t } = useLocale();
   const [prompt, setPrompt] = useState('');
+  const { data: stats, loading } = useStats();
+
+  const formatCost = (cost: number) => {
+    if (cost < 0.01) return '$0.00';
+    return `$${cost.toFixed(2)}`;
+  };
 
   return (
     <div style={{ maxWidth: '800px', margin: '4rem auto', padding: '0 1.5rem', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem' }}>
-        <StatCard label="Total Sessions" value="128" />
-        <StatCard label="Running" value="3" />
-        <StatCard label="Total Cost" value="$12.45" />
-        <StatCard label="Cache Hit" value="84%" />
+        <StatCard label="Total Sessions" value={loading ? '...' : String(stats?.total_sessions ?? 0)} />
+        <StatCard label="Running" value={loading ? '...' : String(stats?.active_sessions ?? 0)} />
+        <StatCard label="Total Cost" value={loading ? '...' : formatCost(stats?.total_cost_usd ?? 0)} />
+        <StatCard label="Total Tokens" value={loading ? '...' : String(stats?.total_tokens ?? 0)} />
       </section>
 
       <GlassPanel style={{ padding: '2rem' }}>
@@ -133,33 +132,37 @@ function StartTab() {
 
 function SessionsTab() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  
-  // Mock data
-  const sessions = [
-    { id: '018f3a8b-1b2c-7000-8000-000000000001', title: 'Refactor engine', subtitle: '3m ago · running', status: 'running' },
-    { id: '018f3a8a-4d5e-7000-8000-000000000002', title: 'Fix CSS bug', subtitle: '15m ago · exited', status: 'exited' },
-    { id: '018f3a89-2f3a-7000-8000-000000000003', title: 'Update README', subtitle: '1h ago · exited', status: 'exited' },
-  ];
+  const { data: sessions, loading } = useSessions();
+
+  // Transform API sessions to DataList items
+  const sessionItems = sessions?.map((s: SessionMetadata) => {
+    const timeAgo = formatTimeAgo(s.start_time);
+    return {
+      id: s.id,
+      title: s.cwd ? s.cwd.split('/').pop() || s.id : s.id,
+      subtitle: `${timeAgo} · ${s.status}`,
+      badge: <Badge variant={s.status === 'running' ? 'success' : 'default'} dot={s.status === 'running'}>{s.status}</Badge>
+    };
+  }) ?? [];
 
   return (
     <SplitPane
       masterWidth="320px"
       master={
-        <DataList
-          items={sessions.map(s => ({
-            id: s.id,
-            title: s.title,
-            subtitle: s.subtitle,
-            badge: <Badge variant={s.status === 'running' ? 'success' : 'default'} dot={s.status === 'running'}>{s.status}</Badge>
-          }))}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          selectionLabel="session"
-        />
+        loading ? (
+          <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--color-text-dim)' }}>Loading...</div>
+        ) : (
+          <DataList
+            items={sessionItems}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            selectionLabel="session"
+          />
+        )
       }
       detail={
         selectedId ? (
-          <SessionDetail id={selectedId} isRunning={sessions.find(s => s.id === selectedId)?.status === 'running'} />
+          <SessionDetail session={sessions?.find(s => s.id === selectedId)} />
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-text-dim)' }}>
             Select a session to view details
@@ -170,19 +173,42 @@ function SessionsTab() {
   );
 }
 
-function SessionDetail({ id, isRunning }: { id: string, isRunning?: boolean }) {
+// Format timestamp to time ago string
+function formatTimeAgo(timestamp: number): string {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
+}
+
+function SessionDetail({ session }: { session?: SessionMetadata }) {
+  const [entries, setEntries] = useState<any[]>([]);
+  const isRunning = session?.status === 'running';
+
+  // Connect to SSE stream for real-time updates
+  useSessionStream(session?.id ?? '', (data) => {
+    setEntries(prev => [...prev, data]);
+  });
+
+  const formatCost = (cost?: number) => cost ? `$${cost.toFixed(2)}` : '$0.00';
+
   return (
     <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', height: '100%', overflow: 'auto' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
             <Badge variant={isRunning ? 'success' : 'default'} dot={isRunning}>{isRunning ? 'Running' : 'Exited'}</Badge>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--color-text-muted)' }}>{id}</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--color-text-muted)' }}>{session?.id ?? ''}</span>
           </div>
-          <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Refactor engine loop</h2>
+          <h2 style={{ margin: 0, fontSize: '1.25rem' }}>{session?.cwd ?? 'Session'}</h2>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {isRunning ? <Button variant="danger" size="sm">Stop</Button> : <Button variant="primary" size="sm">Resume</Button>}
+          {isRunning ? (
+            <Button variant="danger" size="sm" onClick={() => session?.id && killSession(session.id)}>Stop</Button>
+          ) : (
+            <Button variant="primary" size="sm">Resume</Button>
+          )}
           <Button variant="ghost" size="sm">Delete</Button>
         </div>
       </header>
@@ -190,29 +216,17 @@ function SessionDetail({ id, isRunning }: { id: string, isRunning?: boolean }) {
       <div className="divider" />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem' }}>
-        <StatCard label="Token Usage" value="1.2k" />
-        <StatCard label="Cost" value="$0.02" />
-        <StatCard label="Turns" value="5" />
-        <StatCard label="Model" value="claude-3-5-sonnet" />
+        <StatCard label="Token Usage" value={session?.total_tokens ? String(session.total_tokens) : '0'} />
+        <StatCard label="Cost" value={formatCost(session?.total_cost)} />
+        <StatCard label="Model" value={session?.model ?? 'unknown'} />
       </div>
-
-      <SessionEventsPanel
-        sessionId={id}
-        isRunning={isRunning}
-        events={[
-          { id: '1', kind: 'init', badge: 'INIT', preview: 'Session initialized in /work/jenny', timestamp_ms: Date.now() - 300000 },
-          { id: '2', kind: 'user', badge: 'USER', preview: 'Refactor the main engine loop to support SSE streaming.', timestamp_ms: Date.now() - 290000 },
-          { id: '3', kind: 'assistant', badge: 'AI', preview: 'I will start by analyzing the current engine implementation...', timestamp_ms: Date.now() - 280000 },
-          { id: '4', kind: 'tool', badge: 'READ', preview: 'read_file(internal/agent/engine.go)', timestamp_ms: Date.now() - 250000, hasResult: true },
-        ]}
-      />
 
       <StreamPanel
         title="Transcript"
-        sessionId={id}
+        sessionId={session?.id}
         stream="transcript"
         isRunning={isRunning}
-        fetchStream={async () => "Streaming log content..."}
+        fetchStream={async () => entries.map(e => JSON.stringify(e)).join('\n')}
       />
     </div>
   );
