@@ -2198,3 +2198,116 @@ func TestMarketplaceInstall_Skill_Success(t *testing.T) {
 
 	t.Log("AC2 PASS: marketplace install downloads and extracts tar.gz successfully")
 }
+
+// TestMarketplaceInstall_MCP_NoExistingConfig verifies MCP install doesn't panic when mcp.json doesn't exist.
+// This tests the fix for the nil map panic: config must be initialized before accessing it.
+func TestMarketplaceInstall_MCP_NoExistingConfig(t *testing.T) {
+	origJennyHome := os.Getenv("JENNY_HOME")
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Setenv("JENNY_HOME", tmpDir)
+	defer func() {
+		os.RemoveAll(tmpDir)
+		os.Setenv("JENNY_HOME", origJennyHome)
+	}()
+
+	// Create a test tar.gz with manifest.json
+	tarBuf := new(bytes.Buffer)
+	gzWriter := gzip.NewWriter(tarBuf)
+	tarWriter := tar.NewWriter(gzWriter)
+
+	manifest := `{"command":"npx","args":["-y","test-mcp-server"]}`
+	hdr := &tar.Header{
+		Name: "manifest.json",
+		Mode: int64(0644),
+		Size: int64(len(manifest)),
+	}
+	if err := tarWriter.WriteHeader(hdr); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tarWriter.Write([]byte(manifest)); err != nil {
+		t.Fatal(err)
+	}
+	tarWriter.Close()
+	gzWriter.Close()
+
+	// Start a test server that serves the tar.gz
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/gzip")
+		w.WriteHeader(http.StatusOK)
+		tarBuf.WriteTo(w)
+	}))
+	defer server.Close()
+
+	ctx := context.Background()
+	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Shutdown(ctx)
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", p.port)
+
+	// Verify mcp.json doesn't exist yet
+	mcpPath := filepath.Join(tmpDir, "mcp.json")
+	if _, err := os.Stat(mcpPath); !os.IsNotExist(err) {
+		t.Fatal("mcp.json should not exist before test")
+	}
+
+	// Install MCP - this should NOT panic even though mcp.json doesn't exist
+	body := fmt.Sprintf(`{"type":"mcp","name":"test-mcp","download_url":"%s/test.tar.gz"}`, server.URL)
+	req, _ := http.NewRequest("POST", baseURL+"/api/marketplace/install?token="+p.authToken, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		t.Errorf("expected 200, got %d: %s", resp.StatusCode, string(bodyBytes))
+		return
+	}
+
+	var result MarketplaceInstallResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+
+	if result.Status != "installed" {
+		t.Errorf("expected status 'installed', got %q", result.Status)
+	}
+
+	// Verify mcp.json was created
+	if _, err := os.Stat(mcpPath); os.IsNotExist(err) {
+		t.Error("mcp.json should be created after MCP install")
+	}
+
+	// Verify mcp.json contains the server config
+	mcpData, err := os.ReadFile(mcpPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var mcpConfig map[string]struct {
+		Command  string   `json:"command"`
+		Args     []string `json:"args"`
+		Disabled bool     `json:"disabled,omitempty"`
+	}
+	if err := json.Unmarshal(mcpData, &mcpConfig); err != nil {
+		t.Fatal(err)
+	}
+
+	serverConfig, exists := mcpConfig["test-mcp"]
+	if !exists {
+		t.Error("test-mcp should be in mcp.json")
+	}
+	if serverConfig.Command != "npx" {
+		t.Errorf("expected command 'npx', got %q", serverConfig.Command)
+	}
+
+	t.Log("PASS: MCP install works without existing mcp.json")
+}

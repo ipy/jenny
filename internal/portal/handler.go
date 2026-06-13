@@ -1136,6 +1136,15 @@ func (p *Portal) handleMarketplaceInstall(w http.ResponseWriter, r *http.Request
 			}
 		}
 
+		// Initialize config map if nil (mcp.json doesn't exist)
+		if config == nil {
+			config = make(map[string]struct {
+				Command  string   `json:"command"`
+				Args     []string `json:"args"`
+				Disabled bool     `json:"disabled,omitempty"`
+			})
+		}
+
 		// Check if already installed
 		if _, exists := config[req.Name]; exists {
 			http.Error(w, `{"error":"already installed"}`, http.StatusConflict)
