@@ -444,6 +444,46 @@ func TestStreamMessageToolInputUsesInputKey(t *testing.T) {
 	}
 }
 
+func TestStreamMessageHasKindField(t *testing.T) {
+	tests := []struct {
+		eventType string
+		wantKind  string
+	}{
+		{"assistant", "message"},
+		{"user", "message"},
+		{"result", "message"},
+		{"system", "message"},
+		{"tool_call", "tool_call"},
+		{"other", "other"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.eventType, func(t *testing.T) {
+			msg := StreamMessage{
+				Type: tt.eventType,
+			}
+
+			data, err := json.Marshal(msg)
+			if err != nil {
+				t.Fatalf("json.Marshal failed: %v", err)
+			}
+
+			var parsed map[string]any
+			if err := json.Unmarshal(data, &parsed); err != nil {
+				t.Fatalf("json.Unmarshal failed: %v", err)
+			}
+
+			kind, ok := parsed["kind"].(string)
+			if !ok {
+				t.Errorf("expected 'kind' key in JSON output, got: %s", string(data))
+			}
+			if kind != tt.wantKind {
+				t.Errorf("expected kind %q, got %q", tt.wantKind, kind)
+			}
+		})
+	}
+}
+
 // AC6: --help must print the usage block exactly once.
 // Go's flag package invokes flags.Usage() itself when -h/--help is seen and
 // the flag is undefined; our cli.Parse used to call it again on flag.ErrHelp,

@@ -122,6 +122,7 @@ type Message = api.Message
 // then parent_tool_use_id, session_id, uuid, then remaining fields.
 type StreamMessage struct {
 	Type              string             `json:"type"`
+	Kind              string             `json:"kind,omitempty"`
 	Subtype           string             `json:"subtype,omitempty"`
 	IsError           bool               `json:"is_error"`
 	DurationMs        int64              `json:"duration_ms,omitempty"`
@@ -151,17 +152,35 @@ type StreamMessage struct {
 	ToolUseResult  any                   `json:"tool_use_result,omitempty"`
 }
 
+// mapTypeToKind maps Jenny's event types to Claude Code's expected kind values.
+func mapTypeToKind(t string) string {
+	switch t {
+	case "assistant", "user", "result", "system":
+		return "message"
+	case "tool_call", "tool_use":
+		return "tool_call"
+	default:
+		return t
+	}
+}
+
 // MarshalJSON implements custom marshaling for StreamMessage to:
 // - Omit parent_tool_use_id for result events (per reference format)
 // - Maintain correct field ordering for result events
 // - Use reference order for assistant events: type, message, parent_tool_use_id, session_id, uuid
 func (s StreamMessage) MarshalJSON() ([]byte, error) {
+	kind := s.Kind
+	if kind == "" {
+		kind = mapTypeToKind(s.Type)
+	}
+
 	if s.Type == "result" {
 		// Reference result order: type, subtype, is_error, duration_ms, duration_api_ms,
 		// num_turns, result, stop_reason, session_id, total_cost_usd, usage, modelUsage,
 		// permission_denials, fast_mode_state, uuid
 		var fields []string
 		fields = append(fields, `"type":`+encodeString(s.Type))
+		fields = append(fields, `"kind":`+encodeString(kind))
 		if s.Subtype != "" {
 			fields = append(fields, `"subtype":`+encodeString(s.Subtype))
 		}
@@ -221,6 +240,7 @@ func (s StreamMessage) MarshalJSON() ([]byte, error) {
 	if s.Type == "assistant" {
 		var fields []string
 		fields = append(fields, `"type":`+encodeString(s.Type))
+		fields = append(fields, `"kind":`+encodeString(kind))
 		if s.Message != nil {
 			switch m := s.Message.(type) {
 			case json.RawMessage:
@@ -247,6 +267,7 @@ func (s StreamMessage) MarshalJSON() ([]byte, error) {
 	// Default marshaling for all other event types - build manually to avoid recursion
 	var fields []string
 	fields = append(fields, `"type":`+encodeString(s.Type))
+	fields = append(fields, `"kind":`+encodeString(kind))
 	if s.Subtype != "" {
 		fields = append(fields, `"subtype":`+encodeString(s.Subtype))
 	}

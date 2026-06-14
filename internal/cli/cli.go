@@ -264,6 +264,7 @@ func Parse() (*Flags, error) {
 // then session_id, parent_tool_use_id, uuid, then remaining fields.
 type StreamMessage struct {
 	Type              string   `json:"type"`
+	Kind              string   `json:"kind,omitempty"`
 	Subtype           string   `json:"subtype,omitempty"`
 	Content           string   `json:"content,omitempty"`
 	SessionID         string   `json:"session_id,omitempty"`
@@ -281,6 +282,82 @@ type StreamMessage struct {
 	PermissionMode    string   `json:"permissionMode,omitempty"`
 }
 
+// MarshalJSON implements custom marshaling for StreamMessage to:
+// - Maintain correct field ordering per reference format
+// - Include 'kind' field for compatibility with Claude Code parsers
+func (s StreamMessage) MarshalJSON() ([]byte, error) {
+	kind := s.Kind
+	if kind == "" {
+		switch s.Type {
+		case "assistant", "user", "result", "system":
+			kind = "message"
+		case "tool_call", "tool_use":
+			kind = "tool_call"
+		default:
+			kind = s.Type
+		}
+	}
+
+	var fields []string
+	fields = append(fields, `"type":`+encodeString(s.Type))
+	fields = append(fields, `"kind":`+encodeString(kind))
+	if s.Subtype != "" {
+		fields = append(fields, `"subtype":`+encodeString(s.Subtype))
+	}
+	if s.Content != "" {
+		fields = append(fields, `"content":`+encodeString(s.Content))
+	}
+	if s.SessionID != "" {
+		fields = append(fields, `"session_id":`+encodeString(s.SessionID))
+	}
+	if s.ParentToolUseID != nil {
+		fields = append(fields, `"parent_tool_use_id":`+encodeString(*s.ParentToolUseID))
+	} else {
+		fields = append(fields, `"parent_tool_use_id":null`)
+	}
+	if s.Uuid != "" {
+		fields = append(fields, `"uuid":`+encodeString(s.Uuid))
+	}
+	if s.Result != "" {
+		fields = append(fields, `"result":`+encodeString(s.Result))
+	}
+	if s.Model != "" {
+		fields = append(fields, `"model":`+encodeString(s.Model))
+	}
+	if s.CWD != "" {
+		fields = append(fields, `"cwd":`+encodeString(s.CWD))
+	}
+	if len(s.Tools) > 0 {
+		toolsBytes, _ := json.Marshal(s.Tools)
+		fields = append(fields, `"tools":`+string(toolsBytes))
+	}
+	if s.ToolName != "" {
+		fields = append(fields, `"tool_name":`+encodeString(s.ToolName))
+	}
+	if s.ToolInput != nil {
+		inputBytes, _ := json.Marshal(s.ToolInput)
+		fields = append(fields, `"input":`+string(inputBytes))
+	}
+	if s.IsError {
+		fields = append(fields, `"is_error":true`)
+	}
+	if s.IsPartial {
+		fields = append(fields, `"is_partial":true`)
+	}
+	if s.ClaudeCodeVersion != "" {
+		fields = append(fields, `"claude_code_version":`+encodeString(s.ClaudeCodeVersion))
+	}
+	if s.PermissionMode != "" {
+		fields = append(fields, `"permissionMode":`+encodeString(s.PermissionMode))
+	}
+
+	return []byte("{" + strings.Join(fields, ",") + "}"), nil
+}
+
+func encodeString(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
 // WriteStreamJSON writes a message as NDJSON line to stdout.
 func WriteStreamJSON(msg StreamMessage) error {
 	data, err := json.Marshal(msg)

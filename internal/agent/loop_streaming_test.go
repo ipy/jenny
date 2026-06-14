@@ -1395,3 +1395,75 @@ func TestStreamJSON_CostOnlyOnResult(t *testing.T) {
 		t.Log("AC6 PASS: total_cost_usd appears on exactly 1 line (result event)")
 	}
 }
+
+// TestStreamJSON_HasKindField verifies that every stream-json event has a 'kind' field
+// for compatibility with Claude Code parsers.
+func TestStreamJSON_HasKindField(t *testing.T) {
+	server := makeMockStreamServer(t, nil)
+	defer server.Close()
+
+	t.Setenv("ANTHROPIC_BASE_URL", server.URL)
+	t.Setenv("ANTHROPIC_API_KEY", "test-key-00000")
+
+	cfg := StreamConfig{Enabled: true}
+	output, err := captureStreamOutput(t, &cfg)
+	if err != nil {
+		t.Fatalf("RunStream failed: %v", err)
+	}
+
+	lines := strings.Split(output, "\n")
+	foundAssistant := false
+	foundToolCall := false
+	foundResult := false
+
+	for li, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		var msg map[string]any
+		if err := json.Unmarshal([]byte(line), &msg); err != nil {
+			t.Errorf("Line %d is not valid JSON: %v", li, err)
+			continue
+		}
+
+		kind, hasKind := msg["kind"].(string)
+		if !hasKind {
+			t.Errorf("Line %d (%s) missing 'kind' field", li, msg["type"])
+			continue
+		}
+
+		eventType, _ := msg["type"].(string)
+		switch eventType {
+		case "assistant":
+			foundAssistant = true
+			if kind != "message" {
+				t.Errorf("Line %d (assistant) has wrong kind: %s (expected message)", li, kind)
+			}
+		case "tool_call":
+			foundToolCall = true
+			if kind != "tool_call" {
+				t.Errorf("Line %d (tool_call) has wrong kind: %s (expected tool_call)", li, kind)
+			}
+		case "result":
+			foundResult = true
+			if kind != "message" {
+				t.Errorf("Line %d (result) has wrong kind: %s (expected message)", li, kind)
+			}
+		}
+	}
+
+	if !foundAssistant {
+		t.Error("Did not find assistant event in output")
+	}
+	// Note: foundToolCall might be false if no tools were used in the mock.
+	// We'll log it for visibility if it was found.
+	if foundToolCall {
+		t.Log("Found tool_call event in output")
+	}
+	if !foundResult {
+		t.Error("Did not find result event in output")
+	}
+}
+
