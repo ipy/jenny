@@ -738,35 +738,8 @@ func TestLoadEnvFiles_PicksUpJennyEnv(t *testing.T) {
 	}
 }
 
-// TestAutoLaunchPortal_NoArgs_Terminal tests AC1: launching with no arguments from
-// a non-.app path (terminal invocation) should NOT launch portal.
-func TestAutoLaunchPortal_NoArgs_Terminal(t *testing.T) {
-	// Test cases where no arguments are provided but exe path is NOT a .app bundle
-	tests := []struct {
-		name string
-		args []string
-	}{
-		{"no arguments (terminal invocation)", []string{"jenny"}},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			origArgs := os.Args
-			defer func() { os.Args = origArgs }()
-
-			os.Args = tt.args
-			// shouldLaunchPortal uses os.Executable() to detect .app bundle
-			// In test environment, this returns the test binary path which does NOT contain .app
-			got := shouldLaunchPortal()
-			if got {
-				t.Errorf("shouldLaunchPortal() with args %v = true, want false (terminal mode, not .app bundle)", tt.args)
-			}
-		})
-	}
-}
-
-// TestAutoLaunchPortal_ExplicitPortal tests AC2: jenny portal still works.
-func TestAutoLaunchPortal_ExplicitPortal(t *testing.T) {
+// TestShouldLaunchPortal_ExplicitPortal tests AC2: jenny portal launches the portal.
+func TestShouldLaunchPortal_ExplicitPortal(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
@@ -776,8 +749,21 @@ func TestAutoLaunchPortal_ExplicitPortal(t *testing.T) {
 	}
 }
 
-// TestAutoLaunchPortal_OtherArgsStayCLIMode tests AC3: other arguments stay in CLI mode.
-func TestAutoLaunchPortal_OtherArgsStayCLIMode(t *testing.T) {
+// TestShouldLaunchPortal_NoArgs tests AC1: jenny with no arguments does NOT launch portal.
+// Note: macOS double-clicking a bare executable ALWAYS opens Terminal - this is a
+// macOS limitation. Users who want no-Terminal launch must use the optional .app bundle.
+func TestShouldLaunchPortal_NoArgs(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny"}
+	if shouldLaunchPortal() {
+		t.Error("shouldLaunchPortal() = true for no args, want false (CLI mode)")
+	}
+}
+
+// TestShouldLaunchPortal_OtherArgs tests AC3: other arguments stay in CLI mode.
+func TestShouldLaunchPortal_OtherArgs(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
@@ -792,73 +778,5 @@ func TestAutoLaunchPortal_OtherArgsStayCLIMode(t *testing.T) {
 		if shouldLaunchPortal() {
 			t.Errorf("shouldLaunchPortal() = true for args %v, want false (CLI mode)", args)
 		}
-	}
-}
-
-// TestShouldLaunchPortalFromAppBundle tests AC3: portal auto-launches when
-// exe path contains .app/Contents/MacOS/ (simulating .app bundle double-click).
-func TestShouldLaunchPortalFromAppBundle(t *testing.T) {
-	// Test the detection logic with a mock .app bundle path
-	tests := []struct {
-		name string
-		args []string
-		exe  string
-		want bool
-	}{
-		{
-			name: "no args from .app bundle path",
-			args: []string{"jenny"},
-			exe:  "/Applications/Jenny Portal.app/Contents/MacOS/jenny",
-			want: true,
-		},
-		{
-			name: "no args from user .app bundle path",
-			args: []string{"jenny"},
-			exe:  "/Users/user/Applications/Jenny Portal.app/Contents/MacOS/jenny",
-			want: true,
-		},
-		{
-			name: "no args from relative .app bundle path",
-			args: []string{"jenny"},
-			exe:  "./Jenny Portal.app/Contents/MacOS/jenny",
-			want: true,
-		},
-		{
-			name: "no args from non-.app path (terminal)",
-			args: []string{"jenny"},
-			exe:  "/usr/local/bin/jenny",
-			want: false,
-		},
-		{
-			name: "no args from relative path (terminal)",
-			args: []string{"jenny"},
-			exe:  "./jenny",
-			want: false,
-		},
-		{
-			name: "portal subcommand with .app path",
-			args: []string{"jenny", "portal"},
-			exe:  "/Applications/Jenny Portal.app/Contents/MacOS/jenny",
-			want: true,
-		},
-		{
-			name: "portal subcommand without .app path",
-			args: []string{"jenny", "portal"},
-			exe:  "/usr/local/bin/jenny",
-			want: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			origArgs := os.Args
-			defer func() { os.Args = origArgs }()
-
-			os.Args = tt.args
-			got := shouldLaunchPortalForTest(tt.exe)
-			if got != tt.want {
-				t.Errorf("shouldLaunchPortalForTest(%q) with args %v = %v, want %v", tt.exe, tt.args, got, tt.want)
-			}
-		})
 	}
 }

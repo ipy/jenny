@@ -1,5 +1,5 @@
 ---
-title: macOS Double-Click Portal Launch
+title: macOS Double-Click Portal Launch (WONTFIX)
 slug: macos-portal-launch
 priority: P1
 status: complete
@@ -10,70 +10,78 @@ depends_on:
   - webui-portal
 ---
 
-# macOS Double-Click Portal Launch
+# macOS Double-Click Portal Launch (WONTFIX)
 
 ## Overview
 
-Fix for two bugs related to portal launch behavior:
-1. `./jenny` (no arguments, terminal) was incorrectly launching the portal
-2. Double-clicking the binary on macOS opened a Terminal window instead of running in background
+This document explains why double-clicking the `jenny` executable on macOS cannot launch the portal without opening a Terminal window, and documents the accepted workaround.
 
-## Root Cause
+## macOS Limitation
 
-The previous fix (`len(os.Args) < 2`) was too aggressive - it couldn't distinguish terminal invocation from GUI double-click.
+**Double-clicking a bare Unix executable on macOS ALWAYS opens a Terminal window.** This is a fundamental macOS operating system behavior — the system provides no mechanism to suppress Terminal for bare Mach-O binaries.
+
+When you double-click `jenny`:
+1. macOS Finder launches Terminal.app
+2. Terminal runs `/path/to/jenny` with no arguments
+3. `jenny` with no arguments enters CLI mode (shows help)
+
+This is not a bug in `jenny` — it is a macOS OS limitation.
 
 ## Solution
 
-### 1. Smart `shouldLaunchPortal()` Detection
+### Only `jenny portal` launches the portal
 
-Replace the unconditional auto-launch with path-based detection:
+The `shouldLaunchPortal()` function now only returns true for the explicit `portal` subcommand:
 
 ```go
 func shouldLaunchPortal() bool {
-    // Explicit "portal" subcommand always works
-    if len(os.Args) >= 2 && os.Args[1] == "portal" {
-        return true
-    }
-    // When no arguments, check if running from a macOS .app bundle
-    if len(os.Args) < 2 {
-        exe, err := os.Executable()
-        if err != nil {
-            return false
-        }
-        // macOS .app bundles have paths like: .../Jenny Portal.app/Contents/MacOS/jenny
-        if strings.Contains(exe, ".app/Contents/MacOS/") {
-            return true
-        }
-    }
-    return false
+    return len(os.Args) >= 2 && os.Args[1] == "portal"
 }
 ```
 
-### 2. macOS `.app` Bundle Generator
+### Optional: Create a `.app` bundle manually
 
-Create `scripts/make-portal-app.sh` that generates a minimal `.app` bundle with `LSUIElement=true` (background app, no Terminal, no Dock icon).
+Users who want to launch the portal without Terminal must wrap the binary in a macOS `.app` bundle. This is the standard macOS practice for GUI applications.
+
+Use `scripts/make-portal-app.sh` to create the bundle:
+
+```bash
+bash scripts/make-portal-app.sh
+# or with custom binary path:
+bash scripts/make-portal-app.sh /path/to/jenny
+```
+
+This creates `dist/Jenny Portal.app` which can be double-clicked to launch the portal without Terminal.
+
+## Behavior Matrix
+
+| Scenario | Command | Result |
+|----------|---------|--------|
+| `./jenny portal` | Terminal | Portal launches |
+| `./jenny` | Terminal | CLI mode (shows help) |
+| `./jenny -p "hello"` | Terminal | CLI mode |
+| Double-click `jenny` | Terminal opens | CLI mode |
+| Double-click `Jenny Portal.app` | No Terminal | Portal launches |
+
+## Cross-Platform Notes
+
+- This limitation applies to all bare executables on macOS (not just `jenny`)
+- Linux/Windows double-click behavior follows their respective OS conventions
+- The `.app` bundle approach is macOS-specific but harmless on other platforms
+- `os.Executable()` may return different paths depending on how the binary was invoked
 
 ## Testable Acceptance Criteria
 
 | AC | Description | Verification |
 |----|-------------|--------------|
-| AC1 | `./jenny` (no args, terminal) shows help text | Does NOT launch portal |
+| AC1 | `./jenny` (no args, terminal) shows help | Does NOT launch portal |
 | AC2 | `./jenny portal` launches portal | Backward compatible |
-| AC3 | Executable from `.app/Contents/MacOS/` path auto-launches portal | Detection works |
-| AC4 | `make-portal-app.sh` creates valid `.app` bundle | Structure correct |
-| AC5 | `go test ./internal/portal/` passes | Tests green |
-| AC6 | `go test ./cmd/jenny/` passes | Tests green |
+| AC3 | `go test ./cmd/jenny/` passes | Tests green |
+| AC4 | `go test ./internal/portal/` passes | Tests green |
+| AC5 | macOS double-click limitation documented | This doc |
 
-## Behavior Matrix
+## References
 
-| Scenario | os.Args | exe path | Result |
-|----------|---------|----------|--------|
-| `./jenny portal` | [jenny, portal] | any | Portal launches |
-| `./jenny` (terminal) | [jenny] | ./jenny or /usr/local/bin/jenny | CLI mode (help) |
-| Double-click `Jenny Portal.app` | [jenny] | .../Jenny Portal.app/Contents/MacOS/jenny | Portal auto-launches |
-
-## Cross-Platform Notes
-
-- `.app` detection only triggers on macOS (path won't match on Linux/Windows)
-- `os.Executable()` may return relative paths - `strings.Contains` on `./jenny` won't match `.app/Contents/MacOS/`
-- The `make-portal-app.sh` script is macOS-specific but harmless on other platforms
+- `cmd/jenny/main.go` - `shouldLaunchPortal()` implementation
+- `scripts/make-portal-app.sh` - Optional `.app` bundle generator
+- `docs/arch/webui-portal.md` - Portal specification
