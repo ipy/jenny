@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -489,20 +488,12 @@ func TestMissingAuth(t *testing.T) {
 // TestProcessLiveness verifies process liveness detection.
 func TestProcessLiveness(t *testing.T) {
 	// Test with our own PID (should be alive)
-	proc, err := os.FindProcess(os.Getpid())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := proc.Signal(syscall.Signal(0)); err != nil {
+	if !isProcessAlive(os.Getpid()) {
 		t.Error("own process should be alive")
 	}
 
 	// Test with an impossible PID (should be dead)
-	proc, err = os.FindProcess(999999)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := proc.Signal(syscall.Signal(0)); err == nil {
+	if isProcessAlive(999999) {
 		t.Error("impossible PID should not be alive")
 	}
 

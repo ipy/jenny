@@ -89,7 +89,7 @@ func (p *openAIProvider) SetThinkingConfig(cfg ThinkingConfig) {
 }
 
 // SendMessage sends a non-streaming message.
-func (p *openAIProvider) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) (*Response, error) {
+func (p *openAIProvider) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string) (*Response, error) {
 	return p.sendWithRetry(ctx, func(ctx context.Context) (*Response, error) {
 		return p.doSendMessage(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix)
 	}, false)
@@ -173,7 +173,7 @@ func (p *openAIProvider) sendWithRetry(ctx context.Context, fn func(context.Cont
 }
 
 // doSendMessage performs the actual message sending.
-func (p *openAIProvider) doSendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) (*Response, error) {
+func (p *openAIProvider) doSendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string) (*Response, error) {
 	log.Debug("OpenAI provider sending message", "model", p.model)
 
 	messages, tools, _ = NormalizeMessages(messages, tools, Capabilities{SupportsPromptCaching: false})
@@ -223,12 +223,12 @@ func (p *openAIProvider) doSendMessage(ctx context.Context, messages []Message, 
 // The system prompt is split into two separate messages: the frozen prefix
 // (cache-friendly) and the dynamic suffix (changes per-turn). This preserves
 // OpenAI's automatic prefix caching since the cached prefix remains identical.
-func (p *openAIProvider) buildMessages(messages []Message, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) []OpenAIMessage {
+func (p *openAIProvider) buildMessages(messages []Message, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string) []OpenAIMessage {
 	var sdkMessages []OpenAIMessage
 
-	if systemPrompt != "" {
+	if len(systemPrompt) > 0 {
 		sdkMsg := OpenAIMessage{Role: RoleSystem}
-		sdkMsg.SetContent(systemPrompt)
+		sdkMsg.SetContent(strings.Join(systemPrompt, "\n\n"))
 		sdkMessages = append(sdkMessages, sdkMsg)
 	}
 	if systemPromptSuffix != "" {
@@ -391,7 +391,7 @@ func isPromptTooLongOpenAI(err error) bool {
 }
 
 // SendMessageStream sends a streaming message.
-func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string, idleTimeout time.Duration) (<-chan StreamContentBlock, *StreamResult) {
+func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string, idleTimeout time.Duration) (<-chan StreamContentBlock, *StreamResult) {
 	blocksChan := make(chan StreamContentBlock, 10)
 	result := &StreamResult{}
 

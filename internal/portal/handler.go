@@ -227,15 +227,11 @@ func (p *Portal) getSessionMeta(sessionID string) (*SessionMeta, error) {
 	if pidData, err := os.ReadFile(pidPath); err == nil {
 		if pid, err := strconv.Atoi(strings.TrimSpace(string(pidData))); err == nil {
 			meta.PID = pid
-			if proc, err := os.FindProcess(pid); err == nil {
-				if err := proc.Signal(syscall.Signal(0)); err == nil {
+			if isProcessAlive(pid) {
 					meta.Status = "running"
 				} else {
 					meta.Status = "exited"
 				}
-			} else {
-				meta.Status = "exited"
-			}
 		}
 	}
 
@@ -375,8 +371,7 @@ func pollPID(sessionID string, done chan<- struct{}) {
 			return
 		}
 
-		proc, err := os.FindProcess(pid)
-		if err != nil || proc.Signal(syscall.Signal(0)) != nil {
+		if !isProcessAlive(pid) {
 			select {
 			case done <- struct{}{}:
 			default:
@@ -414,7 +409,7 @@ func (p *Portal) handleSessionAction(w http.ResponseWriter, r *http.Request) {
 		}
 
 		proc, err := os.FindProcess(pid)
-		if err != nil || proc.Signal(syscall.Signal(0)) != nil {
+		if err != nil || !isProcessAlive(pid) {
 			http.Error(w, `{"error":"session not running"}`, http.StatusNotFound)
 			return
 		}
@@ -506,11 +501,9 @@ func (p *Portal) handleSessionAction(w http.ResponseWriter, r *http.Request) {
 		pidPath := filepath.Join(sessionDir, "pid")
 		if pidData, err := os.ReadFile(pidPath); err == nil {
 			if pid, err := strconv.Atoi(strings.TrimSpace(string(pidData))); err == nil {
-				if proc, err := os.FindProcess(pid); err == nil {
-					if proc.Signal(syscall.Signal(0)) == nil {
-						http.Error(w, `{"error":"session is running, kill it first"}`, http.StatusConflict)
-						return
-					}
+				if isProcessAlive(pid) {
+					http.Error(w, `{"error":"session is running, kill it first"}`, http.StatusConflict)
+					return
 				}
 			}
 		}

@@ -36,16 +36,13 @@ func TestWindowsSystemPromptHint(t *testing.T) {
 
 // TestPlatformSection_WindowsHint tests the platformSection function directly.
 func TestPlatformSection_WindowsHint(t *testing.T) {
-	section, ok := platformSection("/test/path")
+	section, ok := platformSection()
 	if !ok {
 		t.Fatal("expected platform section to be included")
 	}
 
 	if !strings.Contains(section, "Platform:") {
 		t.Error("should contain Platform:")
-	}
-	if !strings.Contains(section, "/test/path") {
-		t.Error("should contain the cwd path")
 	}
 
 	if runtime.GOOS == "windows" {

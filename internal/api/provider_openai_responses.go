@@ -88,7 +88,7 @@ func (p *openAIResponsesProvider) SetThinkingConfig(cfg ThinkingConfig) {
 }
 
 // SendMessage sends a non-streaming message.
-func (p *openAIResponsesProvider) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) (*Response, error) {
+func (p *openAIResponsesProvider) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string) (*Response, error) {
 	return p.sendWithRetry(ctx, func(ctx context.Context) (*Response, error) {
 		return p.doSendMessage(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix)
 	}, false)
@@ -172,7 +172,7 @@ func (p *openAIResponsesProvider) sendWithRetry(ctx context.Context, fn func(con
 }
 
 // doSendMessage performs the actual message sending.
-func (p *openAIResponsesProvider) doSendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) (*Response, error) {
+func (p *openAIResponsesProvider) doSendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string) (*Response, error) {
 	log.Debug("OpenAI Responses API sending message", "model", p.model)
 
 	messages, tools, _ = NormalizeMessages(messages, tools, Capabilities{SupportsPromptCaching: false})
@@ -194,6 +194,11 @@ func (p *openAIResponsesProvider) doSendMessage(ctx context.Context, messages []
 		Input:           input,
 		MaxOutputTokens: &maxTokens,
 		Tools:           sdkTools,
+	}
+
+	// AC: Use top-level instructions for the first (most stable) block of system prompt
+	if len(systemPrompt) > 0 {
+		reqBody.Instructions = systemPrompt[0]
 	}
 
 	// Add reasoning config if effort is set
@@ -218,18 +223,22 @@ func (p *openAIResponsesProvider) doSendMessage(ctx context.Context, messages []
 // buildInput builds the input for the Responses API from messages.
 // The Responses API uses a flat list of input items. function_call and
 // function_call_output are top-level items, NOT nested inside messages.
-func (p *openAIResponsesProvider) buildInput(messages []Message, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) []any {
+func (p *openAIResponsesProvider) buildInput(messages []Message, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string) []any {
 	var input []any
 
-	if systemPrompt != "" {
+	// Blocks after the first one are added as system messages
+	// (The first block systemPrompt[0] is handled via reqBody.Instructions)
+	if len(systemPrompt) > 1 {
+		remaining := strings.Join(systemPrompt[1:], "\n\n")
 		input = append(input, map[string]any{
 			"type": "message",
 			"role": RoleSystem,
 			"content": []map[string]any{
-				{"type": "input_text", "text": systemPrompt},
+				{"type": "input_text", "text": remaining},
 			},
 		})
 	}
+
 	if systemPromptSuffix != "" {
 		input = append(input, map[string]any{
 			"type": "message",
@@ -425,7 +434,7 @@ func isPromptTooLongOpenAIResponses(err error) bool {
 
 // SendMessageStream sends a streaming message using the OpenAI Responses API.
 // Emits Anthropic-compatible stream events for consistency with Claude Code output format.
-func (p *openAIResponsesProvider) SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string, idleTimeout time.Duration) (<-chan StreamContentBlock, *StreamResult) {
+func (p *openAIResponsesProvider) SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string, idleTimeout time.Duration) (<-chan StreamContentBlock, *StreamResult) {
 	blocksChan := make(chan StreamContentBlock, 10)
 	result := &StreamResult{}
 
@@ -454,6 +463,11 @@ func (p *openAIResponsesProvider) SendMessageStream(ctx context.Context, message
 			MaxOutputTokens: &maxTokens,
 			Tools:           sdkTools,
 			Stream:          true,
+		}
+
+		// AC: Use top-level instructions for the first (most stable) block of system prompt
+		if len(systemPrompt) > 0 {
+			reqBody.Instructions = systemPrompt[0]
 		}
 
 		if p.effort != "" {

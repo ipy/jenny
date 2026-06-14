@@ -27,21 +27,28 @@ Three breakpoints (of 4 max) are used:
 
 | # | Location | What it covers |
 |---|----------|---------------|
-| 1 | `system[0]` (frozen prefix) | Intro, memory, tool list, git status, platform/cwd/date, skills manifest, redaction, append prompt |
+| 1 | `system[-1]` (last system block) | All system prompt blocks (Intro, memory, tools, platform, cwd, date, git, skills, redact, append) |
 | 2 | `tools[last]` (last tool definition) | Entire tools array |
 | 3 | Last message content block | All prior messages in the conversation |
 
-Breakpoint 4 is reserved for future use (e.g., double-marker for tool call rollback).
+### Multi-Block System Prompt
+
+The system prompt is split into 4 logical blocks ordered by stability (see [`system-prompt.md`](./system-prompt.md)). This maximizes cross-project cache hits for global/machine sections (Blocks 1 & 2) while isolating project-specific or volatile sections (Blocks 3 & 4).
+
+The Anthropic provider applies `cache_control` to the **last block** of the system prompt:
+
+```
+system[0]: { text: "<block1>" }
+system[1]: { text: "<block2>" }
+system[2]: { text: "<block3>" }
+system[3]: { text: "<block4>", cache_control: { type: "ephemeral" } }
+```
+
+Rationale: Marking the last block ensures that everything before it (the entire system prompt) is included in the cache key. Since the blocks are stability-ordered, a change in a late block (e.g., Block 4's Git status) doesn't invalidate the earlier blocks for cross-session/cross-project matching.
 
 ### System Prompt — No Dynamic Suffix
 
-The system prompt is a single frozen block:
-
-```
-system[0]: { text: "<frozen>", cache_control: { type: "ephemeral" } }
-```
-
-`DynamicSystemSuffix` always returns empty. All dynamic content (active skills, cwd/date changes) is communicated through virtual user messages in the message chain. This ensures the system prompt prefix is byte-stable across all turns and across resume, preventing cache invalidation of the entire message chain.
+`DynamicSystemSuffix` always returns empty. All dynamic updates that occur *after* session start are communicated through **System Reminders** in the message chain. This keeps the system prompt prefix byte-stable across all turns and across resume.
 
 ### Message Rolling Cache
 

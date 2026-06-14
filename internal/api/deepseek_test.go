@@ -90,7 +90,7 @@ func TestDeepSeekToolResultFormat(t *testing.T) {
 	}
 
 	// Send message
-	_, err = provider.SendMessage(context.Background(), messages, nil, nil, "", "")
+	_, err = provider.SendMessage(context.Background(), messages, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("SendMessage failed: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestDeepSeekToolResultFormat(t *testing.T) {
 		}
 		return nil
 	})
-	_, err = provider.SendMessage(context.Background(), messages, nil, nil, "", "")
+	_, err = provider.SendMessage(context.Background(), messages, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("SendMessage with IsError failed: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestToolResultContentFlattenScope(t *testing.T) {
 		},
 	}
 
-	_, err = provider.SendMessage(context.Background(), messages, tools, nil, "", "")
+	_, err = provider.SendMessage(context.Background(), messages, tools, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("SendMessage failed: %v", err)
 	}

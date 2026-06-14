@@ -602,7 +602,7 @@ type mockCompactClient struct {
 }
 
 // SendMessage implements api.Requester.
-func (m *mockCompactClient) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+func (m *mockCompactClient) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 	m.calls++
 	return &api.Response{
 		Content: []api.ContentBlock{
@@ -615,7 +615,7 @@ func (m *mockCompactClient) SendMessage(ctx context.Context, messages []api.Mess
 }
 
 // SendMessageStream implements api.Requester (no-op for non-streaming tests).
-func (m *mockCompactClient) SendMessageStream(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string, idleTimeout, fallbackTimeout time.Duration, onStreamingFallback func(context.Context) (*api.Response, error)) (<-chan api.StreamContentBlock, *api.StreamResult) {
+func (m *mockCompactClient) SendMessageStream(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string, idleTimeout, fallbackTimeout time.Duration, onStreamingFallback func(context.Context) (*api.Response, error)) (<-chan api.StreamContentBlock, *api.StreamResult) {
 	m.calls++
 	ch := make(chan api.StreamContentBlock)
 	close(ch)
@@ -669,7 +669,7 @@ func TestAC1_InSessionCompact_Behavior_WithLargeMessages(t *testing.T) {
 	}
 
 	// compactMessages should succeed via forkSummaryAgent fallback
-	_, err := engine.compactMessages(context.Background(), messages, cfg, "test system prompt")
+	_, err := engine.compactMessages(context.Background(), messages, cfg, []string{"test system prompt"})
 	if err != nil {
 		t.Fatalf("compactMessages with large messages should succeed via fallback, got error: %v", err)
 	}
@@ -710,7 +710,7 @@ func TestAC1_InSessionCompact_Behavior_WithSmallMessages(t *testing.T) {
 	}
 
 	// compactMessages should succeed (via inSessionCompact or fallback)
-	_, err := engine.compactMessages(context.Background(), messages, cfg, "test system prompt")
+	_, err := engine.compactMessages(context.Background(), messages, cfg, []string{"test system prompt"})
 	if err != nil {
 		t.Fatalf("compactMessages with small messages should succeed, got error: %v", err)
 	}
@@ -796,10 +796,10 @@ type mockAC3Client struct {
 	mockCompactClient
 }
 
-func (m *mockAC3Client) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+func (m *mockAC3Client) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 	m.calls++
 	// forkSummaryAgent uses summarySystemPrompt; first such call returns prompt-too-long
-	if strings.Contains(systemPrompt, "summarizes conversations concisely") && m.calls == 1 {
+	if strings.Contains(strings.Join(systemPrompt, "\n\n"), "summarizes conversations concisely") && m.calls == 1 {
 		return nil, fmt.Errorf("context window exceeds limit (2013)")
 	}
 	return &api.Response{
@@ -869,7 +869,7 @@ func TestAC3_175KTokensForkRetries(t *testing.T) {
 		costState: &CostState{ModelUsage: make(map[string]ModelUsage)},
 	}
 
-	result, err := engine.compactMessages(context.Background(), messages, cfg, "test system prompt")
+	result, err := engine.compactMessages(context.Background(), messages, cfg, []string{"test system prompt"})
 	if err != nil {
 		t.Fatalf("AC3 FAIL: compactMessages should succeed via forkSummaryAgent retry, got error: %v", err)
 	}
@@ -914,18 +914,18 @@ func TestAC3_175KTokensForkRetries(t *testing.T) {
 // ============================================================
 
 // mockAC4Client tracks whether inSessionCompact was called by checking the systemPrompt.
-// inSessionCompact passes the original systemPrompt from compactMessages ("test system prompt"),
+// inSessionCompact passes the original systemPrompt from compactMessages ([]string{"test system prompt"}),
 // while forkSummaryAgent uses its own summarySystemPrompt.
 type mockAC4Client struct {
 	mockCompactClient
 	inSessionCompactCalled bool
 }
 
-func (m *mockAC4Client) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+func (m *mockAC4Client) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 	m.calls++
 	// inSessionCompact passes the original systemPrompt (same as compactMessages received),
 	// while forkSummaryAgent uses summarySystemPrompt.
-	if !strings.Contains(systemPrompt, "summarizes conversations concisely") {
+	if !strings.Contains(strings.Join(systemPrompt, "\n\n"), "summarizes conversations concisely") {
 		m.inSessionCompactCalled = true
 	}
 	return &api.Response{
@@ -969,7 +969,7 @@ func TestAC4_DeepSeek1MWindowUsesInSessionCompact(t *testing.T) {
 		costState: &CostState{ModelUsage: make(map[string]ModelUsage)},
 	}
 
-	_, err := engine.compactMessages(context.Background(), messages, cfg, "test system prompt")
+	_, err := engine.compactMessages(context.Background(), messages, cfg, []string{"test system prompt"})
 	if err != nil {
 		t.Fatalf("AC4 FAIL: compactMessages should succeed for 1M-window model, got error: %v", err)
 	}
@@ -994,7 +994,7 @@ type mockAC5Client struct {
 	mockCompactClient
 }
 
-func (m *mockAC5Client) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+func (m *mockAC5Client) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 	m.calls++
 	if tools == nil {
 		return nil, fmt.Errorf("context window exceeds limit (2013)")
@@ -1046,7 +1046,7 @@ func TestAC5_ForkRetriesExhaustedReturnsUnderlyingError(t *testing.T) {
 		costState: &CostState{ModelUsage: make(map[string]ModelUsage)},
 	}
 
-	_, err := engine.compactMessages(context.Background(), messages, cfg, "test system prompt")
+	_, err := engine.compactMessages(context.Background(), messages, cfg, []string{"test system prompt"})
 	if err == nil {
 		t.Fatal("AC5 FAIL: compactMessages should return error when forkSummaryAgent exhausts retries")
 	}

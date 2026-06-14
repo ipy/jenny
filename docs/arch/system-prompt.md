@@ -14,34 +14,38 @@ depends_on:
 
 ## Overview
 
-Jenny assembles the model system prompt from static sections, dynamic context (cwd, git, tools), and optional user overrides. Custom system prompt **replaces** the default entirely — it is not appended to defaults.
+Jenny assembles the model system prompt from static sections, dynamic context (cwd, git, tools), and optional user overrides. The assembled prompt is returned as a **slice of logical blocks** (`[]string`) ordered by stability to maximize cross-session and cross-project prompt caching.
 
 ## Prompt Caching Design
 
-Anthropic prompt caching (`prompt-caching-2024-07-31`) relies on byte-for-byte stability of the request prefix. Two mechanisms protect cache hits:
+Anthropic prompt caching (`prompt-caching-2024-07-31`) relies on byte-for-byte stability of the request prefix. Jenny uses a multi-block system prompt to isolate volatile segments from stable ones.
+
+### Stability-Ordered Multi-Block Assembly
+
+The system prompt is split into 4 blocks, from most stable to most volatile:
+
+| Block | Stability | Content | Implementation |
+|-------|-----------|---------|----------------|
+| 1 | Global (Most stable) | Default intro + tool list + redaction instructions | `buildSystemPrompt()` |
+| 2 | Machine/Session stable | Platform (OS/Arch) + skills manifest + append prompt | `buildSystemPrompt()` |
+| 3 | Project stable | **CWD (Working Directory)** + Memory content (`AGENTS.md`) | `buildSystemPrompt()` |
+| 4 | Turn stable (Most volatile) | Current Date + Git status | `buildSystemPrompt()` |
+
+Rationale: Placing CWD in Block 3 ensures that if you switch projects, Block 1 and 2 (OS/Arch and Jenny version) can still hit the cache. Placing Date and Git Status in Block 4 ensures that even if they change across sessions, the first 3 blocks remain cache-hit candidates.
 
 ### System Prompt Freeze (Process-Level)
 
-The assembled system prompt is **frozen on first call** and cached as `StreamConfig.CachedSystemPrompt`. Subsequent calls to `AssembleSystemPrompt` within the same process return the frozen string verbatim — regardless of git status changes, date changes, or memory content updates across turns.
+The assembled system blocks are **frozen on first call** and cached as `StreamConfig.CachedSystemPrompt`. Subsequent calls to `AssembleSystemPrompt` within the same process return the identical slice — regardless of git status changes, date changes, or memory content updates across turns.
 
-Implementation: `internal/agent/engine_loop.go:120-122` captures the result from first `AssembleSystemPrompt` into `e.streamCfg.CachedSystemPrompt`.
+Implementation: `internal/agent/engine_loop.go` captures the result from first `AssembleSystemPrompt` into `e.streamCfg.CachedSystemPrompt`.
 
-### Cache-Control Split (Per-Request)
+### Cache-Control Marker
 
-The stable and dynamic sections are sent as **two system blocks** to Anthropic:
-
-| Block | Content | CacheControl | Section |
-|-------|---------|-------------|---------|
-| 1 (stable) | Default intro + memory content + tool list + skills manifest + redact instruction + append prompt | `ephemeral` | `buildSystemPrompt()` (via `provider_anthropic.go`) |
-| 2 (dynamic) | Git status + platform/cwd | none | `DynamicSystemSuffix()` |
-
-The stable block (typically 1000+ tokens) is cacheable and rarely changes. The dynamic suffix (<200 tokens) is re-sent every turn but too small to warrant a cache entry.
-
-Rationale: sending git status and platform as a separate uncached suffix avoids busting the 1000+ token stable prefix every time the working tree changes.
+In the Anthropic provider, a `cache_control: { type: "ephemeral" }` marker is applied to the **last block** of the system prompt (`system[-1]`). 
 
 ### Resume Persistence (Cross-Process)
 
-On first assembly, the frozen system prompt is persisted to the transcript as a `state` entry with field `system_prompt`. On session resume with `-r`, the `CachedSystemPrompt` is restored from this entry — ensuring the same system prompt bytes are sent across process boundaries.
+On first assembly, the frozen system prompt blocks are joined with `\n\n` and persisted to the transcript as a `state` entry with field `system_prompt`. On session resume with `-r`, the `CachedSystemPrompt` is restored as a single-element slice — ensuring the same system prompt bytes are sent across process boundaries.
 
 Implementation: `session.Manager.AppendSystemPrompt()`, `session.Manager.LoadSystemPrompt()`, and `engine.go` restore logic.
 
@@ -51,11 +55,12 @@ Implementation: `session.Manager.AppendSystemPrompt()`, `session.Manager.LoadSys
 AssembleSystemPrompt(cfg, tools, cwd)
     │
     ├─ cfg.CachedSystemPrompt set?
-    │     YES → return it (frozen, cache-friendly)
-    │     NO  → buildSystemPrompt() → freeze into cfg.CachedSystemPrompt
-    │           → persist to transcript
+    │     YES → return it (frozen []string, cache-friendly)
+    │     NO  → buildSystemPrompt() → returns 4 blocks
+    │           → freeze into cfg.CachedSystemPrompt
+    │           → persist joined string to transcript
     │
-    └─ API call: [block1(cache_control)] + [block2(no cache_control)]
+    └─ API call: [block1, block2, block3, block4(cache_control)]
 ```
 
 ## Default Sections
@@ -64,34 +69,37 @@ Static blocks: intro, system identity, doing tasks, actions, tone, using tools.
 
 Dynamic registry sections (when enabled): memory, environment, MCP status, scratchpad, skills manifest.
 
+## Scratchpad Directory
+
+The scratchpad is a session-scoped temporary directory (`~/.jenny/sessions/<sessionID>/scratchpad`).
+
+The default intro instructs the agent to use it for all intermediate files. To make the path accessible without exposing the real filesystem path:
+
+- **Shell tools** (`Bash`): the `JENNY_SCRATCHPAD` environment variable is injected at execution time, pointing to the real scratchpad path.
+- **Read/Write/Edit tools**: paths prefixed with `$JENNY_SCRATCHPAD/` are resolved to the real scratchpad path before permission checks.
+
+The prefix substitution happens **before** the relative-path join with `cwd`, so the agent can write `$JENNY_SCRATCHPAD/foo.txt` regardless of the current working directory. The resolved path is cleaned and validated to be under the scratchpad directory, preventing escape via `..` or symlinks.
+
+Implementation: `internal/tool/scratchpad.go:ResolveScratchpadPrefix`. The `JENNY_SCRATCHPAD` env var is injected in `bash.go` `Execute` and `executeBackground`.
+
 ## DynamicSystemSuffix
 
-`DynamicSystemSuffix(cfg, cwd)` returns only the per-turn sections that should NOT be cached:
+`DynamicSystemSuffix` is **intentionally empty** in the current architecture. All dynamic updates that occur *after* the session has started (e.g., directory changes via `cd`, new skills discovered) are communicated via **System Reminders** (virtual user messages) at the end of the message chain. 
 
-- **Git status** (branch, HEAD, status --short) — only if inside a git repo
-- **Platform + cwd** (OS/arch, working directory path) — date is excluded (already in cached prefix)
-
-Excluded from the suffix (these are in the cached system prompt block):
-- Default intro
-- Memory content (`<system-reminder>` block)
-- Tool list
-- Skills manifest
-- Secret redaction instruction
-- Append prompt
-
-When `CustomSystemPrompt` is set, `DynamicSystemSuffix` returns empty string (custom replaces everything).
+This prevents any change in the environment from busting the system prompt cache prefix for the entire conversation history.
 
 ## Injected Context
 
-| Section | Source | Limits |
-|---------|--------|--------|
-| User context | Project instruction files, date | Truncated per policy |
-| System context | Git status snapshot (frozen at first assembly) | Max 2000 chars |
-| Cwd | Current working directory | Absolute path |
-| Platform | OS, arch | — |
-| Date | time.Now() formatted as "YYYY-MM-DD" (frozen at first assembly) | — |
+| Section | Source | Limits | Block |
+|---------|--------|--------|-------|
+| User context | Project instruction files | Truncated per policy | 3 |
+| System identity | Default identity keywords | — | 1 |
+| Git status | branch, status snapshot | Max 2000 chars | 4 |
+| Cwd | Current working directory | Absolute path | 3 |
+| Platform | OS, arch | — | 2 |
+| Date | time.Now() (YYYY-MM-DD) | — | 4 |
 
-Git status truncated at 2000 characters with ellipsis.
+Git status truncated at 2000 characters with ellipsis. Date and Git Status are in the most volatile Block 4. CWD and Memory are in Block 3. Platform and Skills are in Block 2. Global identity and tools are in Block 1.
 
 ## Tool List Sync
 
@@ -133,17 +141,20 @@ When tool search enabled: omit deferred tool **descriptions** from API schemas (
 - **AC9:** Default prompt names Glob and Grep as search tools
 - **AC10:** No unfilled template placeholders in assembled output
 - **AC11:** AC1–AC5 from iter-115 continue to pass (regression)
-- **AC12:** `--print-system-prompt` stdout contains "date" or "Date" (date is injected into the platform/context section).
+- **AC12:** `--print-system-prompt` stdout contains "date" or "Date" (date is injected into Block 4).
 - **AC13:** The injected date reflects the current calendar year.
 - **AC14:** `--print-system-prompt` stdout contains OS/platform info (`"Platform"`, `"darwin"`, `"linux"`, or `"windows"`).
 - **AC15:** When jenny is launched from inside a git repository, `--print-system-prompt` stdout contains the current branch (substring `"Branch"` or `"Git context"`).
 - **AC16:** When jenny is launched from a directory with no git repo, `--print-system-prompt` stdout does NOT contain `"Git context"` or `"Branch:"`.
-- **AC17:** CLAUDE.md content from cwd appears in system prompt as a `<system-reminder>` block.
+- **AC17:** CLAUDE.md content from cwd appears in system prompt as a `<system-reminder>` block (Block 3).
 - **AC18:** AGENTS.md used as fallback when CLAUDE.md absent.
 - **AC19:** CLAUDE.md takes precedence when both files exist.
 - **AC20:** Subdirectory CLAUDE.md is not loaded.
-- **AC21:** Two calls to `AssembleSystemPrompt` with same cfg in same process return identical strings.
-- **AC22:** `DynamicSystemSuffix` does not contain default intro, memory content, tool list, or any cached-section content.
-- **AC23:** Anthropic API request body.System has two blocks: first with `cache_control`, second without.
+- **AC21:** Two calls to `AssembleSystemPrompt` with same cfg in same process return identical slices.
+- **AC22:** `DynamicSystemSuffix` is always empty to protect cache prefix stability.
+- **AC23:** Anthropic API request body.System has multiple blocks; the last block carries `cache_control`.
 - **AC24:** Resume restores `CachedSystemPrompt` from transcript; system prompt does not change.
 - **AC25:** `--print-system-prompt` output ends with a newline character to prevent shell prompt overlap.
+- **AC26:** Default intro mentions the scratchpad directory and the `$JENNY_SCRATCHPAD` prefix for Read/Write/Edit tools.
+- **AC27:** OpenAI Responses API uses `instructions` field for the first (most stable) block.
+- **AC28:** CWD is located in Block 3, making it stable within a project but distinct across projects.

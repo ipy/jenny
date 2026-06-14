@@ -21,11 +21,11 @@ const (
 type Provider interface {
 	// SendMessage sends a non-streaming message and returns the response.
 	// systemPrompt is the cached stable prefix; systemPromptSuffix is the per-turn dynamic part (no cache control).
-	SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) (*Response, error)
+	SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string) (*Response, error)
 
 	// SendMessageStream sends a streaming message and yields content blocks via the channel.
 	// systemPrompt is the cached stable prefix; systemPromptSuffix is the per-turn dynamic part (no cache control).
-	SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string, idleTimeout time.Duration) (<-chan StreamContentBlock, *StreamResult)
+	SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string, idleTimeout time.Duration) (<-chan StreamContentBlock, *StreamResult)
 
 	// Kind returns the provider kind for debugging/logging.
 	Kind() ProviderKind

@@ -69,7 +69,7 @@ func TestAC2_ResponsesAPI_EffortTranslation(t *testing.T) {
 	// Thread effort: high -> reasoning_config.effort = "high"
 	client.SetThinkingConfig(ThinkingConfig{Effort: "high"})
 
-	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Hi"}}, nil, nil, "", "")
+	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Hi"}}, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -122,7 +122,7 @@ func TestAC2_NoEffort_NoReasoningConfig(t *testing.T) {
 	}
 
 	// No effort set — must not send reasoning_config
-	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Hi"}}, nil, nil, "", "")
+	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Hi"}}, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -173,7 +173,7 @@ func TestAC2_EffortNotThreaded_EmptyEffortFromCLI(t *testing.T) {
 	}
 
 	// Don't call SetThinkingConfig — simulates empty StreamConfig.Effort
-	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Hi"}}, nil, nil, "", "")
+	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Hi"}}, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -238,7 +238,7 @@ func TestAC2_DeepSeekExtraBody_Enabled(t *testing.T) {
 	// Set thinking config — triggers DeepSeek thinking mode
 	client.SetThinkingConfig(ThinkingConfig{Effort: "medium"})
 
-	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Plan."}}, nil, nil, "", "")
+	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Plan."}}, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -299,7 +299,7 @@ func TestAC2_DeepSeekExtraBody_NoEffort_NoExtraBody(t *testing.T) {
 	}
 
 	// No effort set — must not add extra_body
-	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Hi"}}, nil, nil, "", "")
+	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Hi"}}, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -360,7 +360,7 @@ func TestAC2_EffortThreaded_FromCLIThroughEngine(t *testing.T) {
 	// Thread effort "low" through SetThinkingConfig
 	client.SetThinkingConfig(ThinkingConfig{Effort: "low"})
 
-	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "test"}}, nil, nil, "", "")
+	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "test"}}, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -449,7 +449,7 @@ func TestAC3_ThinkingPersisted_OpenAIChat_Provider(t *testing.T) {
 
 	client.SetThinkingConfig(ThinkingConfig{Effort: "high"})
 
-	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Think deeply."}}, nil, nil, "", "")
+	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Think deeply."}}, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -521,7 +521,7 @@ func TestAC3_ThinkingPersisted_DeepSeek_Provider(t *testing.T) {
 
 	client.SetThinkingConfig(ThinkingConfig{Effort: "high"})
 
-	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Reason."}}, nil, nil, "", "")
+	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Reason."}}, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -645,7 +645,7 @@ func TestAC4_ResponsesAPI_ThinkingRoundTrip(t *testing.T) {
 		},
 	}
 
-	resp, err := client.SendMessage(context.Background(), messages, nil, nil, "", "")
+	resp, err := client.SendMessage(context.Background(), messages, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -748,7 +748,7 @@ func TestAC4_ChatAPI_ThinkingWithToolCalls(t *testing.T) {
 		},
 	}
 
-	resp, err := client.SendMessage(context.Background(), messages, nil, nil, "", "")
+	resp, err := client.SendMessage(context.Background(), messages, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -885,7 +885,7 @@ func TestAC4_RoundTrip_No400Error(t *testing.T) {
 		},
 	}
 
-	resp, err := client.SendMessage(context.Background(), messages, nil, nil, "", "")
+	resp, err := client.SendMessage(context.Background(), messages, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("AC4 FAIL: reconstructed history produced error (expected no 400): %v", err)
 	}
@@ -984,7 +984,7 @@ func TestAC4_ChatAPIRoundTrip_ThinkingToolCalls_No400(t *testing.T) {
 		},
 	}
 
-	resp, err := client.SendMessage(context.Background(), messages, nil, nil, "", "")
+	resp, err := client.SendMessage(context.Background(), messages, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("AC4 FAIL: Chat API thinking round-trip error: %v", err)
 	}
@@ -1169,7 +1169,7 @@ func TestAC4_RoundTrip_StillBroken_NoMessageThinking(t *testing.T) {
 		},
 	}
 
-	resp, err := client.SendMessage(context.Background(), messages, nil, nil, "", "")
+	resp, err := client.SendMessage(context.Background(), messages, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("AC4 FAIL: NoMessageThinking round-trip error: %v", err)
 	}
@@ -1329,7 +1329,7 @@ func TestRetest_AC4_FullRoundTrip(t *testing.T) {
 	// Turn 1: Send initial message
 	resp1, err := client.SendMessage(context.Background(),
 		[]Message{{Role: "user", Content: "Search for info."}},
-		nil, nil, "", "")
+		nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("Turn 1 error = %v", err)
 	}
@@ -1371,7 +1371,7 @@ func TestRetest_AC4_FullRoundTrip(t *testing.T) {
 		},
 	}
 
-	resp2, err := client.SendMessage(context.Background(), messages, nil, nil, "", "")
+	resp2, err := client.SendMessage(context.Background(), messages, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("AC4 FAIL: full round-trip error = %v", err)
 	}
@@ -1426,7 +1426,7 @@ func TestAC2_ChatAPI_ReasoningEffort_NoExtraBodyForNonDeepSeek(t *testing.T) {
 
 	client.SetThinkingConfig(ThinkingConfig{Effort: "high"})
 
-	_, err = client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Hi"}}, nil, nil, "", "")
+	_, err = client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Hi"}}, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}

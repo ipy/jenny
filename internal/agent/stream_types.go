@@ -46,7 +46,7 @@ type StreamConfig struct {
 	ReadFileCache        *tool.ReadFileCache         // Cache for read-before-write enforcement
 	AutoMemoryEnabled    bool                        // Whether auto-memory is enabled
 	MemoryContent        string                      // Memory content to inject into system prompt
-	CachedSystemPrompt   string                      // Frozen system prompt from first assembly (cache-friendly)
+	CachedSystemPrompt   []string                    // Frozen system prompt blocks from first assembly (cache-friendly)
 	Skills               []skills.Skill              // Discovered skills for manifest
 	ActiveSkills         []ActivatedSkill            // Skills activated this session (survives compaction)
 	// Non-compacted: survives context compaction.

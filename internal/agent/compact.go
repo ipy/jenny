@@ -209,7 +209,7 @@ func readEnvInt(key string, defaultVal int) int {
 //  1. In-session compaction (shares system+tools+message cache with main session)
 //  2. Session-memory compaction (when enabled)
 //  3. Fork summary agent (independent call, no cache sharing)
-func (e *QueryEngine) compactMessages(ctx context.Context, messages []api.Message, cfg CompactConfig, systemPrompt string) ([]api.Message, error) {
+func (e *QueryEngine) compactMessages(ctx context.Context, messages []api.Message, cfg CompactConfig, systemPrompt []string) ([]api.Message, error) {
 	log.Debug("Starting context compaction", "messageCount", len(messages))
 
 	// AC1: Pre-flight check — skip in-session compaction if messages are too large.
@@ -260,7 +260,7 @@ Output ONLY the summary text. Do not call any tools.`
 // inSessionCompact performs compaction by appending a summary instruction to the
 // existing message chain, sharing the cached system prompt + tools + message
 // prefix with the main session. Only the appended instruction is cold content.
-func (e *QueryEngine) inSessionCompact(ctx context.Context, messages []api.Message, systemPrompt string) ([]api.Message, error) {
+func (e *QueryEngine) inSessionCompact(ctx context.Context, messages []api.Message, systemPrompt []string) ([]api.Message, error) {
 	compactMsg := api.Message{
 		Role:    api.RoleUser,
 		Content: inSessionCompactPrompt,
@@ -301,18 +301,18 @@ func (e *QueryEngine) inSessionCompact(ctx context.Context, messages []api.Messa
 
 // trySessionMemoryCompact attempts compaction via session memory.
 // Currently returns ErrNotImplemented.
-func (e *QueryEngine) trySessionMemoryCompact(ctx context.Context, messages []api.Message, cfg CompactConfig, systemPrompt string) ([]api.Message, error) {
+func (e *QueryEngine) trySessionMemoryCompact(ctx context.Context, messages []api.Message, cfg CompactConfig, systemPrompt []string) ([]api.Message, error) {
 	return nil, fmt.Errorf("session memory compaction not implemented")
 }
 
 // forkSummaryAgent forks a single-turn API call to generate a summary of the
 // conversation history.
-func (e *QueryEngine) forkSummaryAgent(ctx context.Context, messages []api.Message, cfg CompactConfig, systemPrompt string) ([]api.Message, error) {
+func (e *QueryEngine) forkSummaryAgent(ctx context.Context, messages []api.Message, cfg CompactConfig, systemPrompt []string) ([]api.Message, error) {
 	// Prepare messages for summary call (strip images/documents)
 	summaryMessages := prepareSummaryMessages(messages)
 
 	// Create a summary system prompt
-	summarySystemPrompt := "You are a helpful assistant that summarizes conversations concisely. Provide a brief summary of the key points from the conversation above. Focus on the initial goal, essential information, decisions made, and any outstanding tasks or questions."
+	summarySystemPrompt := []string{"You are a helpful assistant that summarizes conversations concisely. Provide a brief summary of the key points from the conversation above. Focus on the initial goal, essential information, decisions made, and any outstanding tasks or questions."}
 
 	// Make the summary API call with retries
 	var lastErr error

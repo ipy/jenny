@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -146,7 +145,6 @@ func startWithConfig(ctx context.Context, jennyDir string, idleTimeout time.Dura
 // This prevents the TOCTOU race between checking and writing the lockfile.
 // If another portal is running, it will be detected here.
 func (p *Portal) writeLockfileWithLock() error {
-	// Write our lockfile content to a temp file first
 	lf := LockfileData{
 		PID:       p.pid,
 		Port:      p.port,
@@ -158,19 +156,11 @@ func (p *Portal) writeLockfileWithLock() error {
 		return fmt.Errorf("marshaling lockfile: %w", err)
 	}
 
-	// Write to temp file
-	tmpPath := p.lockPath + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
-		return fmt.Errorf("writing temp lockfile: %w", err)
-	}
-
 	// Try to acquire exclusive lock on the lockfile path
 	// This will fail if another process has it locked
 	lockFile, err := flock(p.lockPath)
 	if err != nil {
 		// Another process has the lockfile locked - portal is running
-		os.Remove(tmpPath)
-
 		// Read existing lockfile to get port for error message
 		if existingData, readErr := os.ReadFile(p.lockPath); readErr == nil {
 			var existingLF LockfileData
@@ -188,22 +178,23 @@ func (p *Portal) writeLockfileWithLock() error {
 		var existingLF LockfileData
 		if json.Unmarshal(existingData, &existingLF) == nil {
 			// Check if the existing PID is alive
-			if proc, err := os.FindProcess(existingLF.PID); err == nil {
-				if err := proc.Signal(syscall.Signal(0)); err == nil {
-					// Existing portal is still running - we lost the race
-					return fmt.Errorf("portal already running on port %d", existingLF.Port)
-				}
+			if isProcessAlive(existingLF.PID) {
+				// Existing portal is still running - we lost the race
+				return fmt.Errorf("portal already running on port %d", existingLF.Port)
 			}
-			// Stale lockfile - clean it up
-			os.Remove(p.lockPath)
 		}
 	}
 
-	// Atomically rename our temp file to the lockfile
-	if err := os.Rename(tmpPath, p.lockPath); err != nil {
-		os.Remove(tmpPath)
-		// Another process might have won the race
-		return fmt.Errorf("portal already running")
+	// Write directly to the locked file.
+	// We don't use os.Rename here because it fails on Windows when the destination is open.
+	if err := lockFile.Truncate(0); err != nil {
+		return fmt.Errorf("truncating lockfile: %w", err)
+	}
+	if _, err := lockFile.Seek(0, 0); err != nil {
+		return fmt.Errorf("seeking lockfile: %w", err)
+	}
+	if _, err := lockFile.Write(data); err != nil {
+		return fmt.Errorf("writing lockfile: %w", err)
 	}
 
 	return nil
@@ -301,40 +292,14 @@ func (p *Portal) runIdleMonitor(ctx context.Context) {
 	}
 }
 
-// writeLockfile writes the lockfile atomically.
-func (p *Portal) writeLockfile() error {
-	lf := LockfileData{
-		PID:       p.pid,
-		Port:      p.port,
-		AuthToken: p.authToken,
-	}
-
-	data, err := json.Marshal(lf)
-	if err != nil {
-		return fmt.Errorf("marshaling lockfile: %w", err)
-	}
-
-	// Write to temp file then rename for atomicity
-	tmpPath := p.lockPath + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
-		return fmt.Errorf("writing temp lockfile: %w", err)
-	}
-	if err := os.Rename(tmpPath, p.lockPath); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("renaming lockfile: %w", err)
-	}
-
-	return nil
-}
-
-// findAvailablePort finds an available port starting from the given port.
-func findAvailablePort(start int) (int, error) {
-	for port := start; port < 65535; port++ {
-		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
-		if err == nil {
-			ln.Close()
-			return port, nil
+	// findAvailablePort finds an available port starting from the given port.
+	func findAvailablePort(start int) (int, error) {
+		for port := start; port < 65535; port++ {
+			ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+			if err == nil {
+				ln.Close()
+				return port, nil
+			}
 		}
+		return 0, fmt.Errorf("no available port found")
 	}
-	return 0, fmt.Errorf("no available port found")
-}

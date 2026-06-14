@@ -171,7 +171,7 @@ func NewQueryEngine(cfg *StreamConfig, tools []tool.Tool, model string, opts ...
 		// AC3: Restore frozen system prompt from transcript for prompt caching
 		if cfg.SessionManager != nil {
 			if sp, err := cfg.SessionManager.LoadSystemPrompt(sessionID); err == nil && sp != "" {
-				cfg.CachedSystemPrompt = sp
+				cfg.CachedSystemPrompt = []string{sp}
 				log.Debug("System prompt restored from transcript", "sessionID", sessionID, "len", len(sp))
 			}
 		}
@@ -393,19 +393,20 @@ func (e *QueryEngine) persistCompactBoundary(preTokens int, preservedCount int, 
 // The frozen system prompt captures cwd, date, and platform at session start;
 // on resume these may differ (e.g., next day, different directory).
 func (e *QueryEngine) detectResumeChanges(currentCWD string) []string {
-	frozen := e.streamCfg.CachedSystemPrompt
-	if frozen == "" {
+	frozenBlocks := e.streamCfg.CachedSystemPrompt
+	if len(frozenBlocks) == 0 {
 		return nil
 	}
 
+	fullFrozen := strings.Join(frozenBlocks, "\n\n")
 	var reminders []string
 
 	currentDate := time.Now().Format("2006-01-02")
-	if !strings.Contains(frozen, "Date: "+currentDate) {
+	if !strings.Contains(fullFrozen, "Date: "+currentDate) {
 		reminders = append(reminders, "The current date is "+currentDate+".")
 	}
 
-	if currentCWD != "" && !strings.Contains(frozen, "Cwd: "+currentCWD) {
+	if currentCWD != "" && !strings.Contains(fullFrozen, "Cwd: "+currentCWD) {
 		reminders = append(reminders, "The working directory is now "+currentCWD+".")
 	}
 

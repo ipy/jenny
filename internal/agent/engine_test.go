@@ -1981,7 +1981,7 @@ type stubMemExtractorForAC10 struct {
 	recordingTurnCtx TurnContext
 }
 
-func (s *stubMemExtractorForAC10) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string) (*api.Response, error) {
+func (s *stubMemExtractorForAC10) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 	return &api.Response{}, nil
 }
 

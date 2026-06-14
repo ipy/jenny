@@ -16,13 +16,13 @@ import (
 // Requester defines the interface for an API client capable of sending
 // messages and managing streaming sessions with fallback and retries.
 type Requester interface {
-	SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) (*Response, error)
+	SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string) (*Response, error)
 	SendMessageStream(
 		ctx context.Context,
 		messages []Message,
 		tools []ToolParam,
 		toolResults []ToolResult,
-		systemPrompt string,
+		systemPrompt []string,
 		systemPromptSuffix string,
 		idleTimeout time.Duration,
 		fallbackTimeout time.Duration,
@@ -184,7 +184,7 @@ func (c *Client) SetThinkingConfig(cfg ThinkingConfig) {
 }
 
 // SendMessage sends a message to the API and returns the response.
-func (c *Client) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) (*Response, error) {
+func (c *Client) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string) (*Response, error) {
 	return c.provider.SendMessage(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix)
 }
 
@@ -194,7 +194,7 @@ func (c *Client) SendMessageStream(
 	messages []Message,
 	tools []ToolParam,
 	toolResults []ToolResult,
-	systemPrompt string,
+	systemPrompt []string,
 	systemPromptSuffix string,
 	idleTimeout time.Duration,
 	fallbackTimeout time.Duration,

@@ -130,16 +130,22 @@ func (e *QueryEngine) SubmitMessage(ctx context.Context, prompt string) (string,
 // end_turn or stop_sequence, or a limit is reached.
 // querySource indicates the origin of the request ("user", "compact", "session_memory").
 func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, sessionID, querySource string) (string, error) {
-	systemPrompt := AssembleSystemPrompt(e.streamCfg, e.tools, cwd)
+	systemPromptBlocks := AssembleSystemPrompt(e.streamCfg, e.tools, cwd)
 	// Freeze the system prompt after first assembly so that subsequent turns
 	// within the same session receive an identical string, protecting prompt caching.
-	if e.streamCfg.CachedSystemPrompt == "" {
-		e.streamCfg.CachedSystemPrompt = systemPrompt
+	if len(e.streamCfg.CachedSystemPrompt) == 0 {
+		e.streamCfg.CachedSystemPrompt = systemPromptBlocks
 		// Persist frozen system prompt to transcript for cross-process resume
 		if e.sessionManager != nil && sessionID != "" {
-			_ = e.sessionManager.AppendSystemPrompt(sessionID, systemPrompt)
+			// Join blocks for persistence (backward compatible or just for storage)
+			fullPrompt := strings.Join(systemPromptBlocks, "\n\n")
+			_ = e.sessionManager.AppendSystemPrompt(sessionID, fullPrompt)
 		}
 	}
+
+	// For providers that don't support multi-block system prompt, we join them
+	// but currently providers handle the slice.
+	systemPrompt := e.streamCfg.CachedSystemPrompt
 
 	// AC3: When stream-json mode is active, redirect debug logs to stderr
 	// to prevent interleaving with NDJSON output on stdout

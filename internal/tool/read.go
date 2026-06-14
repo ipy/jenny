@@ -105,6 +105,9 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 		return nil, fmt.Errorf("file_path is required and must be a string")
 	}
 
+	// Resolve $JENNY_SCRATCHPAD/ prefix before any relative path resolution
+	filePath = ResolveScratchpadPrefix(filePath, t.sessionID)
+
 	// Resolve relative paths relative to cwd
 	if !filepath.IsAbs(filePath) {
 		filePath = filepath.Join(cwd, filePath)

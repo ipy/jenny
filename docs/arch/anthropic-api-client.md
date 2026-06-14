@@ -24,12 +24,17 @@ System prompt is a **top-level request parameter**, not a `role: system` message
 ```json
 {
   "model": "…",
-  "system": [{ "type": "text", "text": "…" }],
+  "system": [
+    { "type": "text", "text": "<block1>" },
+    { "type": "text", "text": "<block2>" },
+    { "type": "text", "text": "<block3>" },
+    { "type": "text", "text": "<block4>", "cache_control": { "type": "ephemeral" } }
+  ],
   "messages": [ … ]
 }
 ```
 
-Multiple system blocks may be concatenated from prompt assembly (see [`system-prompt.md`](./system-prompt.md)).
+Multiple system blocks are supported from prompt assembly (see [`system-prompt.md`](./system-prompt.md)). Jenny applies `cache_control` to the **last block** to protect the stable prefix.
 
 ## Tool Use / Tool Result Pairing
 

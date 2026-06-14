@@ -668,7 +668,7 @@ func TestRetry_AC5_PreservesParams(t *testing.T) {
 	client.SetMaxTokensOverride(4096)
 
 	// Send message - this should retry and preserve model/max_tokens
-	resp, err := client.SendMessage(context.Background(), nil, nil, nil, "", "")
+	resp, err := client.SendMessage(context.Background(), nil, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("SendMessage failed: %v", err)
 	}

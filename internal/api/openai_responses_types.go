@@ -4,6 +4,7 @@ package api
 type OpenAIResponsesRequest struct {
 	Model           string                          `json:"model"`
 	Input           any                             `json:"input"`
+	Instructions    string                          `json:"instructions,omitempty"`
 	MaxOutputTokens *int64                          `json:"max_output_tokens,omitempty"`
 	Tools           []OpenAIResponsesTool           `json:"tools,omitempty"`
 	ReasoningConfig *OpenAIResponsesReasoningConfig `json:"reasoning_config,omitempty"`

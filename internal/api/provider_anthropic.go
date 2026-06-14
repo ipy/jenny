@@ -75,7 +75,7 @@ func (p *anthropicProvider) SetRetryConfig(cfg RetryConfig) {
 }
 
 // SendMessage sends a non-streaming message.
-func (p *anthropicProvider) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) (*Response, error) {
+func (p *anthropicProvider) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string) (*Response, error) {
 	return p.sendWithRetry(ctx, func(ctx context.Context) (*Response, error) {
 		return p.doSendMessage(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix)
 	}, p.isBackground)
@@ -160,7 +160,7 @@ func (p *anthropicProvider) sendWithRetry(ctx context.Context, fn func(context.C
 }
 
 // doSendMessage performs the actual message sending.
-func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) (*Response, error) {
+func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string) (*Response, error) {
 	log.Debug("Anthropic provider sending message", "model", p.model)
 
 	if err := ValidateMessagesMedia(messages); err != nil {
@@ -184,11 +184,11 @@ func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Messag
 		Tools:     sdkTools,
 	}
 
-	if systemPrompt != "" || systemPromptSuffix != "" {
-		if systemPrompt != "" {
+	if len(systemPrompt) > 0 || systemPromptSuffix != "" {
+		if len(systemPrompt) > 0 {
 			reqBody.System = append(reqBody.System, AnthropicContentBlock{
 				Type:         BlockTypeText,
-				Text:         systemPrompt,
+				Text:         strings.Join(systemPrompt, "\n\n"),
 				CacheControl: &AnthropicCacheControl{Type: "ephemeral"},
 			})
 		}
@@ -383,7 +383,7 @@ func isPromptTooLongAnthropic(err error) bool {
 }
 
 // SendMessageStream sends a streaming message.
-func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string, idleTimeout time.Duration) (<-chan StreamContentBlock, *StreamResult) {
+func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string, idleTimeout time.Duration) (<-chan StreamContentBlock, *StreamResult) {
 	blocksChan := make(chan StreamContentBlock, 10)
 	result := &StreamResult{}
 
@@ -415,11 +415,11 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 			Stream:    true,
 		}
 
-		if systemPrompt != "" || systemPromptSuffix != "" {
-			if systemPrompt != "" {
+		if len(systemPrompt) > 0 || systemPromptSuffix != "" {
+			if len(systemPrompt) > 0 {
 				reqBody.System = append(reqBody.System, AnthropicContentBlock{
 					Type:         BlockTypeText,
-					Text:         systemPrompt,
+					Text:         strings.Join(systemPrompt, "\n\n"),
 					CacheControl: &AnthropicCacheControl{Type: "ephemeral"},
 				})
 			}

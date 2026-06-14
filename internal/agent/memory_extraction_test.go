@@ -17,10 +17,10 @@ import (
 
 // mockExtractionAPIClient is a test double for the API client.
 type mockExtractionAPIClient struct {
-	sendMessageFn func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error)
+	sendMessageFn func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error)
 }
 
-func (m *mockExtractionAPIClient) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+func (m *mockExtractionAPIClient) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 	if m.sendMessageFn != nil {
 		return m.sendMessageFn(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix)
 	}
@@ -41,7 +41,7 @@ func TestAC1_EndOfTurnOnly(t *testing.T) {
 	t.Run("end_turn_triggers", func(t *testing.T) {
 		var invokeCount atomic.Int64
 		mockClient := &mockExtractionAPIClient{
-			sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+			sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 				invokeCount.Add(1)
 				return &api.Response{}, nil
 			},
@@ -67,7 +67,7 @@ func TestAC1_EndOfTurnOnly(t *testing.T) {
 	t.Run("stop_sequence_triggers", func(t *testing.T) {
 		var invokeCount atomic.Int64
 		mockClient := &mockExtractionAPIClient{
-			sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+			sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 				invokeCount.Add(1)
 				return &api.Response{}, nil
 			},
@@ -93,7 +93,7 @@ func TestAC1_EndOfTurnOnly(t *testing.T) {
 	t.Run("tool_use_skipped", func(t *testing.T) {
 		var invokeCount atomic.Int64
 		mockClient := &mockExtractionAPIClient{
-			sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+			sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 				invokeCount.Add(1)
 				return &api.Response{}, nil
 			},
@@ -119,7 +119,7 @@ func TestAC1_EndOfTurnOnly(t *testing.T) {
 	t.Run("max_tokens_skipped", func(t *testing.T) {
 		var invokeCount atomic.Int64
 		mockClient := &mockExtractionAPIClient{
-			sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+			sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 				invokeCount.Add(1)
 				return &api.Response{}, nil
 			},
@@ -156,7 +156,7 @@ func TestAC2_SkipWhenMainAgentWroteMemory(t *testing.T) {
 
 	var invokeCount atomic.Int64
 	mockClient := &mockExtractionAPIClient{
-		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 			invokeCount.Add(1)
 			return &api.Response{}, nil
 		},
@@ -217,7 +217,7 @@ func TestAC2_PostSkipFollowUpTurn(t *testing.T) {
 
 	var invokeCount atomic.Int64
 	mockClient := &mockExtractionAPIClient{
-		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 			invokeCount.Add(1)
 			return &api.Response{}, nil
 		},
@@ -543,7 +543,7 @@ func TestAC5_CoalescingConcurrentRequests(t *testing.T) {
 	var maxConcurrent atomic.Int64
 
 	mockClient := &mockExtractionAPIClient{
-		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 			count := concurrentCount.Add(1)
 			for {
 				max := maxConcurrent.Load()
@@ -604,7 +604,7 @@ func TestAC1_SubAgentSkipped(t *testing.T) {
 
 	var invokeCount atomic.Int64
 	mockClient := &mockExtractionAPIClient{
-		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 			invokeCount.Add(1)
 			return &api.Response{}, nil
 		},
@@ -642,7 +642,7 @@ func TestAC1_AutoMemoryDisabled(t *testing.T) {
 
 	var invokeCount atomic.Int64
 	mockClient := &mockExtractionAPIClient{
-		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 			invokeCount.Add(1)
 			return &api.Response{}, nil
 		},
@@ -679,7 +679,7 @@ func TestThrottleEveryNTurns(t *testing.T) {
 
 	var invokeCount atomic.Int64
 	mockClient := &mockExtractionAPIClient{
-		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 			invokeCount.Add(1)
 			return &api.Response{}, nil
 		},
@@ -732,7 +732,7 @@ func TestDrain(t *testing.T) {
 
 	var completed atomic.Bool
 	mockClient := &mockExtractionAPIClient{
-		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 			// Simulate slow extraction
 			time.Sleep(200 * time.Millisecond)
 			completed.Store(true)
@@ -819,7 +819,7 @@ func TestGoroutineLeak(t *testing.T) {
 	}
 
 	mockClient := &mockExtractionAPIClient{
-		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 			// Simulate a slow API call so the extraction goroutine is
 			// still running when Drain is called.
 			time.Sleep(300 * time.Millisecond)

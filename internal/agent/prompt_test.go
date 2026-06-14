@@ -64,7 +64,8 @@ func TestAssembleSystemPrompt_CustomReplacesDefaults(t *testing.T) {
 		&mockTool{name: "Bash", description: "Run bash commands"},
 	}
 
-	prompt := AssembleSystemPrompt(&cfg, tools, "/some/path")
+	blocks := AssembleSystemPrompt(&cfg, tools, "/some/path")
+	prompt := strings.Join(blocks, "\n\n")
 
 	// Custom prompt should be present
 	if !strings.Contains(prompt, "This is my custom system prompt") {
@@ -92,7 +93,8 @@ func TestAssembleSystemPrompt_ToolListSync(t *testing.T) {
 		&mockTool{name: "Glob", description: "Find files"},
 	}
 
-	prompt := AssembleSystemPrompt(&cfg, tools, "/some/path")
+	blocks := AssembleSystemPrompt(&cfg, tools, "/some/path")
+	prompt := strings.Join(blocks, "\n\n")
 
 	// Tool list should contain all tool names
 	for _, tt := range tools {
@@ -113,7 +115,8 @@ func TestAssembleSystemPrompt_ToolListEmpty(t *testing.T) {
 	cfg := StreamConfig{}
 	tools := []tool.Tool{}
 
-	prompt := AssembleSystemPrompt(&cfg, tools, "/some/path")
+	blocks := AssembleSystemPrompt(&cfg, tools, "/some/path")
+	prompt := strings.Join(blocks, "\n\n")
 
 	// Should not contain "Available tools" since no tools
 	if strings.Contains(prompt, "Available tools:") {
@@ -130,7 +133,8 @@ func TestAssembleSystemPrompt_GitStatusInsideRepo(t *testing.T) {
 	cfg := StreamConfig{}
 	tools := []tool.Tool{}
 
-	prompt := AssembleSystemPrompt(&cfg, tools, tmpDir)
+	blocks := AssembleSystemPrompt(&cfg, tools, tmpDir)
+	prompt := strings.Join(blocks, "\n\n")
 
 	// Should contain git context
 	if !strings.Contains(prompt, "Git context:") {
@@ -151,7 +155,8 @@ func TestAssembleSystemPrompt_GitStatusOutsideRepo(t *testing.T) {
 	// Use a path that is definitely NOT in a git repo
 	nonGitDir := t.TempDir()
 
-	prompt := AssembleSystemPrompt(&cfg, tools, nonGitDir)
+	blocks := AssembleSystemPrompt(&cfg, tools, nonGitDir)
+	prompt := strings.Join(blocks, "\n\n")
 
 	// Should not contain git context
 	if strings.Contains(prompt, "Git context:") {
@@ -166,7 +171,8 @@ func TestAssembleSystemPrompt_PlatformContext(t *testing.T) {
 
 	cwd, _ := os.Getwd()
 
-	prompt := AssembleSystemPrompt(&cfg, tools, cwd)
+	blocks := AssembleSystemPrompt(&cfg, tools, cwd)
+	prompt := strings.Join(blocks, "\n\n")
 
 	// Should contain platform info
 	if !strings.Contains(prompt, "Platform:") {
@@ -191,7 +197,8 @@ func TestAssembleSystemPrompt_AppendSupport(t *testing.T) {
 	tools := []tool.Tool{}
 	cwd := "/tmp" // Outside git repo to keep it simple
 
-	prompt := AssembleSystemPrompt(&cfg, tools, cwd)
+	blocks := AssembleSystemPrompt(&cfg, tools, cwd)
+	prompt := strings.Join(blocks, "\n\n")
 
 	if !strings.Contains(prompt, "This is appended content.") {
 		t.Error("append content should be present")
@@ -212,7 +219,8 @@ func TestAssembleSystemPrompt_OverrideSuppressesAppend(t *testing.T) {
 	tools := []tool.Tool{}
 	cwd := "/tmp"
 
-	prompt := AssembleSystemPrompt(&cfg, tools, cwd)
+	blocks := AssembleSystemPrompt(&cfg, tools, cwd)
+	prompt := strings.Join(blocks, "\n\n")
 
 	if strings.Contains(prompt, "This should not appear.") {
 		t.Error("append content should NOT be present when override is true")
@@ -227,7 +235,8 @@ func TestAssembleSystemPrompt_EmptyAppendIsNoOp(t *testing.T) {
 	tools := []tool.Tool{}
 	cwd := "/tmp"
 
-	prompt := AssembleSystemPrompt(&cfg, tools, cwd)
+	blocks := AssembleSystemPrompt(&cfg, tools, cwd)
+	prompt := strings.Join(blocks, "\n\n")
 
 	// Should not have trailing newlines or weird formatting
 	// The intro should be the last thing if no append
@@ -245,7 +254,8 @@ func TestAssembleSystemPrompt_CustomWithAppend(t *testing.T) {
 	tools := []tool.Tool{}
 	cwd := "/tmp"
 
-	prompt := AssembleSystemPrompt(&cfg, tools, cwd)
+	blocks := AssembleSystemPrompt(&cfg, tools, cwd)
+	prompt := strings.Join(blocks, "\n\n")
 
 	if !strings.Contains(prompt, "Custom only.") {
 		t.Error("custom should be present")
@@ -265,7 +275,8 @@ func TestAssembleSystemPrompt_CustomWithOverride(t *testing.T) {
 	tools := []tool.Tool{}
 	cwd := "/tmp"
 
-	prompt := AssembleSystemPrompt(&cfg, tools, cwd)
+	blocks := AssembleSystemPrompt(&cfg, tools, cwd)
+	prompt := strings.Join(blocks, "\n\n")
 
 	if !strings.Contains(prompt, "Custom only.") {
 		t.Error("custom should be present")
@@ -283,7 +294,8 @@ func TestAssembleSystemPrompt_DefaultSections(t *testing.T) {
 	}
 	cwd := "/tmp" // Outside git repo
 
-	prompt := AssembleSystemPrompt(&cfg, tools, cwd)
+	blocks := AssembleSystemPrompt(&cfg, tools, cwd)
+	prompt := strings.Join(blocks, "\n\n")
 
 	// Default intro
 	if !(strings.Contains(prompt, "autonomous") || strings.Contains(prompt, "non-interactive")) {
@@ -325,19 +337,36 @@ func TestToolListSection_FormatsCorrectly(t *testing.T) {
 }
 
 func TestPlatformSection_ContainsCorrectInfo(t *testing.T) {
-	section, ok := platformSection("/test/path")
-	if !ok {
-		t.Fatal("expected platform section to be included")
-	}
+	blocks := AssembleSystemPrompt(&StreamConfig{}, nil, "/some/path")
+	prompt := strings.Join(blocks, "\n\n")
 
-	if !strings.Contains(section, "Platform:") {
+	if !strings.Contains(prompt, "Platform:") {
 		t.Error("should contain Platform:")
 	}
+}
+
+func TestContextSection_ContainsCorrectInfo(t *testing.T) {
+	section, ok := contextSection("/test/path")
+	if !ok {
+		t.Fatal("expected context section to be included")
+	}
+
 	if !strings.Contains(section, "Cwd:") {
 		t.Error("should contain Cwd:")
 	}
 	if !strings.Contains(section, "/test/path") {
 		t.Error("should contain the cwd path")
+	}
+}
+
+func TestEnvironmentSection_ContainsCorrectInfo(t *testing.T) {
+	section, ok := environmentSection()
+	if !ok {
+		t.Fatal("expected environment section to be included")
+	}
+
+	if !strings.Contains(section, "Date:") {
+		t.Error("should contain Date:")
 	}
 }
 
@@ -375,7 +404,7 @@ func TestAppendSection_Override(t *testing.T) {
 func TestAssembleSystemPrompt_FreezeOnCachedSystemPrompt(t *testing.T) {
 	// When CachedSystemPrompt is set, AssembleSystemPrompt returns it verbatim
 	// even if other cfg fields differ (simulating git status change between turns).
-	frozen := "This is the frozen prompt from turn 1."
+	frozen := []string{"This is the frozen prompt from turn 1."}
 	cfg := StreamConfig{
 		CachedSystemPrompt: frozen,
 		MemoryContent:      "new memory that changed", // Would bust cache if used
@@ -384,8 +413,8 @@ func TestAssembleSystemPrompt_FreezeOnCachedSystemPrompt(t *testing.T) {
 
 	// First call with CachedSystemPrompt set
 	result := AssembleSystemPrompt(&cfg, tools, "/tmp")
-	if result != frozen {
-		t.Errorf("expected frozen prompt, got different result:\n%s", result)
+	if len(result) != len(frozen) || result[0] != frozen[0] {
+		t.Errorf("expected frozen prompt, got different result:\n%v", result)
 	}
 
 	// Simulate second turn: cfg with different dynamic fields but same CachedSystemPrompt
@@ -394,12 +423,13 @@ func TestAssembleSystemPrompt_FreezeOnCachedSystemPrompt(t *testing.T) {
 		MemoryContent:      "completely different memory",
 	}
 	result2 := AssembleSystemPrompt(&cfg2, tools, "/tmp")
-	if result2 != frozen {
-		t.Errorf("expected frozen prompt on second call, got:\n%s", result2)
+	if len(result2) != len(frozen) || result2[0] != frozen[0] {
+		t.Errorf("expected frozen prompt on second call, got:\n%v", result2)
 	}
 
 	// Verify the frozen value does NOT contain the new memory content
-	if strings.Contains(result, "new memory that changed") {
+	fullResult := strings.Join(result, "\n\n")
+	if strings.Contains(fullResult, "new memory that changed") {
 		t.Error("frozen prompt should not contain dynamic memory content")
 	}
 }
@@ -417,7 +447,8 @@ func TestBuildSystemPrompt_ContainsAllSections(t *testing.T) {
 		&mockTool{name: "Read", description: "Read files"},
 	}
 
-	result := buildSystemPrompt(&cfg, tools, tmpDir)
+	blocks := buildSystemPrompt(&cfg, tools, tmpDir)
+	result := strings.Join(blocks, "\n\n")
 
 	// Stable sections (these go into cached block)
 	if !(strings.Contains(result, "autonomous") || strings.Contains(result, "non-interactive")) {
@@ -466,7 +497,8 @@ func TestAssembleSystemPrompt_TrailingNewline(t *testing.T) {
 		&mockTool{name: "Read", description: "Read files"},
 	}
 
-	prompt := AssembleSystemPrompt(&cfg, tools, "/some/path")
+	blocks := AssembleSystemPrompt(&cfg, tools, "/some/path")
+	prompt := strings.Join(blocks, "\n\n")
 
 	if len(prompt) == 0 {
 		t.Fatal("prompt is empty")
@@ -514,7 +546,8 @@ func TestAssembleSystemPrompt_RedactionInstruction(t *testing.T) {
 			cfg := StreamConfig{
 				RedactMode: tt.mode,
 			}
-			prompt := buildSystemPrompt(&cfg, nil, "/tmp")
+			blocks := buildSystemPrompt(&cfg, nil, "/tmp")
+			prompt := strings.Join(blocks, "\n\n")
 
 			redactMsg := "This session has secret redaction enabled."
 			recoverMsg := "They will be automatically recovered when you use them in tool calls"

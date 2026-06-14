@@ -54,7 +54,7 @@ func TestNormalization_ToolResultFlattening_EdgeCases(t *testing.T) {
 			},
 		}
 
-		_, err := provider.SendMessage(context.Background(), messages, nil, nil, "", "")
+		_, err := provider.SendMessage(context.Background(), messages, nil, nil, []string{}, "")
 		if err != nil {
 			t.Fatalf("SendMessage failed: %v", err)
 		}
@@ -102,7 +102,7 @@ func TestNormalization_ToolResultFlattening_EdgeCases(t *testing.T) {
 			},
 		}
 
-		_, err := provider.SendMessage(context.Background(), messages, nil, nil, "", "")
+		_, err := provider.SendMessage(context.Background(), messages, nil, nil, []string{}, "")
 		if err != nil {
 			t.Fatalf("SendMessage failed: %v", err)
 		}
@@ -143,7 +143,7 @@ func TestNormalization_ToolResultFlattening_EdgeCases(t *testing.T) {
 			},
 		}
 
-		_, err := provider.SendMessage(context.Background(), messages, nil, nil, "", "")
+		_, err := provider.SendMessage(context.Background(), messages, nil, nil, []string{}, "")
 		if err != nil {
 			t.Fatalf("SendMessage failed: %v", err)
 		}
@@ -193,7 +193,7 @@ func TestNormalization_ToolResultFlattening_EdgeCases(t *testing.T) {
 			},
 		}
 
-		_, err := provider.SendMessage(context.Background(), messages, nil, nil, "", "")
+		_, err := provider.SendMessage(context.Background(), messages, nil, nil, []string{}, "")
 		if err != nil {
 			t.Fatalf("SendMessage failed: %v (flattening might be broken)", err)
 		}
@@ -220,7 +220,7 @@ func TestNormalization_ToolResultFlattening_EdgeCases(t *testing.T) {
 			},
 		}
 
-		_, err := provider.SendMessage(context.Background(), messages, nil, nil, "", "")
+		_, err := provider.SendMessage(context.Background(), messages, nil, nil, []string{}, "")
 		if err != nil {
 			t.Fatalf("SendMessage failed: %v", err)
 		}

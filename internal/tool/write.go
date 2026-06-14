@@ -94,6 +94,9 @@ func (t *WriteTool) Execute(ctx context.Context, input map[string]any, cwd strin
 		content = ""
 	}
 
+	// Resolve $JENNY_SCRATCHPAD/ prefix before any relative path resolution
+	filePath = ResolveScratchpadPrefix(filePath, t.sessionID)
+
 	// Resolve relative paths relative to cwd
 	if !filepath.IsAbs(filePath) {
 		filePath = filepath.Join(cwd, filePath)

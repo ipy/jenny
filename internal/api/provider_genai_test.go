@@ -167,7 +167,7 @@ func TestGenAIProvider_SendMessage_Basic(t *testing.T) {
 	})
 
 	p := newGenAIProviderForTest(s)
-	resp, err := p.SendMessage(context.Background(), []Message{{Role: "user", Content: "hello"}}, nil, nil, "You are helpful.", "")
+	resp, err := p.SendMessage(context.Background(), []Message{{Role: "user", Content: "hello"}}, nil, nil, []string{"You are helpful."}, "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -219,7 +219,7 @@ func TestGenAIProvider_SendMessage_SystemPromptSuffix(t *testing.T) {
 	})
 
 	p := newGenAIProviderForTest(s)
-	_, err := p.SendMessage(context.Background(), []Message{{Role: "user", Content: "hi"}}, nil, nil, "primary", "suffix")
+	_, err := p.SendMessage(context.Background(), []Message{{Role: "user", Content: "hi"}}, nil, nil, []string{"primary"}, "suffix")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -269,7 +269,7 @@ func TestGenAIProvider_SendMessage_Tools(t *testing.T) {
 		Description: "weather lookup",
 		InputSchema: ToolInputSchema{Type: "object", Properties: map[string]any{"location": map[string]any{"type": "string"}}, Required: []string{"location"}},
 	}}
-	resp, err := p.SendMessage(context.Background(), []Message{{Role: "user", Content: "weather?"}}, tools, nil, "", "")
+	resp, err := p.SendMessage(context.Background(), []Message{{Role: "user", Content: "weather?"}}, tools, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -326,7 +326,7 @@ func TestGenAIProvider_SendMessage_ToolResults(t *testing.T) {
 		{Role: "assistant", ToolUse: []ToolUseBlock{{ID: "call-1", Name: "get_weather", Input: map[string]any{"location": "Tokyo"}}}},
 		{Role: "user", ToolResults: []ToolResultBlock{{ToolUseID: "call-1", Content: "Sunny"}}},
 	}
-	_, err := p.SendMessage(context.Background(), messages, nil, nil, "", "")
+	_, err := p.SendMessage(context.Background(), messages, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -348,7 +348,7 @@ func TestGenAIProvider_SendMessage_MaxTokens(t *testing.T) {
 	})
 
 	p := newGenAIProviderForTest(s)
-	resp, err := p.SendMessage(context.Background(), []Message{{Role: "user", Content: "go"}}, nil, nil, "", "")
+	resp, err := p.SendMessage(context.Background(), []Message{{Role: "user", Content: "go"}}, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -382,7 +382,7 @@ func TestGenAIProvider_SendMessage_ErrorMapping(t *testing.T) {
 				w.Write([]byte(tc.body))
 			})
 			p := newGenAIProviderForTest(s)
-			_, err := p.SendMessage(context.Background(), []Message{{Role: "user", Content: "x"}}, nil, nil, "", "")
+			_, err := p.SendMessage(context.Background(), []Message{{Role: "user", Content: "x"}}, nil, nil, []string{}, "")
 			if err == nil {
 				t.Fatalf("expected error")
 			}
@@ -421,7 +421,7 @@ func TestGenAIProvider_Stream_Basic(t *testing.T) {
 	blocksChan, result := p.SendMessageStream(
 		context.Background(),
 		[]Message{{Role: "user", Content: "say hi"}},
-		nil, nil, "", "",
+		nil, nil, []string{}, "",
 		2*time.Second,
 	)
 	var got []string
@@ -462,7 +462,7 @@ func TestGenAIProvider_Stream_FunctionCall(t *testing.T) {
 		context.Background(),
 		[]Message{{Role: "user", Content: "weather"}},
 		[]ToolParam{{Name: "get_weather", InputSchema: ToolInputSchema{Type: "object"}}},
-		nil, "", "", 2*time.Second,
+		nil, []string{}, "", 2*time.Second,
 	)
 	for range blocksChan {
 	}
@@ -499,7 +499,7 @@ func TestGenAIProvider_Stream_Thinking(t *testing.T) {
 	blocksChan, result := p.SendMessageStream(
 		context.Background(),
 		[]Message{{Role: "user", Content: "?"}},
-		nil, nil, "", "", 2*time.Second,
+		nil, nil, []string{}, "", 2*time.Second,
 	)
 	for range blocksChan {
 	}
@@ -537,7 +537,7 @@ func TestGenAIProvider_Stream_Usage(t *testing.T) {
 	blocksChan, result := p.SendMessageStream(
 		context.Background(),
 		[]Message{{Role: "user", Content: "hi"}},
-		nil, nil, "", "", 2*time.Second,
+		nil, nil, []string{}, "", 2*time.Second,
 	)
 	for range blocksChan {
 	}
@@ -568,7 +568,7 @@ func TestGenAIProvider_Stream_Error(t *testing.T) {
 	blocksChan, result := p.SendMessageStream(
 		context.Background(),
 		[]Message{{Role: "user", Content: "x"}},
-		nil, nil, "", "", 2*time.Second,
+		nil, nil, []string{}, "", 2*time.Second,
 	)
 	for range blocksChan {
 	}

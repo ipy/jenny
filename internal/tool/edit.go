@@ -152,10 +152,12 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 
 	isScoped := startLine > 0 && endLine > 0
 
+	// Resolve $JENNY_SCRATCHPAD/ prefix before any relative path resolution
+	resolvedPath := ResolveScratchpadPrefix(filePath, t.sessionID)
+
 	// Resolve relative paths relative to cwd (but preserve tilde for now)
-	resolvedPath := filePath
-	if !filepath.IsAbs(filePath) {
-		resolvedPath = filepath.Join(cwd, filePath)
+	if !filepath.IsAbs(resolvedPath) {
+		resolvedPath = filepath.Join(cwd, resolvedPath)
 	}
 	resolvedPath = filepath.Clean(resolvedPath)
 

@@ -73,7 +73,7 @@ func (p *genaiProvider) SetRetryConfig(cfg RetryConfig) {
 }
 
 // SendMessage sends a non-streaming message.
-func (p *genaiProvider) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) (*Response, error) {
+func (p *genaiProvider) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string) (*Response, error) {
 	return p.sendWithRetry(ctx, func(ctx context.Context) (*Response, error) {
 		return p.doSendMessage(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix)
 	}, false)
@@ -158,7 +158,7 @@ func (p *genaiProvider) sendWithRetry(ctx context.Context, fn func(context.Conte
 }
 
 // doSendMessage performs the actual non-streaming message send.
-func (p *genaiProvider) doSendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string) (*Response, error) {
+func (p *genaiProvider) doSendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string) (*Response, error) {
 	if err := ValidateMessagesMedia(messages); err != nil {
 		return nil, err
 	}
@@ -172,10 +172,10 @@ func (p *genaiProvider) doSendMessage(ctx context.Context, messages []Message, t
 		},
 	}
 
-	if systemPrompt != "" || systemPromptSuffix != "" {
+	if len(systemPrompt) > 0 || systemPromptSuffix != "" {
 		var parts []GenAIPart
-		if systemPrompt != "" {
-			parts = append(parts, GenAIPart{Text: systemPrompt})
+		if len(systemPrompt) > 0 {
+			parts = append(parts, GenAIPart{Text: strings.Join(systemPrompt, "\n\n")})
 		}
 		if systemPromptSuffix != "" {
 			parts = append(parts, GenAIPart{Text: systemPromptSuffix})
@@ -223,7 +223,7 @@ func isPromptTooLongGenAI(err error) bool {
 }
 
 // SendMessageStream sends a streaming message.
-func (p *genaiProvider) SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt string, systemPromptSuffix string, idleTimeout time.Duration) (<-chan StreamContentBlock, *StreamResult) {
+func (p *genaiProvider) SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string, idleTimeout time.Duration) (<-chan StreamContentBlock, *StreamResult) {
 	blocksChan := make(chan StreamContentBlock, 10)
 	result := &StreamResult{}
 
@@ -244,10 +244,10 @@ func (p *genaiProvider) SendMessageStream(ctx context.Context, messages []Messag
 			},
 		}
 
-		if systemPrompt != "" || systemPromptSuffix != "" {
+		if len(systemPrompt) > 0 || systemPromptSuffix != "" {
 			var parts []GenAIPart
-			if systemPrompt != "" {
-				parts = append(parts, GenAIPart{Text: systemPrompt})
+			if len(systemPrompt) > 0 {
+				parts = append(parts, GenAIPart{Text: strings.Join(systemPrompt, "\n\n")})
 			}
 			if systemPromptSuffix != "" {
 				parts = append(parts, GenAIPart{Text: systemPromptSuffix})

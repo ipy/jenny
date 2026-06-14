@@ -15,10 +15,10 @@ import (
 
 // mockAPIClient is a test double that implements the API client interface
 type mockAPIClient struct {
-	sendMessageFn func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error)
+	sendMessageFn func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error)
 }
 
-func (m *mockAPIClient) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+func (m *mockAPIClient) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 	if m.sendMessageFn != nil {
 		return m.sendMessageFn(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix)
 	}
@@ -162,7 +162,7 @@ func TestAC3_15SecondTimeout(t *testing.T) {
 
 	// Create a slow mock client that blocks beyond 15 seconds
 	slowClient := &mockAPIClient{
-		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 			// Simulate work that takes longer than 15 seconds
 			select {
 			case <-time.After(20 * time.Second):
@@ -207,7 +207,7 @@ func TestAC4_ForkedAgentEditOnly(t *testing.T) {
 	}
 
 	mockClient := &mockAPIClient{
-		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 			// Verify that only Edit tool is passed
 			if len(tools) != 1 {
 				t.Fatalf("Expected 1 tool (Edit only), got %d", len(tools))
@@ -390,7 +390,7 @@ func TestAC4_StaleInFlight(t *testing.T) {
 
 	invoked := false
 	mockClient := &mockAPIClient{
-		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 			invoked = true
 			return &api.Response{}, nil
 		},
@@ -432,7 +432,7 @@ func TestAC5_CoalescingWindow(t *testing.T) {
 
 	invoked := false
 	mockClient := &mockAPIClient{
-		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt string, systemPromptSuffix string) (*api.Response, error) {
+		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 			invoked = true
 			return &api.Response{}, nil
 		},
