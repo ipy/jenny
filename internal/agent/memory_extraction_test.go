@@ -541,6 +541,7 @@ func TestAC5_CoalescingConcurrentRequests(t *testing.T) {
 
 	var concurrentCount atomic.Int64
 	var maxConcurrent atomic.Int64
+	extractionDone := make(chan struct{}, 2) // Channel for signaling completion
 
 	mockClient := &mockExtractionAPIClient{
 		sendMessageFn: func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
@@ -556,9 +557,10 @@ func TestAC5_CoalescingConcurrentRequests(t *testing.T) {
 			}
 
 			// Simulate slow extraction
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 
 			concurrentCount.Add(-1)
+			extractionDone <- struct{}{} // Signal completion
 
 			return &api.Response{}, nil
 		},
@@ -566,28 +568,36 @@ func TestAC5_CoalescingConcurrentRequests(t *testing.T) {
 
 	me := NewMemoryExtractor(mockClient, cfg).WithMemdir(t.TempDir()).WithTimeout(2 * time.Second)
 
-	// Create multiple turn contexts
 	turnCtx := TurnContext{
-		StopReason: api.StopReasonEndTurn,
-		AssistantMessage: &api.Message{
-			ID:      "msg_1",
-			Content: "hello",
-		},
+		StopReason:       api.StopReasonEndTurn,
+		AssistantMessage: &api.Message{ID: "msg_1", Content: "hello"},
 	}
 
 	// Trigger first extraction
 	me.CheckAndExtract(context.Background(), turnCtx)
-
-	// Immediately trigger second extraction (should be coalesced)
+	// Immediately trigger second (should be coalesced)
 	turnCtx.AssistantMessage.ID = "msg_2"
 	me.CheckAndExtract(context.Background(), turnCtx)
 
-	// Wait for extraction to complete
-	time.Sleep(1 * time.Second)
+	// Wait for at most 1 extraction to complete (second was coalesced)
+	select {
+	case <-extractionDone:
+		// One extraction completed — good
+	case <-time.After(3 * time.Second):
+		t.Fatal("AC5 FAIL: extraction timed out")
+	}
 
-	// Verify only one extraction ran at a time
+	// Check no more completions arrive within extraction time
+	// (second was coalesced - trailing extraction hasn't started yet)
+	select {
+	case <-extractionDone:
+		t.Error("AC5 FAIL: second extraction ran despite coalescing")
+	case <-time.After(50 * time.Millisecond):
+		// No second extraction within extraction time — coalescing worked
+	}
+
 	if maxConcurrent.Load() > 1 {
-		t.Errorf("AC5 FAIL: max concurrent extractions was %d, expected 1 (coalescing failed)", maxConcurrent.Load())
+		t.Errorf("AC5 FAIL: max concurrent extractions was %d, expected 1", maxConcurrent.Load())
 	} else {
 		t.Log("AC5 PASS: concurrent extraction requests are coalesced")
 	}
