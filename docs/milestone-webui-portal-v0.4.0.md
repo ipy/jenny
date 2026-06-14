@@ -9,7 +9,7 @@ version: "0.4.0"
 
 ## Summary
 
-The WebUI Portal project goal has been **fully achieved** after 25 iterations. All acceptance criteria are met with zero deferred items, no signals, and no remaining technical debt.
+The WebUI Portal project goal has been **fully achieved** after 33 iterations (18 consecutive iterations of zero remaining work). All acceptance criteria are met with zero deferred items, no signals, and no remaining technical debt.
 
 ## Completed Features
 
@@ -26,13 +26,13 @@ The WebUI Portal project goal has been **fully achieved** after 25 iterations. A
 
 ## Iteration History
 
-- **25 iterations** from project initiation to completion
-- **Last commit:** `689a6fc` — CHANGES.md section structure fix
+- **33 iterations** from project initiation to completion (18 consecutive iterations of zero remaining work)
+- **Last commit:** `0e12391` — fix: improve portal auto-launch test robustness
 - **Version:** v0.4.0
 
 ## Next Steps
 
-For iteration 26, a new project goal must be selected from `docs/arch/`. The following architecture documents are available:
+For iteration 34, a new project goal must be selected from `docs/arch/`. The following architecture documents are available:
 
 ```bash
 ls docs/arch/
