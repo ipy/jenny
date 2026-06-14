@@ -738,13 +738,8 @@ func TestLoadEnvFiles_PicksUpJennyEnv(t *testing.T) {
 	}
 }
 
-// shouldLaunchPortal checks whether run() would route to portal mode.
-// This is a pure-logic test of the condition: len(os.Args) < 2 || os.Args[1] == "portal"
-func shouldLaunchPortal(args []string) bool {
-	return len(args) < 2 || (len(args) >= 2 && args[1] == "portal")
-}
-
 // TestAutoLaunchPortal_NoArgs tests AC1: launching with no arguments launches portal.
+// Uses os.Args manipulation to test the actual shouldLaunchPortal function.
 func TestAutoLaunchPortal_NoArgs(t *testing.T) {
 	tests := []struct {
 		name string
@@ -764,9 +759,16 @@ func TestAutoLaunchPortal_NoArgs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := shouldLaunchPortal(tt.args)
+			// Save original os.Args and restore after test
+			origArgs := os.Args
+			defer func() { os.Args = origArgs }()
+
+			// Set test args
+			os.Args = tt.args
+
+			got := shouldLaunchPortal()
 			if got != tt.want {
-				t.Errorf("shouldLaunchPortal(%v) = %v, want %v", tt.args, got, tt.want)
+				t.Errorf("shouldLaunchPortal() with args %v = %v, want %v", tt.args, got, tt.want)
 			}
 		})
 	}
@@ -774,13 +776,20 @@ func TestAutoLaunchPortal_NoArgs(t *testing.T) {
 
 // TestAutoLaunchPortal_ExplicitPortal tests AC2: jenny portal still works.
 func TestAutoLaunchPortal_ExplicitPortal(t *testing.T) {
-	if !shouldLaunchPortal([]string{"jenny", "portal"}) {
-		t.Error("expected shouldLaunchPortal([\"jenny\", \"portal\"]) = true")
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "portal"}
+	if !shouldLaunchPortal() {
+		t.Error("expected shouldLaunchPortal() = true for 'jenny portal'")
 	}
 }
 
 // TestAutoLaunchPortal_OtherArgsStayCLIMode tests AC3: other arguments stay in CLI mode.
 func TestAutoLaunchPortal_OtherArgsStayCLIMode(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
 	cliArgs := [][]string{
 		{"jenny", "-p", "test"},
 		{"jenny", "--help"},
@@ -788,8 +797,9 @@ func TestAutoLaunchPortal_OtherArgsStayCLIMode(t *testing.T) {
 		{"jenny", "server"},
 	}
 	for _, args := range cliArgs {
-		if shouldLaunchPortal(args) {
-			t.Errorf("shouldLaunchPortal(%v) = true, want false (CLI mode)", args)
+		os.Args = args
+		if shouldLaunchPortal() {
+			t.Errorf("shouldLaunchPortal() = true for args %v, want false (CLI mode)", args)
 		}
 	}
 }

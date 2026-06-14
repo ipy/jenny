@@ -54,10 +54,17 @@ func loadEnvFiles(cwd string) {
 	}
 }
 
+// shouldLaunchPortal returns true when the portal should be auto-launched:
+// - No arguments given (e.g., double-click in macOS Finder)
+// - Explicit "portal" subcommand is provided
+func shouldLaunchPortal() bool {
+	return len(os.Args) < 2 || os.Args[1] == "portal"
+}
+
 func run() error {
 	// Auto-launch portal when no arguments given (e.g., double-click in macOS Finder).
 	// When arguments are provided, check for explicit "portal" subcommand.
-	if len(os.Args) < 2 || os.Args[1] == "portal" {
+	if shouldLaunchPortal() {
 		return runPortal(context.Background())
 	}
 
