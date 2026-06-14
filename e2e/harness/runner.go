@@ -40,7 +40,7 @@ var (
 	binaryErr  error
 
 	referenceOnce sync.Once
-	referenceErr error
+	referenceErr  error
 	referencePath string
 )
 
