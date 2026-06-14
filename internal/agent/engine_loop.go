@@ -166,16 +166,20 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			e.mu.Unlock()
 			// Emit error result if streaming enabled
 			if e.streamCfg.Enabled {
+				errStr := fmt.Sprintf("Maximum number of turns (%d) reached. stopping.", e.maxTurns)
 				msg := StreamMessage{
 					Type:            "result",
 					Subtype:         "error",
-					Result:          fmt.Sprintf("Maximum number of turns (%d) reached. stopping.", e.maxTurns),
+					Result:          errStr,
 					SessionID:       sessionID,
 					ParentToolUseID: nil,
 					Uuid:            GenerateUUID(),
 					Model:           e.model,
 					IsError:         true,
 					StopReason:      "max_turns",
+					TTFTMs:          0,
+					TerminalReason:  "",
+					APIErrorStatus:  &errStr,
 					DurationMs:      time.Since(e.startTime).Milliseconds(),
 					DurationAPIMs:   e.totalAPIDurationMs,
 					TotalCostUSD:    e.costState.TotalCostUSD,
@@ -200,16 +204,20 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		if budgetUSD > 0 {
 			if exceeded, _ := CheckBudgetExceeded(e.costState, budgetUSD); exceeded {
 				if e.streamCfg.Enabled {
+					errStr := fmt.Sprintf("budget exceeded: %.4f USD > %.4f USD limit", e.costState.TotalCostUSD, budgetUSD)
 					msg := StreamMessage{
 						Type:            "result",
 						Subtype:         "error",
-						Result:          fmt.Sprintf("budget exceeded: %.4f USD > %.4f USD limit", e.costState.TotalCostUSD, budgetUSD),
+						Result:          errStr,
 						SessionID:       sessionID,
 						ParentToolUseID: nil,
 						Uuid:            GenerateUUID(),
 						Model:           e.model,
 						IsError:         true,
 						StopReason:      "budget_exceeded",
+						TTFTMs:          0,
+						TerminalReason:  "",
+						APIErrorStatus:  &errStr,
 						DurationMs:      time.Since(e.startTime).Milliseconds(),
 						DurationAPIMs:   e.totalAPIDurationMs,
 						TotalCostUSD:    e.costState.TotalCostUSD,
@@ -329,6 +337,9 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		// Use streaming API (AC1)
 		// Track API call duration (AC3: duration_api_ms)
 		apiStartTime := time.Now()
+		// Reset firstTokenTime and lastAPIStartTime for TTFT calculation per API call
+		e.firstTokenTime = time.Time{}
+		e.lastAPIStartTime = apiStartTime
 		dynamicSuffix := DynamicSystemSuffix(e.streamCfg, cwd)
 		blocksChan, streamResult := e.client.SendMessageStream(
 			ctx,
@@ -394,6 +405,10 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 
 			switch block.Block.Type {
 			case api.BlockTypeText:
+				// Track TTFT: record time when first content block arrives
+				if e.firstTokenTime.IsZero() {
+					e.firstTokenTime = time.Now()
+				}
 				// AC1: Redact secrets from text output before writing
 				if e.secretRedactor != nil && e.secretRedactor.Enabled() {
 					textOutput.WriteString(e.secretRedactor.Redact(block.Block.Text))
@@ -401,8 +416,16 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					textOutput.WriteString(block.Block.Text)
 				}
 			case api.BlockTypeThinking:
+				// Track TTFT: record time when first content block arrives
+				if e.firstTokenTime.IsZero() {
+					e.firstTokenTime = time.Now()
+				}
 				thinkingBlocks = append(thinkingBlocks, thinkingBlock{Text: block.Block.Thinking, Signature: block.Block.Signature})
 			case api.BlockTypeToolUse:
+				// Track TTFT: record time when first content block arrives
+				if e.firstTokenTime.IsZero() {
+					e.firstTokenTime = time.Now()
+				}
 				// Collect tool_use blocks for the assistant message
 				toolUseBlocks = append(toolUseBlocks, api.ToolUseBlock{
 					ID:    block.Block.ToolID,
@@ -476,16 +499,20 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 
 			// Emit standard error result for other streaming errors
 			if e.streamCfg.Enabled {
+				errStr := fmt.Sprintf("streaming error: %v", streamResult.Error)
 				msg := StreamMessage{
 					Type:            "result",
 					Subtype:         "error",
-					Result:          fmt.Sprintf("streaming error: %v", streamResult.Error),
+					Result:          errStr,
 					SessionID:       sessionID,
 					ParentToolUseID: nil,
 					Uuid:            GenerateUUID(),
 					Model:           e.model,
 					IsError:         true,
 					StopReason:      "error",
+					TTFTMs:          0,
+					TerminalReason:  "",
+					APIErrorStatus:  &errStr,
 					DurationMs:      time.Since(e.startTime).Milliseconds(),
 					DurationAPIMs:   e.totalAPIDurationMs,
 					TotalCostUSD:    e.costState.TotalCostUSD,

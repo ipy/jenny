@@ -130,6 +130,9 @@ type StreamMessage struct {
 	NumTurns          int                `json:"num_turns,omitempty"`
 	Result            string             `json:"result,omitempty"`
 	StopReason        string             `json:"stop_reason,omitempty"`
+	TTFTMs            int64              `json:"ttft_ms,omitempty"`
+	TerminalReason    string             `json:"terminal_reason,omitempty"`
+	APIErrorStatus    *string            `json:"api_error_status,omitempty"`
 	ParentToolUseID   *string            `json:"parent_tool_use_id,omitempty"`
 	SessionID         string             `json:"session_id,omitempty"`
 	TotalCostUSD      float64            `json:"total_cost_usd,omitempty"`
@@ -176,8 +179,8 @@ func (s StreamMessage) MarshalJSON() ([]byte, error) {
 
 	if s.Type == "result" {
 		// Reference result order: type, subtype, is_error, duration_ms, duration_api_ms,
-		// num_turns, result, stop_reason, session_id, total_cost_usd, usage, modelUsage,
-		// permission_denials, fast_mode_state, uuid
+		// num_turns, result, stop_reason, ttft_ms, terminal_reason, api_error_status,
+		// session_id, total_cost_usd, usage, modelUsage, permission_denials, fast_mode_state, uuid
 		var fields []string
 		fields = append(fields, `"type":`+encodeString(s.Type))
 		fields = append(fields, `"kind":`+encodeString(kind))
@@ -196,6 +199,20 @@ func (s StreamMessage) MarshalJSON() ([]byte, error) {
 		}
 		if s.StopReason != "" {
 			fields = append(fields, `"stop_reason":`+encodeString(s.StopReason))
+		}
+		// ttft_ms: time to first token (omitted when zero)
+		if s.TTFTMs > 0 {
+			fields = append(fields, fmt.Sprintf(`"ttft_ms":%d`, s.TTFTMs))
+		}
+		// terminal_reason: mapped from stop_reason (omitted when empty)
+		if s.TerminalReason != "" {
+			fields = append(fields, `"terminal_reason":`+encodeString(s.TerminalReason))
+		}
+		// api_error_status: always emitted (null on success, string on error)
+		if s.APIErrorStatus != nil {
+			fields = append(fields, `"api_error_status":`+encodeString(*s.APIErrorStatus))
+		} else {
+			fields = append(fields, `"api_error_status":null`)
 		}
 		if s.SessionID != "" {
 			fields = append(fields, `"session_id":`+encodeString(s.SessionID))

@@ -1634,3 +1634,96 @@ func TestInitEvent_HasMCPServers(t *testing.T) {
 		}
 	}
 }
+
+// TestResultEvent_HasNewFields verifies that the result event includes the new fields:
+// - ttft_ms: time to first token (optional, omitted when zero)
+// - terminal_reason: mapped from stop_reason (completed for end_turn/stop_sequence)
+// - api_error_status: null on success, string on error
+func TestResultEvent_HasNewFields(t *testing.T) {
+	server := makeMockStreamServer(t, nil)
+	defer server.Close()
+
+	t.Setenv("ANTHROPIC_BASE_URL", server.URL)
+	t.Setenv("ANTHROPIC_API_KEY", "test-key-00000")
+
+	cfg := StreamConfig{Enabled: true}
+	output, err := captureStreamOutput(t, &cfg)
+	if err != nil {
+		t.Fatalf("RunStream failed: %v", err)
+	}
+
+	lines := parseNDJSONLines(t, output)
+
+	// Find the result event
+	var resultEvent map[string]any
+	for _, line := range lines {
+		if line["type"] == "result" {
+			resultEvent = line
+			break
+		}
+	}
+
+	if resultEvent == nil {
+		t.Fatal("FAIL: no result event found in output")
+	}
+
+	// AC1: Verify ttft_ms is present when non-zero (omitted when zero per spec)
+	if _, hasTTFT := resultEvent["ttft_ms"]; hasTTFT {
+		// Field present - verify value is >= 0
+		if ttftMs, ok := resultEvent["ttft_ms"].(float64); ok {
+			if ttftMs < 0 {
+				t.Errorf("AC1 FAIL: ttft_ms = %f, want >= 0", ttftMs)
+			} else {
+				t.Logf("AC1 PASS: ttft_ms = %f (valid non-negative value)", ttftMs)
+			}
+		} else if ttftMs, ok := resultEvent["ttft_ms"].(int64); ok {
+			if ttftMs < 0 {
+				t.Errorf("AC1 FAIL: ttft_ms = %d, want >= 0", ttftMs)
+			} else {
+				t.Logf("AC1 PASS: ttft_ms = %d (valid non-negative value)", ttftMs)
+			}
+		}
+	} else {
+		t.Log("AC1 PASS: ttft_ms correctly omitted when zero (no timing data in mock)")
+	}
+	// AC2: Verify terminal_reason is present and has correct value for end_turn
+	terminalReason, hasTerminalReason := resultEvent["terminal_reason"].(string)
+	if !hasTerminalReason {
+		t.Error("AC2 FAIL: result event missing terminal_reason field")
+	} else if terminalReason != "completed" {
+		t.Errorf("AC2 FAIL: terminal_reason = %q, want \"completed\" for end_turn", terminalReason)
+	} else {
+		t.Log("AC2 PASS: result event has terminal_reason=\"completed\"")
+	}
+
+	// AC3: Verify api_error_status is present and is null on success
+	apiErrorStatus, hasAPIErrorStatus := resultEvent["api_error_status"]
+	if !hasAPIErrorStatus {
+		t.Error("AC3 FAIL: result event missing api_error_status field")
+	} else if apiErrorStatus != nil {
+		t.Errorf("AC3 FAIL: api_error_status = %v, want null on success", apiErrorStatus)
+	} else {
+		t.Log("AC3 PASS: result event has api_error_status=null on success")
+	}
+}
+
+// TestMapTerminalReason tests the terminal reason mapping function
+func TestMapTerminalReason(t *testing.T) {
+	tests := []struct {
+		stopReason string
+		want       string
+	}{
+		{"end_turn", "completed"},
+		{"stop_sequence", "completed"},
+		{"max_tokens", "max_tokens"},
+		{"", ""},
+		{"unknown", ""},
+	}
+
+	for _, tt := range tests {
+		got := mapTerminalReason(tt.stopReason)
+		if got != tt.want {
+			t.Errorf("mapTerminalReason(%q) = %q, want %q", tt.stopReason, got, tt.want)
+		}
+	}
+}

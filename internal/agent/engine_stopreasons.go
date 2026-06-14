@@ -12,6 +12,20 @@ import (
 	"github.com/ipy/jenny/internal/api"
 )
 
+// mapTerminalReason maps the API stop_reason to the terminal_reason field.
+// terminal_reason is "completed" for end_turn/stop_sequence, "max_tokens" for max_tokens,
+// and empty for other/unknown stop reasons.
+func mapTerminalReason(stopReason string) string {
+	switch stopReason {
+	case "end_turn", "stop_sequence":
+		return "completed"
+	case "max_tokens":
+		return "max_tokens"
+	default:
+		return ""
+	}
+}
+
 // handleStopReason processes the model's stop_reason and returns the result
 // string, error, and a boolean indicating whether the loop should continue.
 // When shouldContinue is true, messages is modified in-place to include any
@@ -224,21 +238,36 @@ func (e *QueryEngine) emitSuccessResult(resp *api.Response, finalResult, session
 		Iterations:               []any{},
 		Speed:                    "standard",
 	}
+
+	// Calculate TTFT (time to first token) in milliseconds
+	// firstTokenTime is set when the first content block arrives
+	// lastAPIStartTime is set at the start of the API call
+	var ttftMs int64
+	if !e.firstTokenTime.IsZero() && !e.lastAPIStartTime.IsZero() {
+		ttftMs = e.firstTokenTime.Sub(e.lastAPIStartTime).Milliseconds()
+		if ttftMs < 0 {
+			ttftMs = 0
+		}
+	}
+
 	msg := StreamMessage{
-		Type:          "result",
-		Subtype:       "success",
-		Result:        finalResult,
-		SessionID:     sessionID,
-		Uuid:          GenerateUUID(),
-		Usage:         usage,
-		IsError:       false,
-		StopReason:    string(resp.StopReason),
-		DurationMs:    time.Since(e.startTime).Milliseconds(),
-		DurationAPIMs: e.totalAPIDurationMs,
-		NumTurns:      e.turnCount,
-		TotalCostUSD:  e.costState.TotalCostUSD,
-		ModelUsage:    e.buildModelUsage(),
-		FastModeState: "off",
+		Type:            "result",
+		Subtype:         "success",
+		Result:         finalResult,
+		SessionID:       sessionID,
+		Uuid:            GenerateUUID(),
+		Usage:           usage,
+		IsError:         false,
+		StopReason:      string(resp.StopReason),
+		TTFTMs:          ttftMs,
+		TerminalReason:   mapTerminalReason(string(resp.StopReason)),
+		APIErrorStatus:  nil, // null on success
+		DurationMs:      time.Since(e.startTime).Milliseconds(),
+		DurationAPIMs:   e.totalAPIDurationMs,
+		NumTurns:        e.turnCount,
+		TotalCostUSD:    e.costState.TotalCostUSD,
+		ModelUsage:      e.buildModelUsage(),
+		FastModeState:   "off",
 	}
 	data, _ := json.Marshal(msg)
 	fmt.Fprintln(os.Stdout, string(data))

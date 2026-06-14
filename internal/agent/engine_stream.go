@@ -92,6 +92,15 @@ func (e *QueryEngine) finalizeAsEndTurn(ctx context.Context, resp *api.Response,
 			Iterations:               []any{},
 			Speed:                    "standard",
 		}
+		// Calculate TTFT (time to first token) in milliseconds
+		var ttftMs int64
+		if !e.firstTokenTime.IsZero() && !e.lastAPIStartTime.IsZero() {
+			ttftMs = e.firstTokenTime.Sub(e.lastAPIStartTime).Milliseconds()
+			if ttftMs < 0 {
+				ttftMs = 0
+			}
+		}
+
 		msg := StreamMessage{
 			Type:            "result",
 			Subtype:         "success",
@@ -102,6 +111,9 @@ func (e *QueryEngine) finalizeAsEndTurn(ctx context.Context, resp *api.Response,
 			Usage:           usage,
 			IsError:         false,
 			StopReason:      string(resp.StopReason),
+			TTFTMs:          ttftMs,
+			TerminalReason:  mapTerminalReason(string(resp.StopReason)),
+			APIErrorStatus:  nil,
 			DurationMs:      time.Since(e.startTime).Milliseconds(),
 			DurationAPIMs:   e.totalAPIDurationMs,
 			NumTurns:        e.turnCount,
