@@ -1663,7 +1663,7 @@ func TestMaxIterations_LoopContractBounded(t *testing.T) {
 func TestMaxIterations_EngineConfigWired(t *testing.T) {
 	// Verify that StreamConfig.MaxIterations is used by QueryEngine
 	cfg := StreamConfig{MaxIterations: 7}
-	engine := mustNewQueryEngine(cfg, nil, "", WithClient(fastClient()))
+	engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient()))
 	// Access the internal runLoop's maxIterations via config — the engine
 	// reads e.streamCfg.MaxIterations in runLoop. Verify the config field is preserved.
 	if engine.streamCfg.MaxIterations != 7 {

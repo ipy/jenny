@@ -23,12 +23,12 @@ const (
 
 // defaultIntroSection returns the default introduction section of the system prompt.
 func defaultIntroSection() (string, bool) {
-	return `You are an autonomous AI assistant with tools to search, read, write, and execute safe operations. You operate in a non-interactive mode.
+	return `You are an autonomous AI assistant with tools to search, read, write, and execute safe operations.
 Your mission: autonomously complete every assigned task to the best of your ability, using all available means.
 
 **Core mandates:**
-- Strictly obey all rules and instructions in the <system-reminder> block.
-- Never ask the user for clarification, input, or permission mid-task. You are running non-interactively.
+- Strictly obey all rules and instructions in the <system-reminder> block. In case of conflict, subsequent instructions take precedence.
+- You are running non-interactively. Never ask the user for clarification, input, or permission mid-task. Never invoke shell tools that require interactive input.
 - Exhaust every available avenue on your own: search, read files, run diagnostics, reason step-by-step. Keep trying until the task is done or you have truly reached a dead end.
 - Be thorough before acting. Gather all necessary context first. Verify assumptions from actual data; never guess about current implementation details.
 - Do not execute destructive or irreversible actions (rm -rf, git clean -fd, etc.) unless the user explicitly requested them and you are certain of the impact.
@@ -139,7 +139,7 @@ func appendSection(appendPrompt string, override bool) (string, bool) {
 // On the first call, the result should be frozen by the caller into cfg.CachedSystemPrompt
 // so that subsequent calls return the identical string, protecting Anthropic's prompt
 // caching from dynamic variation (date, git status).
-func AssembleSystemPrompt(cfg StreamConfig, tools []tool.Tool, cwd string) string {
+func AssembleSystemPrompt(cfg *StreamConfig, tools []tool.Tool, cwd string) string {
 	// Return frozen prompt if already assembled
 	if cfg.CachedSystemPrompt != "" {
 		return cfg.CachedSystemPrompt
@@ -149,7 +149,7 @@ func AssembleSystemPrompt(cfg StreamConfig, tools []tool.Tool, cwd string) strin
 
 // buildSystemPrompt assembles the system prompt sections (the actual builder).
 // Exported for testing; use AssembleSystemPrompt in production.
-func buildSystemPrompt(cfg StreamConfig, tools []tool.Tool, cwd string) string {
+func buildSystemPrompt(cfg *StreamConfig, tools []tool.Tool, cwd string) string {
 	// AC1: Custom prompt replaces all defaults
 	if cfg.CustomSystemPrompt != "" {
 		var result strings.Builder
@@ -204,9 +204,15 @@ func buildSystemPrompt(cfg StreamConfig, tools []tool.Tool, cwd string) string {
 
 	// AC9: Redaction instruction in system prompt when enabled
 	if cfg.RedactMode != redact.ModeDisabled {
-		prompt := "This session has secret redaction enabled. Tool results may contain `[REDACTED:<hex>]` placeholders (e.g. `[REDACTED:a3f1b2c9]`). Copy them verbatim — including the full hex suffix — and never simplify, abbreviate, or otherwise modify them."
-		if redact.ParseRedactMode(string(cfg.RedactMode)) == redact.ModeRecover {
-			prompt += " They will be automatically recovered when you use them in tool calls, so you can refer to them directly as needed."
+		prompt := "This session has secret redaction enabled."
+		switch redact.ParseRedactMode(string(cfg.RedactMode)) {
+		case redact.ModeRecover:
+			prompt += " Tool results may contain `[REDACTED:<hex>]` placeholders (e.g. `[REDACTED:a3f1b2c9]`)." +
+				" They will be automatically recovered when you use them in tool calls, so you can refer to them directly as needed." +
+				" Copy them verbatim - including the full hex suffix - and never simplify, abbreviate, or otherwise modify them."
+		case redact.ModeRedact:
+			prompt += " Tool results may contain `[REDACTED:<hex>]` markers." +
+				" You can still use the original content internally (e.g., through local scripts), but you are strictly prohibited from exposing it in any way."
 		}
 		sections = append(sections, prompt)
 	}
@@ -227,7 +233,7 @@ func buildSystemPrompt(cfg StreamConfig, tools []tool.Tool, cwd string) string {
 // message chain instead of via the system prompt. This ensures the system prompt
 // prefix is byte-stable across turns, preventing cache invalidation of the entire
 // message chain when the suffix changes.
-func DynamicSystemSuffix(cfg StreamConfig, cwd string) string {
+func DynamicSystemSuffix(cfg *StreamConfig, cwd string) string {
 	return ""
 }
 

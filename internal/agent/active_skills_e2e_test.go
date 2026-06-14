@@ -183,7 +183,7 @@ func TestActiveSkills_E2E_ThroughCompaction(t *testing.T) {
 	}
 
 	// Create QueryEngine with skill activator
-	engine := mustNewQueryEngine(cfg, tools, "", WithClient(fastClient()), WithSkillActivator(activator))
+	engine := mustNewQueryEngine(&cfg, tools, "", WithClient(fastClient()), WithSkillActivator(activator))
 
 	// Turn 1: Submit message that will trigger tool use
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -306,7 +306,7 @@ func TestPermissionDenials_SurviveCompaction(t *testing.T) {
 	cfg.SessionManager = sessMgr
 	cfg.SessionID = "test-permissions-compaction"
 
-	engine := mustNewQueryEngine(cfg, nil, "", WithClient(fastClient()))
+	engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient()))
 
 	// Simulate real compaction with the engine
 	messages := []api.Message{
@@ -434,7 +434,7 @@ func TestDiscoveredSkillNames_SurviveCompaction_E2E(t *testing.T) {
 	cfg.SessionManager = sessMgr
 	cfg.SessionID = "test-discovered-compaction"
 
-	engine := mustNewQueryEngine(cfg, nil, "", WithClient(fastClient()))
+	engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient()))
 
 	// Capture count before compaction
 	countBefore := len(engine.streamCfg.DiscoveredSkillNames)
@@ -555,7 +555,7 @@ func TestActiveSkills_AccumulateAcrossTurns(t *testing.T) {
 		MaxIterations:  5,
 	}
 
-	engine := mustNewQueryEngine(cfg, tools, "", WithClient(fastClient()), WithSkillActivator(activator))
+	engine := mustNewQueryEngine(&cfg, tools, "", WithClient(fastClient()), WithSkillActivator(activator))
 
 	// Turn 1: path-triggered activation for skill-A (go-developer)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -664,7 +664,7 @@ func TestCompaction_PreservesNonCompactedFields(t *testing.T) {
 	cfg.SessionManager = sessMgr
 	cfg.SessionID = "test-compaction-preservation"
 
-	engine := mustNewQueryEngine(cfg, nil, "", WithClient(fastClient()))
+	engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient()))
 
 	// Capture state before compaction
 	originalActiveSkills := make([]ActivatedSkill, len(engine.streamCfg.ActiveSkills))
@@ -769,7 +769,7 @@ func TestActiveSkills_GracefulDegradation(t *testing.T) {
 	}
 
 	// DynamicSystemSuffix is always empty regardless of skills
-	if DynamicSystemSuffix(StreamConfig{}, tmpDir) != "" {
+	if DynamicSystemSuffix(&StreamConfig{}, tmpDir) != "" {
 		t.Error("AC6 FAIL: DynamicSystemSuffix should always be empty")
 	}
 
@@ -803,7 +803,7 @@ func TestActiveSkills_NoRegression(t *testing.T) {
 	}
 
 	// DynamicSystemSuffix is always empty (skills go through messages)
-	if DynamicSystemSuffix(cfg, tmpDir) != "" {
+	if DynamicSystemSuffix(&cfg, tmpDir) != "" {
 		t.Error("AC7 FAIL: DynamicSystemSuffix should be empty")
 	}
 

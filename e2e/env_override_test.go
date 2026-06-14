@@ -129,7 +129,7 @@ func TestSystemPromptOverride(t *testing.T) {
 	if !strings.Contains(sysText, "CUSTOM_SYS_SENTINEL") {
 		t.Errorf("system prompt does not contain CUSTOM_SYS_SENTINEL")
 	}
-	if (strings.Contains(sysText, "autonomous") || strings.Contains(sysText, "non-interactive")) {
+	if strings.Contains(sysText, "autonomous") || strings.Contains(sysText, "non-interactive") {
 		t.Error("system prompt still contains default text after --system-prompt override")
 	}
 }

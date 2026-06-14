@@ -293,7 +293,7 @@ func fastClient() api.Requester {
 
 // mustNewQueryEngine creates a QueryEngine for testing, panicking on error.
 // All test callers use WithClient so the error path is never reached.
-func mustNewQueryEngine(cfg StreamConfig, tools []tool.Tool, model string, opts ...QueryEngineOption) *QueryEngine {
+func mustNewQueryEngine(cfg *StreamConfig, tools []tool.Tool, model string, opts ...QueryEngineOption) *QueryEngine {
 	e, err := NewQueryEngine(cfg, tools, model, opts...)
 	if err != nil {
 		panic(fmt.Sprintf("mustNewQueryEngine: %v", err))

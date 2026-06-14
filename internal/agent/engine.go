@@ -30,7 +30,7 @@ type QueryEngine struct {
 	costState      *CostState
 	tools          []tool.Tool
 	toolParams     []ToolParam
-	streamCfg      StreamConfig
+	streamCfg      *StreamConfig
 	model          string
 	startTime      time.Time
 	turnCount      int
@@ -94,7 +94,7 @@ func WithSkillActivator(activator tool.SkillActivator) QueryEngineOption {
 }
 
 // NewQueryEngine creates a new QueryEngine with the given configuration.
-func NewQueryEngine(cfg StreamConfig, tools []tool.Tool, model string, opts ...QueryEngineOption) (*QueryEngine, error) {
+func NewQueryEngine(cfg *StreamConfig, tools []tool.Tool, model string, opts ...QueryEngineOption) (*QueryEngine, error) {
 	// AC1/AC4: Inject StructuredOutputTool for non-interactive sessions with schema
 	var structuredTool *tool.StructuredOutputTool
 	if cfg.StructuredSchema != nil && cfg.Enabled {

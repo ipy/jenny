@@ -59,7 +59,7 @@ func (e *QueryEngine) executeAndProcessTools(ctx context.Context, toolUseBlocks 
 	}
 
 	// Execute all tools using the parallel executor with cross-turn state support
-	executor := NewToolExecutorWithStreamConfig(e.tools, cwd, &e.streamCfg)
+	executor := NewToolExecutorWithStreamConfig(e.tools, cwd, e.streamCfg)
 	execResults, err := executor.Execute(ctx, execBlocks)
 	if err != nil {
 		return nil, false, fmt.Errorf("executing tools: %w", err)

@@ -193,8 +193,8 @@ type LocalSubagentRunner struct {
 	tools             []tool.Tool
 	denyRules         map[string]bool
 	sessionMgr        *session.Manager
-	parentConfig      StreamConfig // Parent's StreamConfig for inheritance when Name is set (AC3)
-	capturedStreamCfg StreamConfig // Captured StreamConfig for testing verification (AC2, AC4)
+	parentConfig      *StreamConfig // Parent's StreamConfig for inheritance when Name is set (AC3)
+	capturedStreamCfg *StreamConfig // Captured StreamConfig for testing verification (AC2, AC4)
 }
 
 // NewLocalSubagentRunner creates a new LocalSubagentRunner.
@@ -220,13 +220,13 @@ func (r *LocalSubagentRunner) SetSessionManager(mgr *session.Manager) {
 }
 
 // SetParentConfig sets the parent StreamConfig for inheritance when Name is set (AC3).
-func (r *LocalSubagentRunner) SetParentConfig(cfg StreamConfig) {
+func (r *LocalSubagentRunner) SetParentConfig(cfg *StreamConfig) {
 	r.parentConfig = cfg
 }
 
 // GetCapturedStreamConfig returns the StreamConfig most recently constructed in RunSubagent.
 // Used by tests to verify IsNamedAgent and inherited field propagation (AC2, AC4).
-func (r *LocalSubagentRunner) GetCapturedStreamConfig() StreamConfig {
+func (r *LocalSubagentRunner) GetCapturedStreamConfig() *StreamConfig {
 	return r.capturedStreamCfg
 }
 
@@ -234,6 +234,9 @@ func (r *LocalSubagentRunner) GetCapturedStreamConfig() StreamConfig {
 // Implements tool.SubagentRunner.GetCapturedStreamConfigInfo.
 func (r *LocalSubagentRunner) GetCapturedStreamConfigInfo() map[string]any {
 	cfg := r.capturedStreamCfg
+	if cfg == nil {
+		return nil
+	}
 	return map[string]any{
 		"IsNamedAgent":         cfg.IsNamedAgent,
 		"MaxBudgetUSD":         cfg.MaxBudgetUSD,
@@ -321,7 +324,7 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 	}
 
 	// Build stream config for the subagent
-	streamCfg := StreamConfig{
+	streamCfg := &StreamConfig{
 		Enabled:      false, // Subagent runs without streaming
 		Verbose:      false,
 		IsForkChild:  true,              // Mark as fork child for recursive fork detection
@@ -329,7 +332,7 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 	}
 
 	// AC3-streamconfig-inheritance: Named agents inherit parent config fields
-	if params.Name != "" {
+	if params.Name != "" && r.parentConfig != nil {
 		streamCfg.MCPConfig = r.parentConfig.MCPConfig
 		streamCfg.AutoMemoryEnabled = r.parentConfig.AutoMemoryEnabled
 		streamCfg.MemoryContent = r.parentConfig.MemoryContent
@@ -396,7 +399,7 @@ func (r *AsyncSubagentRunner) SetSessionManager(mgr *session.Manager) {
 }
 
 // SetParentConfig sets the parent StreamConfig for inheritance when Name is set (AC3).
-func (r *AsyncSubagentRunner) SetParentConfig(cfg StreamConfig) {
+func (r *AsyncSubagentRunner) SetParentConfig(cfg *StreamConfig) {
 	r.runner.parentConfig = cfg
 }
 

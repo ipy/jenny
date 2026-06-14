@@ -52,7 +52,7 @@ func TestAC4_StreamRequestStartEmitted(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		_, _, err = RunStream(ctx, "test prompt", nil, tmpDir, cfg, "test-model", WithClient(fastClient()))
+		_, _, err = RunStream(ctx, "test prompt", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
 		errCh <- err
 	}()
 
@@ -122,7 +122,7 @@ func TestAC4_NoStreamRequestStartWhenDisabled(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _, err = RunStream(ctx, "test prompt", nil, tmpDir, cfg, "test-model", WithClient(fastClient()))
+		_, _, err = RunStream(ctx, "test prompt", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
 		errCh <- err
 	}()
 
@@ -174,7 +174,7 @@ func TestStreamEvent_EmittedWhenFlagOn(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _, err = RunStream(ctx, "test prompt", nil, tmpDir, cfg, "test-model", WithClient(fastClient()))
+		_, _, err = RunStream(ctx, "test prompt", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
 		errCh <- err
 	}()
 
@@ -273,7 +273,7 @@ func TestStreamEvent_NotEmittedWhenFlagOff(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _, err = RunStream(ctx, "test prompt", nil, tmpDir, cfg, "test-model", WithClient(fastClient()))
+		_, _, err = RunStream(ctx, "test prompt", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
 		errCh <- err
 	}()
 
@@ -349,7 +349,7 @@ func TestStreamEvent_NotEmittedOnFallback(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _, err = RunStream(ctx, "test prompt", nil, tmpDir, cfg, "test-model", WithClient(fastClient()))
+		_, _, err = RunStream(ctx, "test prompt", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
 		errCh <- err
 	}()
 
@@ -441,7 +441,7 @@ func TestStreamEvent_ThinkingAndSignature(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	result, _, err := RunStream(ctx, "hello", nil, tmpDir, cfg, "test-model", WithClient(fastClient()))
+	result, _, err := RunStream(ctx, "hello", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
 	if err != nil {
 		t.Fatalf("RunStream error: %v", err)
 	}
@@ -517,7 +517,7 @@ func TestStreamingFallbackParityPreserved(t *testing.T) {
 		cfg := StreamConfig{Enabled: true, SessionManager: sessMgr}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _, err := RunStream(ctx, "test", nil, tmpDir, cfg, "test-model", WithClient(fastClient()))
+		_, _, err := RunStream(ctx, "test", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
 		errCh <- err
 	}()
 
@@ -636,7 +636,7 @@ func TestStreamingEmitsOneAssistantPerTurn(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _, runErr = RunStream(ctx, "test", tools, tmpDir, cfg, "test-model", WithClient(fastClient()))
+		_, _, runErr = RunStream(ctx, "test", tools, tmpDir, &cfg, "test-model", WithClient(fastClient()))
 	})
 
 	if runErr != nil {
@@ -758,7 +758,7 @@ func TestStreamingNoTextDuplication(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _, runErr = RunStream(ctx, "test", tools, tmpDir, cfg, "test-model", WithClient(fastClient()))
+		_, _, runErr = RunStream(ctx, "test", tools, tmpDir, &cfg, "test-model", WithClient(fastClient()))
 	})
 
 	if runErr != nil {
@@ -826,7 +826,7 @@ func TestStreamingTextOnlyTurn(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _, runErr = RunStream(ctx, "test", nil, tmpDir, cfg, "test-model", WithClient(fastClient()))
+		_, _, runErr = RunStream(ctx, "test", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
 	})
 
 	if runErr != nil {
@@ -948,7 +948,7 @@ func TestStreamingToolUseOnlyTurn(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _, runErr = RunStream(ctx, "test", tools, tmpDir, cfg, "test-model", WithClient(fastClient()))
+		_, _, runErr = RunStream(ctx, "test", tools, tmpDir, &cfg, "test-model", WithClient(fastClient()))
 	})
 
 	if runErr != nil {
@@ -1000,7 +1000,7 @@ func TestStreamingToolUseOnlyTurn(t *testing.T) {
 
 // captureStreamOutput runs RunStream and captures stdout. It returns the
 // captured output string and signals done via doneCh.
-func captureStreamOutput(t *testing.T, cfg StreamConfig) (string, error) {
+func captureStreamOutput(t *testing.T, cfg *StreamConfig) (string, error) {
 	oldStdout := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
@@ -1041,7 +1041,7 @@ func TestStreamJSON_HasParentToolUseID(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "test-key-00000")
 
 	cfg := StreamConfig{Enabled: true}
-	output, err := captureStreamOutput(t, cfg)
+	output, err := captureStreamOutput(t, &cfg)
 	if err != nil {
 		t.Fatalf("RunStream failed: %v", err)
 	}
@@ -1080,7 +1080,7 @@ func TestStreamJSON_EmitsAggregatedAssistant(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "test-key-00000")
 
 	cfg := StreamConfig{Enabled: true}
-	output, err := captureStreamOutput(t, cfg)
+	output, err := captureStreamOutput(t, &cfg)
 	if err != nil {
 		t.Fatalf("RunStream failed: %v", err)
 	}
@@ -1126,7 +1126,7 @@ func TestStreamJSON_EmitsAggregatedUser(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "test-key-00000")
 
 	cfg := StreamConfig{Enabled: true}
-	output, err := captureStreamOutput(t, cfg)
+	output, err := captureStreamOutput(t, &cfg)
 	if err != nil {
 		t.Fatalf("RunStream failed: %v", err)
 	}
@@ -1159,7 +1159,7 @@ func TestStreamJSON_EmitsTerminalResult(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "test-key-00000")
 
 	cfg := StreamConfig{Enabled: true}
-	output, err := captureStreamOutput(t, cfg)
+	output, err := captureStreamOutput(t, &cfg)
 	if err != nil {
 		t.Fatalf("RunStream failed: %v", err)
 	}
@@ -1193,7 +1193,7 @@ func TestStreamJSON_FieldOrderMatchesReference(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "test-key-00000")
 
 	cfg := StreamConfig{Enabled: true}
-	output, err := captureStreamOutput(t, cfg)
+	output, err := captureStreamOutput(t, &cfg)
 	if err != nil {
 		t.Fatalf("RunStream failed: %v", err)
 	}
@@ -1373,7 +1373,7 @@ func TestStreamJSON_CostOnlyOnResult(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "test-key-00000")
 
 	cfg := StreamConfig{Enabled: true}
-	output, err := captureStreamOutput(t, cfg)
+	output, err := captureStreamOutput(t, &cfg)
 	if err != nil {
 		t.Fatalf("RunStream failed: %v", err)
 	}

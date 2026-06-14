@@ -454,7 +454,7 @@ func TestLocalSubagentRunner_AC4_StreamConfigPropagation(t *testing.T) {
 		StructuredSchema:     map[string]any{"type": "object"},
 		StructuredDenyRules:  []string{"Bash"},
 	}
-	runner.SetParentConfig(parentCfg)
+	runner.SetParentConfig(&parentCfg)
 
 	// Call RunSubagent with Name="worker1"
 	params := tool.SubagentParams{

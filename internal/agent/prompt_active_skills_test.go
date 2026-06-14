@@ -60,13 +60,13 @@ func TestDynamicSystemSuffix_AlwaysEmpty(t *testing.T) {
 	// through virtual messages in the message chain, not via system prompt suffix.
 	tests := []struct {
 		name string
-		cfg  StreamConfig
+		cfg  *StreamConfig
 	}{
-		{"no skills", StreamConfig{}},
-		{"with skills", StreamConfig{ActiveSkills: []ActivatedSkill{
+		{"no skills", &StreamConfig{}},
+		{"with skills", &StreamConfig{ActiveSkills: []ActivatedSkill{
 			{Name: "test", RootPath: "/test"},
 		}}},
-		{"custom prompt", StreamConfig{CustomSystemPrompt: "custom"}},
+		{"custom prompt", &StreamConfig{CustomSystemPrompt: "custom"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

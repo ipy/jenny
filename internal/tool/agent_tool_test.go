@@ -189,7 +189,7 @@ func TestAC3_NamedAgentHasAccessToParentTools(t *testing.T) {
 		MaxBudgetUSD: 1.5,
 		MaxTurns:     50,
 	}
-	runner.SetParentConfig(parentCfg)
+	runner.SetParentConfig(&parentCfg)
 
 	agentTool := tool.NewAgentToolWithSwarms(runner, nil, true)
 

@@ -271,7 +271,7 @@ func TestAC2_PersistsEndTurnPath(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	_, _, err = RunStream(ctx, "test prompt", nil, tmpDir, cfg, "test-model", WithClient(fastClient()))
+	_, _, err = RunStream(ctx, "test prompt", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
 	if err != nil {
 		t.Fatalf("AC2 FAIL: RunStream error = %v", err)
 	}
@@ -501,7 +501,7 @@ func TestAC4_ResultLineContainsCacheAndCostFields(t *testing.T) {
 			return
 		}
 		cfg := StreamConfig{Enabled: true, SessionManager: sessMgr}
-		_, _, err = RunStream(context.Background(), "test", nil, tmpDir, cfg, "test-model", WithClient(fastClient()))
+		_, _, err = RunStream(context.Background(), "test", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
 		errCh <- err
 	}()
 
@@ -660,7 +660,7 @@ func TestAC5_BudgetStopInRunStream(t *testing.T) {
 			IsResume:       true,  // Enable resume restore of cost state
 			SessionID:      "sess_budget_test",
 		}
-		_, _, err = RunStream(context.Background(), "test", nil, tmpDir, cfg, "test-model", WithClient(fastClient()))
+		_, _, err = RunStream(context.Background(), "test", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
 		errCh <- err
 	}()
 
@@ -724,7 +724,7 @@ func TestAC5_BudgetNoLimitWhenMaxBudgetUSDIsZero(t *testing.T) {
 		MaxBudgetUSD:   0, // No limit
 		SessionManager: sessMgr,
 	}
-	_, _, err = RunStream(context.Background(), "test", nil, tmpDir, cfg, "test-model", WithClient(fastClient()))
+	_, _, err = RunStream(context.Background(), "test", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
 	if err != nil {
 		t.Fatalf("AC5 FAIL: RunStream should not fail with no budget limit: %v", err)
 	}
