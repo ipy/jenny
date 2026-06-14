@@ -281,8 +281,8 @@ type StreamMessage struct {
 	ClaudeCodeVersion string   `json:"claude_code_version,omitempty"`
 	PermissionMode    string   `json:"permissionMode,omitempty"`
 	FastModeState     string   `json:"fast_mode_state,omitempty"`
-	OutputStyle      string   `json:"output_style,omitempty"`
-	MCPServers       []string `json:"mcp_servers,omitempty"`
+	OutputStyle       string   `json:"output_style,omitempty"`
+	MCPServers        []string `json:"mcp_servers,omitempty"`
 }
 
 // MarshalJSON implements custom marshaling for StreamMessage to:
@@ -374,6 +374,7 @@ func encodeString(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
 }
+
 // WriteStreamJSON writes a message as NDJSON line to stdout.
 func WriteStreamJSON(msg StreamMessage) error {
 	data, err := json.Marshal(msg)

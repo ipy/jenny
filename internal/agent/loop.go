@@ -396,8 +396,8 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 			ClaudeCodeVersion: constants.Version,
 			PermissionMode:    "default",
 			FastModeState:     "off",
-			OutputStyle:      "default",
-			MCPServers:       mcpServerNames,
+			OutputStyle:       "default",
+			MCPServers:        mcpServerNames,
 		}
 		_ = cli.WriteStreamJSON(initMsg)
 	}
