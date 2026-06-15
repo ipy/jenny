@@ -18,11 +18,12 @@ import (
 	"github.com/ipy/jenny/internal/session"
 )
 
-// findAssistantContentBlock scans captured NDJSON stdout for the first
-// `type:"assistant"` envelope and returns its `message.content` array decoded
-// as []map[string]any. Returns nil if not found.
+// findAssistantContentBlock scans captured NDJSON stdout for all
+// `type:"assistant"` envelopes and returns their aggregated `message.content`
+// blocks as []map[string]any. Returns nil if none found.
 func findAssistantContentBlock(t *testing.T, stdoutOutput string) []map[string]any {
 	t.Helper()
+	var allContent []map[string]any
 	for line := range strings.SplitSeq(stdoutOutput, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -43,15 +44,16 @@ func findAssistantContentBlock(t *testing.T, stdoutOutput string) []map[string]a
 		if !ok {
 			continue
 		}
-		content := make([]map[string]any, 0, len(contentAny))
 		for _, c := range contentAny {
 			if cm, ok := c.(map[string]any); ok {
-				content = append(content, cm)
+				allContent = append(allContent, cm)
 			}
 		}
-		return content
 	}
-	return nil
+	if len(allContent) == 0 {
+		return nil
+	}
+	return allContent
 }
 
 // thinkingTextToolEvents returns SSE events for a response containing one

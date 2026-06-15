@@ -150,6 +150,7 @@ type StreamContentBlock struct {
 
 // StreamResult represents the result of a streaming session.
 type StreamResult struct {
+	ID              string
 	Blocks          []ContentBlock
 	StopReason      StopReason
 	Usage           Usage

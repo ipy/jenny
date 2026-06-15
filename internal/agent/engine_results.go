@@ -13,7 +13,7 @@ import (
 )
 
 // executeAndProcessTools converts tool_use blocks to executor format, emits
-// tool_call started/completed events, executes tools, syncs active skills, and
+// tool_progress started/complete events, executes tools, syncs active skills, and
 // persists tool results to transcript. Returns the collected tool results, a
 // boolean indicating whether synthetic (interrupted) results were generated,
 // and any execution error.
@@ -28,11 +28,11 @@ func (e *QueryEngine) executeAndProcessTools(ctx context.Context, toolUseBlocks 
 		})
 	}
 
-	// AC1: Emit tool_call started events before execution begins
+	// AC2: Emit tool_progress started events before execution begins
 	if e.streamCfg.Enabled {
 		for _, block := range execBlocks {
 			msg := StreamMessage{
-				Type:            "tool_call",
+				Type:            "tool_progress",
 				Subtype:         "started",
 				ToolName:        block.Name,
 				ToolUseID:       block.ID,
@@ -127,10 +127,10 @@ func (e *QueryEngine) executeAndProcessTools(ctx context.Context, toolUseBlocks 
 		}
 
 		if e.streamCfg.Enabled {
-			// AC2: Emit tool_call completed event before tool_result wrapper
+			// AC2: Emit tool_progress complete event before tool_result wrapper
 			completedMsg := StreamMessage{
-				Type:            "tool_call",
-				Subtype:         "completed",
+				Type:            "tool_progress",
+				Subtype:         "complete",
 				ToolUseID:       emitToolUseID,
 				IsError:         emitIsError,
 				SessionID:       sessionID,

@@ -49,6 +49,13 @@ type AnthropicRequest struct {
 	TopP          *float64                `json:"top_p,omitempty"`
 	TopK          *int                    `json:"top_k,omitempty"`
 	Tools         []AnthropicTool         `json:"tools,omitempty"`
+	Thinking      *AnthropicThinkingConfig `json:"thinking,omitempty"`
+}
+
+// AnthropicThinkingConfig represents the thinking configuration for Anthropic.
+type AnthropicThinkingConfig struct {
+	Type         string `json:"type"`
+	BudgetTokens int    `json:"budget_tokens"`
 }
 
 // AnthropicMessage represents a message in the Anthropic Messages API.

@@ -16,11 +16,12 @@ import (
 
 // anthropicProvider implements the Provider interface using a lightweight HTTP client.
 type anthropicProvider struct {
-	client       *HTTPClient
-	model        string
-	maxTokens    int
-	retryConfig  RetryConfig
-	isBackground bool
+	client         *HTTPClient
+	model          string
+	maxTokens      int
+	thinkingConfig ThinkingConfig
+	retryConfig    RetryConfig
+	isBackground   bool
 }
 
 // newAnthropicProvider creates a new Anthropic provider.
@@ -72,6 +73,11 @@ func (p *anthropicProvider) SetMaxTokensOverride(maxTokens int) {
 // SetRetryConfig sets the retry configuration.
 func (p *anthropicProvider) SetRetryConfig(cfg RetryConfig) {
 	p.retryConfig = cfg
+}
+
+// SetThinkingConfig sets the thinking configuration.
+func (p *anthropicProvider) SetThinkingConfig(cfg ThinkingConfig) {
+	p.thinkingConfig = cfg
 }
 
 // SendMessage sends a non-streaming message.
@@ -182,6 +188,13 @@ func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Messag
 		Messages:  sdkMessages,
 		MaxTokens: maxTokens,
 		Tools:     sdkTools,
+	}
+
+	if p.thinkingConfig.BudgetTokens > 0 {
+		reqBody.Thinking = &AnthropicThinkingConfig{
+			Type:         "enabled",
+			BudgetTokens: p.thinkingConfig.BudgetTokens,
+		}
 	}
 
 	if len(systemPrompt) > 0 || systemPromptSuffix != "" {
@@ -346,6 +359,7 @@ func (p *anthropicProvider) buildHeaders() http.Header {
 // parseResponse converts an Anthropic response to api.Response.
 func (p *anthropicProvider) parseResponse(resp *AnthropicResponse) (*Response, error) {
 	response := &Response{
+		ID:         resp.ID,
 		Model:      resp.Model,
 		StopReason: StopReason(resp.StopReason),
 	}
@@ -427,6 +441,13 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 			MaxTokens: maxTokens,
 			Tools:     sdkTools,
 			Stream:    true,
+		}
+
+		if p.thinkingConfig.BudgetTokens > 0 {
+			reqBody.Thinking = &AnthropicThinkingConfig{
+				Type:         "enabled",
+				BudgetTokens: p.thinkingConfig.BudgetTokens,
+			}
 		}
 
 		if len(systemPrompt) > 0 || systemPromptSuffix != "" {
@@ -521,6 +542,7 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 			case EventMessageStart:
 				hasMessageStart = true
 				if event.Message != nil {
+					result.ID = event.Message.ID
 					acc.setModel(event.Message.Model)
 					acc.setUsage(Usage{
 						InputTokens:              event.Message.Usage.InputTokens,

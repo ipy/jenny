@@ -582,7 +582,7 @@ func TestActiveSkills_AccumulateAcrossTurns(t *testing.T) {
 	}
 
 	// Turn 2: explicit activation for skill-B (python-developer)
-	activator.RegisterActivation("python-developer", tmpDir+"/python-developer")
+	activator.RegisterActivation("python-developer", tmpDir+"/python-developer", nil)
 
 	// Verify both skills are in the list
 	activatedSkills2 := activator.GetActivatedSkills()
@@ -608,7 +608,7 @@ func TestActiveSkills_AccumulateAcrossTurns(t *testing.T) {
 	}
 
 	// Verify dedup: re-activating same skill doesn't add duplicates
-	activator.RegisterActivation("go-developer", tmpDir+"/go-developer")
+	activator.RegisterActivation("go-developer", tmpDir+"/go-developer", nil)
 	activatedSkills3 := activator.GetActivatedSkills()
 	if len(activatedSkills3) != 2 {
 		t.Errorf("AC4 FAIL: Re-activating skill should not create duplicate, got %d skills", len(activatedSkills3))

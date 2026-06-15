@@ -55,6 +55,9 @@ func JennyHomeDir() string {
 // This is the conventional location used by Codex, Claude Code, and other
 // agent tools. Returns "" if os.UserHomeDir() fails.
 func AgentsHomeDir() string {
+	if h := os.Getenv("JENNY_AGENTS_HOME"); h != "" {
+		return h
+	}
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
 		return ""

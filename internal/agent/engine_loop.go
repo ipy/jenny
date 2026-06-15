@@ -361,28 +361,33 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 
 		// Process blocks as they arrive
 		for block := range blocksChan {
-			// Reset lastAPIStartTime for each block to track active streaming time?
-			// Actually, totalAPIDurationMs should include the entire time the API is active.
-			// ... (existing block processing)
+			// AC1: Capture message ID, usage, and stop reason from raw events for assistant events
+			if block.Type == "stream_event" {
+				if ev, ok := block.RawEvent.(api.AnthropicStreamEvent); ok {
+					switch ev.Type {
+					case api.EventMessageStart:
+						if ev.Message != nil {
+							e.currentMessageID = ev.Message.ID
+							e.currentUsage = api.Usage{
+								InputTokens:              ev.Message.Usage.InputTokens,
+								CacheReadInputTokens:     ev.Message.Usage.CacheReadInputTokens,
+								CacheCreationInputTokens: ev.Message.Usage.CacheCreationInputTokens,
+							}
+						}
+					case api.EventMessageDelta:
+						if ev.Delta != nil {
+							e.currentStopReason = ev.Delta.StopReason
+							e.currentStopSequence = ev.Delta.StopSequence
+						}
+						if ev.Usage != nil && ev.Usage.OutputTokens > 0 {
+							e.currentUsage.OutputTokens = ev.Usage.OutputTokens
+						}
+					}
+				}
+			}
+
 			// Handle raw stream_event passthrough
 			if block.Type == "stream_event" && e.streamCfg.Enabled && e.streamCfg.IncludePartial {
-				// Capture message ID from MessageStartEvent
-				if msgStart, ok := block.RawEvent.(api.AnthropicStreamEvent); ok && msgStart.Type == api.EventMessageStart && msgStart.Message != nil {
-					e.currentMessageID = msgStart.Message.ID
-					e.currentUsage = api.Usage{
-						InputTokens:              msgStart.Message.Usage.InputTokens,
-						CacheReadInputTokens:     msgStart.Message.Usage.CacheReadInputTokens,
-						CacheCreationInputTokens: msgStart.Message.Usage.CacheCreationInputTokens,
-					}
-				}
-				// Capture stop_reason and usage from MessageDeltaEvent
-				if msgDelta, ok := block.RawEvent.(api.AnthropicStreamEvent); ok && msgDelta.Type == api.EventMessageDelta && msgDelta.Delta != nil {
-					e.currentStopReason = msgDelta.Delta.StopReason
-					e.currentStopSequence = msgDelta.Delta.StopSequence
-					if msgDelta.Usage != nil && msgDelta.Usage.OutputTokens > 0 {
-						e.currentUsage.OutputTokens = msgDelta.Usage.OutputTokens
-					}
-				}
 				// Transform SDK event to minimal representation (AC1: no bloated zero-value fields)
 				transformedEvent, err := TransformStreamEvent(block.RawEvent)
 				if err != nil {
@@ -410,10 +415,19 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					e.firstTokenTime = time.Now()
 				}
 				// AC1: Redact secrets from text output before writing
+				var text string
 				if e.secretRedactor != nil && e.secretRedactor.Enabled() {
-					textOutput.WriteString(e.secretRedactor.Redact(block.Block.Text))
+					text = e.secretRedactor.Redact(block.Block.Text)
 				} else {
-					textOutput.WriteString(block.Block.Text)
+					text = block.Block.Text
+				}
+				textOutput.WriteString(text)
+				// AC1: Emit assistant event for text block stop
+				if e.streamCfg.Enabled && text != "" {
+					e.emitAssistantEvent(sessionID, api.ContentBlock{
+						Type: api.BlockTypeText,
+						Text: text,
+					}, e.currentMessageID, e.model)
 				}
 			case api.BlockTypeThinking:
 				// Track TTFT: record time when first content block arrives
@@ -431,6 +445,10 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				if !e.streamCfg.IncludePartial {
 					thinkingBlocks = append(thinkingBlocks, thinkingBlock{Text: block.Block.Thinking, Signature: block.Block.Signature})
 				}
+				// AC1: Emit assistant event for thinking block stop
+				if e.streamCfg.Enabled {
+					e.emitAssistantEvent(sessionID, block.Block, e.currentMessageID, e.model)
+				}
 			case api.BlockTypeToolUse:
 				// Track TTFT: record time when first content block arrives
 				if e.firstTokenTime.IsZero() {
@@ -446,6 +464,10 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					Name:  block.Block.ToolName,
 					Input: block.Block.ToolInput,
 				})
+				// AC1: Emit assistant event for tool_use block stop
+				if e.streamCfg.Enabled {
+					e.emitAssistantEvent(sessionID, block.Block, e.currentMessageID, e.model)
+				}
 			case api.BlockTypeWebSearchResult:
 				// AC5: Process web search results and surface error codes
 				if block.Block.WebSearchResult != nil && block.Block.WebSearchResult.IsError {
@@ -465,12 +487,9 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		// emitted even if the periodic timer hasn't fired since last delta.
 		e.emitAllFinalThinkingTokens(sessionID)
 
-		// Emit ONE consolidated assistant message for all collected content from streaming
-		// (AC1-AC4: one assistant event per API turn, not per tool_use block)
-		// Only emit if streaming actually produced content; fallback path emits separately.
-		if textOutput.Len() > 0 || len(toolUseBlocks) > 0 || len(thinkingBlocks) > 0 {
-			e.emitConsolidatedAssistant(sessionID, thinkingBlocks, &textOutput, toolUseBlocks,
-				e.currentMessageID, e.currentStopReason, e.currentStopSequence, toLoopUsage(e.currentUsage), e.model)
+		// AC1: Emit final assistant event with usage and stop_reason in stream-json mode
+		if e.streamCfg.Enabled {
+			e.emitAssistantFinalEvent(sessionID, e.currentMessageID, e.currentStopReason, e.currentStopSequence, toLoopUsage(e.currentUsage), e.model)
 		}
 
 		// Check if streaming completed with error

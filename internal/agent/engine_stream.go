@@ -278,6 +278,110 @@ func (e *QueryEngine) emitConsolidatedAssistant(
 	fmt.Fprintln(os.Stdout, string(data))
 }
 
+// emitAssistantEvent emits a single assistant event for a finished content block.
+// AC1: Every content block stop emits a separate assistant event sharing the same message.id.
+func (e *QueryEngine) emitAssistantEvent(sessionID string, block api.ContentBlock, messageID string, model string) {
+	if !e.streamCfg.Enabled {
+		return
+	}
+
+	var blockFields []string
+	switch block.Type {
+	case api.BlockTypeThinking:
+		blockFields = append(blockFields, `"type":"thinking"`)
+		blockFields = append(blockFields, `"thinking":`+encodeString(block.Thinking))
+		if block.Signature != "" {
+			blockFields = append(blockFields, `"signature":`+encodeString(block.Signature))
+		}
+	case api.BlockTypeText:
+		blockFields = append(blockFields, `"type":"text"`)
+		blockFields = append(blockFields, `"text":`+encodeString(block.Text))
+	case api.BlockTypeToolUse:
+		inputBytes, _ := json.Marshal(block.ToolInput)
+		blockFields = append(blockFields, `"type":"tool_use"`)
+		blockFields = append(blockFields, `"id":`+encodeString(block.ToolID))
+		blockFields = append(blockFields, `"name":`+encodeString(block.ToolName))
+		blockFields = append(blockFields, `"input":`+string(inputBytes))
+	default:
+		return
+	}
+	contentJSON := "[{" + strings.Join(blockFields, ",") + "}]"
+
+	messageFields := []string{
+		`"id":` + encodeString(messageID),
+		`"type":"message"`,
+		`"role":"assistant"`,
+		`"model":` + encodeString(model),
+		`"content":` + contentJSON,
+		`"stop_reason":null`,
+		`"stop_sequence":null`,
+	}
+
+	// Include usage if available (input tokens are usually known at start)
+	// AC1: Shared message.id and consistent metadata
+	usage := toLoopUsage(e.currentUsage)
+	usageJSON := fmt.Sprintf(`{"input_tokens":%d,"cache_creation_input_tokens":%d,"cache_read_input_tokens":%d,"output_tokens":%d,"service_tier":"standard"}`,
+		usage.InputTokens, usage.CacheCreationInputTokens, usage.CacheReadInputTokens, usage.OutputTokens)
+	messageFields = append(messageFields, `"usage":`+usageJSON)
+
+	messageJSON := "{" + strings.Join(messageFields, ",") + "}"
+	msg := StreamMessage{
+		Type:            "assistant",
+		Message:         json.RawMessage(messageJSON),
+		ParentToolUseID: nil,
+		SessionID:       sessionID,
+		Uuid:            GenerateUUID(),
+	}
+	data, _ := json.Marshal(msg)
+	fmt.Fprintln(os.Stdout, string(data))
+}
+
+// emitAssistantFinalEvent emits a final assistant event with usage and stop reason.
+// Used at the end of a streaming turn to provide usage metadata (AC1).
+func (e *QueryEngine) emitAssistantFinalEvent(sessionID string, messageID string, stopReason string, stopSequence string, usage *Usage, model string) {
+	if !e.streamCfg.Enabled {
+		return
+	}
+
+	messageFields := []string{
+		`"id":` + encodeString(messageID),
+		`"type":"message"`,
+		`"role":"assistant"`,
+		`"model":` + encodeString(model),
+		`"content":[]`, // Final event has empty content
+	}
+
+	// Include stop_reason and stop_sequence
+	if stopReason != "" {
+		messageFields = append(messageFields, `"stop_reason":`+encodeString(stopReason))
+	} else {
+		messageFields = append(messageFields, `"stop_reason":null`)
+	}
+	if stopSequence != "" {
+		messageFields = append(messageFields, `"stop_sequence":`+encodeString(stopSequence))
+	} else {
+		messageFields = append(messageFields, `"stop_sequence":null`)
+	}
+
+	// Include usage if present
+	if usage != nil {
+		usageJSON := fmt.Sprintf(`{"input_tokens":%d,"cache_creation_input_tokens":%d,"cache_read_input_tokens":%d,"output_tokens":%d,"service_tier":"standard"}`,
+			usage.InputTokens, usage.CacheCreationInputTokens, usage.CacheReadInputTokens, usage.OutputTokens)
+		messageFields = append(messageFields, `"usage":`+usageJSON)
+	}
+
+	messageJSON := "{" + strings.Join(messageFields, ",") + "}"
+	msg := StreamMessage{
+		Type:            "assistant",
+		Message:         json.RawMessage(messageJSON),
+		ParentToolUseID: nil,
+		SessionID:       sessionID,
+		Uuid:            GenerateUUID(),
+	}
+	data, _ := json.Marshal(msg)
+	fmt.Fprintln(os.Stdout, string(data))
+}
+
 // emitThinkingTokens emits a thinking_tokens system event to stdout.
 // It is guarded by e.streamCfg.Enabled (AC5).
 // AC3: Emits on first thinking delta arrival (no 100ms delay); subsequent emissions

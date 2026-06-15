@@ -226,10 +226,11 @@ func NewQueryEngine(cfg *StreamConfig, tools []tool.Tool, model string, opts ...
 		e.client = client
 	}
 
-	// Wire thinking config (Effort) from StreamConfig to client/provider
-	if cfg.Effort != "" && e.client != nil {
+	// Wire thinking config (Effort, BudgetTokens) from StreamConfig to client/provider
+	if e.client != nil {
 		e.client.SetThinkingConfig(api.ThinkingConfig{
-			Effort: cfg.Effort,
+			Effort:       cfg.Effort,
+			BudgetTokens: cfg.ThinkingBudget,
 		})
 	}
 
@@ -287,6 +288,10 @@ func (e *QueryEngine) WireTools() {
 				t.WithSessionID(sessionID)
 			case *tool.ReadMcpResourceTool:
 				t.WithSessionID(sessionID)
+			case *tool.AgentTool:
+				if e.skillActivator != nil {
+					t.WithSkillActivator(e.skillActivator)
+				}
 			}
 		}
 	}
@@ -547,7 +552,11 @@ func (e *QueryEngine) syncActiveSkills() {
 		skillsList := activator.GetActivatedSkills()
 		activated := make([]ActivatedSkill, len(skillsList))
 		for i, s := range skillsList {
-			activated[i] = ActivatedSkill{Name: s.Name, RootPath: s.RootPath}
+			activated[i] = ActivatedSkill{
+				Name:         s.Name,
+				RootPath:     s.RootPath,
+				AllowedTools: s.AllowedTools,
+			}
 		}
 		e.streamCfg.SetActiveSkills(activated)
 	}

@@ -249,6 +249,7 @@ func (c *Client) SendMessageStream(
 		}
 
 		// Copy result
+		result.ID = providerResult.ID
 		result.Blocks = providerResult.Blocks
 		result.StopReason = providerResult.StopReason
 		result.Usage = providerResult.Usage
@@ -279,9 +280,12 @@ func (c *Client) SendMessageStream(
 					return
 				}
 				log.Debug("Streaming fallback succeeded")
+				result.ID = resp.ID
 				result.Blocks = resp.Content
 				result.StopReason = resp.StopReason
 				result.Usage = resp.Usage
+				result.Model = resp.Model
+				result.StreamComplete = true
 			}
 		} else {
 			// Stream completed successfully - emit buffered blocks
@@ -427,6 +431,7 @@ func IsMaxTokensError(err error) (*MaxTokensError, bool) {
 
 // Response represents the API response.
 type Response struct {
+	ID         string
 	Content    []ContentBlock
 	StopReason StopReason
 	Model      string

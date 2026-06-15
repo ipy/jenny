@@ -63,6 +63,7 @@ type StreamConfig struct {
 	MaxIterations        int               // Maximum loop iterations (0 = unlimited)
 	RedactMode           redact.RedactMode // Secret redaction mode
 	Effort               string            // Reasoning effort level (low, medium, high) for OpenAI/DeepSeek
+	ThinkingBudget       int               // Maximum thinking tokens for Anthropic (AC3)
 	ParentEngine         *QueryEngine      // Parent engine for subagent cost merge (set before RunStream)
 }
 
@@ -108,8 +109,9 @@ func (cfg *StreamConfig) AddDiscoveredSkillName(name string) {
 
 // ActivatedSkill tracks a skill that has been activated in the current session.
 type ActivatedSkill struct {
-	Name     string
-	RootPath string
+	Name         string
+	RootPath     string
+	AllowedTools []string
 }
 
 // ToolParam represents a tool parameter for the API.

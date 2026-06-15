@@ -395,7 +395,7 @@ func TestStreamJSONToolCallEvents(t *testing.T) {
 		{
 			ID:          "stream-json.tool-call.has-started-and-completed",
 			Category:    "stream-json",
-			Description: "tool execution emits tool_call started and completed events",
+			Description: "tool execution emits tool_progress started and complete events",
 			Target: harness.TargetInvocation{
 				Kind:             "prompt",
 				Prompt:           "run echo hello",
@@ -407,7 +407,7 @@ func TestStreamJSONToolCallEvents(t *testing.T) {
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,
 				StreamJSON: &harness.StreamJSONExpectation{
-					HasEventTypes: []string{"assistant", "result"},
+					HasEventTypes: []string{"assistant", "result", "tool_progress"},
 				},
 			},
 		},

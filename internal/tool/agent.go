@@ -23,8 +23,9 @@ type SubagentParams struct {
 	CWD             string
 	Isolation       string
 	RunInBackground bool
-	Name            string // Swarm agent name (empty means unnamed subagent)
-	Profile         string // Router profile name for multi-provider routing (e.g., "vision")
+	Name            string   // Swarm agent name (empty means unnamed subagent)
+	Profile         string   // Router profile name for multi-provider routing (e.g., "vision")
+	AllowedTools    []string // Skill-specific allowed tools (AC4)
 }
 
 // SubagentResult holds the result of a subagent execution.
@@ -57,14 +58,21 @@ type AsyncResult struct {
 
 // AgentTool provides subagent spawning capability.
 type AgentTool struct {
-	runner        SubagentRunner
-	asyncRunner   AsyncRunner
-	swarmsEnabled bool
+	runner         SubagentRunner
+	asyncRunner    AsyncRunner
+	swarmsEnabled  bool
+	skillActivator SkillActivator
 }
 
 // NewAgentTool creates a new AgentTool with the given subagent runner.
 func NewAgentTool(runner SubagentRunner, asyncRunner AsyncRunner) *AgentTool {
 	return &AgentTool{runner: runner, asyncRunner: asyncRunner, swarmsEnabled: false}
+}
+
+// WithSkillActivator sets the skill activator for the AgentTool.
+func (t *AgentTool) WithSkillActivator(activator SkillActivator) *AgentTool {
+	t.skillActivator = activator
+	return t
 }
 
 // NewAgentToolWithSwarms creates a new AgentTool with swarm mode enabled.
@@ -254,6 +262,11 @@ func (t *AgentTool) Execute(ctx context.Context, input map[string]any, cwd strin
 		RunInBackground: runInBackground,
 		Name:            name,
 		Profile:         profile,
+	}
+
+	// AC4: Pass active skill's allowed tools if available
+	if t.skillActivator != nil {
+		params.AllowedTools = t.skillActivator.GetActivatedTools()
 	}
 
 	// Handle async mode

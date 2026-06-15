@@ -1289,14 +1289,17 @@ func TestDeletedSessionNotInList(t *testing.T) {
 // TestListSkills verifies AC1: GET /api/skills returns installed skills.
 func TestListSkills(t *testing.T) {
 	origJennyHome := os.Getenv("JENNY_HOME")
+	origAgentsHome := os.Getenv("JENNY_AGENTS_HOME")
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
 		t.Fatal(err)
 	}
 	os.Setenv("JENNY_HOME", tmpDir)
+	os.Setenv("JENNY_AGENTS_HOME", filepath.Join(tmpDir, "agents"))
 	defer func() {
 		os.RemoveAll(tmpDir)
 		os.Setenv("JENNY_HOME", origJennyHome)
+		os.Setenv("JENNY_AGENTS_HOME", origAgentsHome)
 	}()
 
 	// Create a mock skill directory with SKILL.md
@@ -1386,14 +1389,17 @@ func TestListSkills(t *testing.T) {
 // TestListSkills_Empty verifies skills endpoint returns [] when no skills installed.
 func TestListSkills_Empty(t *testing.T) {
 	origJennyHome := os.Getenv("JENNY_HOME")
+	origAgentsHome := os.Getenv("JENNY_AGENTS_HOME")
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
 		t.Fatal(err)
 	}
 	os.Setenv("JENNY_HOME", tmpDir)
+	os.Setenv("JENNY_AGENTS_HOME", filepath.Join(tmpDir, "agents"))
 	defer func() {
 		os.RemoveAll(tmpDir)
 		os.Setenv("JENNY_HOME", origJennyHome)
+		os.Setenv("JENNY_AGENTS_HOME", origAgentsHome)
 	}()
 
 	ctx := context.Background()
@@ -1431,14 +1437,17 @@ func TestListSkills_Empty(t *testing.T) {
 // TestListSkills_TildePath verifies AC3: skill paths use tilde prefix (~/.jenny/skills/).
 func TestListSkills_TildePath(t *testing.T) {
 	origJennyHome := os.Getenv("JENNY_HOME")
+	origAgentsHome := os.Getenv("JENNY_AGENTS_HOME")
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
 		t.Fatal(err)
 	}
 	os.Setenv("JENNY_HOME", tmpDir)
+	os.Setenv("JENNY_AGENTS_HOME", filepath.Join(tmpDir, "agents"))
 	defer func() {
 		os.RemoveAll(tmpDir)
 		os.Setenv("JENNY_HOME", origJennyHome)
+		os.Setenv("JENNY_AGENTS_HOME", origAgentsHome)
 	}()
 
 	// Create a mock skill

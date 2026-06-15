@@ -14,7 +14,11 @@ type SkillActivator interface {
 
 	// RegisterActivation records a skill activation by name.
 	// The activator should track activations for later retrieval.
-	RegisterActivation(name string, rootPath string)
+	RegisterActivation(name string, rootPath string, allowedTools []string)
+
+	// GetActivatedTools returns the union of allowed tools for all active skills.
+	// If no skills are active, returns nil (no skill-based restrictions).
+	GetActivatedTools() []string
 }
 
 // LogSkillActivated logs a skill activation event for debugging.

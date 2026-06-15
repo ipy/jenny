@@ -449,6 +449,7 @@ func run() error {
 		MaxBudgetUSD:       flags.MaxBudgetUsd,
 		RedactMode:         redactMode,
 		Effort:             flags.Effort,
+		ThinkingBudget:     flags.ThinkingBudget,
 		Plugins:            pluginInfo,
 		MemoryPaths:        memoryPaths,
 	}

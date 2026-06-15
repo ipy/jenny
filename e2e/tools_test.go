@@ -26,7 +26,7 @@ func TestToolRead(t *testing.T) {
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,
 				StreamJSON: &harness.StreamJSONExpectation{
-					HasEventTypes: []string{"tool_call"},
+					HasEventTypes: []string{"tool_progress"},
 				},
 				Stdout: &harness.StdoutExpectation{
 					Contains: []string{"line one", "line two"},
@@ -225,7 +225,7 @@ func TestToolBash(t *testing.T) {
 					Contains: []string{"hello"},
 				},
 				StreamJSON: &harness.StreamJSONExpectation{
-					HasEventTypes: []string{"tool_call"},
+					HasEventTypes: []string{"tool_progress"},
 				},
 			},
 		},

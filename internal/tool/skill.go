@@ -93,7 +93,7 @@ func (t *SkillTool) Execute(ctx context.Context, input map[string]any, cwd strin
 
 	// Register the activation if an activator is provided
 	if t.activator != nil {
-		t.activator.RegisterActivation(skill.Name, skill.RootPath)
+		t.activator.RegisterActivation(skill.Name, skill.RootPath, skill.AllowedTools)
 	}
 
 	return &ToolResult{

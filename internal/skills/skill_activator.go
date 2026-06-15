@@ -10,8 +10,9 @@ import (
 
 // ActivatedSkill records a skill that has been activated in the current session.
 type ActivatedSkill struct {
-	Name     string
-	RootPath string
+	Name         string
+	RootPath     string
+	AllowedTools []string
 }
 
 // PathSkillActivator implements the tool.SkillActivator interface for path-triggered activation.
@@ -34,7 +35,7 @@ func (a *PathSkillActivator) ActivateForPath(path string) []string {
 		if skill.MatchesPath(path) {
 			activated = append(activated, skill.Name)
 			// Register the activation for tracking
-			a.RegisterActivation(skill.Name, skill.RootPath)
+			a.RegisterActivation(skill.Name, skill.RootPath, skill.AllowedTools)
 			// Log activation event
 			LogSkillActivated(skill.Name, path)
 		}
@@ -44,7 +45,7 @@ func (a *PathSkillActivator) ActivateForPath(path string) []string {
 
 // RegisterActivation records a skill activation by name.
 // Implements the tool.SkillActivator interface.
-func (a *PathSkillActivator) RegisterActivation(name string, rootPath string) {
+func (a *PathSkillActivator) RegisterActivation(name string, rootPath string, allowedTools []string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	// Deduplication: check if already registered
@@ -54,8 +55,9 @@ func (a *PathSkillActivator) RegisterActivation(name string, rootPath string) {
 		}
 	}
 	a.activatedSkills = append(a.activatedSkills, ActivatedSkill{
-		Name:     name,
-		RootPath: rootPath,
+		Name:         name,
+		RootPath:     rootPath,
+		AllowedTools: allowedTools,
 	})
 }
 
@@ -65,6 +67,27 @@ func (a *PathSkillActivator) GetActivatedSkills() []ActivatedSkill {
 	defer a.mu.Unlock()
 	result := make([]ActivatedSkill, len(a.activatedSkills))
 	copy(result, a.activatedSkills)
+	return result
+}
+
+// GetActivatedTools returns the union of allowed tools for all active skills.
+func (a *PathSkillActivator) GetActivatedTools() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.activatedSkills) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	var result []string
+	for _, s := range a.activatedSkills {
+		for _, t := range s.AllowedTools {
+			if !seen[t] {
+				seen[t] = true
+				result = append(result, t)
+			}
+		}
+	}
 	return result
 }
 

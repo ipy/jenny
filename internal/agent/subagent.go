@@ -295,6 +295,22 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 	} else {
 		// Unnamed subagent: filter by subagent type
 		allowedToolNames := subagentType.FilterTools(denyList)
+
+		// AC4: Intersect with skill-specific allowed tools if provided
+		if len(params.AllowedTools) > 0 {
+			var intersected []string
+			skillAllowed := make(map[string]bool)
+			for _, t := range params.AllowedTools {
+				skillAllowed[t] = true
+			}
+			for _, t := range allowedToolNames {
+				if skillAllowed[t] {
+					intersected = append(intersected, t)
+				}
+			}
+			allowedToolNames = intersected
+		}
+
 		for _, toolName := range allowedToolNames {
 			t := tool.FindTool(r.tools, toolName)
 			if t != nil {

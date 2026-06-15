@@ -1207,25 +1207,25 @@ func TestToolCallEvents(t *testing.T) {
 	io.Copy(&stdoutBuf, stdoutR)
 	stdoutOutput := stdoutBuf.String()
 
-	// Verify tool_call started event exists
-	if !strings.Contains(stdoutOutput, `"type":"tool_call"`) {
-		t.Error("AC1 FAIL: stdout does not contain tool_call event")
+	// Verify tool_progress started event exists
+	if !strings.Contains(stdoutOutput, `"type":"tool_progress"`) {
+		t.Error("AC1 FAIL: stdout does not contain tool_progress event")
 	} else {
-		t.Log("AC1 PASS: stdout contains tool_call event")
+		t.Log("AC1 PASS: stdout contains tool_progress event")
 	}
 
-	// Verify tool_call started subtype
+	// Verify tool_progress started subtype
 	if !strings.Contains(stdoutOutput, `"subtype":"started"`) {
-		t.Error("AC1 FAIL: stdout does not contain tool_call started event")
+		t.Error("AC1 FAIL: stdout does not contain tool_progress started event")
 	} else {
-		t.Log("AC1 PASS: stdout contains tool_call started event")
+		t.Log("AC1 PASS: stdout contains tool_progress started event")
 	}
 
-	// Verify tool_call completed subtype
-	if !strings.Contains(stdoutOutput, `"subtype":"completed"`) {
-		t.Error("AC1 FAIL: stdout does not contain tool_call completed event")
+	// Verify tool_progress complete subtype
+	if !strings.Contains(stdoutOutput, `"subtype":"complete"`) {
+		t.Error("AC1 FAIL: stdout does not contain tool_progress complete event")
 	} else {
-		t.Log("AC1 PASS: stdout contains tool_call completed event")
+		t.Log("AC1 PASS: stdout contains tool_progress complete event")
 	}
 
 	// Verify tool_name is present
@@ -1720,11 +1720,11 @@ func TestToolCallEvents_Negative(t *testing.T) {
 	io.Copy(&stdoutBuf, stdoutR)
 	stdoutOutput := stdoutBuf.String()
 
-	// AC3 negative: Verify NO tool_call events appear when stream-json is disabled
-	if strings.Contains(stdoutOutput, `"type":"tool_call"`) {
-		t.Error("AC3 FAIL: stdout contains tool_call event even though stream-json mode is disabled")
+	// AC3 negative: Verify NO tool_progress events appear when stream-json is disabled
+	if strings.Contains(stdoutOutput, `"type":"tool_progress"`) {
+		t.Error("AC3 FAIL: stdout contains tool_progress event even though stream-json mode is disabled")
 	} else {
-		t.Log("AC3 PASS: no tool_call events emitted when stream-json mode is disabled")
+		t.Log("AC3 PASS: no tool_progress events emitted when stream-json mode is disabled")
 	}
 }
 
@@ -2556,18 +2556,32 @@ func (m *mockSkillActivatorForTest) ActivateForPath(path string) []string {
 	return nil
 }
 
-func (m *mockSkillActivatorForTest) RegisterActivation(name string, rootPath string) {
+func (m *mockSkillActivatorForTest) RegisterActivation(name string, rootPath string, allowedTools []string) {
 	// Deduplicate
 	for _, s := range m.activated {
 		if s.Name == name {
 			return
 		}
 	}
-	m.activated = append(m.activated, skills.ActivatedSkill{Name: name, RootPath: rootPath})
+	m.activated = append(m.activated, skills.ActivatedSkill{Name: name, RootPath: rootPath, AllowedTools: allowedTools})
 }
 
 func (m *mockSkillActivatorForTest) GetActivatedSkills() []skills.ActivatedSkill {
 	return m.activated
+}
+
+func (m *mockSkillActivatorForTest) GetActivatedTools() []string {
+	var result []string
+	seen := make(map[string]bool)
+	for _, a := range m.activated {
+		for _, t := range a.AllowedTools {
+			if !seen[t] {
+				seen[t] = true
+				result = append(result, t)
+			}
+		}
+	}
+	return result
 }
 
 // TestAC1_SkillActivatorWiring tests that the skill activator is properly wired
@@ -2584,8 +2598,8 @@ func TestAC1_SkillActivatorWiring(t *testing.T) {
 	}
 
 	// Register some activations via the activator
-	mockActivator.RegisterActivation("readme-writer", "/path/to/readme-writer")
-	mockActivator.RegisterActivation("code-review", "/path/to/code-review")
+	mockActivator.RegisterActivation("readme-writer", "/path/to/readme-writer", nil)
+	mockActivator.RegisterActivation("code-review", "/path/to/code-review", nil)
 
 	// Call syncActiveSkills to copy the activated skills to StreamConfig
 	engine.syncActiveSkills()
@@ -2615,8 +2629,8 @@ func TestAC1_SkillActivatorDeduplication(t *testing.T) {
 	engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient()), WithSkillActivator(mockActivator))
 
 	// Register the same skill twice
-	mockActivator.RegisterActivation("readme-writer", "/path/to/readme-writer")
-	mockActivator.RegisterActivation("readme-writer", "/path/to/readme-writer") // duplicate
+	mockActivator.RegisterActivation("readme-writer", "/path/to/readme-writer", nil)
+	mockActivator.RegisterActivation("readme-writer", "/path/to/readme-writer", nil) // duplicate
 
 	engine.syncActiveSkills()
 

@@ -482,8 +482,12 @@ func (a *mockSkillActivator) ActivateForPath(path string) []string {
 	return activated
 }
 
-func (a *mockSkillActivator) RegisterActivation(name string, rootPath string) {
+func (a *mockSkillActivator) RegisterActivation(name string, rootPath string, allowedTools []string) {
 	// No-op for testing
+}
+
+func (a *mockSkillActivator) GetActivatedTools() []string {
+	return nil
 }
 
 // mockMCPTool implements Tool interface for testing MCP exclusion
@@ -694,7 +698,7 @@ func (a *mockActivatorForAC1) ActivateForPath(path string) []string {
 	return nil
 }
 
-func (a *mockActivatorForAC1) RegisterActivation(name string, rootPath string) {
+func (a *mockActivatorForAC1) RegisterActivation(name string, rootPath string, allowedTools []string) {
 	// Deduplication check
 	for _, act := range a.activations {
 		if act.name == name {
@@ -702,6 +706,10 @@ func (a *mockActivatorForAC1) RegisterActivation(name string, rootPath string) {
 		}
 	}
 	a.activations = append(a.activations, activationRecord{name: name, rootPath: rootPath})
+}
+
+func (a *mockActivatorForAC1) GetActivatedTools() []string {
+	return nil
 }
 
 func (a *mockActivatorForAC1) GetActivatedSkills() []skills.ActivatedSkill {
