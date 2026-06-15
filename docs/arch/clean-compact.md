@@ -2,9 +2,9 @@
 title: Clean and Compact Subcommands
 slug: clean-compact
 priority: P2
-status: partial
+status: done
 spec: complete
-code: partial
+code: complete
 package: cmd/jenny, internal/clean, internal/compact, internal/session
 depends_on:
   - jenny-directory-structure
