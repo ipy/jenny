@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ipy/jenny/internal/constants"
@@ -37,7 +38,7 @@ func (t *ReadMcpResourceTool) Name() string {
 
 // Description returns a description of the tool.
 func (t *ReadMcpResourceTool) Description() string {
-	return "Read a single MCP resource by server and URI. Text content is returned inline; binary content is decoded and saved to disk."
+	return "List resource templates or read a single MCP resource by server and URI."
 }
 
 // InputSchema returns the JSON schema for tool input.
@@ -45,39 +46,81 @@ func (t *ReadMcpResourceTool) InputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
+			"action": map[string]any{
+				"type":        "string",
+				"description": "Action to perform: 'read' to fetch a resource, 'list_templates' to see available resource templates",
+				"enum":        []any{"read", "list_templates"},
+			},
 			"server": map[string]any{
 				"type":        "string",
-				"description": "MCP server name",
+				"description": "MCP server name (required for 'read')",
 			},
 			"uri": map[string]any{
 				"type":        "string",
-				"description": "Resource URI to read",
+				"description": "Resource URI to read (required for 'read' if template is missing)",
+			},
+			"template": map[string]any{
+				"type":        "string",
+				"description": "Optional: Resource URI template to use if uri is not provided",
+			},
+			"arguments": map[string]any{
+				"type":        "object",
+				"description": "Optional: Arguments for the URI template",
 			},
 		},
-		"required": []string{"server", "uri"},
+		"required": []string{"action"},
 	}
 }
 
-// Execute reads the MCP resource and returns content inline or persisted to disk.
-func (t *ReadMcpResourceTool) Execute(ctx context.Context, input map[string]any, cwd string) (*ToolResult, error) {
+// Execute performs the requested action (read resource or list templates).
+func (t *ReadMcpResourceTool) Execute(ctx context.Context, input map[string]any, _ string) (*ToolResult, error) {
+	action, _ := input["action"].(string)
+
+	if action == "list_templates" {
+		templates := mcp.GetResourceTemplates()
+		if len(templates) == 0 {
+			return &ToolResult{
+				Content: "No MCP resource templates available",
+				IsError: false,
+			}, nil
+		}
+
+		var sb strings.Builder
+		sb.WriteString("Available MCP Resource Templates:\n")
+		for _, templ := range templates {
+			fmt.Fprintf(&sb, "- %s (server: %s): %s\n", templ.URITemplate, templ.ServerName, templ.Description)
+		}
+		return &ToolResult{
+			Content: sb.String(),
+			IsError: false,
+		}, nil
+	}
+
 	server, _ := input["server"].(string)
 	uri, _ := input["uri"].(string)
+	template, _ := input["template"].(string)
+	args, _ := input["arguments"].(map[string]any)
 
 	if server == "" {
 		return &ToolResult{
-			Content: "Error: server parameter is required",
+			Content: "Error: server parameter is required for 'read' action",
 			IsError: true,
 		}, nil
 	}
 
-	if uri == "" {
+	if uri == "" && template == "" {
 		return &ToolResult{
-			Content: "Error: uri parameter is required",
+			Content: "Error: either uri or template parameter is required for 'read' action",
 			IsError: true,
 		}, nil
 	}
 
-	// AC1: Validate server exists
+	// Expand template if provided and uri is missing
+	if uri == "" && template != "" {
+		uri = expandURITemplate(template, args)
+	}
+
+	// Validate server exists
 	client := mcp.GetClient(server)
 	if client == nil {
 		clients := mcp.GetMCPClients()
@@ -140,15 +183,18 @@ func (t *ReadMcpResourceTool) Execute(ctx context.Context, input map[string]any,
 	}, nil
 }
 
+// expandURITemplate performs simple {name} substitution for MCP URI templates.
+func expandURITemplate(template string, args map[string]any) string {
+	result := template
+	for k, v := range args {
+		placeholder := "{" + k + "}"
+		result = strings.ReplaceAll(result, placeholder, fmt.Sprintf("%v", v))
+	}
+	return result
+}
+
 // persistBlob decodes base64 data and writes it to a unique file in ~/.jenny/mcp-resources/.
 func (t *ReadMcpResourceTool) persistBlob(data []byte) (string, error) {
-	// Decode base64 if needed (data may already be decoded from []byte)
-	var decoded []byte
-	if len(data) > 0 {
-		// Check if data is base64 encoded (contains only valid base64 chars)
-		decoded = data
-	}
-
 	// Generate unique filename: timestamp-random suffix
 	timestamp := time.Now().UnixNano()
 	var b [8]byte
@@ -167,7 +213,7 @@ func (t *ReadMcpResourceTool) persistBlob(data []byte) (string, error) {
 
 	// Write file
 	filePath := filepath.Join(persistDir, filename)
-	if err := os.WriteFile(filePath, decoded, 0644); err != nil {
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
 		return "", fmt.Errorf("writing blob to disk: %w", err)
 	}
 

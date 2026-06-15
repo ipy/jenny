@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/git"
+	"github.com/ipy/jenny/internal/mcp"
 	"github.com/ipy/jenny/internal/redact"
 	"github.com/ipy/jenny/internal/skills"
 	"github.com/ipy/jenny/internal/tool"
@@ -221,6 +222,11 @@ func buildSystemPrompt(cfg *StreamConfig, tools []tool.Tool, cwd string) []strin
 			sections = append(sections, platform)
 		}
 
+		// MCP Prompts & Resource Templates (AC3)
+		if mcpInfo, ok := mcpSection(); ok {
+			sections = append(sections, mcpInfo)
+		}
+
 		// Skills manifest (AC2)
 		if len(cfg.Skills) > 0 {
 			if manifest := skills.SkillsManifest(cfg.Skills); manifest != "" {
@@ -282,6 +288,36 @@ func buildSystemPrompt(cfg *StreamConfig, tools []tool.Tool, cwd string) []strin
 // message chain when the suffix changes.
 func DynamicSystemSuffix(cfg *StreamConfig, cwd string) string {
 	return ""
+}
+
+// mcpSection returns a section listing MCP prompts and resource templates.
+func mcpSection() (string, bool) {
+	prompts := mcp.GetPrompts()
+	templates := mcp.GetResourceTemplates()
+
+	if len(prompts) == 0 && len(templates) == 0 {
+		return "", false
+	}
+
+	var sb strings.Builder
+	if len(prompts) > 0 {
+		sb.WriteString("Available MCP Prompts:\n")
+		for _, p := range prompts {
+			fmt.Fprintf(&sb, "  - %s (server: %s): %s\n", p.Name, p.ServerName, p.Description)
+		}
+	}
+
+	if len(templates) > 0 {
+		if sb.Len() > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString("Available MCP Resource Templates:\n")
+		for _, t := range templates {
+			fmt.Fprintf(&sb, "  - %s (server: %s): %s\n", t.URITemplate, t.ServerName, t.Description)
+		}
+	}
+
+	return sb.String(), true
 }
 
 // activeSkillsSection returns the "Active Skills" section for the system prompt.

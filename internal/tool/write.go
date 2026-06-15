@@ -105,6 +105,17 @@ func (t *WriteTool) Execute(ctx context.Context, input map[string]any, cwd strin
 	// Clean the path
 	filePath = filepath.Clean(filePath)
 
+	// Universal Windows Security (AC4)
+	if runtime.GOOS == "windows" {
+		winGate := NewWindowsCommandGate(false) // Write tool doesn't have skipPermissions field
+		if err := winGate.CheckPath(filePath); err != nil {
+			return &ToolResult{
+				Content: fmt.Sprintf("Security error: %v", err),
+				IsError: true,
+			}, nil
+		}
+	}
+
 	// Check allowedPaths restriction first - paths in allowedPaths bypass cwd gate
 	// Use prefix matching to allow subdirectories under allowed paths
 	if len(t.allowedPaths) > 0 {

@@ -11,6 +11,12 @@ type Transport interface {
 	// SendNotification sends a JSON-RPC notification (no response expected).
 	SendNotification(ctx context.Context, notif jsonRPCRequest) error
 
+	// SetNotificationHandler registers a callback for incoming notifications.
+	SetNotificationHandler(handler func(Notification))
+
+	// BackgroundListen established a long-lived connection for notifications if supported.
+	BackgroundListen(ctx context.Context) error
+
 	// Close shuts down the transport and releases resources.
 	Close() error
 }

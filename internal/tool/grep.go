@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -173,6 +174,18 @@ func (t *GrepTool) Execute(ctx context.Context, input map[string]any, cwd string
 			path = filepath.Join(cwd, path)
 		}
 	}
+
+	// Universal Windows Security (AC4)
+	if runtime.GOOS == "windows" {
+		winGate := NewWindowsCommandGate(false)
+		if err := winGate.CheckPath(path); err != nil {
+			return &ToolResult{
+				Content: fmt.Sprintf("Security error: %v", err),
+				IsError: true,
+			}, nil
+		}
+	}
+
 	args = append(args, path)
 
 	// Glob

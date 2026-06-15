@@ -37,6 +37,7 @@ type Registry struct {
 	skillActivator         SkillActivator
 	enterWorktreeEnabled   bool
 	exitWorktreeEnabled    bool
+	sessionID              string
 }
 
 // NewRegistry creates a new Registry.
@@ -61,6 +62,12 @@ func (r *Registry) WithReadFileCache(cache *ReadFileCache) *Registry {
 		cache = NewReadFileCache()
 	}
 	r.readCache = cache
+	return r
+}
+
+// WithSessionID sets the session ID for tools that need it.
+func (r *Registry) WithSessionID(id string) *Registry {
+	r.sessionID = id
 	return r
 }
 
@@ -231,26 +238,28 @@ func (r *Registry) Build() []Tool {
 	// Create base tools with skipPermissions if hasBaseTools is set
 	if r.hasBaseTools {
 		r.baseTools = []Tool{
-			NewReadTool(r.skipPermissions, r.readCache),
+			NewReadTool(r.skipPermissions, r.readCache).WithSessionID(r.sessionID),
 		}
 
 		// On Windows, register PowerShellTool; on Unix, register BashTool
 		if runtime.GOOS == "windows" {
 			// Register PowerShellTool on Windows
-			r.baseTools = append(r.baseTools, NewPowerShellTool(r.skipPermissions))
+			r.baseTools = append(r.baseTools, NewPowerShellTool(r.skipPermissions).WithSessionID(r.sessionID))
 			// Only register BashTool if bash.exe is found in PATH
 			if _, err := exec.LookPath("bash.exe"); err == nil {
-				r.baseTools = append(r.baseTools, NewBashTool(r.skipPermissions))
+				r.baseTools = append(r.baseTools, NewBashTool(r.skipPermissions).WithSessionID(r.sessionID))
 			}
 		} else {
 			// On Unix, always register BashTool
-			r.baseTools = append(r.baseTools, NewBashTool(r.skipPermissions))
+			r.baseTools = append(r.baseTools, NewBashTool(r.skipPermissions).WithSessionID(r.sessionID))
 		}
 
 		r.baseTools = append(r.baseTools, NewGlobTool(), NewGrepTool())
+		// Add MCP interaction tools
+		r.baseTools = append(r.baseTools, NewReadMcpResourceTool().WithSessionID(r.sessionID), NewMcpPromptTool())
 		// Add WriteTool and EditTool if readCache is configured
 		if r.readCache != nil {
-			r.baseTools = append(r.baseTools, NewWriteTool(r.readCache), NewEditTool(r.readCache), NewNotebookEditTool(r.readCache))
+			r.baseTools = append(r.baseTools, NewWriteTool(r.readCache).WithSessionID(r.sessionID), NewEditTool(r.readCache).WithSessionID(r.sessionID), NewNotebookEditTool(r.readCache).WithSessionID(r.sessionID))
 		}
 
 		// Wire sandbox to BashTool and GrepTool if configured

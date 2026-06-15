@@ -4,6 +4,7 @@ package tool
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -22,6 +23,14 @@ func NewCommandGate(skipPermissions bool) *CommandGate {
 func (g *CommandGate) CheckCommand(command string) error {
 	if g.skipPermissions {
 		return nil
+	}
+
+	// Universal Windows Security (AC4)
+	if runtime.GOOS == "windows" {
+		winGate := NewWindowsCommandGate(g.skipPermissions)
+		if err := winGate.CheckCommand(command); err != nil {
+			return err
+		}
 	}
 
 	// Check for command substitution patterns
@@ -325,6 +334,14 @@ func (g *CommandGate) CheckDevicePathsInCommand(command string) error {
 func (g *CommandGate) CheckDevicePath(path string) error {
 	if g.skipPermissions {
 		return nil
+	}
+
+	// Universal Windows Security (AC4)
+	if runtime.GOOS == "windows" {
+		winGate := NewWindowsCommandGate(g.skipPermissions)
+		if err := winGate.CheckPath(path); err != nil {
+			return err
+		}
 	}
 
 	// Normalize path

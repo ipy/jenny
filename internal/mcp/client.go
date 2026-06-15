@@ -31,6 +31,20 @@ type Client struct {
 	proc      *proc
 	transport Transport // HTTP transport (nil for stdio)
 	mu        sync.Mutex
+
+	respChans map[any]chan *jsonRPCResponse
+	muResp    sync.Mutex
+
+	notifHandlers []func(Notification)
+	muNotif       sync.Mutex
+
+	done chan struct{}
+}
+
+// Notification represents a JSON-RPC notification.
+type Notification struct {
+	Method string          `json:"method"`
+	Params json.RawMessage `json:"params,omitempty"`
 }
 
 // proc holds the process handles for a subprocess transport.
@@ -63,15 +77,28 @@ func nextJSONID() int64 {
 // jsonRPCRequest represents a JSON-RPC request.
 type jsonRPCRequest struct {
 	JSONRPC string         `json:"jsonrpc"`
-	ID      any            `json:"id"`
+	ID      any            `json:"id,omitempty"`
 	Method  string         `json:"method"`
 	Params  map[string]any `json:"params,omitempty"`
+	Meta    map[string]any `json:"_meta,omitempty"`
+}
+
+// ProgressParams represents the parameters for a notifications/progress notification.
+type ProgressParams struct {
+	ProgressToken any     `json:"progressToken"`
+	Progress      float64 `json:"progress"`
+	Total         float64 `json:"total,omitempty"`
+}
+
+// ResourceUpdatedParams represents the parameters for a notifications/resources/updated notification.
+type ResourceUpdatedParams struct {
+	URI string `json:"uri"`
 }
 
 // jsonRPCResponse represents a JSON-RPC response.
 type jsonRPCResponse struct {
 	JSONRPC string          `json:"jsonrpc"`
-	ID      any             `json:"id"`
+	ID      any             `json:"id,omitempty"`
 	Result  json.RawMessage `json:"result,omitempty"`
 	Error   *jsonRPCError   `json:"error,omitempty"`
 }
@@ -125,12 +152,270 @@ type resourcesListResult struct {
 	NextCursor string          `json:"nextCursor,omitempty"`
 }
 
+// promptInfo represents a prompt from the prompts/list response.
+type promptInfo struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Arguments   []promptArgInfo `json:"arguments,omitempty"`
+}
+
+// promptArgInfo represents a prompt argument.
+type promptArgInfo struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Required    bool   `json:"required,omitempty"`
+}
+
+// promptsListResult represents the result of a prompts/list call.
+type promptsListResult struct {
+	Prompts    []promptInfo `json:"prompts"`
+	NextCursor string       `json:"nextCursor,omitempty"`
+}
+
+// promptGetResult represents the result of a prompts/get call.
+type promptGetResult struct {
+	Description string          `json:"description,omitempty"`
+	Messages    []promptMessage `json:"messages"`
+}
+
+// promptMessage represents a message in a prompt.
+type promptMessage struct {
+	Role    string         `json:"role"`
+	Content promptContent `json:"content"`
+}
+
+// promptContent represents the content of a prompt message.
+type promptContent struct {
+	Type string `json:"type"`
+	Text string `json:"text,omitempty"`
+}
+
+// resourceTemplateEntry represents a resource template from the resources/templates/list response.
+type resourceTemplateEntry struct {
+	URITemplate string `json:"uriTemplate"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	MimeType    string `json:"mimeType,omitempty"`
+}
+
+// resourcesTemplatesListResult represents the result of a resources/templates/list call.
+type resourcesTemplatesListResult struct {
+	ResourceTemplates []resourceTemplateEntry `json:"resourceTemplates"`
+	NextCursor        string                  `json:"nextCursor,omitempty"`
+}
+
+// MCPPrompt represents a prompt exposed by an MCP server.
+type MCPPrompt struct {
+	Name        string
+	Description string
+	Arguments   []MCPPromptArg
+	ServerName  string
+}
+
+// MCPPromptArg represents an argument for an MCP prompt.
+type MCPPromptArg struct {
+	Name        string
+	Description string
+	Required    bool
+}
+
+// MCPResourceTemplate represents a resource template exposed by an MCP server.
+type MCPResourceTemplate struct {
+	URITemplate string
+	Name        string
+	Description string
+	MimeType    string
+	ServerName  string
+}
+
 // MCPResource represents a resource exposed by an MCP server.
 type MCPResource struct {
 	URI         string
 	Name        string
 	MimeType    string
 	Description string
+}
+
+// ListPrompts discovers prompts from the MCP server.
+func (c *Client) ListPrompts(ctx context.Context) ([]MCPPrompt, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.proc == nil && c.transport == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+
+	var allPrompts []MCPPrompt
+	var cursor string
+
+	for {
+		params := map[string]any{}
+		if cursor != "" {
+			params["cursor"] = cursor
+		}
+
+		req := jsonRPCRequest{
+			JSONRPC: "2.0",
+			ID:      nextJSONID(),
+			Method:  "prompts/list",
+		}
+		if len(params) > 0 {
+			req.Params = params
+		}
+
+		resp, err := c.doRequest(ctx, req)
+		if err != nil {
+			return nil, fmt.Errorf("prompts/list request failed: %w", err)
+		}
+
+		if resp.Error != nil {
+			return nil, fmt.Errorf("prompts/list error: %s (code %d)", resp.Error.Message, resp.Error.Code)
+		}
+
+		var listResult promptsListResult
+		if err := json.Unmarshal(resp.Result, &listResult); err != nil {
+			return nil, fmt.Errorf("parsing prompts/list result: %w", err)
+		}
+
+		for _, p := range listResult.Prompts {
+			args := make([]MCPPromptArg, 0, len(p.Arguments))
+			for _, a := range p.Arguments {
+				args = append(args, MCPPromptArg{
+					Name:        a.Name,
+					Description: a.Description,
+					Required:    a.Required,
+				})
+			}
+			allPrompts = append(allPrompts, MCPPrompt{
+				Name:        p.Name,
+				Description: p.Description,
+				Arguments:   args,
+				ServerName:  c.Name,
+			})
+			log.Debug("discovered MCP prompt", "server", c.Name, "prompt", p.Name)
+		}
+
+		if listResult.NextCursor == "" {
+			break
+		}
+		cursor = listResult.NextCursor
+	}
+
+	return allPrompts, nil
+}
+
+// GetPrompt retrieves a prompt by name with arguments.
+func (c *Client) GetPrompt(ctx context.Context, name string, arguments map[string]any) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.proc == nil && c.transport == nil {
+		return "", fmt.Errorf("not connected to MCP server %s", c.Name)
+	}
+
+	req := jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      nextJSONID(),
+		Method:  "prompts/get",
+		Params: map[string]any{
+			"name":      name,
+			"arguments": arguments,
+		},
+	}
+
+	resp, err := c.doRequest(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("prompts/get request failed: %w", err)
+	}
+
+	if resp.Error != nil {
+		return "", fmt.Errorf("prompts/get error: %s (code %d)", resp.Error.Message, resp.Error.Code)
+	}
+
+	var getResult promptGetResult
+	if err := json.Unmarshal(resp.Result, &getResult); err != nil {
+		return "", fmt.Errorf("parsing prompts/get result: %w", err)
+	}
+
+	var sb strings.Builder
+	for _, msg := range getResult.Messages {
+		if msg.Content.Text != "" {
+			if sb.Len() > 0 {
+				sb.WriteString("\n\n")
+			}
+			fmt.Fprintf(&sb, "[%s]: %s", msg.Role, msg.Content.Text)
+		}
+	}
+
+	return sb.String(), nil
+}
+
+// ListResourceTemplates discovers resource templates from the MCP server.
+func (c *Client) ListResourceTemplates(ctx context.Context) ([]MCPResourceTemplate, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.proc == nil && c.transport == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+
+	var allTemplates []MCPResourceTemplate
+	var cursor string
+
+	for {
+		params := map[string]any{}
+		if cursor != "" {
+			params["cursor"] = cursor
+		}
+
+		req := jsonRPCRequest{
+			JSONRPC: "2.0",
+			ID:      nextJSONID(),
+			Method:  "resources/templates/list",
+		}
+		if len(params) > 0 {
+			req.Params = params
+		}
+
+		resp, err := c.doRequest(ctx, req)
+		if err != nil {
+			// Some servers might not support templates, gracefully handle as empty
+			if strings.Contains(err.Error(), "Method not found") {
+				return nil, nil
+			}
+			return nil, fmt.Errorf("resources/templates/list request failed: %w", err)
+		}
+
+		if resp.Error != nil {
+			if resp.Error.Code == -32601 { // Method not found
+				return nil, nil
+			}
+			return nil, fmt.Errorf("resources/templates/list error: %s (code %d)", resp.Error.Message, resp.Error.Code)
+		}
+
+		var listResult resourcesTemplatesListResult
+		if err := json.Unmarshal(resp.Result, &listResult); err != nil {
+			return nil, fmt.Errorf("parsing resources/templates/list result: %w", err)
+		}
+
+		for _, t := range listResult.ResourceTemplates {
+			allTemplates = append(allTemplates, MCPResourceTemplate{
+				URITemplate: t.URITemplate,
+				Name:        t.Name,
+				Description: t.Description,
+				MimeType:    t.MimeType,
+				ServerName:  c.Name,
+			})
+			log.Debug("discovered MCP resource template", "server", c.Name, "template", t.Name, "uriTemplate", t.URITemplate)
+		}
+
+		if listResult.NextCursor == "" {
+			break
+		}
+		cursor = listResult.NextCursor
+	}
+
+	return allTemplates, nil
 }
 
 // toolsCallResult represents the result of a tools/call call.
@@ -199,7 +484,7 @@ func (t *MCPTool) Execute(ctx context.Context, input map[string]any, cwd string)
 		}, nil
 	}
 
-	result, err := client.CallTool(t.toolName, input)
+	result, err := client.CallTool(ctx, t.toolName, input)
 	if err != nil {
 		return &toolresult.ToolResult{
 			Content: fmt.Sprintf("Error calling MCP tool: %v", err),
@@ -250,10 +535,12 @@ func NormalizeName(name string) string {
 // NewClient creates a new MCP client for the given server (stdio transport).
 func NewClient(name string, cmd string, args []string, env map[string]string) *Client {
 	return &Client{
-		Name: name,
-		cmd:  cmd,
-		args: args,
-		env:  env,
+		Name:      name,
+		cmd:       cmd,
+		args:      args,
+		env:       env,
+		respChans: make(map[any]chan *jsonRPCResponse),
+		done:      make(chan struct{}),
 	}
 }
 
@@ -262,6 +549,8 @@ func NewHTTPClient(name string, url string, headers map[string]string) *Client {
 	return &Client{
 		Name:      name,
 		transport: NewHTTPTransport(url, headers),
+		respChans: make(map[any]chan *jsonRPCResponse),
+		done:      make(chan struct{}),
 	}
 }
 
@@ -274,6 +563,13 @@ func (c *Client) Connect(ctx context.Context) error {
 
 	// HTTP transport path
 	if c.transport != nil {
+		c.transport.SetNotificationHandler(c.handleNotification)
+		// Start background listener for SSE notifications
+		go func() {
+			if err := c.transport.BackgroundListen(context.Background()); err != nil {
+				log.Debug("MCP HTTP background listener failed", "server", c.Name, "error", err)
+			}
+		}()
 		return c.initializeViaTransport(ctx)
 	}
 
@@ -323,6 +619,9 @@ func (c *Client) Connect(ctx context.Context) error {
 		},
 	}
 
+	// Start background reader loop for stdio
+	go c.loop()
+
 	// Perform initialization
 	if err := c.initialize(ctx); err != nil {
 		c.cleanup()
@@ -330,6 +629,119 @@ func (c *Client) Connect(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+type progressTokenKey struct{}
+
+// WithProgressToken returns a context with the given progress token.
+func WithProgressToken(ctx context.Context, token any) context.Context {
+	return context.WithValue(ctx, progressTokenKey{}, token)
+}
+
+// GetProgressToken retrieves the progress token from the context.
+func GetProgressToken(ctx context.Context) any {
+	return ctx.Value(progressTokenKey{})
+}
+
+// ProgressHandler is a function that receives progress updates.
+type ProgressHandler func(token any, progress, total float64)
+
+var (
+	progressHandlers   []ProgressHandler
+	progressHandlersMu sync.Mutex
+)
+
+// RegisterProgressHandler registers a global handler for progress notifications.
+func RegisterProgressHandler(h ProgressHandler) {
+	progressHandlersMu.Lock()
+	defer progressHandlersMu.Unlock()
+	progressHandlers = append(progressHandlers, h)
+}
+
+// handleNotification processes an incoming MCP notification.
+func (c *Client) handleNotification(notif Notification) {
+	// Handle specific notifications for AC1/AC2
+	switch notif.Method {
+	case "notifications/progress":
+		var params ProgressParams
+		if err := json.Unmarshal(notif.Params, &params); err == nil {
+			log.Debug("MCP progress notification", "server", c.Name, "token", params.ProgressToken, "progress", params.Progress, "total", params.Total)
+			progressHandlersMu.Lock()
+			for _, h := range progressHandlers {
+				h(params.ProgressToken, params.Progress, params.Total)
+			}
+			progressHandlersMu.Unlock()
+		}
+	case "notifications/resources/updated":
+		var params ResourceUpdatedParams
+		if err := json.Unmarshal(notif.Params, &params); err == nil {
+			log.Info("MCP resource updated", "server", c.Name, "uri", params.URI)
+			bumpCacheGen() // Invalidate resource cache on update
+		}
+	}
+
+	c.muNotif.Lock()
+	for _, handler := range c.notifHandlers {
+		go handler(notif)
+	}
+	c.muNotif.Unlock()
+}
+
+// loop reads messages from the stdout of the MCP server process.
+func (c *Client) loop() {
+	reader := c.proc.stdoutRd
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			if err != io.EOF && !strings.Contains(err.Error(), "file already closed") {
+				log.Error("MCP background reader loop error", "server", c.Name, "error", err)
+			}
+			return
+		}
+
+		// Try to parse as response or notification
+		var msg struct {
+			ID     any             `json:"id"`
+			Method string          `json:"method"`
+			Params json.RawMessage `json:"params"`
+			Result json.RawMessage `json:"result"`
+			Error  *jsonRPCError   `json:"error"`
+		}
+
+		if err := json.Unmarshal(line, &msg); err != nil {
+			log.Warn("MCP background reader failed to parse message", "server", c.Name, "line", string(line), "error", err)
+			continue
+		}
+
+		if msg.ID != nil {
+			// It's a response
+			resp := &jsonRPCResponse{
+				JSONRPC: "2.0",
+				ID:      msg.ID,
+				Result:  msg.Result,
+				Error:   msg.Error,
+			}
+			c.muResp.Lock()
+			ch, ok := c.respChans[msg.ID]
+			if ok {
+				ch <- resp
+			}
+			c.muResp.Unlock()
+		} else if msg.Method != "" {
+			// It's a notification
+			c.handleNotification(Notification{
+				Method: msg.Method,
+				Params: msg.Params,
+			})
+		}
+	}
+}
+
+// RegisterNotificationHandler registers a callback for MCP notifications.
+func (c *Client) RegisterNotificationHandler(handler func(Notification)) {
+	c.muNotif.Lock()
+	defer c.muNotif.Unlock()
+	c.notifHandlers = append(c.notifHandlers, handler)
 }
 
 // initializeViaTransport performs the MCP handshake using the HTTP transport.
@@ -625,7 +1037,7 @@ func maxMCPOutputChars() int {
 }
 
 // CallTool calls a tool on the MCP server.
-func (c *Client) CallTool(name string, arguments map[string]any) (string, error) {
+func (c *Client) CallTool(ctx context.Context, name string, arguments map[string]any) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -633,7 +1045,6 @@ func (c *Client) CallTool(name string, arguments map[string]any) (string, error)
 		return "", fmt.Errorf("not connected to MCP server %s", c.Name)
 	}
 
-	ctx := context.Background()
 	req := jsonRPCRequest{
 		JSONRPC: "2.0",
 		ID:      nextJSONID(),
@@ -642,6 +1053,13 @@ func (c *Client) CallTool(name string, arguments map[string]any) (string, error)
 			"name":      name,
 			"arguments": arguments,
 		},
+	}
+
+	// AC2: If a progress token is provided in the context, include it in _meta
+	if progressToken := GetProgressToken(ctx); progressToken != nil {
+		req.Meta = map[string]any{
+			"progressToken": progressToken,
+		}
 	}
 
 	resp, err := c.doRequest(ctx, req)
@@ -749,7 +1167,7 @@ func (c *Client) doRequest(ctx context.Context, req jsonRPCRequest) (*jsonRPCRes
 
 // sendRequestStdio sends a JSON-RPC request via stdio and waits for a response.
 // Caller must hold c.mu.
-func (c *Client) sendRequestStdio(_ context.Context, req jsonRPCRequest) (*jsonRPCResponse, error) {
+func (c *Client) sendRequestStdio(ctx context.Context, req jsonRPCRequest) (*jsonRPCResponse, error) {
 	if c.proc == nil || c.proc.stdin == nil || c.proc.stdout == nil {
 		return nil, fmt.Errorf("not connected")
 	}
@@ -759,21 +1177,29 @@ func (c *Client) sendRequestStdio(_ context.Context, req jsonRPCRequest) (*jsonR
 		return nil, fmt.Errorf("marshaling request: %w", err)
 	}
 
+	// Register response channel before sending request
+	ch := make(chan *jsonRPCResponse, 1)
+	c.muResp.Lock()
+	c.respChans[req.ID] = ch
+	c.muResp.Unlock()
+
+	defer func() {
+		c.muResp.Lock()
+		delete(c.respChans, req.ID)
+		c.muResp.Unlock()
+	}()
+
 	if _, err := c.proc.stdin.Write(append(data, '\n')); err != nil {
 		return nil, fmt.Errorf("writing request: %w", err)
 	}
 
-	line, err := c.proc.stdoutRd.ReadBytes('\n')
-	if err != nil {
-		return nil, fmt.Errorf("reading response: %w", err)
+	// Wait for response or timeout/context cancellation
+	select {
+	case resp := <-ch:
+		return resp, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
-
-	var resp jsonRPCResponse
-	if err := json.Unmarshal(line, &resp); err != nil {
-		return nil, fmt.Errorf("parsing response: %w", err)
-	}
-
-	return &resp, nil
 }
 
 // sendRequest is kept for backward compatibility with the initialize method (stdio path).
@@ -906,6 +1332,44 @@ func GetTools() []any {
 	}
 
 	return allTools
+}
+
+// GetPrompts returns all discovered MCP prompts from all connected servers.
+func GetPrompts() []MCPPrompt {
+	clientsMu.RLock()
+	defer clientsMu.RUnlock()
+
+	var allPrompts []MCPPrompt
+	for _, client := range clients {
+		ctx := context.Background()
+		prompts, err := client.ListPrompts(ctx)
+		if err != nil {
+			log.Warn("failed to list prompts", "server", client.Name, "error", err)
+			continue
+		}
+		allPrompts = append(allPrompts, prompts...)
+	}
+
+	return allPrompts
+}
+
+// GetResourceTemplates returns all discovered MCP resource templates from all connected servers.
+func GetResourceTemplates() []MCPResourceTemplate {
+	clientsMu.RLock()
+	defer clientsMu.RUnlock()
+
+	var allTemplates []MCPResourceTemplate
+	for _, client := range clients {
+		ctx := context.Background()
+		templates, err := client.ListResourceTemplates(ctx)
+		if err != nil {
+			log.Warn("failed to list resource templates", "server", client.Name, "error", err)
+			continue
+		}
+		allTemplates = append(allTemplates, templates...)
+	}
+
+	return allTemplates
 }
 
 // GetMCPClients returns a copy of the map of normalized server names to clients.

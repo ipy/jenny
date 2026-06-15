@@ -20,6 +20,7 @@ type PowerShellTool struct {
 	projectRoot     string
 	backgroundTasks sync.Map
 	taskManager     *TaskManager
+	sessionID       string
 }
 
 // NewPowerShellTool creates a new PowerShellTool.
@@ -32,6 +33,12 @@ func NewPowerShellTool(skipPermissions bool) *PowerShellTool {
 // WithTaskManager sets the task manager for background task tracking.
 func (t *PowerShellTool) WithTaskManager(tm *TaskManager) *PowerShellTool {
 	t.taskManager = tm
+	return t
+}
+
+// WithSessionID sets the session ID for the PowerShellTool.
+func (t *PowerShellTool) WithSessionID(id string) *PowerShellTool {
+	t.sessionID = id
 	return t
 }
 

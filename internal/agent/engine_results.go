@@ -9,8 +9,27 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/api"
+	"github.com/ipy/jenny/internal/mcp"
 	"github.com/ipy/jenny/internal/session"
 )
+
+// emitToolProgress emits a tool_progress event with subtype "output".
+func (e *QueryEngine) emitToolProgress(toolUseID, toolName, content string) {
+	if e.streamCfg.Enabled {
+		msg := StreamMessage{
+			Type:            "tool_progress",
+			Subtype:         "output",
+			ToolName:        toolName,
+			ToolUseID:       toolUseID,
+			Content:         content,
+			SessionID:       e.streamCfg.SessionID,
+			ParentToolUseID: nil,
+			Uuid:            GenerateUUID(),
+		}
+		data, _ := json.Marshal(msg)
+		fmt.Fprintln(os.Stdout, string(data))
+	}
+}
 
 // executeAndProcessTools converts tool_use blocks to executor format, emits
 // tool_progress started/complete events, executes tools, syncs active skills, and
@@ -60,6 +79,32 @@ func (e *QueryEngine) executeAndProcessTools(ctx context.Context, toolUseBlocks 
 
 	// Execute all tools using the parallel executor with cross-turn state support
 	executor := NewToolExecutorWithStreamConfig(e.tools, cwd, e.streamCfg)
+
+	// Register progress handler if streaming is enabled
+	if e.streamCfg.Enabled {
+		mcp.RegisterProgressHandler(func(token any, progress, total float64) {
+			// In our implementation, the token is the tool_use_id string
+			if toolUseID, ok := token.(string); ok {
+				// Find the tool name for this ID from execBlocks
+				var toolName string
+				for _, b := range execBlocks {
+					if b.ID == toolUseID {
+						toolName = b.Name
+						break
+					}
+				}
+
+				msg := fmt.Sprintf("Progress: %.1f%%", progress)
+				if total > 0 {
+					msg = fmt.Sprintf("Progress: %.1f/%.1f", progress, total)
+				}
+
+				// Emit tool_progress event with subtype "output"
+				e.emitToolProgress(toolUseID, toolName, msg)
+			}
+		})
+	}
+
 	execResults, err := executor.Execute(ctx, execBlocks)
 	if err != nil {
 		return nil, false, fmt.Errorf("executing tools: %w", err)

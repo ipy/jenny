@@ -713,7 +713,7 @@ func TestNewHTTPClient(t *testing.T) {
 	}
 
 	// Call a tool
-	result, err := client.CallTool("echo", map[string]any{"text": "hello"})
+	result, err := client.CallTool(context.Background(), "echo", map[string]any{"text": "hello"})
 	if err != nil {
 		t.Fatalf("CallTool failed: %v", err)
 	}

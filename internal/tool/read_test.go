@@ -720,6 +720,41 @@ func TestReadTool_TOCTOU(t *testing.T) {
 	}
 }
 
+func TestReadTool_UTF16(t *testing.T) {
+	tmpDir := t.TempDir()
+	tool := NewReadTool(true, nil)
+
+	// Test UTF-16 LE
+	lePath := filepath.Join(tmpDir, "utf16le.txt")
+	leData := []byte{0xFF, 0xFE, 'U', 0, 'T', 0, 'F', 0, '-', 0, '1', 0, '6', 0, ' ', 0, 'L', 0, 'E', 0}
+	if err := os.WriteFile(lePath, leData, 0644); err != nil {
+		t.Fatalf("failed to create UTF-16 LE file: %v", err)
+	}
+
+	result, err := tool.Execute(context.Background(), map[string]any{"file_path": lePath}, tmpDir)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if !strings.Contains(result.Content, "UTF-16 LE") {
+		t.Errorf("UTF-16 LE decoding failed, got content: %q", result.Content)
+	}
+
+	// Test UTF-16 BE
+	bePath := filepath.Join(tmpDir, "utf16be.txt")
+	beData := []byte{0xFE, 0xFF, 0, 'U', 0, 'T', 0, 'F', 0, '-', 0, '1', 0, '6', 0, ' ', 0, 'B', 0, 'E'}
+	if err := os.WriteFile(bePath, beData, 0644); err != nil {
+		t.Fatalf("failed to create UTF-16 BE file: %v", err)
+	}
+
+	result, err = tool.Execute(context.Background(), map[string]any{"file_path": bePath}, tmpDir)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if !strings.Contains(result.Content, "UTF-16 BE") {
+		t.Errorf("UTF-16 BE decoding failed, got content: %q", result.Content)
+	}
+}
+
 func TestReadTool_ImageFile(t *testing.T) {
 	tmpDir := t.TempDir()
 

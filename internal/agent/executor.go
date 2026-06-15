@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ipy/jenny/internal/mcp"
 	"github.com/ipy/jenny/internal/tool"
 )
 
@@ -278,6 +279,9 @@ func (e *ToolExecutor) executeParallel(parentCtx context.Context, batch []toolUs
 			}
 			defer func() { <-sem }()
 
+			// AC2: Wrap context with progress token (tool_use_id) so MCP tools can report progress
+			toolCtx := mcp.WithProgressToken(ctx, tw.block.ID)
+
 			// Check permission denial cache before execution
 			denialKey := BuildDenialKey(tw.block.Name, tw.block.Input)
 			if e.streamCfg != nil && e.streamCfg.HasPermissionDenial(denialKey) {
@@ -290,7 +294,7 @@ func (e *ToolExecutor) executeParallel(parentCtx context.Context, batch []toolUs
 				return
 			}
 
-			execResult, err := tw.tool.Execute(ctx, tw.block.Input, e.cwd)
+			execResult, err := tw.tool.Execute(toolCtx, tw.block.Input, e.cwd)
 
 			// Check if this was a security gate denial via ToolResult
 			if err == nil && execResult != nil && execResult.IsError && isSecurityGateDenial(execResult.Content) {
@@ -352,6 +356,9 @@ func (e *ToolExecutor) executeSerial(parentCtx context.Context, batch []toolUseW
 			continue
 		}
 
+		// AC2: Wrap context with progress token (tool_use_id) so MCP tools can report progress
+		toolCtx := mcp.WithProgressToken(ctx, tw.block.ID)
+
 		// Check permission denial cache before execution
 		denialKey := BuildDenialKey(tw.block.Name, tw.block.Input)
 		if e.streamCfg != nil && e.streamCfg.HasPermissionDenial(denialKey) {
@@ -364,7 +371,7 @@ func (e *ToolExecutor) executeSerial(parentCtx context.Context, batch []toolUseW
 			continue
 		}
 
-		execResult, err := tw.tool.Execute(ctx, tw.block.Input, e.cwd)
+		execResult, err := tw.tool.Execute(toolCtx, tw.block.Input, e.cwd)
 
 		// Check if this was a security gate denial via ToolResult
 		if err == nil && execResult != nil && execResult.IsError && isSecurityGateDenial(execResult.Content) {

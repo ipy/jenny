@@ -82,7 +82,7 @@ func TestRealWorldHTTPMCP(t *testing.T) {
 			args["question"] = "what is this repo about"
 		}
 
-		result, err := client.CallTool(toolName, args)
+		result, err := client.CallTool(context.Background(), toolName, args)
 		if err != nil {
 			t.Fatalf("CallTool(%s) failed: %v", toolName, err)
 		}

@@ -2,15 +2,16 @@
 package tool
 
 import (
-	"bufio"
 	"context"
 	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
 
 	"github.com/ipy/jenny/internal/constants"
 )
@@ -138,6 +139,17 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 	// Clean the absolute path to resolve any traversal sequences
 	absFilePathClean := filepath.Clean(absFilePath)
 
+	// Universal Windows Security (AC4)
+	if runtime.GOOS == "windows" {
+		winGate := NewWindowsCommandGate(t.skipPermissions)
+		if err := winGate.CheckPath(absFilePathClean); err != nil {
+			return &ToolResult{
+				Content: fmt.Sprintf("Security error: %v", err),
+				IsError: true,
+			}, nil
+		}
+	}
+
 	// Normalize cwd for comparison
 	absCwdClean := filepath.Clean(absCwd)
 
@@ -223,10 +235,6 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 	isFullRead := !offsetExplicit && !limitExplicit
 
 	// AC1: TOCTOU eliminated — atomically stat+compare inside the cache mutex.
-	// The early `info` Stat above remains for size validation, but the dedup
-	// decision must be made atomically (stat + cache compare) to prevent a
-	// concurrent writer from sneaking a stale mtime into the cache between
-	// the stat and the record.
 	if t.readCache != nil && isFullRead {
 		hit, statErr := t.readCache.CheckAndRecord(absFilePath, "", isFullRead, offset, limit)
 		if statErr == nil && hit {
@@ -236,8 +244,6 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 				CacheHit: true,
 			}, nil
 		}
-		// On statErr (e.g. file vanished between the early stat and now),
-		// fall through and let the actual open below fail with a clear error.
 	}
 
 	// AC3: 1 GiB OOM guard — reject files ≥1 GiB before any read.
@@ -266,39 +272,39 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 	}
 
 	// Open the file
-	file, err := os.Open(absFilePath)
+	fileBytes, err := os.ReadFile(absFilePath)
 	if err != nil {
-		return &ToolResult{
-			Content: fmt.Sprintf("Error opening file: %v", err),
-			IsError: true,
-		}, nil
-	}
-	defer file.Close()
-
-	// Read and process the file
-	scanner := bufio.NewScanner(file)
-	var lines []string
-	if limit > 0 {
-		lines = make([]string, 0, limit)
-	}
-	lineNum := 0
-
-	for scanner.Scan() {
-		lineNum++
-		if lineNum < offset {
-			continue
-		}
-		if limit > 0 && len(lines) >= limit {
-			break
-		}
-		lines = append(lines, scanner.Text())
-	}
-
-	if err := scanner.Err(); err != nil {
 		return &ToolResult{
 			Content: fmt.Sprintf("Error reading file: %v", err),
 			IsError: true,
 		}, nil
+	}
+
+	// AC5: UTF-16 Detection and Decoding
+	var content string
+	if decoded, ok := detectAndDecodeUTF16(fileBytes); ok {
+		content = decoded
+	} else {
+		content = string(fileBytes)
+	}
+
+	// Process content line by line
+	lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
+	// Remove trailing empty line if file ends with newline
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+
+	lineNum := len(lines)
+	readLines := 0
+	var resultLines []string
+
+	for i := offset - 1; i < len(lines); i++ {
+		if limit > 0 && readLines >= limit {
+			break
+		}
+		resultLines = append(resultLines, lines[i])
+		readLines++
 	}
 
 	// maxTokens check (post-read)
@@ -308,7 +314,7 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 			maxTokens = int(maxTokensVal)
 		}
 		// Estimate tokens: ~4 characters per token
-		estimatedTokens := len(strings.Join(lines, "\n")) / 4
+		estimatedTokens := len(strings.Join(resultLines, "\n")) / 4
 		if estimatedTokens > maxTokens {
 			return &ToolResult{
 				Content: fmt.Sprintf("content exceeds maxTokens limit (estimated %d tokens)", estimatedTokens),
@@ -320,22 +326,14 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 	// Format output with line numbers (matching cat -n format)
 	var output strings.Builder
 	totalLines := lineNum
-	readLines := len(lines)
 
 	// Record the read in cache for read-before-write contract
-	// This must happen before early returns for empty/EOF cases
 	if t.readCache != nil {
 		fullContent := ""
 		if isFullRead {
-			// Reuse scanner content - the scanner already read the full file
-			fullContent = strings.Join(lines, "\n")
-			if len(lines) > 0 {
-				fullContent += "\n"
-			}
+			fullContent = content
 		} else {
-			// Partial read: need to read full file for cache
-			fullContentBytes, _ := os.ReadFile(absFilePath)
-			fullContent = string(fullContentBytes)
+			fullContent = content
 		}
 		// AC1: post-read stat-and-record is atomic in the cache mutex.
 		_, _ = t.readCache.StatAndRecord(absFilePath, fullContent, isFullRead, offset, limit)
@@ -344,11 +342,10 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 	// Handle empty file content - warning, not error
 	if totalLines == 0 {
 		fmt.Fprintf(&output, "[Warning: empty file]\n")
-		result := &ToolResult{
+		return &ToolResult{
 			Content: output.String(),
 			IsError: false,
-		}
-		return result, nil
+		}, nil
 	}
 
 	// Handle reading past EOF - warning with actual line count
@@ -356,14 +353,13 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 		fmt.Fprintf(&output, "[Warning: offset %d exceeds file line count %d]\n", offset, totalLines)
 		fmt.Fprintf(&output, "\n[%d lines, started at line %d, total lines in file: %d]",
 			readLines, offset, totalLines)
-		result := &ToolResult{
+		return &ToolResult{
 			Content: output.String(),
 			IsError: false,
-		}
-		return result, nil
+		}, nil
 	}
 
-	for i, line := range lines {
+	for i, line := range resultLines {
 		lineStr := strconv.Itoa(offset + i)
 		fmt.Fprintf(&output, "%6s\t%s\n", lineStr, line)
 	}
@@ -372,12 +368,34 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 	fmt.Fprintf(&output, "\n[%d lines, started at line %d, total lines in file: %d]",
 		readLines, offset, totalLines)
 
-	result := &ToolResult{
+	return &ToolResult{
 		Content: output.String(),
 		IsError: false,
-	}
+	}, nil
+}
 
-	return result, nil
+// detectAndDecodeUTF16 detects UTF-16 LE/BE with BOM and decodes it.
+func detectAndDecodeUTF16(data []byte) (string, bool) {
+	if len(data) < 2 {
+		return "", false
+	}
+	// UTF-16 BE BOM: FE FF
+	if data[0] == 0xFE && data[1] == 0xFF {
+		u16 := make([]uint16, (len(data)-2)/2)
+		for i := 0; i < len(u16); i++ {
+			u16[i] = uint16(data[2+i*2])<<8 | uint16(data[2+i*2+1])
+		}
+		return string(utf16.Decode(u16)), true
+	}
+	// UTF-16 LE BOM: FF FE
+	if data[0] == 0xFF && data[1] == 0xFE {
+		u16 := make([]uint16, (len(data)-2)/2)
+		for i := 0; i < len(u16); i++ {
+			u16[i] = uint16(data[2+i*2+1])<<8 | uint16(data[2+i*2])
+		}
+		return string(utf16.Decode(u16)), true
+	}
+	return "", false
 }
 
 // Image file support

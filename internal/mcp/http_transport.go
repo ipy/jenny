@@ -30,12 +30,13 @@ func httpRequestTimeout() time.Duration {
 // All JSON-RPC messages are sent via HTTP POST. The server may respond with
 // either application/json or text/event-stream (SSE).
 type HTTPTransport struct {
-	url       string
-	headers   map[string]string
-	sessionID string
-	client    *http.Client
-	closed    bool
-	mu        sync.Mutex
+	url          string
+	headers      map[string]string
+	sessionID    string
+	client       *http.Client
+	closed       bool
+	notifHandler func(Notification)
+	mu           sync.Mutex
 }
 
 // NewHTTPTransport creates a new HTTP transport for the given MCP endpoint URL.
@@ -49,6 +50,97 @@ func NewHTTPTransport(url string, headers map[string]string) *HTTPTransport {
 			Timeout: httpRequestTimeout(),
 		},
 	}
+}
+
+// SetNotificationHandler registers a callback for incoming notifications.
+func (t *HTTPTransport) SetNotificationHandler(handler func(Notification)) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.notifHandler = handler
+}
+
+// BackgroundListen established a long-lived SSE connection for notifications.
+// Per MCP spec, the client should maintain one SSE connection for the session.
+func (t *HTTPTransport) BackgroundListen(ctx context.Context) error {
+	t.mu.Lock()
+	if t.closed {
+		t.mu.Unlock()
+		return fmt.Errorf("transport is closed")
+	}
+	url := t.url
+	t.mu.Unlock()
+
+	// Establish SSE connection
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("creating SSE request: %w", err)
+	}
+
+	req.Header.Set("Accept", "text/event-stream")
+	for k, v := range t.headers {
+		req.Header.Set(k, v)
+	}
+
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("SSE connection failed: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return fmt.Errorf("SSE connection rejected: HTTP %d", resp.StatusCode)
+	}
+
+	// Capture session ID if provided
+	if sid := resp.Header.Get("Mcp-Session-Id"); sid != "" {
+		t.mu.Lock()
+		t.sessionID = sid
+		t.mu.Unlock()
+	}
+
+	go func() {
+		defer resp.Body.Close()
+		scanner := bufio.NewScanner(resp.Body)
+		var currentEvent string
+		var dataLines []string
+
+		for scanner.Scan() {
+			line := scanner.Text()
+			if line == "" {
+				if len(dataLines) > 0 {
+					data := strings.Join(dataLines, "\n")
+					if currentEvent == "" || currentEvent == "message" {
+						var msg struct {
+							Method string          `json:"method"`
+							Params json.RawMessage `json:"params"`
+						}
+						if err := json.Unmarshal([]byte(data), &msg); err == nil && msg.Method != "" {
+							t.mu.Lock()
+							handler := t.notifHandler
+							t.mu.Unlock()
+							if handler != nil {
+								handler(Notification{
+									Method: msg.Method,
+									Params: msg.Params,
+								})
+							}
+						}
+					}
+					dataLines = nil
+					currentEvent = ""
+				}
+				continue
+			}
+
+			if strings.HasPrefix(line, "event:") {
+				currentEvent = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+			} else if strings.HasPrefix(line, "data:") {
+				dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
+			}
+		}
+	}()
+
+	return nil
 }
 
 // SendRequest sends a JSON-RPC request via HTTP POST and returns the response.
@@ -252,10 +344,34 @@ func (t *HTTPTransport) parseSSEResponse(body io.Reader, requestID any) (*jsonRP
 			if len(dataLines) > 0 {
 				data := strings.Join(dataLines, "\n")
 				if currentEvent == "" || currentEvent == "message" {
-					var resp jsonRPCResponse
-					if err := json.Unmarshal([]byte(data), &resp); err == nil {
-						if matchesRequestID(resp.ID, requestID) {
-							return &resp, nil
+					var msg struct {
+						ID     any             `json:"id"`
+						Method string          `json:"method"`
+						Params json.RawMessage `json:"params"`
+						Result json.RawMessage `json:"result"`
+						Error  *jsonRPCError   `json:"error"`
+					}
+					if err := json.Unmarshal([]byte(data), &msg); err == nil {
+						if msg.ID != nil {
+							if matchesRequestID(msg.ID, requestID) {
+								return &jsonRPCResponse{
+									JSONRPC: "2.0",
+									ID:      msg.ID,
+									Result:  msg.Result,
+									Error:   msg.Error,
+								}, nil
+							}
+						} else if msg.Method != "" {
+							// It's a notification
+							t.mu.Lock()
+							handler := t.notifHandler
+							t.mu.Unlock()
+							if handler != nil {
+								handler(Notification{
+									Method: msg.Method,
+									Params: msg.Params,
+								})
+							}
 						}
 					}
 				}

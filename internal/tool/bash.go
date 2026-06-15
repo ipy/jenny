@@ -121,6 +121,18 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 	if t.commandCwd == "" {
 		t.commandCwd = cwd
 	}
+
+	// Universal Windows Security (AC4)
+	if runtime.GOOS == "windows" {
+		winGate := NewWindowsCommandGate(t.skipPermissions)
+		if err := winGate.CheckPath(t.commandCwd); err != nil {
+			return &ToolResult{
+				Content: fmt.Sprintf("Security error: %v", err),
+				IsError: true,
+			}, nil
+		}
+	}
+
 	t.mu.Unlock()
 
 	// Handle sed simulation (AC5) - after security checks but before timeout/background

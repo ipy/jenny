@@ -320,7 +320,7 @@ func TestIntegrationMCPSubprocess(t *testing.T) {
 	}
 
 	// Call a tool (tests AC3: tool call dispatch)
-	result, err := client.CallTool("test-tool", map[string]any{})
+	result, err := client.CallTool(context.Background(), "test-tool", map[string]any{})
 	if err != nil {
 		t.Fatalf("failed to call tool: %v", err)
 	}
