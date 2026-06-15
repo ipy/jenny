@@ -452,6 +452,11 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		}
 		e.totalAPIDurationMs += time.Since(apiStartTime).Milliseconds()
 
+		// AC4: Emit final thinking_tokens events for all active thinking blocks
+		// before the consolidated assistant message. This ensures final totals are
+		// emitted even if the periodic timer hasn't fired since last delta.
+		e.emitAllFinalThinkingTokens(sessionID)
+
 		// Emit ONE consolidated assistant message for all collected content from streaming
 		// (AC1-AC4: one assistant event per API turn, not per tool_use block)
 		// Only emit if streaming actually produced content; fallback path emits separately.

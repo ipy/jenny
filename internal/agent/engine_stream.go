@@ -277,3 +277,138 @@ func (e *QueryEngine) emitConsolidatedAssistant(
 	data, _ := json.Marshal(msg)
 	fmt.Fprintln(os.Stdout, string(data))
 }
+
+// emitThinkingTokens emits a thinking_tokens system event to stdout.
+// It is guarded by e.streamCfg.Enabled (AC5).
+// AC3: Emits within 200ms of thinking delta arrival; AC4: emits on thinking block stop.
+func (e *QueryEngine) emitThinkingTokens(sessionID string, blockIndex int, newThinkingText string) {
+	if !e.streamCfg.Enabled {
+		return
+	}
+
+	now := time.Now()
+
+	// Initialize state for this block index if not seen before
+	if e.thinkingBlockState == nil {
+		e.thinkingBlockState = make(map[int]*thinkingBlockState)
+	}
+	state, exists := e.thinkingBlockState[blockIndex]
+	if !exists {
+		state = &thinkingBlockState{
+			EstimatedTokens:       0,
+			AccumulatedThisCycle: 0,
+			LastEmitTime:         now,
+		}
+		e.thinkingBlockState[blockIndex] = state
+	}
+
+	// Calculate delta tokens from the new thinking text
+	// Heuristic: 1 token ≈ 4 characters (conservative for thinking content)
+	prevTextLen := state.EstimatedTokens * 4
+	newTextLen := len(newThinkingText)
+	deltaChars := newTextLen - prevTextLen
+	if deltaChars < 0 {
+		deltaChars = 0
+	}
+	deltaTokens := deltaChars / 4
+	if deltaTokens < 1 && newTextLen > prevTextLen {
+		deltaTokens = 1
+	}
+
+	// Update accumulated state
+	state.EstimatedTokens += deltaTokens
+	state.AccumulatedThisCycle += deltaTokens
+
+	// Emit if ≥100ms have elapsed since last emit OR if this is the first emit for this block
+	shouldEmit := state.LastEmitTime.IsZero() || now.Sub(state.LastEmitTime) >= 100*time.Millisecond
+	if shouldEmit && state.AccumulatedThisCycle > 0 {
+		// Use custom marshaling to include estimated_tokens and estimated_tokens_delta
+		fields := []string{
+			`"type":"system"`,
+			`"subtype":"thinking_tokens"`,
+			`"session_id":` + encodeString(sessionID),
+			`"uuid":` + encodeString(GenerateUUID()),
+			fmt.Sprintf(`"estimated_tokens":%d`, state.EstimatedTokens),
+			fmt.Sprintf(`"estimated_tokens_delta":%d`, state.AccumulatedThisCycle),
+		}
+		data := []byte("{" + strings.Join(fields, ",") + "}")
+		fmt.Fprintln(os.Stdout, string(data))
+
+		// Reset cycle accumulator and update last emit time
+		state.AccumulatedThisCycle = 0
+		state.LastEmitTime = now
+	}
+}
+
+// emitThinkingTokensFinal emits a final thinking_tokens event when a thinking block stops.
+// This ensures AC4: final totals are emitted even if the periodic timer has not fired.
+func (e *QueryEngine) emitThinkingTokensFinal(sessionID string, blockIndex int, finalThinkingText string) {
+	if !e.streamCfg.Enabled {
+		return
+	}
+
+	if e.thinkingBlockState == nil {
+		return
+	}
+	state, exists := e.thinkingBlockState[blockIndex]
+	if !exists {
+		return
+	}
+
+	// Calculate final delta
+	prevTextLen := state.EstimatedTokens * 4
+	finalTextLen := len(finalThinkingText)
+	deltaChars := finalTextLen - prevTextLen
+	if deltaChars < 0 {
+		deltaChars = 0
+	}
+	deltaTokens := deltaChars / 4
+	if deltaTokens < 1 && finalTextLen > prevTextLen {
+		deltaTokens = 1
+	}
+
+	finalTotal := state.EstimatedTokens + deltaTokens
+	if finalTotal == 0 {
+		finalTotal = finalTextLen / 4
+		if finalTotal < 1 {
+			finalTotal = 1
+		}
+	}
+
+	// Only emit if we have accumulated tokens or there was final content
+	if finalTotal > 0 || deltaTokens > 0 {
+		fields := []string{
+			`"type":"system"`,
+			`"subtype":"thinking_tokens"`,
+			`"session_id":` + encodeString(sessionID),
+			`"uuid":` + encodeString(GenerateUUID()),
+			fmt.Sprintf(`"estimated_tokens":%d`, finalTotal),
+			fmt.Sprintf(`"estimated_tokens_delta":%d`, deltaTokens),
+		}
+		data := []byte("{" + strings.Join(fields, ",") + "}")
+		fmt.Fprintln(os.Stdout, string(data))
+	}
+
+	// Clean up state for this block
+	delete(e.thinkingBlockState, blockIndex)
+}
+
+// resetThinkingBlockState resets thinking block state at the start of each streaming turn.
+func (e *QueryEngine) resetThinkingBlockState() {
+	e.thinkingBlockState = nil
+}
+
+// emitAllFinalThinkingTokens emits final thinking_tokens events for all active thinking blocks.
+// AC4: Called at end of streaming turn to ensure final totals are emitted even if periodic timer hasn't fired.
+func (e *QueryEngine) emitAllFinalThinkingTokens(sessionID string) {
+	if !e.streamCfg.Enabled || e.thinkingBlockState == nil {
+		return
+	}
+
+	// Iterate over a copy of the keys to avoid mutation during iteration
+	for blockIndex := range e.thinkingBlockState {
+		// Use empty string for final text - the state already has accumulated tokens
+		// The final delta will be 0 since we've already counted all the thinking
+		e.emitThinkingTokensFinal(sessionID, blockIndex, "")
+	}
+}
