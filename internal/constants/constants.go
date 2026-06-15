@@ -18,6 +18,9 @@ const PluginDirName = "." + ProjectName + "-plugin" // ".jenny-plugin"
 // IgnoreFileName is the jenny-specific ignore file name.
 const IgnoreFileName = "." + ProjectName + "ignore" // ".jennyignore"
 
+// AgentsDirName is the standard shared agent directory name (~/.agents).
+const AgentsDirName = ".agents"
+
 // ProjectJennyDir returns the project-local .jenny directory path for the given cwd.
 func ProjectJennyDir(cwd string) string {
 	return filepath.Join(cwd, ProjectDirName)
@@ -46,6 +49,17 @@ var JennyHomeDirFunc = func() string {
 // current working directory.
 func JennyHomeDir() string {
 	return JennyHomeDirFunc()
+}
+
+// AgentsHomeDir returns the standard shared agent directory (~/.agents).
+// This is the conventional location used by Codex, Claude Code, and other
+// agent tools. Returns "" if os.UserHomeDir() fails.
+func AgentsHomeDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return ""
+	}
+	return filepath.Join(home, AgentsDirName)
 }
 
 // SessionDir returns the directory for a specific session (~/.jenny/sessions/<sessionID>).

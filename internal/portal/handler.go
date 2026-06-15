@@ -867,43 +867,58 @@ func (p *Portal) handleListMCPServers(w http.ResponseWriter, r *http.Request) {
 
 // handleListSkills handles GET /api/skills.
 func (p *Portal) handleListSkills(w http.ResponseWriter, r *http.Request) {
-	homeDir := constants.JennyHomeDir()
-	skillsDir := filepath.Join(homeDir, "skills")
+	jennyHomeDir := constants.JennyHomeDir()
+	agentsHomeDir := constants.AgentsHomeDir()
 
-	entries, err := os.ReadDir(skillsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte("[]"))
-			return
-		}
-		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
-		return
+	// Collect skills from both ~/.jenny/skills/ and ~/.agents/skills/
+	skillsDirs := []string{filepath.Join(jennyHomeDir, "skills")}
+	if agentsHomeDir != "" {
+		skillsDirs = append(skillsDirs, filepath.Join(agentsHomeDir, "skills"))
 	}
 
 	var skills []SkillInfo
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
+	seen := make(map[string]bool) // dedup by skill name
+
+	for _, skillsDir := range skillsDirs {
+		entries, err := os.ReadDir(skillsDir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
+			return
 		}
-		skillPath := filepath.Join(skillsDir, entry.Name())
 
-		// Read README.md or SKILL.md for description
-		desc := readSkillDescription(skillPath)
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			skillPath := filepath.Join(skillsDir, entry.Name())
+			if seen[entry.Name()] {
+				continue
+			}
+			seen[entry.Name()] = true
 
-		// Read .activation-glob if present
-		glob := readActivationGlob(skillPath)
+			// Read README.md or SKILL.md for description
+			desc := readSkillDescription(skillPath)
 
-		// Replace home dir with tilde-prefixed path for display
-		displayPath := strings.Replace(skillPath, homeDir, "~/.jenny", 1)
-		displayPath = filepath.ToSlash(displayPath)
+			// Read .activation-glob if present
+			glob := readActivationGlob(skillPath)
 
-		skills = append(skills, SkillInfo{
-			Name:           entry.Name(),
-			Description:    desc,
-			Path:           displayPath,
-			ActivationGlob: glob,
-		})
+			// Replace home dir with tilde-prefixed path for display
+			displayPath := strings.Replace(skillPath, jennyHomeDir, "~/.jenny", 1)
+			if agentsHomeDir != "" {
+				displayPath = strings.Replace(displayPath, agentsHomeDir, "~/.agents", 1)
+			}
+			displayPath = filepath.ToSlash(displayPath)
+
+			skills = append(skills, SkillInfo{
+				Name:           entry.Name(),
+				Description:    desc,
+				Path:           displayPath,
+				ActivationGlob: glob,
+			})
+		}
 	}
 
 	if skills == nil {

@@ -274,15 +274,24 @@ func run() error {
 
 	// AC4: Bare mode skips all skill discovery
 	if !flags.Bare {
+		// Project-level skills: .jenny/skills/ (highest) then .agents/skills/
 		projectSkillsDir := filepath.Join(constants.ProjectJennyDir(cwd), "skills")
+		projectAgentsDir := filepath.Join(cwd, constants.AgentsDirName, "skills")
 
-		// Bundled default skills directory (user-level)
-		bundledSkillsDir := ""
-		if _, err := os.UserHomeDir(); err == nil {
-			bundledSkillsDir = filepath.Join(constants.JennyHomeDir(), "skills")
+		// User-level skills: .jenny/skills/ (higher) then .agents/skills/ (lowest)
+		var userSkillsDirs []string
+		if jennyHome := constants.JennyHomeDir(); jennyHome != "" {
+			userSkillsDirs = append(userSkillsDirs, filepath.Join(jennyHome, "skills"))
 		}
-		// Discover from both directories (AC6: discovery from multiple directories)
-		discoveredSkills, err = skills.Discover(projectSkillsDir, bundledSkillsDir)
+		if agentsHome := constants.AgentsHomeDir(); agentsHome != "" {
+			userSkillsDirs = append(userSkillsDirs, filepath.Join(agentsHome, "skills"))
+		}
+
+		// Discover from all directories (AC6: discovery from multiple directories)
+		// Priority (highest first): project/.jenny > project/.agents > ~/.jenny > ~/.agents
+		discoveredSkills, err = skills.Discover(
+			append([]string{projectSkillsDir, projectAgentsDir}, userSkillsDirs...)...,
+		)
 		if err != nil {
 			return fmt.Errorf("discovering skills: %w", err)
 		}
