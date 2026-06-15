@@ -444,17 +444,19 @@ func TestStreamMessageToolInputUsesInputKey(t *testing.T) {
 	}
 }
 
-func TestStreamMessageHasKindField(t *testing.T) {
+// TestStreamMessageHasNoKindField verifies AC1: stream-json events do NOT include
+// the 'kind' field. Per spec: 'kind' is a jenny extension not present in Claude
+// Code's SDK format, so it should be absent from all event types.
+func TestStreamMessageHasNoKindField(t *testing.T) {
 	tests := []struct {
 		eventType string
-		wantKind  string
 	}{
-		{"assistant", "message"},
-		{"user", "message"},
-		{"result", "message"},
-		{"system", "message"},
-		{"tool_call", "tool_call"},
-		{"other", "other"},
+		{"assistant"},
+		{"user"},
+		{"result"},
+		{"system"},
+		{"tool_call"},
+		{"other"},
 	}
 
 	for _, tt := range tests {
@@ -473,12 +475,11 @@ func TestStreamMessageHasKindField(t *testing.T) {
 				t.Fatalf("json.Unmarshal failed: %v", err)
 			}
 
-			kind, ok := parsed["kind"].(string)
-			if !ok {
-				t.Errorf("expected 'kind' key in JSON output, got: %s", string(data))
-			}
-			if kind != tt.wantKind {
-				t.Errorf("expected kind %q, got %q", tt.wantKind, kind)
+			// AC1: 'kind' field should NOT be present
+			if _, hasKind := parsed["kind"]; hasKind {
+				t.Errorf("AC1 FAIL: 'kind' key found in JSON output for event type %q, got: %s", tt.eventType, string(data))
+			} else {
+				t.Logf("AC1 PASS: event type %q does not have 'kind' field", tt.eventType)
 			}
 		})
 	}

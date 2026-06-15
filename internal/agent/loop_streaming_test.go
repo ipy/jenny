@@ -19,9 +19,10 @@ import (
 	"github.com/ipy/jenny/internal/tool"
 )
 
-// TestAC4_StreamRequestStartEmitted verifies that RunStream emits
-// stream_request_start before each API iteration when streaming is enabled.
-func TestAC4_StreamRequestStartEmitted(t *testing.T) {
+// TestAC2_NoStreamRequestStart verifies that stream_request_start is NOT emitted.
+// Per spec: stream_request_start is a jenny extension that Claude Code QueryEngine
+// discards internally, so it should not be present in Jenny's stream-json output.
+func TestAC2_NoStreamRequestStart(t *testing.T) {
 	server := makeMockStreamServer(t, nil)
 	defer server.Close()
 
@@ -72,32 +73,17 @@ func TestAC4_StreamRequestStartEmitted(t *testing.T) {
 
 	t.Logf("RunStream completed with: %v", err)
 
-	// ----- AC4 verification -----
-	if !strings.Contains(output, "stream_request_start") {
-		t.Error("AC4 FAIL: stream_request_start not found in stdout output when cfg.Enabled=true")
+	// AC2 verification: stream_request_start should NOT be present
+	if strings.Contains(output, "stream_request_start") {
+		t.Error("AC2 FAIL: stream_request_start found in stdout output - jenny extension should be removed")
 	} else {
-		t.Log("AC4 PASS: stream_request_start emitted in stdout")
-	}
-
-	// Also verify it appears on its own line (valid NDJSON)
-	lines := strings.Split(output, "\n")
-	found := false
-	for _, line := range lines {
-		if strings.Contains(line, "stream_request_start") {
-			found = true
-			if !strings.HasPrefix(line, `{"type":"stream_request_start"`) {
-				t.Errorf("AC4 FAIL: stream_request_start line is not valid NDJSON: %q", line)
-			}
-		}
-	}
-	if !found && !t.Failed() {
-		t.Error("AC4 FAIL: stream_request_start not found in any output line")
+		t.Log("AC2 PASS: no stream_request_start in output (jenny extension removed)")
 	}
 }
 
-// TestAC4_NoStreamRequestStartWhenDisabled verifies that stream_request_start
-// is NOT emitted when streaming is disabled.
-func TestAC4_NoStreamRequestStartWhenDisabled(t *testing.T) {
+// TestAC2_NoStreamRequestStartWhenDisabled verifies that stream_request_start
+// is NOT emitted when streaming is disabled (AC2).
+func TestAC2_NoStreamRequestStartWhenDisabled(t *testing.T) {
 	server := makeMockStreamServer(t, nil)
 	defer server.Close()
 
@@ -137,9 +123,9 @@ func TestAC4_NoStreamRequestStartWhenDisabled(t *testing.T) {
 	t.Logf("RunStream (disabled) completed with: %v", err)
 
 	if strings.Contains(output, "stream_request_start") {
-		t.Error("AC4 FAIL: stream_request_start found in output when cfg.Enabled=false")
+		t.Error("AC2 FAIL: stream_request_start found in output when cfg.Enabled=false")
 	} else {
-		t.Log("AC4 PASS: no stream_request_start when disabled")
+		t.Log("AC2 PASS: no stream_request_start when disabled")
 	}
 }
 
@@ -1418,9 +1404,9 @@ func TestStreamJSON_CostOnlyOnResult(t *testing.T) {
 	}
 }
 
-// TestStreamJSON_HasKindField verifies that every stream-json event has a 'kind' field
-// for compatibility with Claude Code parsers.
-func TestStreamJSON_HasKindField(t *testing.T) {
+// TestStreamJSON_HasNoKindField verifies that stream-json events do NOT have a 'kind' field.
+// Per the stream-json spec, "kind" is a jenny extension — Claude Code SDK schema does not include this field.
+func TestStreamJSON_HasNoKindField(t *testing.T) {
 	server := makeMockStreamServer(t, nil)
 	defer server.Close()
 
@@ -1435,7 +1421,6 @@ func TestStreamJSON_HasKindField(t *testing.T) {
 
 	lines := strings.Split(output, "\n")
 	foundAssistant := false
-	foundToolCall := false
 	foundResult := false
 
 	for li, line := range lines {
@@ -1450,39 +1435,22 @@ func TestStreamJSON_HasKindField(t *testing.T) {
 			continue
 		}
 
-		kind, hasKind := msg["kind"].(string)
-		if !hasKind {
-			t.Errorf("Line %d (%s) missing 'kind' field", li, msg["type"])
-			continue
+		// Per spec: "kind" field is NOT present (jenny extension, not in Claude Code SDK schema)
+		if _, hasKind := msg["kind"]; hasKind {
+			t.Errorf("Line %d (%s) has unexpected 'kind' field - per spec, kind is a jenny extension and should not be present", li, msg["type"])
 		}
 
 		eventType, _ := msg["type"].(string)
 		switch eventType {
 		case "assistant":
 			foundAssistant = true
-			if kind != "message" {
-				t.Errorf("Line %d (assistant) has wrong kind: %s (expected message)", li, kind)
-			}
-		case "tool_call":
-			foundToolCall = true
-			if kind != "tool_call" {
-				t.Errorf("Line %d (tool_call) has wrong kind: %s (expected tool_call)", li, kind)
-			}
 		case "result":
 			foundResult = true
-			if kind != "message" {
-				t.Errorf("Line %d (result) has wrong kind: %s (expected message)", li, kind)
-			}
 		}
 	}
 
 	if !foundAssistant {
 		t.Error("Did not find assistant event in output")
-	}
-	// Note: foundToolCall might be false if no tools were used in the mock.
-	// We'll log it for visibility if it was found.
-	if foundToolCall {
-		t.Log("Found tool_call event in output")
 	}
 	if !foundResult {
 		t.Error("Did not find result event in output")

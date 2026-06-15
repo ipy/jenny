@@ -239,20 +239,6 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			}
 		}
 
-		// Emit stream_request_start before each API iteration (AC4)
-		// Note: firstStreamTime is set when first content block arrives (not here),
-		// so ttft_stream_ms measures time from API call start to first content block
-		if e.streamCfg.Enabled {
-			msg := StreamMessage{
-				Type:            "stream_request_start",
-				SessionID:       sessionID,
-				ParentToolUseID: nil,
-				Uuid:            GenerateUUID(),
-			}
-			data, _ := json.Marshal(msg)
-			fmt.Fprintln(os.Stdout, string(data))
-		}
-
 		// AC3: Inject pending task completions as synthetic tool_results
 		// before each API iteration so the model can process them
 		completions := e.drainTaskCompletions()
@@ -350,8 +336,6 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		apiStartTime := time.Now()
 		// Reset timing fields for TTFT calculation per API call
 		e.firstTokenTime = time.Time{}
-		// NOTE: Do NOT reset firstStreamTime here - it's set when first content block arrives
-		// during streaming and should be preserved for ttft_stream_ms calculation
 		e.lastAPIStartTime = apiStartTime
 		dynamicSuffix := DynamicSystemSuffix(e.streamCfg, cwd)
 		blocksChan, streamResult := e.client.SendMessageStream(
@@ -372,6 +356,9 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		var toolUseBlocks []api.ToolUseBlock
 		var thinkingBlocks []thinkingBlock
 
+		// Reset thinking block state at the start of each streaming turn (AC3: thinking_tokens)
+		e.resetThinkingBlockState()
+
 		// Process blocks as they arrive
 		for block := range blocksChan {
 			// Reset lastAPIStartTime for each block to track active streaming time?
@@ -379,11 +366,6 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			// ... (existing block processing)
 			// Handle raw stream_event passthrough
 			if block.Type == "stream_event" && e.streamCfg.Enabled && e.streamCfg.IncludePartial {
-				// AC1: Capture firstStreamTime at the first SSE stream event (message_start),
-				// not at content block processing. This measures time to first stream event.
-				if e.firstStreamTime.IsZero() {
-					e.firstStreamTime = time.Now()
-				}
 				// Capture message ID from MessageStartEvent
 				if msgStart, ok := block.RawEvent.(api.AnthropicStreamEvent); ok && msgStart.Type == api.EventMessageStart && msgStart.Message != nil {
 					e.currentMessageID = msgStart.Message.ID
@@ -438,7 +420,13 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				if e.firstTokenTime.IsZero() {
 					e.firstTokenTime = time.Now()
 				}
-				thinkingBlocks = append(thinkingBlocks, thinkingBlock{Text: block.Block.Thinking, Signature: block.Block.Signature})
+				// AC3: Emit thinking_tokens event when thinking block arrives (streaming delta)
+				e.emitThinkingTokens(sessionID, block.Index, block.Block.Thinking)
+				// When IncludePartial is true, thinking blocks are already emitted via thinking_tokens events,
+				// so don't accumulate them for emitConsolidatedAssistant to avoid duplication.
+				if !e.streamCfg.IncludePartial {
+					thinkingBlocks = append(thinkingBlocks, thinkingBlock{Text: block.Block.Thinking, Signature: block.Block.Signature})
+				}
 			case api.BlockTypeToolUse:
 				// Track TTFT: record time when first content block arrives
 				if e.firstTokenTime.IsZero() {
@@ -697,6 +685,9 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			}
 		}
 
+		// Capture skill count BEFORE tool execution to detect changes (AC3)
+		prevSkillCount := len(e.streamCfg.ActiveSkills)
+
 		// Execute all tools using the parallel executor with cross-turn state support
 		execToolResults, hasSynthetic, execErr := e.executeAndProcessTools(ctx, toolUseBlocks, sessionID, cwd)
 		if execErr != nil {
@@ -707,7 +698,6 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		// Sync active skills and inject a reminder message if they changed.
 		// (The executeAndProcessTools function also calls syncActiveSkills, but this
 		// is the additional cross-turn reminder injection that must happen at loop level)
-		prevSkillCount := len(e.streamCfg.ActiveSkills)
 		e.syncActiveSkills()
 		if len(e.streamCfg.ActiveSkills) != prevSkillCount {
 			if reminder := activeSkillsSection(e.streamCfg.ActiveSkills); reminder != "" {
