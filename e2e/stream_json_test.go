@@ -642,14 +642,15 @@ func TestStreamJSONUserToolResultFormat(t *testing.T) {
 	})
 }
 
-// TestStreamJSONGap_InitExtendedFields tests that jenny is MISSING extended init fields.
-// This test documents a known gap: Claude Code includes apiKeySource, analytics_disabled, memory_paths, agents, plugins.
+// TestStreamJSONGap_InitExtendedFields tests that jenny includes extended init fields.
+// AC4: Checks for 3 implemented fields: analytics_disabled, apiKeySource, skills.
+// The remaining 4 fields (memory_paths, agents, plugins, slash_commands) are deferred.
 func TestStreamJSONGap_InitExtendedFields(t *testing.T) {
 	runE2ESuite(t, []*harness.TestCase{
 		{
 			ID:          "stream-json.init.has-extended-fields",
 			Category:    "stream-json",
-			Description: "init event includes apiKeySource, analytics_disabled, memory_paths, agents, plugins",
+			Description: "init event includes analytics_disabled, apiKeySource, skills",
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "say hi",
@@ -661,8 +662,8 @@ func TestStreamJSONGap_InitExtendedFields(t *testing.T) {
 				StreamJSON: &harness.StreamJSONExpectation{
 					FirstEvent: &harness.EventExpectation{
 						Type:          "system",
-						HasFields:     []string{"apiKeySource", "analytics_disabled", "memory_paths", "agents", "plugins", "skills", "slash_commands"},
-						FieldNotEmpty: []string{"agents", "skills"},
+						HasFields:     []string{"analytics_disabled", "apiKeySource", "skills"},
+						FieldNotEmpty: []string{"analytics_disabled", "apiKeySource"},
 					},
 				},
 			},

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/ipy/jenny/internal/api"
@@ -16,6 +17,40 @@ import (
 
 // Ensure ReadFileCache type is used (via StreamConfig field)
 var _ *tool.ReadFileCache
+
+// detectAPIKeySource reports the API key source based on environment variables.
+// This matches the provider selection logic in api/client.go.
+func detectAPIKeySource() string {
+	if os.Getenv("ANTHROPIC_API_KEY") != "" || os.Getenv("ANTHROPIC_AUTH_TOKEN") != "" {
+		return "anthropic"
+	}
+	if os.Getenv("OPENAI_API_KEY") != "" {
+		return "openai"
+	}
+	if os.Getenv("GOOGLE_API_KEY") != "" || os.Getenv("GENAI_API_KEY") != "" || os.Getenv("GEMINI_API_KEY") != "" {
+		return "gemini"
+	}
+	return "none"
+}
+
+// detectInstalledSkills returns the list of skill names from ~/.jenny/skills/ directory.
+func detectInstalledSkills() []string {
+	skillsDir := filepath.Join(constants.JennyHomeDir(), "skills")
+	entries, err := os.ReadDir(skillsDir)
+	if err != nil {
+		return []string{}
+	}
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() {
+			names = append(names, e.Name())
+		}
+	}
+	if names == nil {
+		names = []string{}
+	}
+	return names
+}
 
 // chainParticipantTypes are entry types that produce chain participant messages
 // in RebuildMessages. These are the types that generate non-empty API messages.
@@ -398,6 +433,9 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 			FastModeState:     "off",
 			OutputStyle:       "default",
 			MCPServers:        mcpServerNames,
+			AnalyticsDisabled: true,
+			APIKeySource:      detectAPIKeySource(),
+			Skills:            detectInstalledSkills(),
 		}
 		_ = cli.WriteStreamJSON(initMsg)
 	}

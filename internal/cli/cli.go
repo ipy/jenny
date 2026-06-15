@@ -283,6 +283,9 @@ type StreamMessage struct {
 	FastModeState     string   `json:"fast_mode_state,omitempty"`
 	OutputStyle       string   `json:"output_style,omitempty"`
 	MCPServers        []string `json:"mcp_servers,omitempty"`
+	AnalyticsDisabled bool     `json:"analytics_disabled,omitempty"`
+	APIKeySource      string   `json:"apiKeySource,omitempty"`
+	Skills            []string `json:"skills,omitempty"`
 }
 
 // MarshalJSON implements custom marshaling for StreamMessage to:
@@ -363,6 +366,19 @@ func (s StreamMessage) MarshalJSON() ([]byte, error) {
 		fields = append(fields, `"mcp_servers":`+string(mcpBytes))
 	} else {
 		fields = append(fields, `"mcp_servers":[]`)
+	}
+	if s.AnalyticsDisabled {
+		fields = append(fields, `"analytics_disabled":true`)
+	}
+	if s.APIKeySource != "" {
+		fields = append(fields, `"apiKeySource":`+encodeString(s.APIKeySource))
+	}
+	// Always emit skills as array (even if empty) for init events compatibility
+	if s.Skills != nil {
+		skillsBytes, _ := json.Marshal(s.Skills)
+		fields = append(fields, `"skills":`+string(skillsBytes))
+	} else {
+		fields = append(fields, `"skills":[]`)
 	}
 
 	return []byte("{" + strings.Join(fields, ",") + "}"), nil
