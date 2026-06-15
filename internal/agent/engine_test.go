@@ -529,7 +529,7 @@ func TestAC4_RunStreamReturnsTextContent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	result, _, err := RunStream(ctx, "test", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
+	_, result, _, err := RunStream(ctx, "test", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
 	if err != nil {
 		t.Fatalf("RunStream error: %v", err)
 	}

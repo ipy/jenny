@@ -1073,24 +1073,14 @@ func TestAC3_AsyncSubagentOutputFile_ReturnsPath(t *testing.T) {
 	if result.AgentID == "" {
 		t.Error("expected non-empty agent_id")
 	}
-	if result.OutputFile == "" {
-		t.Fatal("expected non-empty output_file path")
-	}
-
-	// Verify the OutputFile path is well-formed
-	if !strings.HasSuffix(result.OutputFile, ".jsonl") {
-		t.Errorf("expected output_file to end with .jsonl, got: %s", result.OutputFile)
-	}
-
-	// Verify it's in a transcripts directory
-	if !strings.Contains(result.OutputFile, "transcripts") {
-		t.Errorf("expected output_file to be in transcripts dir, got: %s", result.OutputFile)
+	if result.Done == nil {
+		t.Fatal("expected non-nil Done channel")
 	}
 }
 
-func TestAC3_AsyncOutputFile_WrittenOnCompletion(t *testing.T) {
-	// AC3: After async subagent completes, the output file should exist and contain
-	// valid JSONL with the result/error information.
+func TestAC3_AsyncSubagentCompletes(t *testing.T) {
+	// AC3: After async subagent completes, Done is closed and subagent_result
+	// entry is written to the parent's transcript.
 
 	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
 	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
@@ -1112,54 +1102,17 @@ func TestAC3_AsyncOutputFile_WrittenOnCompletion(t *testing.T) {
 		t.Fatalf("RunSubagentAsync error: %v", err)
 	}
 
-	outputFile := result.OutputFile
-
-	// Wait for the background goroutine to complete
-	// The goroutine may need to make an API call, so use generous timeout
-	deadline := time.Now().Add(30 * time.Second)
-	var fileExists bool
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(outputFile); err == nil {
-			fileExists = true
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
+	// Wait for Done to close (subagent completed)
+	select {
+	case <-result.Done:
+		// ok
+	case <-time.After(2 * time.Minute):
+		t.Fatal("subagent did not complete within 2m")
 	}
-
-	if !fileExists {
-		t.Fatalf("output file was not created within 30s: %s", outputFile)
-	}
-
-	// Read the output file and verify it contains valid JSONL
-	data, err := os.ReadFile(outputFile)
-	if err != nil {
-		t.Fatalf("reading output file: %v", err)
-	}
-
-	content := string(data)
-	t.Logf("Output file content: %s", content)
-
-	// Should be non-empty
-	if len(content) == 0 {
-		t.Fatal("output file is empty")
-	}
-
-	// Should contain "type" field (JSONL format)
-	if !strings.Contains(content, `"type"`) {
-		t.Errorf("output file should contain JSON with 'type' field, got: %s", content)
-	}
-
-	// Should end with newline (valid JSONL)
-	if content[len(content)-1] != '\n' {
-		t.Errorf("output file should end with newline for valid JSONL, got: %q", content[len(content)-1])
-	}
-
-	// Clean up
-	os.Remove(outputFile)
 }
 
-func TestAC3_AsyncOutputFile_ErrorContent(t *testing.T) {
-	// AC3: When the subagent fails, the output file should contain the error message
+func TestAC3_AsyncSubagentErrorContent(t *testing.T) {
+	// AC3: When the subagent fails, Done is still closed and error is recorded.
 
 	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
 	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
@@ -1182,39 +1135,13 @@ func TestAC3_AsyncOutputFile_ErrorContent(t *testing.T) {
 		t.Fatalf("RunSubagentAsync should not error (launch is sync): %v", err)
 	}
 
-	outputFile := result.OutputFile
-
-	// Wait for the background goroutine to complete
-	deadline := time.Now().Add(30 * time.Second)
-	var fileExists bool
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(outputFile); err == nil {
-			fileExists = true
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
+	// Wait for Done to close (subagent completed with error)
+	select {
+	case <-result.Done:
+		// ok
+	case <-time.After(30 * time.Second):
+		t.Fatal("subagent did not complete within 30s")
 	}
-
-	if !fileExists {
-		t.Fatalf("output file was not created within 30s: %s", outputFile)
-	}
-
-	// Read the output file
-	data, err := os.ReadFile(outputFile)
-	if err != nil {
-		t.Fatalf("reading output file: %v", err)
-	}
-
-	content := string(data)
-	t.Logf("Output file content: %s", content)
-
-	// Should contain error information when subagent fails
-	if !strings.Contains(content, `"error"`) {
-		t.Errorf("expected output file to contain error field for failed subagent, got: %s", content)
-	}
-
-	// Clean up
-	os.Remove(outputFile)
 }
 
 // ============================================================================

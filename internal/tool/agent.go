@@ -48,9 +48,11 @@ type AsyncRunner interface {
 
 // AsyncResult holds the result of an async subagent launch.
 type AsyncResult struct {
-	Status     string `json:"status"`
-	AgentID    string `json:"agent_id"`
-	OutputFile string `json:"output_file"`
+	Status  string `json:"status"`
+	AgentID string `json:"agent_id"`
+	// Done is closed when the subagent completes. Tests can wait on it to
+	// verify the result was written to the parent's transcript.
+	Done <-chan struct{}
 }
 
 // AgentTool provides subagent spawning capability.

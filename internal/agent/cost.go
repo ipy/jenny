@@ -448,6 +448,27 @@ func AccumulateUsage(state *CostState, model string, usage api.Usage) {
 	}
 }
 
+// Merge combines all usage and cost from another CostState into this one.
+// Used to aggregate subagent costs back into the parent session.
+func (s *CostState) Merge(other *CostState) {
+	if other == nil {
+		return
+	}
+	for model, mu := range other.ModelUsage {
+		existing := s.ModelUsage[model]
+		existing.InputTokens += mu.InputTokens
+		existing.OutputTokens += mu.OutputTokens
+		existing.CacheReadInputTokens += mu.CacheReadInputTokens
+		existing.CacheCreationInputTokens += mu.CacheCreationInputTokens
+		existing.CostUSD += mu.CostUSD
+		s.ModelUsage[model] = existing
+	}
+	s.TotalCostUSD += other.TotalCostUSD
+	if other.HasUnknownModelCost {
+		s.HasUnknownModelCost = true
+	}
+}
+
 // CheckBudgetExceeded checks if the accumulated USD cost exceeds the budget.
 // Returns true if budget is exceeded (should stop) and the current total USD cost.
 // When maxBudget <= 0, no limit applies (returns false, current total).

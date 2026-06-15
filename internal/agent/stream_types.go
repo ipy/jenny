@@ -63,6 +63,7 @@ type StreamConfig struct {
 	MaxIterations        int               // Maximum loop iterations (0 = unlimited)
 	RedactMode           redact.RedactMode // Secret redaction mode
 	Effort               string            // Reasoning effort level (low, medium, high) for OpenAI/DeepSeek
+	ParentEngine         *QueryEngine      // Parent engine for subagent cost merge (set before RunStream)
 }
 
 // SetActiveSkills sets the active skills list for the system prompt.

@@ -348,13 +348,13 @@ func RunSimple(ctx context.Context, prompt string, tools []tool.Tool, maxIterati
 // RunStream executes the agent loop with streaming JSON output.
 // It outputs NDJSON lines to stdout for each message.
 // Uses SSE streaming for API calls when cfg.Enabled is true.
-func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string, cfg *StreamConfig, model string, opts ...QueryEngineOption) (string, string, error) {
+func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string, cfg *StreamConfig, model string, opts ...QueryEngineOption) (*QueryEngine, string, string, error) {
 	// Use provided session ID or generate a new one
 	sessionID := cfg.SessionID
 	if sessionID == "" {
 		newSessionID, err := SessionID()
 		if err != nil {
-			return "", "", fmt.Errorf("generating session ID: %v", err)
+			return nil, "", "", fmt.Errorf("generating session ID: %v", err)
 		}
 		sessionID = newSessionID
 		cfg.SessionID = sessionID
@@ -367,10 +367,17 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 	ctx = context.WithValue(ctx, tool.NamedAgentKey, cfg.IsNamedAgent)
 
 	// Create QueryEngine - it handles API client creation, cost state restoration,
-	// tool parameter conversion, and the agent loop lifecycle
-	engine, err := NewQueryEngine(cfg, tools, model, append(opts, WithCWD(cwd))...)
-	if err != nil {
-		return "", "", err
+	// tool parameter conversion, and the agent loop lifecycle.
+	// If cfg.ParentEngine is already set (subagent integration), reuse it.
+	var engine *QueryEngine
+	var err error
+	if cfg.ParentEngine != nil {
+		engine = cfg.ParentEngine
+	} else {
+		engine, err = NewQueryEngine(cfg, tools, model, append(opts, WithCWD(cwd))...)
+		if err != nil {
+			return nil, "", "", err
+		}
 	}
 
 	// Emit system/init line once at start of stream-json mode (AC1-AC6)
@@ -438,5 +445,5 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 	// - Stream-json emission, SSE streaming, tool execution
 	result, err := engine.SubmitMessage(ctx, prompt)
 
-	return result, sessionID, err
+	return engine, result, sessionID, err
 }

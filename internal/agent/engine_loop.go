@@ -85,18 +85,21 @@ func (e *QueryEngine) SubmitMessage(ctx context.Context, prompt string) (string,
 		messages = historyMessages
 
 		// Inject system reminders for environment changes detected on resume.
-		// These go as virtual user messages before the new user message so the
-		// model sees them in context without polluting the system prompt prefix.
+		// All reminders are merged into a single <system-reminder> block and
+		// sent as one virtual user message, preserving prompt cache integrity.
 		if isResume {
 			reminders := e.detectResumeChanges(cwd)
-			for _, r := range reminders {
-				msg := api.Message{
+			if len(reminders) > 0 {
+				// Store bare reminders joined by newlines (no <system-reminder> wrapper),
+				// consistent with compact path and cross-turn skill-change path.
+				// The restore code prepends "[system]: " so the model sees the full block.
+				bareContent := strings.Join(reminders, "\n")
+				messages = append(messages, api.Message{
 					Role:      api.RoleUser,
-					Content:   "[system]: " + r,
+					Content:   "<system-reminder>\n" + bareContent + "\n</system-reminder>",
 					IsVirtual: true,
-				}
-				messages = append(messages, msg)
-				e.persistSystemReminder(sessionID, r)
+				})
+				e.persistSystemReminder(sessionID, bareContent)
 			}
 		}
 

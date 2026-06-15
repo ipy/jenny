@@ -3,10 +3,7 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -196,6 +193,7 @@ type LocalSubagentRunner struct {
 	sessionMgr        *session.Manager
 	parentConfig      *StreamConfig // Parent's StreamConfig for inheritance when Name is set (AC3)
 	capturedStreamCfg *StreamConfig // Captured StreamConfig for testing verification (AC2, AC4)
+	parentSessionID   string        // Parent session ID for transcript/cost integration
 }
 
 // NewLocalSubagentRunner creates a new LocalSubagentRunner.
@@ -223,6 +221,11 @@ func (r *LocalSubagentRunner) SetSessionManager(mgr *session.Manager) {
 // SetParentConfig sets the parent StreamConfig for inheritance when Name is set (AC3).
 func (r *LocalSubagentRunner) SetParentConfig(cfg *StreamConfig) {
 	r.parentConfig = cfg
+}
+
+// SetParentSessionID sets the parent session ID for transcript/cost integration.
+func (r *LocalSubagentRunner) SetParentSessionID(sessionID string) {
+	r.parentSessionID = sessionID
 }
 
 // GetCapturedStreamConfig returns the StreamConfig most recently constructed in RunSubagent.
@@ -348,6 +351,11 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 		streamCfg.StructuredDenyRules = r.parentConfig.StructuredDenyRules
 	}
 
+	// Subagent integration: use parent's session ID so transcript/cost land in parent's directory
+	if r.parentSessionID != "" {
+		streamCfg.SessionID = r.parentSessionID
+	}
+
 	// Capture streamCfg for test verification (AC2, AC4)
 	r.capturedStreamCfg = streamCfg
 
@@ -369,7 +377,7 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 			defer r.SetProfile(prevProfile)
 		}
 	}
-	output, _, err := RunStream(ctx, params.Prompt, subagentTools, cwd, streamCfg, params.Model, WithClient(r.client))
+	_, output, _, err := RunStream(ctx, params.Prompt, subagentTools, cwd, streamCfg, params.Model, WithClient(r.client))
 
 	// AC4: Interrupt yields partial result - capture output even on cancellation
 	if ctx.Err() != nil {
@@ -385,6 +393,33 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 		}, err
 	}
 
+	// Merge subagent cost back into parent's cost state.
+	// When ParentEngine is available, merge into its in-memory costState.
+	// Fall back to disk merge: load subagent cost, load parent cost, merge, save.
+	if r.parentSessionID != "" {
+		loadSubagentCost := func() *CostState {
+			c, e := LoadCostState(r.parentSessionID)
+			if e != nil || c == nil {
+				return nil
+			}
+			return c
+		}
+		if r.parentConfig != nil && r.parentConfig.ParentEngine != nil {
+			if subagentCost := loadSubagentCost(); subagentCost != nil {
+				r.parentConfig.ParentEngine.costState.Merge(subagentCost)
+			}
+		} else {
+			// Fallback: merge to parent session file on disk
+			if subagentCost := loadSubagentCost(); subagentCost != nil {
+				if parentCost, e := LoadCostState(r.parentSessionID); e == nil && parentCost != nil {
+					parentCost.Merge(subagentCost)
+					parentCost.LastSessionID = r.parentSessionID
+					_ = SaveCostState(parentCost)
+				}
+			}
+		}
+	}
+
 	return &tool.SubagentResult{
 		Output: output,
 	}, nil
@@ -392,8 +427,9 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 
 // AsyncSubagentRunner wraps a LocalSubagentRunner to provide async execution.
 type AsyncSubagentRunner struct {
-	runner     *LocalSubagentRunner
-	sessionMgr *session.Manager
+	runner          *LocalSubagentRunner
+	sessionMgr      *session.Manager
+	parentSessionID string
 }
 
 // NewAsyncSubagentRunner creates a new AsyncSubagentRunner.
@@ -414,6 +450,12 @@ func (r *AsyncSubagentRunner) SetParentConfig(cfg *StreamConfig) {
 	r.runner.parentConfig = cfg
 }
 
+// SetParentSessionID sets the parent session ID for transcript/cost integration.
+func (r *AsyncSubagentRunner) SetParentSessionID(sessionID string) {
+	r.parentSessionID = sessionID
+	r.runner.parentSessionID = sessionID
+}
+
 // RunSubagentAsync launches a subagent asynchronously.
 // It returns immediately with an AsyncResult without blocking.
 func (r *AsyncSubagentRunner) RunSubagentAsync(params tool.SubagentParams) (*tool.AsyncResult, error) {
@@ -423,47 +465,38 @@ func (r *AsyncSubagentRunner) RunSubagentAsync(params tool.SubagentParams) (*too
 		return nil, fmt.Errorf("generating agent ID: %w", err)
 	}
 
-	// Determine transcript directory - use session manager's dir if available
-	transcriptDir := "transcripts"
-	if r.sessionMgr != nil {
-		transcriptDir = r.sessionMgr.TranscriptDir()
-	}
 
-	// Build output file path
-	outputFile := filepath.Join(transcriptDir, agentID+".jsonl")
+	// Done channel so caller can wait for completion
+	done := make(chan struct{})
 
-	// Ensure transcripts directory exists
-	if err := os.MkdirAll(transcriptDir, 0755); err != nil {
-		return nil, fmt.Errorf("creating transcripts directory: %w", err)
-	}
-
-	// Launch subagent in goroutine with result capture (AC3)
+	// Launch subagent in goroutine with result capture
 	go func() {
+		defer close(done)
+
 		result, err := r.runner.RunSubagent(context.Background(), params)
 
-		// Write result to output file as JSONL (newline-delimited JSON)
-		var entry struct {
-			Type   string `json:"type"`
-			Output string `json:"output,omitempty"`
-			Error  string `json:"error,omitempty"`
+		// Write result to parent's transcript instead of root transcripts/ file
+		if r.sessionMgr != nil && r.parentSessionID != "" {
+			entry := session.TranscriptEntry{
+				Type:        "subagent_result",
+				SubagentID:  agentID,
+				Content:     "",
+				IsError:     err != nil,
+			}
+			if result != nil {
+				entry.Content = result.Output
+			}
+			if err != nil {
+				entry.Content = err.Error()
+			}
+			_ = r.sessionMgr.AppendEntry(r.parentSessionID, entry)
+			// Cost merge already handled inside RunSubagent above — no duplicate here
 		}
-		entry.Type = "result"
-		if result != nil {
-			entry.Output = result.Output
-		}
-		if err != nil {
-			entry.Error = err.Error()
-		}
-
-		data, _ := json.Marshal(entry)
-		// Add newline for valid JSONL format
-		data = append(data, '\n')
-		_ = os.WriteFile(outputFile, data, 0644)
 	}()
 
 	return &tool.AsyncResult{
-		Status:     "async_launched",
-		AgentID:    agentID,
-		OutputFile: outputFile,
+		Status: "async_launched",
+		AgentID: agentID,
+		Done:   done,
 	}, nil
 }

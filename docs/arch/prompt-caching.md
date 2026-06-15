@@ -76,11 +76,28 @@ After compaction, if `StreamConfig.ActiveSkills` is non-empty, a reminder is inj
 
 ### Resume-time environment changes
 
-`detectResumeChanges()` compares current cwd and date against the frozen system prompt. Differences are injected as virtual messages before the new user message.
+`detectResumeChanges()` compares current cwd, date, and skills list against the frozen system prompt. All detected differences are merged into a **single** `<system-reminder>` block and injected as one virtual user message before the new user prompt:
+
+```xml
+<system-reminder>
+The current date is 2026-06-16.
+The working directory is now /Users/sin/work/agents/jenny.
+New skills available:
+- agent-browser: Browser automation for AI agents
+- ultra-goal: Orchestrate multi-agent workflows for complex engineering goals
+Skills removed: find-skills
+</system-reminder>
+```
+
+The cache is **never busted** — all changes flow through the message chain.
+
+#### Skills change detection on resume
+
+When resuming, `extractSkillsFromManifest()` parses the frozen system prompt's "Available Skills" section (name → description) and compares it against `cfg.Skills`. Both name and description are compared; description changes also trigger a reminder. This preserves prompt caching benefits for unchanged skills while ensuring the agent always sees the current skill set.
 
 ### Transcript persistence
 
-`system_reminder` entries are persisted with `Type: system, Subtype: system_reminder`. On resume, `RebuildMessages` restores them as `IsVirtual: true` user messages with `[system]: ` prefix, keeping the message chain structurally identical.
+`system_reminder` entries are persisted with `Type: system, Subtype: system_reminder` and store the full `<system-reminder>` XML content. On resume, `RebuildMessages` restores them as `IsVirtual: true` user messages, keeping the message chain structurally identical.
 
 ## Compaction Integration
 

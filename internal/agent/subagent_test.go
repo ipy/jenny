@@ -429,8 +429,8 @@ func TestAsyncSubagentRunner_AC2_AsyncLaunch(t *testing.T) {
 	if result.AgentID == "" {
 		t.Error("expected non-empty agent_id")
 	}
-	if result.OutputFile == "" {
-		t.Error("expected non-empty output_file")
+	if result.Done == nil {
+		t.Error("expected non-nil Done channel")
 	}
 }
 

@@ -395,6 +395,8 @@ func (e *QueryEngine) persistCompactBoundary(preTokens int, preservedCount int, 
 // system prompt and returns reminder strings for anything that changed.
 // The frozen system prompt captures cwd, date, and platform at session start;
 // on resume these may differ (e.g., next day, different directory).
+// Skills changes are detected by comparing the frozen manifest against the
+// current cfg.Skills — differences are injected as reminders to preserve cache.
 func (e *QueryEngine) detectResumeChanges(currentCWD string) []string {
 	frozenBlocks := e.streamCfg.CachedSystemPrompt
 	if len(frozenBlocks) == 0 {
@@ -413,7 +415,90 @@ func (e *QueryEngine) detectResumeChanges(currentCWD string) []string {
 		reminders = append(reminders, "The working directory is now "+currentCWD+".")
 	}
 
+	// Detect skills changes by comparing frozen manifest vs current cfg.Skills.
+	// The frozen manifest only has names; current cfg.Skills has names+descriptions.
+	if len(e.streamCfg.Skills) > 0 {
+		frozenSkills := extractSkillsFromManifest(fullFrozen) // name → description (may be "")
+		currentSkills := make(map[string]string)
+		for _, s := range e.streamCfg.Skills {
+			currentSkills[s.Name] = s.Description
+		}
+		if skillsChanged(frozenSkills, currentSkills) {
+			reminders = append(reminders, buildSkillsChangeReminder(frozenSkills, currentSkills))
+		}
+	}
+
 	return reminders
+}
+
+// extractSkillsFromManifest parses the "Available Skills" section from a frozen
+// system prompt and returns a map of skill name → description (may be empty).
+func extractSkillsFromManifest(text string) map[string]string {
+	result := make(map[string]string)
+	_, after, found := strings.Cut(text, "Available Skills:\n")
+	if !found {
+		return result
+	}
+	rest := after
+	if end := strings.Index(rest, "\n\n"); end >= 0 {
+		rest = rest[:end]
+	}
+	lines := strings.Split(rest, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if name, desc, ok := strings.Cut(strings.TrimPrefix(line, "- "), ": "); ok {
+			result[name] = desc
+		}
+	}
+	return result
+}
+
+// skillsChanged compares frozen vs current skill maps and returns true if they differ.
+func skillsChanged(frozen, current map[string]string) bool {
+	if len(frozen) != len(current) {
+		return true
+	}
+	for name, frozenDesc := range frozen {
+		if currentDesc, exists := current[name]; !exists || currentDesc != frozenDesc {
+			return true
+		}
+	}
+	return false
+}
+
+// buildSkillsChangeReminder produces a human-readable reminder for skill changes,
+// including descriptions for new/changed skills.
+func buildSkillsChangeReminder(frozen map[string]string, current map[string]string) string {
+	var added, removed []string
+	for name, desc := range current {
+		if _, existed := frozen[name]; !existed {
+			if desc != "" {
+				added = append(added, name+": "+desc)
+			} else {
+				added = append(added, name)
+			}
+		}
+	}
+	for name := range frozen {
+		if _, exists := current[name]; !exists {
+			removed = append(removed, name)
+		}
+	}
+
+	var msg string
+	if len(added) > 0 {
+		msg += "New skills available:\n"
+		for _, a := range added {
+			msg += "- " + a + "\n"
+		}
+	}
+	if len(removed) > 0 {
+		if msg != "" {
+			msg += "\n"
+		}
+		msg += "Skills removed: " + strings.Join(removed, ", ")
+	}
+	return strings.TrimSpace(msg)
 }
 
 // persistSystemReminder persists a system_reminder entry to the transcript.

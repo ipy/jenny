@@ -217,6 +217,11 @@ func (sm *SessionMemory) Init() error {
 	// Record read in cache for edit validation
 	sm.readCache.RecordRead(sm.memoryFilePath, content, time.Now(), true, 0, 0)
 
+	// Set baselines so Update() coalescing guards don't immediately fire
+	sm.lastBaseline = sm.accumTokens
+	sm.lastToolBaseline = sm.toolCalls
+	sm.lastUpdateTime = time.Now()
+
 	log.Debug("Session memory file created", "path", sm.memoryFilePath)
 	return nil
 }

@@ -397,8 +397,20 @@ func run() error {
 	localRunner.SetParentConfig(&streamCfg)
 	asyncRunner.SetParentConfig(&streamCfg)
 
-	// Run agent
-	result, _, err := agent.RunStream(ctx, flags.Prompt, tools, cwd, &streamCfg, flags.Model, agent.WithSkillActivator(skillActivator))
+	// Subagent integration: wire parent session ID so subagent transcript/cost land in parent dir
+	localRunner.SetParentSessionID(sessionID)
+	asyncRunner.SetParentSessionID(sessionID)
+
+	// Create engine before RunStream so subagents can access ParentEngine during execution.
+	// This is needed for cost merge: subagent reads r.parentConfig.ParentEngine after it completes.
+	engine, err := agent.NewQueryEngine(&streamCfg, tools, flags.Model, agent.WithSkillActivator(skillActivator), agent.WithCWD(cwd))
+	if err != nil {
+		return err
+	}
+	streamCfg.ParentEngine = engine
+
+	// Run agent (will reuse the engine we just created since ParentEngine is set)
+	engine, result, _, err := agent.RunStream(ctx, flags.Prompt, tools, cwd, &streamCfg, flags.Model, agent.WithSkillActivator(skillActivator))
 	if err != nil {
 		return err
 	}
