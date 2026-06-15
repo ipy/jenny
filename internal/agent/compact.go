@@ -484,8 +484,8 @@ func buildCompactedChain(originalMessages []api.Message, summary string) []api.M
 
 	var result []api.Message
 	result = append(result, api.Message{
-		Role:    api.RoleSystem,
-		Content: compactSummaryPrefix + summary,
+		Role:    api.RoleUser,
+		Content: "[system]: " + compactSummaryPrefix + summary,
 	})
 	result = append(result, originalMessages...)
 	return result

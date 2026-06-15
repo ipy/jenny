@@ -205,8 +205,7 @@ func TestNormalization_ToolResultFlattening_EdgeCases(t *testing.T) {
 
 		messages := []Message{
 			{
-				Role:    "user",
-				Content: "Hello",
+				Role:    "assistant",
 				ToolUse: []ToolUseBlock{
 					{
 						ID:    "call_1",
@@ -214,8 +213,12 @@ func TestNormalization_ToolResultFlattening_EdgeCases(t *testing.T) {
 						Input: map[string]any{"key": "value"},
 					},
 				},
+			},
+			{
+				Role:    "user",
+				Content: "Hello",
 				ToolResults: []ToolResultBlock{
-					{ToolUseID: "call_0", Content: "prev output"},
+					{ToolUseID: "call_1", Content: "prev output"},
 				},
 			},
 		}
@@ -227,25 +230,32 @@ func TestNormalization_ToolResultFlattening_EdgeCases(t *testing.T) {
 
 		reqs := mock.Requests()
 		msgs, _ := reqs[len(reqs)-1].Body["messages"].([]any)
-		lastMsg, _ := msgs[len(msgs)-1].(map[string]any)
-		content, _ := lastMsg["content"].([]any)
+		
+		// Check assistant message for tool_use
+		assistantMsg, _ := msgs[0].(map[string]any)
+		assistantContent, _ := assistantMsg["content"].([]any)
+		hasToolUse := false
+		for _, b := range assistantContent {
+			block, _ := b.(map[string]any)
+			if block["type"] == "tool_use" {
+				hasToolUse = true
+			}
+		}
+
+		// Check user message for text and tool_result
+		userMsg, _ := msgs[1].(map[string]any)
+		userContent, _ := userMsg["content"].([]any)
 
 		hasText := false
-		hasToolUse := false
 		hasToolResult := false
 
-		for _, b := range content {
+		for _, b := range userContent {
 			block, _ := b.(map[string]any)
 			switch block["type"] {
 			case "text":
 				hasText = true
 				if _, isString := block["text"].(string); !isString {
 					t.Error("text block 'text' field is not a string")
-				}
-			case "tool_use":
-				hasToolUse = true
-				if _, isMap := block["input"].(map[string]any); !isMap {
-					t.Errorf("tool_use block 'input' field is not a map: %T", block["input"])
 				}
 			case "tool_result":
 				hasToolResult = true

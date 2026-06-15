@@ -49,7 +49,76 @@ func NormalizeMessages(messages []Message, tools []ToolParam, caps Capabilities)
 		normalizedMessages[i].ToolResults = deduplicateToolResults(msg.ToolResults)
 	}
 
+	// Merge consecutive same-role messages (universal)
+	normalizedMessages = MergeConsecutiveSameRole(normalizedMessages)
+
 	return normalizedMessages, normalizedTools, logs
+}
+
+// MergeConsecutiveSameRole merges consecutive messages with the same role.
+func MergeConsecutiveSameRole(messages []Message) []Message {
+	if len(messages) == 0 {
+		return messages
+	}
+
+	var result []Message
+	var current *Message
+
+	for _, msg := range messages {
+		if current == nil {
+			m := msg
+			current = &m
+			continue
+		}
+
+		if current.Role == msg.Role {
+			// Merge content
+			if msg.Content != "" {
+				if current.Content != "" {
+					current.Content += "\n"
+				}
+				current.Content += msg.Content
+			}
+			// Merge Thinking
+			if msg.Thinking != "" {
+				if current.Thinking != "" {
+					current.Thinking += "\n"
+				}
+				current.Thinking += msg.Thinking
+			}
+			// Concatenate tool_use for assistant
+			if msg.Role == RoleAssistant {
+				current.ToolUse = append(current.ToolUse, msg.ToolUse...)
+			}
+			// Merge tool_results for user (dedup by ToolUseID - last-writer-wins)
+			if msg.Role == RoleUser {
+				// Map ToolUseID -> index in current.ToolResults for last-writer-wins
+				seenIDToIdx := make(map[string]int)
+				for i, tr := range current.ToolResults {
+					seenIDToIdx[tr.ToolUseID] = i
+				}
+				for _, tr := range msg.ToolResults {
+					if idx, exists := seenIDToIdx[tr.ToolUseID]; exists {
+						// Replace existing entry (last writer wins)
+						current.ToolResults[idx] = tr
+					} else {
+						current.ToolResults = append(current.ToolResults, tr)
+						seenIDToIdx[tr.ToolUseID] = len(current.ToolResults) - 1
+					}
+				}
+			}
+		} else {
+			result = append(result, *current)
+			m := msg
+			current = &m
+		}
+	}
+
+	if current != nil {
+		result = append(result, *current)
+	}
+
+	return result
 }
 
 // flattenToolResultContent ensures all tool_result blocks have plain string content.

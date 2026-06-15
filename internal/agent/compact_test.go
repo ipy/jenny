@@ -425,7 +425,7 @@ func TestBuildCompactedChain(t *testing.T) {
 		t.Fatal("AC1 FAIL: result should not be empty")
 	}
 
-	if result[0].Role != "system" {
+	if result[0].Role != "user" {
 		t.Errorf("AC1 FAIL: first message should be system role, got %s", result[0].Role)
 	}
 
@@ -881,8 +881,8 @@ func TestAC3_175KTokensForkRetries(t *testing.T) {
 	if len(result) == 0 {
 		t.Fatal("AC3 FAIL: compacted result should not be empty")
 	}
-	if result[0].Role != "system" {
-		t.Errorf("AC3 FAIL: first message role = %q, want 'system'", result[0].Role)
+	if result[0].Role != "user" {
+		t.Errorf("AC3 FAIL: first message role = %q, want 'user'", result[0].Role)
 	}
 	if !strings.Contains(result[0].Content, "[Context boundary") {
 		t.Error("AC3 FAIL: first message should contain context boundary marker")

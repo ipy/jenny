@@ -38,7 +38,7 @@ func NormalizeMessagesAPI(messages []api.Message) []api.Message {
 	// Step 6: Role merging - merge consecutive same-role messages
 	// NOTE: This is the primary cache buster in the normal turn path.
 	// It is only called here (compaction path), not in the per-turn engine loop.
-	messages = mergeConsecutiveSameRole(messages)
+	messages = api.MergeConsecutiveSameRole(messages)
 
 	return messages
 }
@@ -351,74 +351,6 @@ func ensureToolResultPairing(messages []api.Message) []api.Message {
 			pendingAssistant.Content = "[Tool use interrupted]"
 		}
 		result = append(result, *pendingAssistant)
-	}
-
-	return result
-}
-
-// mergeConsecutiveSameRole merges consecutive messages with the same role.
-// This is called after pairing to consolidate role blocks.
-func mergeConsecutiveSameRole(messages []api.Message) []api.Message {
-	if len(messages) == 0 {
-		return messages
-	}
-
-	var result []api.Message
-	var current *api.Message
-
-	for _, msg := range messages {
-		if current == nil {
-			current = &api.Message{
-				Role:    msg.Role,
-				Content: msg.Content,
-			}
-			current.ToolUse = append(current.ToolUse, msg.ToolUse...)
-			current.ToolResults = append(current.ToolResults, msg.ToolResults...)
-			continue
-		}
-
-		if current.Role == msg.Role {
-			// Merge content
-			if msg.Content != "" {
-				if current.Content != "" {
-					current.Content += "\n"
-				}
-				current.Content += msg.Content
-			}
-			// Concatenate tool_use for assistant
-			if msg.Role == api.RoleAssistant {
-				current.ToolUse = append(current.ToolUse, msg.ToolUse...)
-			}
-			// Merge tool_results for user (dedup by ToolUseID - last-writer-wins)
-			if msg.Role == api.RoleUser {
-				// Map ToolUseID -> index in current.ToolResults for last-writer-wins
-				seenIDToIdx := make(map[string]int)
-				for i, tr := range current.ToolResults {
-					seenIDToIdx[tr.ToolUseID] = i
-				}
-				for _, tr := range msg.ToolResults {
-					if idx, exists := seenIDToIdx[tr.ToolUseID]; exists {
-						// Replace existing entry (last writer wins)
-						current.ToolResults[idx] = tr
-					} else {
-						current.ToolResults = append(current.ToolResults, tr)
-						seenIDToIdx[tr.ToolUseID] = len(current.ToolResults) - 1
-					}
-				}
-			}
-		} else {
-			result = append(result, *current)
-			current = &api.Message{
-				Role:    msg.Role,
-				Content: msg.Content,
-			}
-			current.ToolUse = append(current.ToolUse, msg.ToolUse...)
-			current.ToolResults = append(current.ToolResults, msg.ToolResults...)
-		}
-	}
-
-	if current != nil {
-		result = append(result, *current)
 	}
 
 	return result

@@ -231,33 +231,44 @@ func (p *anthropicProvider) buildMessages(messages []Message, toolResults []Tool
 			})
 		}
 
-		if msg.Content != "" {
-			contentBlocks = append(contentBlocks, AnthropicContentBlock{
-				Type: BlockTypeText,
-				Text: msg.Content,
-			})
+		if msg.Role == RoleAssistant {
+			if msg.Content != "" {
+				contentBlocks = append(contentBlocks, AnthropicContentBlock{
+					Type: BlockTypeText,
+					Text: msg.Content,
+				})
+			}
+
+			for _, tu := range msg.ToolUse {
+				contentBlocks = append(contentBlocks, AnthropicContentBlock{
+					Type:  BlockTypeToolUse,
+					ID:    tu.ID,
+					Name:  tu.Name,
+					Input: tu.Input,
+				})
+			}
+		} else {
+			// User role: tool_results must come before text to satisfy tool call sequence
+			for _, tr := range msg.ToolResults {
+				block := AnthropicContentBlock{
+					Type:      BlockTypeToolResult,
+					ToolUseID: tr.ToolUseID,
+				}
+				block.SetContent(tr.Content)
+				if tr.IsError {
+					block.IsError = true
+				}
+				contentBlocks = append(contentBlocks, block)
+			}
+
+			if msg.Content != "" {
+				contentBlocks = append(contentBlocks, AnthropicContentBlock{
+					Type: BlockTypeText,
+					Text: msg.Content,
+				})
+			}
 		}
 
-		for _, tu := range msg.ToolUse {
-			contentBlocks = append(contentBlocks, AnthropicContentBlock{
-				Type:  BlockTypeToolUse,
-				ID:    tu.ID,
-				Name:  tu.Name,
-				Input: tu.Input,
-			})
-		}
-
-		for _, tr := range msg.ToolResults {
-			block := AnthropicContentBlock{
-				Type:      BlockTypeToolResult,
-				ToolUseID: tr.ToolUseID,
-			}
-			block.SetContent(tr.Content)
-			if tr.IsError {
-				block.IsError = true
-			}
-			contentBlocks = append(contentBlocks, block)
-		}
 
 		sdkMessages = append(sdkMessages, AnthropicMessage{
 			Role:    msg.Role,

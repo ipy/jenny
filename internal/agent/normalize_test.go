@@ -291,7 +291,7 @@ func TestMergeConsecutiveSameRole(t *testing.T) {
 		{Role: "assistant", Content: "Hi"},
 		{Role: "assistant", Content: "There"},
 	}
-	result := mergeConsecutiveSameRole(messages)
+	result := api.MergeConsecutiveSameRole(messages)
 
 	if len(result) != 2 {
 		t.Errorf("expected 2 merged messages, got %d", len(result))
@@ -321,7 +321,7 @@ func TestMergeConsecutiveSameRole_DedupToolResults(t *testing.T) {
 			},
 		},
 	}
-	result := mergeConsecutiveSameRole(messages)
+	result := api.MergeConsecutiveSameRole(messages)
 
 	if len(result) != 1 {
 		t.Fatalf("expected 1 merged user message, got %d", len(result))
@@ -360,7 +360,7 @@ func TestMergeConsecutiveSameRole_PreservesUnique(t *testing.T) {
 			},
 		},
 	}
-	result := mergeConsecutiveSameRole(messages)
+	result := api.MergeConsecutiveSameRole(messages)
 
 	if len(result) != 1 {
 		t.Fatalf("expected 1 merged user message, got %d", len(result))

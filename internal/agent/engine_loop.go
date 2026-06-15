@@ -420,6 +420,10 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				if e.firstTokenTime.IsZero() {
 					e.firstTokenTime = time.Now()
 				}
+				// AC2: Track first stream event time (for ttft_stream_ms calculation)
+				if e.firstStreamTime.IsZero() {
+					e.firstStreamTime = time.Now()
+				}
 				// AC3: Emit thinking_tokens event when thinking block arrives (streaming delta)
 				e.emitThinkingTokens(sessionID, block.Index, block.Block.Thinking)
 				// When IncludePartial is true, thinking blocks are already emitted via thinking_tokens events,
@@ -431,6 +435,10 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				// Track TTFT: record time when first content block arrives
 				if e.firstTokenTime.IsZero() {
 					e.firstTokenTime = time.Now()
+				}
+				// AC2: Track first stream event time (for ttft_stream_ms calculation)
+				if e.firstStreamTime.IsZero() {
+					e.firstStreamTime = time.Now()
 				}
 				// Collect tool_use blocks for the assistant message
 				toolUseBlocks = append(toolUseBlocks, api.ToolUseBlock{

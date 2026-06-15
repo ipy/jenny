@@ -265,7 +265,6 @@ func Parse() (*Flags, error) {
 // then session_id, parent_tool_use_id, uuid, then remaining fields.
 type StreamMessage struct {
 	Type                    string            `json:"type"`
-	Kind                    string            `json:"kind,omitempty"`
 	Subtype                 string            `json:"subtype,omitempty"`
 	Content                 string            `json:"content,omitempty"`
 	SessionID               string            `json:"session_id,omitempty"`
@@ -303,23 +302,9 @@ type PluginInitInfo struct {
 
 // MarshalJSON implements custom marshaling for StreamMessage to:
 // - Maintain correct field ordering per reference format
-// - Include 'kind' field for compatibility with Claude Code parsers
 func (s StreamMessage) MarshalJSON() ([]byte, error) {
-	kind := s.Kind
-	if kind == "" {
-		switch s.Type {
-		case "assistant", "user", "result", "system":
-			kind = "message"
-		case "tool_call", "tool_use":
-			kind = "tool_call"
-		default:
-			kind = s.Type
-		}
-	}
-
 	var fields []string
 	fields = append(fields, `"type":`+encodeString(s.Type))
-	fields = append(fields, `"kind":`+encodeString(kind))
 	if s.Subtype != "" {
 		fields = append(fields, `"subtype":`+encodeString(s.Subtype))
 	}
