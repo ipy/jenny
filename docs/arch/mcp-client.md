@@ -7,22 +7,19 @@ spec: complete
 code: partial
 package: internal/mcp
 gaps:
-  - "SSE, HTTP (Streamable), WebSocket transports not implemented (stdio only this iteration)"
-  - "OAuth 2.1 authorization not implemented (no HTTP transport)"
-  - "Binary MCP results from tools not persisted to disk (text/path only for ReadMcpResource, but missing for ToolCall)"
-  - "Content truncation at MAX_MCP_OUTPUT_TOKENS not implemented"
+  - "OAuth 2.1 authorization not implemented"
   - "Resource cache is minimal (missing support for notifications/resources/list_changed)"
   - "Progress events not implemented (notifications/progress)"
   - "Prompts (prompts/list, prompts/get) not implemented"
   - "Resource templates (resources/templates/list) not implemented"
   - "Resource subscriptions (resources/subscribe, notifications/resources/updated) not implemented"
-  - "Pagination (cursor-based) for list requests not implemented"
   - "Client capabilities (roots/list, sampling/createMessage) not implemented"
   - "Logging (logging/setLevel, notifications/message) not implemented"
   - "Icons metadata not supported"
   - "Tasks (experimental) not implemented"
-  - "Protocol version 2025-11-25 support missing (currently 2025-03-26)"
   - "Asynchronous message loop for handling server-initiated requests/notifications (sampling, list_changed, logging) not implemented"
+  - "SSE stream resumability (Last-Event-ID) not implemented"
+  - "GET-based server-to-client SSE stream not implemented"
 defer_to: P4
 depends_on:
   - mcp-config
@@ -35,14 +32,55 @@ Jenny implements an MCP client that connects to configured servers, exposes thei
 
 ## Transports
 
-| Transport | Use case |
-|-----------|----------|
-| `stdio` | Default; spawn subprocess with stdin/stdout JSON-RPC |
-| `sse` | Server-sent events endpoint |
-| `http` | Streamable HTTP (modern MCP transport) |
-| `ws` | WebSocket endpoint |
+| Transport | Use case | Config trigger |
+|-----------|----------|----------------|
+| `stdio` | Local subprocess; stdin/stdout JSON-RPC | `command` field present |
+| `http` | Streamable HTTP (MCP spec 2025-03-26+) | `url` field present, no `command` |
 
 Connection lifecycle: connect → initialize → list tools/resources → ready.
+
+### Transport Selection Logic
+
+```
+if def.Command != "" → stdio transport
+else if def.URL != "" → HTTP (Streamable HTTP) transport
+else → skip (invalid config)
+```
+
+### Stdio Transport
+
+Spawn subprocess, newline-delimited JSON-RPC 2.0 over stdin/stdout. Existing behavior unchanged.
+
+### HTTP Transport (Streamable HTTP)
+
+Per MCP spec 2025-03-26. Single HTTP endpoint, JSON-RPC over POST.
+
+**Request requirements:**
+- POST JSON-RPC messages to the server URL
+- `Content-Type: application/json`
+- `Accept: application/json, text/event-stream`
+- Include `Mcp-Session-Id` header after initialization (if server provides one)
+
+**Response handling:**
+- `Content-Type: application/json` → parse single JSON-RPC response
+- `Content-Type: text/event-stream` → parse SSE stream, extract JSON-RPC messages from `data:` lines with `event: message`
+- HTTP 202 Accepted → notification/response acknowledged, no body
+- HTTP 404 with session ID → session expired, must re-initialize
+
+**Session management:**
+- Server MAY return `Mcp-Session-Id` in `InitializeResult` response headers
+- Client MUST include this header in all subsequent requests
+- On HTTP 404, discard session and re-initialize
+
+**Notifications (client → server):**
+- POST notification, expect HTTP 202 Accepted
+
+**Custom headers:**
+- `headers` from config merged into every request (e.g., `Authorization: Bearer ...`)
+
+**Timeouts:**
+- Request timeout: 120s default (tool calls may be long-running)
+- Configurable via environment: `MCP_HTTP_REQUEST_TIMEOUT` (value in seconds)
 
 ## OAuth and 401 Handling
 
@@ -71,18 +109,27 @@ Binary MCP content must **not** be inlined as base64 in tool_result text.
 Flow:
 
 1. Decode blob from MCP response.
-2. Persist to disk under session-scoped tool-results directory.
+2. Persist to disk under `~/.jenny/mcp-tool-output/` (unique filename with extension based on mime type).
 3. Return human-readable path reference in tool_result.
 
-Applies to `ReadMcpResource` and MCP tool calls returning binary.
+Applies to `ReadMcpResource` (session-scoped) and MCP tool calls returning `image` or `blob` content parts.
 
 ## Content Truncation
 
 Oversized MCP text responses truncate before model context:
 
-- Default cap: **25,000 output tokens** (`MAX_MCP_OUTPUT_TOKENS`).
+- Default cap: **100,000 characters** (~25,000 tokens).
+- Configurable via `MCP_MAX_OUTPUT_CHARS` environment variable.
 - Truncation appends notice with original size.
-- Truncated content still valid JSON/text where applicable.
+- Truncated content still valid text.
+
+## Pagination
+
+`tools/list` and `resources/list` support cursor-based pagination per MCP spec:
+
+- If response contains `nextCursor`, client sends follow-up request with `cursor` param.
+- Continues until `nextCursor` is empty.
+- All pages are aggregated transparently; callers get complete results.
 
 ## Resource Cache
 
@@ -117,10 +164,29 @@ During long MCP tool calls, emit progress entries (not chain nodes):
 - Tool progress may appear as `tool_progress` lines between assistant and user messages.
 - Final tool_result uses text/path only, compatible with stream-json `user` message shape.
 
+## Transport Interface
+
+Both transports implement a common interface:
+
+```go
+type Transport interface {
+    SendRequest(ctx context.Context, req jsonRPCRequest) (*jsonRPCResponse, error)
+    SendNotification(notif jsonRPCRequest) error
+    Close() error
+}
+```
+
+This allows the Client to be transport-agnostic after connection.
+
 ## Acceptance Criteria
 
-- **AC1:** All four transports connect with valid config.
-- **AC2:** 401 triggers refresh flow once before marking needs-auth.
-- **AC3:** Binary MCP output persisted to disk; tool_result references path.
-- **AC4:** Text exceeding token cap truncated with notice.
-- **AC5:** Resource cache cleared on disconnect.
+- **AC1:** Stdio transport connects with valid `command` config (existing behavior).
+- **AC2:** HTTP transport connects with valid `url` config, completes initialization handshake.
+- **AC3:** HTTP transport handles both JSON and SSE response content types.
+- **AC4:** HTTP transport includes `Mcp-Session-Id` in requests after initialization.
+- **AC5:** HTTP transport includes custom `headers` from config in all requests.
+- **AC6:** Client automatically re-initializes on HTTP 404 (session expired) and retries the failed request once.
+- **AC7:** Binary MCP output persisted to disk; tool_result references path.
+- **AC8:** Resource cache cleared on disconnect.
+- **AC9:** Tools discovered via HTTP transport are registered identically to stdio tools.
+- **AC10:** Existing stdio tests pass unchanged (no regression).

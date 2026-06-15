@@ -4,6 +4,7 @@ package mcp
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -11,21 +12,25 @@ import (
 	"maps"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/log"
 	"github.com/ipy/jenny/internal/toolresult"
 )
 
 // Client represents an MCP client connection to a server.
 type Client struct {
-	Name string // Original server name
-	cmd  string
-	args []string
-	env  map[string]string
-	proc *proc
-	mu   sync.Mutex
+	Name      string // Original server name
+	cmd       string
+	args      []string
+	env       map[string]string
+	proc      *proc
+	transport Transport // HTTP transport (nil for stdio)
+	mu        sync.Mutex
 }
 
 // proc holds the process handles for a subprocess transport.
@@ -102,7 +107,8 @@ type toolInfo struct {
 
 // toolsListResult represents the result of a tools/list call.
 type toolsListResult struct {
-	Tools []toolInfo `json:"tools"`
+	Tools      []toolInfo `json:"tools"`
+	NextCursor string     `json:"nextCursor,omitempty"`
 }
 
 // resourceEntry represents a resource entry from the resources/list response.
@@ -115,7 +121,8 @@ type resourceEntry struct {
 
 // resourcesListResult represents the result of a resources/list call.
 type resourcesListResult struct {
-	Resources []resourceEntry `json:"resources"`
+	Resources  []resourceEntry `json:"resources"`
+	NextCursor string          `json:"nextCursor,omitempty"`
 }
 
 // MCPResource represents a resource exposed by an MCP server.
@@ -136,6 +143,7 @@ type contentPart struct {
 	Type string `json:"type"`
 	Text string `json:"text,omitempty"`
 	Mime string `json:"mimeType,omitempty"`
+	Data string `json:"data,omitempty"`
 }
 
 // resourceContent represents a content item in a resources/read response.
@@ -207,11 +215,10 @@ func (t *MCPTool) Execute(ctx context.Context, input map[string]any, cwd string)
 
 // NormalizeName normalizes a name for use in tool naming.
 // Lowercase, non-alphanumeric characters become underscores, repeats collapsed.
+// If the input produces an empty result, returns "unnamed" as a safe fallback.
 func NormalizeName(name string) string {
-	// Convert to lowercase
 	result := strings.ToLower(name)
 
-	// Replace non-alphanumeric chars with underscore
 	var sb strings.Builder
 	prevUnderscore := false
 	for _, r := range result {
@@ -233,11 +240,14 @@ func NormalizeName(name string) string {
 		}
 	}
 
-	// Trim leading/trailing underscores
-	return strings.Trim(sb.String(), "_")
+	normalized := strings.Trim(sb.String(), "_")
+	if normalized == "" {
+		return "unnamed"
+	}
+	return normalized
 }
 
-// NewClient creates a new MCP client for the given server.
+// NewClient creates a new MCP client for the given server (stdio transport).
 func NewClient(name string, cmd string, args []string, env map[string]string) *Client {
 	return &Client{
 		Name: name,
@@ -247,11 +257,27 @@ func NewClient(name string, cmd string, args []string, env map[string]string) *C
 	}
 }
 
-// Connect establishes a connection to the MCP server via stdio transport.
+// NewHTTPClient creates a new MCP client for the given server (HTTP transport).
+func NewHTTPClient(name string, url string, headers map[string]string) *Client {
+	return &Client{
+		Name:      name,
+		transport: NewHTTPTransport(url, headers),
+	}
+}
+
+// Connect establishes a connection to the MCP server.
+// For HTTP transport, performs the initialization handshake over HTTP.
+// For stdio transport, spawns the subprocess and initializes.
 func (c *Client) Connect(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// HTTP transport path
+	if c.transport != nil {
+		return c.initializeViaTransport(ctx)
+	}
+
+	// Stdio transport path
 	if c.proc != nil {
 		return nil // Already connected
 	}
@@ -306,6 +332,53 @@ func (c *Client) Connect(ctx context.Context) error {
 	return nil
 }
 
+// initializeViaTransport performs the MCP handshake using the HTTP transport.
+// Caller must hold c.mu.
+func (c *Client) initializeViaTransport(ctx context.Context) error {
+	req := jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      nextJSONID(),
+		Method:  "initialize",
+		Params: map[string]any{
+			"protocolVersion": "2025-03-26",
+			"capabilities":    map[string]any{},
+			"clientInfo": map[string]any{
+				"name":    "jenny",
+				"version": "0.1.0",
+			},
+		},
+	}
+
+	resp, err := c.transport.SendRequest(ctx, req)
+	if err != nil {
+		return fmt.Errorf("initialize request failed: %w", err)
+	}
+
+	if resp.Error != nil {
+		return fmt.Errorf("initialize error: %s (code %d)", resp.Error.Message, resp.Error.Code)
+	}
+
+	var initResult initializeResult
+	if err := json.Unmarshal(resp.Result, &initResult); err != nil {
+		return fmt.Errorf("parsing initialize result: %w", err)
+	}
+
+	log.Debug("MCP server initialized (HTTP)",
+		"server", c.Name,
+		"protocolVersion", initResult.ProtocolVersion,
+		"serverInfo", initResult.ServerInfo.Name+"@"+initResult.ServerInfo.Version,
+	)
+
+	// Send notifications/initialized
+	notif := jsonRPCRequest{
+		JSONRPC: "2.0",
+		Method:  "notifications/initialized",
+	}
+	_ = c.transport.SendNotification(ctx, notif)
+
+	return nil
+}
+
 // initialize performs the MCP handshake.
 func (c *Client) initialize(ctx context.Context) error {
 	// Send initialize request
@@ -355,93 +428,129 @@ func (c *Client) initialize(ctx context.Context) error {
 }
 
 // ListTools discovers tools from the MCP server.
+// Handles cursor-based pagination to collect all tools.
 func (c *Client) ListTools(ctx context.Context) ([]MCPTool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.proc == nil {
+	if c.proc == nil && c.transport == nil {
 		return nil, fmt.Errorf("not connected")
 	}
 
-	req := jsonRPCRequest{
-		JSONRPC: "2.0",
-		ID:      nextJSONID(),
-		Method:  "tools/list",
-	}
+	var allTools []MCPTool
+	var cursor string
 
-	resp, err := c.sendRequest(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("tools/list request failed: %w", err)
-	}
-
-	if resp.Error != nil {
-		return nil, fmt.Errorf("tools/list error: %s (code %d)", resp.Error.Message, resp.Error.Code)
-	}
-
-	var listResult toolsListResult
-	if err := json.Unmarshal(resp.Result, &listResult); err != nil {
-		return nil, fmt.Errorf("parsing tools/list result: %w", err)
-	}
-
-	tools := make([]MCPTool, 0, len(listResult.Tools))
-	for _, t := range listResult.Tools {
-		var inputSchema map[string]any
-		if err := json.Unmarshal(t.InputSchema, &inputSchema); err != nil {
-			log.Warn("failed to parse tool input schema", "tool", t.Name, "error", err)
-			inputSchema = map[string]any{"type": "object"}
+	for {
+		params := map[string]any{}
+		if cursor != "" {
+			params["cursor"] = cursor
 		}
-		tools = append(tools, MCPTool{
-			serverName:  c.Name,
-			toolName:    t.Name,
-			inputSchema: inputSchema,
-		})
-		log.Debug("discovered MCP tool", "server", c.Name, "tool", t.Name)
+
+		req := jsonRPCRequest{
+			JSONRPC: "2.0",
+			ID:      nextJSONID(),
+			Method:  "tools/list",
+		}
+		if len(params) > 0 {
+			req.Params = params
+		}
+
+		resp, err := c.doRequest(ctx, req)
+		if err != nil {
+			return nil, fmt.Errorf("tools/list request failed: %w", err)
+		}
+
+		if resp.Error != nil {
+			return nil, fmt.Errorf("tools/list error: %s (code %d)", resp.Error.Message, resp.Error.Code)
+		}
+
+		var listResult toolsListResult
+		if err := json.Unmarshal(resp.Result, &listResult); err != nil {
+			return nil, fmt.Errorf("parsing tools/list result: %w", err)
+		}
+
+		for _, t := range listResult.Tools {
+			var inputSchema map[string]any
+			if err := json.Unmarshal(t.InputSchema, &inputSchema); err != nil {
+				log.Warn("failed to parse tool input schema", "tool", t.Name, "error", err)
+				inputSchema = map[string]any{"type": "object"}
+			}
+			allTools = append(allTools, MCPTool{
+				serverName:  c.Name,
+				toolName:    t.Name,
+				inputSchema: inputSchema,
+			})
+			log.Debug("discovered MCP tool", "server", c.Name, "tool", t.Name)
+		}
+
+		if listResult.NextCursor == "" {
+			break
+		}
+		cursor = listResult.NextCursor
 	}
 
-	return tools, nil
+	return allTools, nil
 }
 
 // ListResources discovers resources from the MCP server.
+// Handles cursor-based pagination to collect all resources.
 func (c *Client) ListResources(ctx context.Context) ([]MCPResource, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.proc == nil {
+	if c.proc == nil && c.transport == nil {
 		return nil, fmt.Errorf("not connected")
 	}
 
-	req := jsonRPCRequest{
-		JSONRPC: "2.0",
-		ID:      nextJSONID(),
-		Method:  "resources/list",
+	var allResources []MCPResource
+	var cursor string
+
+	for {
+		params := map[string]any{}
+		if cursor != "" {
+			params["cursor"] = cursor
+		}
+
+		req := jsonRPCRequest{
+			JSONRPC: "2.0",
+			ID:      nextJSONID(),
+			Method:  "resources/list",
+		}
+		if len(params) > 0 {
+			req.Params = params
+		}
+
+		resp, err := c.doRequest(ctx, req)
+		if err != nil {
+			return nil, fmt.Errorf("resources/list request failed: %w", err)
+		}
+
+		if resp.Error != nil {
+			return nil, fmt.Errorf("resources/list error: %s (code %d)", resp.Error.Message, resp.Error.Code)
+		}
+
+		var listResult resourcesListResult
+		if err := json.Unmarshal(resp.Result, &listResult); err != nil {
+			return nil, fmt.Errorf("parsing resources/list result: %w", err)
+		}
+
+		for _, r := range listResult.Resources {
+			allResources = append(allResources, MCPResource{
+				URI:         r.URI,
+				Name:        r.Name,
+				MimeType:    r.MimeType,
+				Description: r.Description,
+			})
+			log.Debug("discovered MCP resource", "server", c.Name, "resource", r.Name, "uri", r.URI)
+		}
+
+		if listResult.NextCursor == "" {
+			break
+		}
+		cursor = listResult.NextCursor
 	}
 
-	resp, err := c.sendRequest(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("resources/list request failed: %w", err)
-	}
-
-	if resp.Error != nil {
-		return nil, fmt.Errorf("resources/list error: %s (code %d)", resp.Error.Message, resp.Error.Code)
-	}
-
-	var listResult resourcesListResult
-	if err := json.Unmarshal(resp.Result, &listResult); err != nil {
-		return nil, fmt.Errorf("parsing resources/list result: %w", err)
-	}
-
-	resources := make([]MCPResource, 0, len(listResult.Resources))
-	for _, r := range listResult.Resources {
-		resources = append(resources, MCPResource{
-			URI:         r.URI,
-			Name:        r.Name,
-			MimeType:    r.MimeType,
-			Description: r.Description,
-		})
-		log.Debug("discovered MCP resource", "server", c.Name, "resource", r.Name, "uri", r.URI)
-	}
-
-	return resources, nil
+	return allResources, nil
 }
 
 // ReadResource reads a single resource content by URI.
@@ -449,7 +558,7 @@ func (c *Client) ReadResource(ctx context.Context, uri string) ([]ResourceConten
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.proc == nil {
+	if c.proc == nil && c.transport == nil {
 		return nil, fmt.Errorf("not connected to MCP server %s", c.Name)
 	}
 
@@ -462,7 +571,7 @@ func (c *Client) ReadResource(ctx context.Context, uri string) ([]ResourceConten
 		},
 	}
 
-	resp, err := c.sendRequest(ctx, req)
+	resp, err := c.doRequest(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("resources/read request failed: %w", err)
 	}
@@ -497,12 +606,30 @@ func (c *Client) ReadResource(ctx context.Context, uri string) ([]ResourceConten
 	return contents, nil
 }
 
+// maxMCPOutputChars is the maximum character count for MCP tool results.
+// Approximate token count: 1 token ≈ 4 chars, so 25000 tokens ≈ 100000 chars.
+// Configurable via MCP_MAX_OUTPUT_CHARS env var.
+const defaultMaxMCPOutputChars = 100000
+
+func maxMCPOutputChars() int {
+	if v := os.Getenv("MCP_MAX_OUTPUT_CHARS"); v != "" {
+		if n, err := fmt.Sscanf(v, "%d", new(int)); n == 1 && err == nil {
+			var val int
+			fmt.Sscanf(v, "%d", &val)
+			if val > 0 {
+				return val
+			}
+		}
+	}
+	return defaultMaxMCPOutputChars
+}
+
 // CallTool calls a tool on the MCP server.
 func (c *Client) CallTool(name string, arguments map[string]any) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.proc == nil {
+	if c.proc == nil && c.transport == nil {
 		return "", fmt.Errorf("not connected to MCP server %s", c.Name)
 	}
 
@@ -517,7 +644,7 @@ func (c *Client) CallTool(name string, arguments map[string]any) (string, error)
 		},
 	}
 
-	resp, err := c.sendRequest(ctx, req)
+	resp, err := c.doRequest(ctx, req)
 	if err != nil {
 		return "", fmt.Errorf("tools/call request failed: %w", err)
 	}
@@ -531,38 +658,111 @@ func (c *Client) CallTool(name string, arguments map[string]any) (string, error)
 		return "", fmt.Errorf("parsing tools/call result: %w", err)
 	}
 
-	// Extract text content from result
 	var result strings.Builder
 	for _, part := range callResult.Content {
-		if part.Type == "text" {
+		switch part.Type {
+		case "text":
 			result.WriteString(part.Text)
-		} else {
-			fmt.Fprintf(&result, "[%s: %s]", part.Type, part.Text)
+		case "image", "blob":
+			if part.Data != "" {
+				savedPath, err := persistBinaryToolResult(part.Data, part.Mime)
+				if err != nil {
+					fmt.Fprintf(&result, "[binary %s: failed to save: %v]", part.Type, err)
+				} else {
+					fmt.Fprintf(&result, "[%s saved to: %s]", part.Type, savedPath)
+				}
+			} else {
+				fmt.Fprintf(&result, "[%s: %s]", part.Type, part.Text)
+			}
+		default:
+			if part.Text != "" {
+				fmt.Fprintf(&result, "[%s: %s]", part.Type, part.Text)
+			}
 		}
 	}
 
-	return result.String(), nil
+	output := result.String()
+	maxChars := maxMCPOutputChars()
+	if len(output) > maxChars {
+		truncated := output[:maxChars]
+		output = truncated + fmt.Sprintf("\n\n[Content truncated: original %d chars, showing first %d chars]", len(output), maxChars)
+	}
+
+	return output, nil
 }
 
-// sendRequest sends a JSON-RPC request and waits for a response.
+// persistBinaryToolResult decodes base64 data and writes to disk.
+func persistBinaryToolResult(data string, mimeType string) (string, error) {
+	decoded, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		return "", fmt.Errorf("decoding base64: %w", err)
+	}
+
+	ext := ".bin"
+	switch {
+	case strings.HasPrefix(mimeType, "image/png"):
+		ext = ".png"
+	case strings.HasPrefix(mimeType, "image/jpeg"):
+		ext = ".jpg"
+	case strings.HasPrefix(mimeType, "image/gif"):
+		ext = ".gif"
+	case strings.HasPrefix(mimeType, "image/webp"):
+		ext = ".webp"
+	case strings.HasPrefix(mimeType, "application/pdf"):
+		ext = ".pdf"
+	}
+
+	var b [8]byte
+	rand.Read(b[:])
+	filename := fmt.Sprintf("%d-%x%s", time.Now().UnixNano(), b, ext)
+
+	dir := filepath.Join(constants.JennyHomeDir(), "mcp-tool-output")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", fmt.Errorf("creating output directory: %w", err)
+	}
+
+	path := filepath.Join(dir, filename)
+	if err := os.WriteFile(path, decoded, 0644); err != nil {
+		return "", fmt.Errorf("writing file: %w", err)
+	}
+
+	return path, nil
+}
+
+// doRequest routes the request to the appropriate transport.
+// For HTTP transport, handles session expiration by re-initializing once.
 // Caller must hold c.mu.
-func (c *Client) sendRequest(_ context.Context, req jsonRPCRequest) (*jsonRPCResponse, error) {
+func (c *Client) doRequest(ctx context.Context, req jsonRPCRequest) (*jsonRPCResponse, error) {
+	if c.transport != nil {
+		resp, err := c.transport.SendRequest(ctx, req)
+		if err != nil && IsSessionExpired(err) {
+			// AC6: re-initialize on session expiry, then retry once
+			if reinitErr := c.initializeViaTransport(ctx); reinitErr != nil {
+				return nil, fmt.Errorf("re-initialization after session expiry failed: %w", reinitErr)
+			}
+			return c.transport.SendRequest(ctx, req)
+		}
+		return resp, err
+	}
+	return c.sendRequestStdio(ctx, req)
+}
+
+// sendRequestStdio sends a JSON-RPC request via stdio and waits for a response.
+// Caller must hold c.mu.
+func (c *Client) sendRequestStdio(_ context.Context, req jsonRPCRequest) (*jsonRPCResponse, error) {
 	if c.proc == nil || c.proc.stdin == nil || c.proc.stdout == nil {
 		return nil, fmt.Errorf("not connected")
 	}
 
-	// Marshal the request
 	data, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshaling request: %w", err)
 	}
 
-	// Send the request
 	if _, err := c.proc.stdin.Write(append(data, '\n')); err != nil {
 		return nil, fmt.Errorf("writing request: %w", err)
 	}
 
-	// Read the response using the persistent buffered reader
 	line, err := c.proc.stdoutRd.ReadBytes('\n')
 	if err != nil {
 		return nil, fmt.Errorf("reading response: %w", err)
@@ -576,7 +776,13 @@ func (c *Client) sendRequest(_ context.Context, req jsonRPCRequest) (*jsonRPCRes
 	return &resp, nil
 }
 
-// sendNotification sends a JSON-RPC notification (no response expected).
+// sendRequest is kept for backward compatibility with the initialize method (stdio path).
+// Caller must hold c.mu.
+func (c *Client) sendRequest(ctx context.Context, req jsonRPCRequest) (*jsonRPCResponse, error) {
+	return c.sendRequestStdio(ctx, req)
+}
+
+// sendNotification sends a JSON-RPC notification (no response expected) via stdio.
 // Caller must hold c.mu.
 func (c *Client) sendNotification(notif jsonRPCRequest) error {
 	if c.proc == nil || c.proc.stdin == nil {
@@ -592,13 +798,17 @@ func (c *Client) sendNotification(notif jsonRPCRequest) error {
 	return err
 }
 
-// cleanup shuts down the process and cleans up resources.
+// cleanup shuts down the transport and/or process.
 func (c *Client) cleanup() {
+	if c.transport != nil {
+		c.transport.Close()
+		c.transport = nil
+	}
+
 	if c.proc == nil {
 		return
 	}
 
-	// Send shutdown notification if possible
 	if c.proc.stdin != nil {
 		notif := jsonRPCRequest{
 			JSONRPC: "2.0",
@@ -632,16 +842,25 @@ func GetClient(serverName string) *Client {
 }
 
 // ConnectAll connects to all MCP servers in the configuration.
+// Servers with a `command` field use stdio transport.
+// Servers with a `url` field (and no command) use HTTP transport.
+// Servers with neither are skipped.
 func ConnectAll(cfg map[string]MCPServerDef) error {
 	clientsMu.Lock()
 	defer clientsMu.Unlock()
 
 	for name, def := range cfg {
-		if def.Command == "" {
-			continue // Skip non-stdio servers for now
+		var client *Client
+
+		switch {
+		case def.Command != "":
+			client = NewClient(name, def.Command, def.Args, def.Env)
+		case def.URL != "":
+			client = NewHTTPClient(name, def.URL, def.Headers)
+		default:
+			continue
 		}
 
-		client := NewClient(name, def.Command, def.Args, def.Env)
 		clients[NormalizeName(name)] = client
 
 		ctx := context.Background()

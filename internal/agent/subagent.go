@@ -465,7 +465,6 @@ func (r *AsyncSubagentRunner) RunSubagentAsync(params tool.SubagentParams) (*too
 		return nil, fmt.Errorf("generating agent ID: %w", err)
 	}
 
-
 	// Done channel so caller can wait for completion
 	done := make(chan struct{})
 
@@ -478,10 +477,10 @@ func (r *AsyncSubagentRunner) RunSubagentAsync(params tool.SubagentParams) (*too
 		// Write result to parent's transcript instead of root transcripts/ file
 		if r.sessionMgr != nil && r.parentSessionID != "" {
 			entry := session.TranscriptEntry{
-				Type:        "subagent_result",
-				SubagentID:  agentID,
-				Content:     "",
-				IsError:     err != nil,
+				Type:       "subagent_result",
+				SubagentID: agentID,
+				Content:    "",
+				IsError:    err != nil,
 			}
 			if result != nil {
 				entry.Content = result.Output
@@ -495,8 +494,8 @@ func (r *AsyncSubagentRunner) RunSubagentAsync(params tool.SubagentParams) (*too
 	}()
 
 	return &tool.AsyncResult{
-		Status: "async_launched",
+		Status:  "async_launched",
 		AgentID: agentID,
-		Done:   done,
+		Done:    done,
 	}, nil
 }

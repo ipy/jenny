@@ -24,6 +24,11 @@ func TestNormalizeName(t *testing.T) {
 		{"  spaces  ", "spaces"},
 		{"UPPERCASE", "uppercase"},
 		{"MiXeD CaSe", "mixed_case"}, // lowercase only, spaces to underscore
+		{"---", "unnamed"},           // all non-alphanumeric → fallback
+		{"", "unnamed"},              // empty input → fallback
+		{"...", "unnamed"},           // all dots → fallback
+		{"___", "unnamed"},           // all underscores → trim leaves empty → fallback
+		{"a", "a"},                   // single char preserved
 	}
 
 	for _, tt := range tests {
@@ -321,5 +326,25 @@ func TestIntegrationMCPSubprocess(t *testing.T) {
 	}
 	if result == "" {
 		t.Error("expected non-empty result from tool call")
+	}
+}
+
+func TestMaxMCPOutputChars(t *testing.T) {
+	// Test that default is returned when env not set
+	t.Setenv("MCP_MAX_OUTPUT_CHARS", "")
+	if got := maxMCPOutputChars(); got != defaultMaxMCPOutputChars {
+		t.Errorf("default: got %d, want %d", got, defaultMaxMCPOutputChars)
+	}
+
+	// Test with env override
+	t.Setenv("MCP_MAX_OUTPUT_CHARS", "500")
+	if got := maxMCPOutputChars(); got != 500 {
+		t.Errorf("env override: got %d, want 500", got)
+	}
+
+	// Test with invalid value falls back to default
+	t.Setenv("MCP_MAX_OUTPUT_CHARS", "invalid")
+	if got := maxMCPOutputChars(); got != defaultMaxMCPOutputChars {
+		t.Errorf("invalid env: got %d, want %d", got, defaultMaxMCPOutputChars)
 	}
 }
