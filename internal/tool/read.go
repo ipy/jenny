@@ -4,6 +4,7 @@ package tool
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -199,6 +200,11 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}, nil
 	}
 
+	// Handle image files: encode as base64 data URI for model vision
+	if isImageFile(absFilePathClean) {
+		return t.readImage(absFilePathClean, info)
+	}
+
 	// Determine offset and limit early (needed for isFullRead check and dedup)
 	offset := 1
 	offsetExplicit := false
@@ -372,4 +378,50 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 	}
 
 	return result, nil
+}
+
+// Image file support
+
+var imageExtensions = map[string]string{
+	".png":  "image/png",
+	".jpg":  "image/jpeg",
+	".jpeg": "image/jpeg",
+	".gif":  "image/gif",
+	".webp": "image/webp",
+}
+
+func isImageFile(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	_, ok := imageExtensions[ext]
+	return ok
+}
+
+const maxImageSize = 10 * 1024 * 1024 // 10 MB
+
+func (t *ReadTool) readImage(path string, info os.FileInfo) (*ToolResult, error) {
+	if info.Size() > maxImageSize {
+		return &ToolResult{
+			Content: fmt.Sprintf("Image file too large (%d bytes, max %d bytes)", info.Size(), maxImageSize),
+			IsError: true,
+		}, nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return &ToolResult{
+			Content: fmt.Sprintf("Error reading image: %v", err),
+			IsError: true,
+		}, nil
+	}
+
+	ext := strings.ToLower(filepath.Ext(path))
+	mimeType := imageExtensions[ext]
+	encoded := base64.StdEncoding.EncodeToString(data)
+
+	content := fmt.Sprintf("data:%s;base64,%s", mimeType, encoded)
+
+	return &ToolResult{
+		Content: content,
+		IsError: false,
+	}, nil
 }

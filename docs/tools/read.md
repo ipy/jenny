@@ -2,12 +2,25 @@
 title: Read Tool
 slug: read
 priority: P1
-status: partial
+status: done
 spec: complete
-code: partial
+code: done
 package: internal/tool
+implemented:
+  - "Text file reading with line numbers"
+  - "Offset/limit partial reads"
+  - "Size limits (256KB pre-read, 25K tokens post-read, 1GiB hard limit)"
+  - "Block device rejection"
+  - "Path security (traversal prevention, deny rules)"
+  - "Read deduplication cache (mtime-based, TOCTOU-safe)"
+  - "macOS screenshot filename retry (U+202F)"
+  - "Image files (png, jpg, gif, webp) returned as base64 data URIs"
+  - "Skill directory discovery on read paths"
+  - "Scratchpad prefix resolution"
 gaps:
-  - No images/PDF/notebooks
+  - "PDF reading (page extraction, poppler fallback) not implemented"
+  - "Notebook (.ipynb) structured cell parsing not implemented"
+  - "UTF-16 encoding detection not implemented"
 defer_to: P3
 depends_on:
   - tool-registry
@@ -42,17 +55,22 @@ Extension blocklist rejects binary files. **Exempt:** images (png, jpg, gif, web
 
 ## Images
 
-Resize/compress to token budget; return image content block with dimension metadata.
+Supported formats: PNG, JPEG, GIF, WebP (detected by extension).
 
-## PDFs
+- Files up to 10 MB are read and returned as `data:<mime>;base64,<encoded>` data URIs.
+- Files exceeding 10 MB are rejected with an error.
+- The model can process these as vision inputs.
 
+## PDFs (Not Implemented — P3)
+
+Planned:
 - Small + model supports: inline document block.
 - Large: extract pages to JPEGs; `pages` limits pages per request.
 - Poppler fallback when native extraction fails.
 
-## Notebooks (`.ipynb`)
+## Notebooks (`.ipynb`) (Not Implemented — P3)
 
-Parse cells as structured content. When oversized, suggest Bash/`jq` approach in error.
+Planned: Parse cells as structured content. When oversized, suggest Bash/`jq` approach in error.
 
 ## Dedup (cache hit)
 

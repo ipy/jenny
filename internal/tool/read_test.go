@@ -719,3 +719,65 @@ func TestReadTool_TOCTOU(t *testing.T) {
 			entry.Mtime, info.ModTime())
 	}
 }
+
+func TestReadTool_ImageFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a minimal 1x1 PNG (smallest valid PNG)
+	pngData := []byte{
+		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, // PNG signature
+		0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
+		0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+		0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
+		0xde, 0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41,
+		0x54, 0x08, 0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0x00,
+		0x00, 0x00, 0x02, 0x00, 0x01, 0xe2, 0x21, 0xbc,
+		0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e,
+		0x44, 0xae, 0x42, 0x60, 0x82, // IEND chunk
+	}
+	imgFile := filepath.Join(tmpDir, "test.png")
+	if err := os.WriteFile(imgFile, pngData, 0644); err != nil {
+		t.Fatalf("failed to create PNG: %v", err)
+	}
+
+	tool := NewReadTool(true, nil)
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"file_path": imgFile,
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", result.Content)
+	}
+	if !strings.HasPrefix(result.Content, "data:image/png;base64,") {
+		t.Errorf("expected data URI, got: %.40s...", result.Content)
+	}
+}
+
+func TestReadTool_ImageFileTooLarge(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create an oversized file with .png extension
+	imgFile := filepath.Join(tmpDir, "big.png")
+	f, err := os.Create(imgFile)
+	if err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+	f.Truncate(11 * 1024 * 1024) // 11 MB
+	f.Close()
+
+	tool := NewReadTool(true, nil)
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"file_path": imgFile,
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected error for oversized image")
+	}
+	if !strings.Contains(result.Content, "too large") {
+		t.Errorf("expected 'too large' error, got: %s", result.Content)
+	}
+}
