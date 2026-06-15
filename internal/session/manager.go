@@ -15,6 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/ipy/jenny/internal/compact"
 	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/log"
 )
@@ -622,4 +623,56 @@ func (m *Manager) ListSessions() ([]string, error) {
 		ids[i] = s.id
 	}
 	return ids, nil
+}
+
+// MaybeExtractArchive transparently rebuilds a session directory from a
+// companion <id>.tar.gz archive created by `jenny compact`.
+//
+// Resume-time flow:
+//   - If <JENNY_HOME>/sessions/<id>/ already exists, this is a no-op.
+//   - If the directory is absent but <JENNY_HOME>/sessions/<id>.tar.gz is
+//     present, the archive is extracted into the sessions directory. After a
+//     successful extraction the archive is removed unless the env knob
+//     JENNY_COMPACT_KEEP_ARCHIVE is set to a non-empty value (deterministic
+//     retention control, documented in `jenny compact --help`).
+//   - If neither exists, the function returns nil — callers downstream will
+//     surface the usual "session not found" error.
+//
+// This is the entry point used by `jenny --resume <id>` to make archive
+// handling invisible to the rest of the resume flow.
+func MaybeExtractArchive(sessionID string) error {
+	if sessionID == "" {
+		return fmt.Errorf("session ID is required")
+	}
+	if containsPathTraversal(sessionID) {
+		return fmt.Errorf("invalid session ID: path traversal not allowed")
+	}
+
+	home := constants.JennyHomeDir()
+	sessionsDir := filepath.Join(home, "sessions")
+	sessDir := filepath.Join(sessionsDir, sessionID)
+	archivePath := filepath.Join(sessionsDir, sessionID+".tar.gz")
+
+	// Already in directory form → nothing to do. We intentionally do NOT
+	// delete a sibling archive here; if both exist we trust the directory
+	// (the user may have placed the archive there for other reasons).
+	if _, err := os.Stat(sessDir); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("checking session directory %s: %w", sessDir, err)
+	}
+
+	// No archive → nothing to extract. Caller will see "session not found".
+	if _, err := os.Stat(archivePath); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("checking archive %s: %w", archivePath, err)
+	}
+
+	keepArchive := os.Getenv("JENNY_COMPACT_KEEP_ARCHIVE") != ""
+	if err := compact.ExtractArchive(archivePath, sessionsDir, sessionID, keepArchive); err != nil {
+		return fmt.Errorf("extracting archive for session %s: %w", sessionID, err)
+	}
+	return nil
 }

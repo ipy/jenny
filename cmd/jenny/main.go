@@ -11,7 +11,9 @@ import (
 
 	"github.com/ipy/jenny/internal/agent"
 	"github.com/ipy/jenny/internal/api/router"
+	"github.com/ipy/jenny/internal/clean"
 	"github.com/ipy/jenny/internal/cli"
+	"github.com/ipy/jenny/internal/compact"
 	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/git"
 	"github.com/ipy/jenny/internal/log"
@@ -68,12 +70,62 @@ func shouldLaunchPortal() bool {
 	return len(os.Args) >= 2 && os.Args[1] == "portal"
 }
 
+// shouldRunClean returns true when `jenny clean [args]` is the invocation.
+// Mirrors shouldLaunchPortal() so the housekeeping subcommands short-circuit
+// the normal flag parsing path entirely.
+func shouldRunClean() bool {
+	return len(os.Args) >= 2 && os.Args[1] == "clean"
+}
+
+// shouldRunCompact returns true when `jenny compact [args]` is the invocation.
+func shouldRunCompact() bool {
+	return len(os.Args) >= 2 && os.Args[1] == "compact"
+}
+
+// runClean dispatches `jenny clean` and exits with the appropriate status code.
+func runClean() int {
+	dryRun, help, err := clean.ParseCleanArgs(os.Args[2:])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "jenny clean: %v\n", err)
+		clean.RunCleanHelp(os.Stdout, os.Stderr)
+		return 2
+	}
+	if help {
+		return clean.RunCleanHelp(os.Stdout, os.Stderr)
+	}
+	return clean.RunClean(dryRun, os.Stdout, os.Stderr)
+}
+
+// runCompact dispatches `jenny compact [id] [--dry-run] [--force]` and exits
+// with the appropriate status code.
+func runCompact() int {
+	id, dryRun, force, help, err := compact.ParseCompactArgs(os.Args[2:])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "jenny compact: %v\n", err)
+		compact.RunCompactHelp(os.Stdout, os.Stderr)
+		return 2
+	}
+	if help {
+		return compact.RunCompactHelp(os.Stdout, os.Stderr)
+	}
+	return compact.RunCompact(id, dryRun, force, os.Stdout, os.Stderr)
+}
+
 func run() error {
 	// Launch portal only when explicit "portal" subcommand is provided.
 	// Note: macOS double-clicking a bare executable ALWAYS opens Terminal -
 	// this is a macOS limitation, not a code bug.
 	if shouldLaunchPortal() {
 		return runPortal(context.Background())
+	}
+
+	// `jenny clean` and `jenny compact` short-circuit the normal flag path
+	// because they have their own flag sets. They exit with their own status.
+	if shouldRunClean() {
+		os.Exit(runClean())
+	}
+	if shouldRunCompact() {
+		os.Exit(runCompact())
 	}
 
 	// AC9: load .env files (and .jenny/.env) before parsing flags so any
@@ -175,6 +227,14 @@ func run() error {
 		// Validate session ID doesn't contain path traversal before using it
 		if err := session.ValidateSessionID(sessionID); err != nil {
 			return err
+		}
+
+		// AC8: transparently rebuild the session directory from a sibling
+		// <id>.tar.gz archive produced by `jenny compact` before checking
+		// for existence. After this call the regular session lookup flow
+		// runs against the freshly extracted directory.
+		if err := session.MaybeExtractArchive(sessionID); err != nil {
+			return fmt.Errorf("extracting compact archive for session %s: %w", sessionID, err)
 		}
 
 		// Check if the session exists when resuming

@@ -433,3 +433,14 @@ func WriteStreamJSONRaw(data []byte) error {
 	fmt.Fprintln(os.Stdout, string(data))
 	return nil
 }
+
+// IsCleanSubcommand reports whether the first positional arg is "clean".
+// Mirrors shouldLaunchPortal() in cmd/jenny/main.go.
+func IsCleanSubcommand(args []string) bool {
+	return len(args) > 0 && args[0] == "clean"
+}
+
+// IsCompactSubcommand reports whether the first positional arg is "compact".
+func IsCompactSubcommand(args []string) bool {
+	return len(args) > 0 && args[0] == "compact"
+}
