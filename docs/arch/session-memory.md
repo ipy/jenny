@@ -21,11 +21,13 @@ Background markdown notes file maintained by a forked sub-agent on the main thre
 
 | Event | Threshold |
 |-------|-----------|
-| Init | ~10K context tokens |
-| Update | Every ~5K token growth **and** 3 tool calls |
+| Init | ~15K context tokens |
+| Update | Every ~8K token growth **and** 3 tool calls |
 | Natural break | ~5K tokens when last assistant has no pending tool calls |
 
 Token counting matches autocompact: input + output + cache tokens.
+
+> **Concern (2026-06-15):** Current mechanism is "threshold-triggered + LLM decides if change is needed". This means the "Session memory updated" log can be misleading — the update may be triggered but the LLM may determine no new context warrants an edit, resulting in no file change despite the log. Current fix: log level distinguishes actual edits (`Info`) from no-change cases (`Debug`). Long-term consideration: consider triggering on semantic "key decision points" rather than fixed token thresholds, or require LLM to produce a confirmation edit even when deciding no changes are needed.
 
 ## Extraction
 

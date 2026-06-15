@@ -45,11 +45,11 @@ func TestAC1_SessionMemoryInitAt10KTokens(t *testing.T) {
 		t.Fatal("Memory file should not exist before threshold")
 	}
 
-	// Simulate accumulating ~10K tokens (10001 to be over threshold)
-	shouldAct, action := sm.CheckThreshold(10001, 0)
+	// Simulate accumulating ~15K tokens (15001 to be over threshold)
+	shouldAct, action := sm.CheckThreshold(15001, 0)
 
 	if !shouldAct {
-		t.Fatal("Should trigger action at 10K+ tokens")
+		t.Fatal("Should trigger action at 15K+ tokens")
 	}
 	if action != "init" {
 		t.Fatalf("Action should be 'init', got '%s'", action)
@@ -103,7 +103,7 @@ func TestAC1_SessionMemoryInitAt10KTokens(t *testing.T) {
 }
 
 // TestAC2_UpdateRequiresBothThresholds verifies that update requires both
-// token growth >= 5K AND tool calls >= 3.
+// token growth >= 8K AND tool calls >= 3.
 func TestAC2_UpdateRequiresBothThresholds(t *testing.T) {
 	compactCfg := CompactConfig{
 		DisableAutoCompact: false,
@@ -120,31 +120,31 @@ func TestAC2_UpdateRequiresBothThresholds(t *testing.T) {
 	sm.lastBaseline = sm.accumTokens
 	sm.lastToolBaseline = sm.toolCalls
 
-	// Test case 1: 5K tokens but only 1 tool call - should NOT update
-	sm.accumTokens = sm.lastBaseline + 5000
+	// Test case 1: 8K tokens but only 1 tool call - should NOT update
+	sm.accumTokens = sm.lastBaseline + 8000
 	sm.toolCalls = sm.lastToolBaseline + 1
 
 	shouldAct, action := sm.CheckThreshold(0, 0)
 	if shouldAct {
-		t.Fatal("Should NOT trigger update with only tokens met (5K tokens, 1 tool call)")
+		t.Fatal("Should NOT trigger update with only tokens met (8K tokens, 1 tool call)")
 	}
 
-	// Test case 2: 3 tool calls but only 4K tokens - should NOT update
-	sm.accumTokens = sm.lastBaseline + 4000
+	// Test case 2: 3 tool calls but only 6K tokens - should NOT update
+	sm.accumTokens = sm.lastBaseline + 6000
 	sm.toolCalls = sm.lastToolBaseline + 3
 
 	shouldAct, action = sm.CheckThreshold(0, 0)
 	if shouldAct {
-		t.Fatal("Should NOT trigger update with only tool calls met (4K tokens, 3 tool calls)")
+		t.Fatal("Should NOT trigger update with only tool calls met (6K tokens, 3 tool calls)")
 	}
 
-	// Test case 3: 5K tokens AND 3 tool calls - SHOULD update
-	sm.accumTokens = sm.lastBaseline + 5000
+	// Test case 3: 8K tokens AND 3 tool calls - SHOULD update
+	sm.accumTokens = sm.lastBaseline + 8000
 	sm.toolCalls = sm.lastToolBaseline + 3
 
 	shouldAct, action = sm.CheckThreshold(0, 0)
 	if !shouldAct {
-		t.Fatal("Should trigger update when both thresholds met (5K tokens, 3 tool calls)")
+		t.Fatal("Should trigger update when both thresholds met (8K tokens, 3 tool calls)")
 	}
 	if action != "update" {
 		t.Fatalf("Action should be 'update', got '%s'", action)

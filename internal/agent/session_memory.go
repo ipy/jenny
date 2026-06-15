@@ -173,19 +173,19 @@ func (sm *SessionMemory) CheckThreshold(turnTokens int, toolCallCount int) (bool
 	sm.accumTokens += turnTokens
 	sm.toolCalls += toolCallCount
 
-	// Check for init: >= 10K tokens and no file exists
+	// Check for init: >= 15K tokens and no file exists
 	if sm.lastBaseline == 0 && !sm.fileExists() {
-		if sm.accumTokens >= 10000 {
+		if sm.accumTokens >= 15000 {
 			return true, "init"
 		}
 		return false, ""
 	}
 
-	// Check for update: >= 5K tokens since last baseline AND >= 3 tool calls since last tool baseline
+	// Check for update: >= 8K tokens since last baseline AND >= 3 tool calls since last tool baseline
 	tokenGrowth := sm.accumTokens - sm.lastBaseline
 	toolGrowth := sm.toolCalls - sm.lastToolBaseline
 
-	if tokenGrowth >= 5000 && toolGrowth >= 3 {
+	if tokenGrowth >= 8000 && toolGrowth >= 3 {
 		return true, "update"
 	}
 
@@ -327,8 +327,10 @@ func (sm *SessionMemory) Update(ctx context.Context) error {
 		return fmt.Errorf("forked agent call: %w", err)
 	}
 
+	// Track whether any edit actually succeeded
+	anyEditSucceeded := false
+
 	// Process response - handle tool_use blocks and text content
-	// Loop over content blocks and execute any tool_use blocks
 	for _, block := range resp.Content {
 		if block.Type == "tool_use" && block.ToolUse != nil {
 			// Execute the edit tool
@@ -336,11 +338,12 @@ func (sm *SessionMemory) Update(ctx context.Context) error {
 			cwd := "/" // Using allowedPaths, so cwd doesn't matter for path validation
 			result, err := editTool.Execute(ctx, input, cwd)
 			if err != nil {
-				log.Warn("Edit tool execution failed", "error", err)
+				log.Warn("Session memory edit failed", "error", err, "path", sm.memoryFilePath)
 				continue
 			}
-			// Update cache after edit (EditTool.Execute already does this, but being explicit)
-			// The editTool.Execute already updates the cache on success
+			if !result.IsError {
+				anyEditSucceeded = true
+			}
 			log.Debug("Edit tool executed", "toolUseID", block.ToolUse.ID, "isError", result.IsError)
 		}
 		// Text blocks are informational only - no need to capture for summary
@@ -351,7 +354,11 @@ func (sm *SessionMemory) Update(ctx context.Context) error {
 	sm.lastToolBaseline = sm.toolCalls
 	sm.lastUpdateTime = time.Now()
 
-	log.Debug("Session memory updated", "path", sm.memoryFilePath)
+	if anyEditSucceeded {
+		log.Info("Session memory updated", "path", sm.memoryFilePath)
+	} else {
+		log.Debug("Session memory: no changes made", "path", sm.memoryFilePath)
+	}
 	return nil
 }
 
