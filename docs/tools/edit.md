@@ -53,15 +53,13 @@ Supports **scoped editing** via `start_line`/`end_line` to modify a specific lin
 
 ## Matching
 
-- UTF-16 LE detected via BOM.
-- Fuzzy match via quote normalization (`findActualString`).
-- `preserveQuoteStyle` in `new_string` when applicable.
+- **Exact** string match required; CRLF in file content is normalized to LF for matching only.
 - Atomic check-then-write (no async gap between staleness check and write).
 - Scoped edit uses line-by-line streaming I/O: only the scoped line range is buffered in memory; before/after sections stream directly through.
 
 ## Post-Edit
 
-Same as Write: update readFileState, LSP, file history, skill discovery.
+Update `readFileState` and run skill discovery when the skills framework is enabled. No LSP or IDE file-history integration (headless CLI).
 
 ## Edge Cases
 
@@ -69,7 +67,7 @@ Same as Write: update readFileState, LSP, file history, skill discovery.
 |------|-------------------|
 | Zero matches | Clear error with snippet hint |
 | Overlapping matches | replace_all replaces all non-overlapping |
-| Line ending mismatch | Normalize for match; write LF |
+| Line ending mismatch | CRLF normalized for match; original bytes preserved on write |
 | Scoped edit on partial read, range within | Succeeds; only scoped range modified |
 | Scoped edit on partial read, range outside | Error: outside read range |
 | Scoped edit on partial read, no line params | Error: requires start_line/end_line |

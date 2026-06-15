@@ -105,6 +105,7 @@ func Parse() (*Flags, error) {
 
 	var sessionResume string
 	flags.StringVar(&sessionResume, "r", "", "Session ID to resume")
+	flags.StringVar(&sessionResume, "resume", "", "Session ID to resume (alias for -r)")
 
 	var noSessionPersistence bool
 	flags.BoolVar(&noSessionPersistence, "no-session-persistence", false, "Disable session persistence")

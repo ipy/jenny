@@ -110,14 +110,15 @@ func (t *EnterWorktreeTool) Execute(ctx context.Context, input map[string]any, c
 		}, nil
 	}
 
-	// Mark as in worktree session
+	// Mark as in worktree session, save original cwd for restoration
 	if t.session != nil {
-		t.session.SetWorktree(worktreePath)
+		t.session.SetWorktree(worktreePath, cwd)
 	}
 
 	return &ToolResult{
-		Content: fmt.Sprintf(`{"path": %q, "branch": %q}`, worktreePath, branch),
+		Content: fmt.Sprintf(`{"path": %q, "branch": %q, "cwd_switched": true}`, worktreePath, branch),
 		IsError: false,
+		NewCwd:  worktreePath,
 	}, nil
 }
 

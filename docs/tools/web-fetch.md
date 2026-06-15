@@ -44,9 +44,14 @@ Reject credentials in URL.
 - Cross-host redirect → instruct model to re-fetch redirect URL (no auto cross-host follow).
 - Binary saved to disk with path note.
 
-## Permissions
+## SSRF Protection
 
-Per-hostname `domain:<host>`. Preapproved hosts bypass gate.
+No interactive per-hostname permission UI. Instead, a **SSRF blocklist** runs before fetch:
+
+- Hardcoded blocklist for common SSRF targets (localhost, metadata endpoints, …).
+- DNS resolution with private/loopback range detection.
+- Per-hostname cache (5 min TTL) for blocked hosts.
+- Pinned dialer uses pre-resolved IPs to prevent DNS rebinding.
 
 Auth warning in tool description.
 

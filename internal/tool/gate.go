@@ -34,6 +34,16 @@ func (g *CommandGate) CheckCommand(command string) error {
 		return err
 	}
 
+	// Check for ANSI-C quoting (byte-encoding bypass)
+	if err := g.checkANSICQuoting(command); err != nil {
+		return err
+	}
+
+	// Check for brace expansion (path construction)
+	if err := g.checkBraceExpansion(command); err != nil {
+		return err
+	}
+
 	// Check for carriage return smuggling
 	if err := g.checkCarriageReturnSmuggling(command); err != nil {
 		return err
@@ -65,6 +75,33 @@ func (g *CommandGate) checkCommandSubstitution(command string) error {
 		return fmt.Errorf("backtick command substitution is not allowed")
 	}
 
+	return nil
+}
+
+// checkANSICQuoting blocks ANSI-C quoting ($'...') which can encode arbitrary bytes
+// to bypass path or character checks (e.g., $'\x2f' is '/').
+func (g *CommandGate) checkANSICQuoting(command string) error {
+	if strings.Contains(command, "$'") {
+		return fmt.Errorf("ANSI-C quoting $'...' is not allowed")
+	}
+	return nil
+}
+
+// checkBraceExpansion blocks brace expansion patterns like {a,b} or {1..10}
+// which can construct dangerous paths or arguments.
+func (g *CommandGate) checkBraceExpansion(command string) error {
+	for i := 0; i < len(command)-2; i++ {
+		if command[i] == '{' {
+			end := strings.IndexByte(command[i:], '}')
+			if end < 0 {
+				continue
+			}
+			inner := command[i+1 : i+end]
+			if strings.Contains(inner, ",") || strings.Contains(inner, "..") {
+				return fmt.Errorf("brace expansion {,} or {..} is not allowed")
+			}
+		}
+	}
 	return nil
 }
 
@@ -139,15 +176,17 @@ func (g *CommandGate) checkGitInjection(command string) error {
 	return nil
 }
 
-// CheckPipelineSegments validates that all segments in a pipeline are read-only.
+// CheckPipelineSegments validates that all segments in a pipeline/chain are read-only.
+// Handles pipes (|), logical OR (||), logical AND (&&), and semicolons (;).
 // Returns an error if any segment is mutating.
 func (g *CommandGate) CheckPipelineSegments(command string) error {
 	if g.skipPermissions {
 		return nil
 	}
 
-	// Split command into pipeline segments by |
-	segments := strings.Split(command, "|")
+	// Split on all chain operators: ||, &&, ;, and |
+	// Order matters: check || before | to avoid mis-splitting
+	segments := splitCommandChain(command)
 	if len(segments) == 0 {
 		return nil
 	}
@@ -163,6 +202,11 @@ func (g *CommandGate) CheckPipelineSegments(command string) error {
 			return fmt.Errorf("output redirection is not allowed for security reasons")
 		}
 
+		// Check for bare $VAR references that could expand to unexpected values
+		if containsBareVarExpansion(segment) {
+			return fmt.Errorf("bare variable expansion $VAR is not allowed for security reasons")
+		}
+
 		// Check if segment's first word is in read-only allowlist
 		if !isSegmentReadOnly(segment) {
 			return fmt.Errorf("pipeline segment '%s' is not allowed for security reasons", strings.TrimSpace(segment))
@@ -170,6 +214,54 @@ func (g *CommandGate) CheckPipelineSegments(command string) error {
 	}
 
 	return nil
+}
+
+// splitCommandChain splits a command on ||, &&, ;, and | operators.
+func splitCommandChain(command string) []string {
+	var segments []string
+	var current strings.Builder
+	i := 0
+	for i < len(command) {
+		if i+1 < len(command) && (command[i:i+2] == "||" || command[i:i+2] == "&&") {
+			segments = append(segments, current.String())
+			current.Reset()
+			i += 2
+			continue
+		}
+		if command[i] == '|' || command[i] == ';' {
+			segments = append(segments, current.String())
+			current.Reset()
+			i++
+			continue
+		}
+		current.WriteByte(command[i])
+		i++
+	}
+	if current.Len() > 0 {
+		segments = append(segments, current.String())
+	}
+	return segments
+}
+
+// containsBareVarExpansion checks for bare $VAR patterns (not ${} or $() which are
+// caught by checkCommandSubstitution). Allows $? (exit status) as it's read-only.
+func containsBareVarExpansion(segment string) bool {
+	for i := 0; i < len(segment)-1; i++ {
+		if segment[i] == '$' {
+			next := segment[i+1]
+			if next == '(' || next == '{' || next == '[' || next == '\'' {
+				return false // handled by other checks
+			}
+			if next == '?' || next == '#' || next == '@' || next == '*' || next == '-' {
+				i++ // skip special vars (read-only shell builtins)
+				continue
+			}
+			if (next >= 'A' && next <= 'Z') || (next >= 'a' && next <= 'z') || next == '_' {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // isSegmentReadOnly checks if a pipeline segment is read-only.
@@ -207,6 +299,25 @@ func isSegmentReadOnly(segment string) bool {
 	}
 
 	return true
+}
+
+// CheckDevicePathsInCommand scans all tokens in a command for device paths.
+// Returns an error if any token references a blocked device path.
+func (g *CommandGate) CheckDevicePathsInCommand(command string) error {
+	if g.skipPermissions {
+		return nil
+	}
+	for _, token := range strings.Fields(command) {
+		if strings.HasPrefix(token, "-") {
+			continue
+		}
+		if strings.HasPrefix(token, "/dev/") || strings.HasPrefix(token, "/proc/") {
+			if err := g.CheckDevicePath(token); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // CheckDevicePath validates that a path is not a device or proc path.

@@ -41,11 +41,9 @@ Every pipeline segment must pass read-only allowlist:
 
 Prefer flag-level validation over regex where possible.
 
-## Classifier Layer
+## Pattern-Based Gate
 
-Auto permission mode uses prompt classifier (`bashClassifier`, `yoloClassifier`) for ambiguous commands.
-
-Background classifier calls: no 529 retry (see rate-limit doc).
+Security validation is **deterministic and auditable** via `CommandGate` pattern checks — no ML classifiers. `CheckCommand()` blocks dangerous constructs; `CheckPipelineSegments()` enforces read-only allowlists on pipeline segments.
 
 ## Bypass
 

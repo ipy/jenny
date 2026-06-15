@@ -16,31 +16,40 @@ depends_on:
 
 ## Overview
 
-The agent loop executes model-requested tools with concurrency for read-only tools and serialization for mutating or shell tools. Results are ordered by request sequence, not completion time.
+The agent loop uses `ToolExecutor` (`internal/agent/executor.go`) to run model-requested tools. Consecutive read-only tools execute in parallel; mutating and shell tools are serialized. Results are returned in **request order**, not completion order.
 
-## Execution Paths
+## ToolExecutor
 
-1. **Streaming path** — `StreamingToolExecutor` runs tools while SSE response is still streaming (tool_use blocks arrive incrementally).
-2. **Batch path** — `runTools` executes all tool_use blocks after full assistant message received.
+```go
+executor := NewToolExecutor(tools, cwd)
+// or with cross-turn state (permission denial cache):
+executor := NewToolExecutorWithStreamConfig(tools, cwd, streamCfg)
+results, err := executor.Execute(ctx, toolUseBlocks)
+```
 
-Both paths share the same concurrency rules.
+## Partitioning (`partitionGroups`)
 
-## Concurrency Rules
+Tools are scanned in model request order and grouped:
 
-| Tool class | Execution |
-|------------|-----------|
-| `isConcurrencySafe(input) === true` | May run in parallel (default max 10, env override) |
-| Write, Edit, Bash (mutating) | Serialized |
-| Mixed batch | Consecutive safe tools parallel; stop at first unsafe tool until it completes |
+| Tool class | Grouping | Execution |
+|------------|----------|-----------|
+| Read, Glob, Grep (and `ConcurrencySafe()` tools) | Consecutive batch | Parallel (semaphore-limited) |
+| Bash | Consecutive batch | Serial within batch; sibling abort on failure |
+| Write, Edit | Individual | Serial (one per group) |
+| Unknown tool | Individual | Immediate synthetic error |
 
-Partitioning: group consecutive concurrency-safe tools into parallel batches; switch to serial for writes/bash.
+When tool class changes, the current batch is flushed and a new group starts.
+
+## Concurrency Limit
+
+Default max parallel tools: **10**. Override with `JENNY_MAX_TOOL_CONCURRENCY` env var.
 
 ## Bash Sibling Abort
 
-When a **bash** tool fails (non-zero exit or execution error):
+When a **Bash** tool fails (execution error or `IsError` result):
 
-- Set batch error flag.
-- Abort sibling subprocesses via `AbortController` with reason `sibling_error`.
+- Cancel the batch context.
+- Subsequent bash tools in the same batch receive `"Tool execution aborted due to sibling failure"`.
 - Other tool types failing do **not** abort siblings.
 
 ## Unknown Tool
@@ -51,39 +60,25 @@ Immediate synthetic error — never hang:
 Error: No such tool available: {name}
 ```
 
-Wrapped in tool error format; status `completed`.
-
 ## Result Ordering
 
-`getCompletedResults()` yields in tool **add order** (order model requested), not completion order. Mark each tool `yielded` after emission.
+`Execute()` writes results into a slice indexed by original request position. Emission to stream-json follows this order.
 
-## Progress Events
+## Permission Denial Cache
 
-Messages with `type: progress` (bash progress, MCP progress):
+When `StreamConfig` is provided, security-gate denials are cached by `BuildDenialKey(toolName, input)`. Subsequent identical invocations return the cached denial without re-executing.
 
-- Stored in `pendingProgress`.
-- Yield immediately to stream-json consumers.
-- Separate from final `tool_result`.
+## Cwd Updates
 
-## Context Modifiers
-
-Applied only for **non-concurrent** tools after completion (e.g. cwd updates, file history).
-
-## Streaming Fallback Discard
-
-When SSE streaming fails and falls back to non-streaming:
-
-- Call `discard()` on streaming executor.
-- Abandon in-flight tool work with reason `Streaming fallback - tool execution discarded`.
-- Do not reuse partial tool_use IDs.
+Tools that return `NewCwd` update the executor's cwd. Updates from serial tools apply immediately; parallel batch cwd updates are mutex-protected.
 
 ## Edge Cases
 
 | Case | Expected behavior |
 |------|-------------------|
-| 10+ parallel reads | Cap at max concurrency env |
-| Bash + Read same turn | Bash serializes; reads may complete first if batched separately |
-| Interrupt mid-batch | Synthetic errors for pending tools |
+| 10+ parallel reads | Cap at `JENNY_MAX_TOOL_CONCURRENCY` |
+| Bash + Read same turn | Separate groups; reads may complete while bash runs serially |
+| Interrupt mid-batch | Context cancellation marks pending tools interrupted |
 | Duplicate tool names same turn | Each tool_use ID independent |
 
 ## Acceptance Criteria

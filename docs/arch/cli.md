@@ -34,8 +34,7 @@ jenny -p "prompt text"
 | `-r`, `--resume <session_id>` | Resume session from transcript |
 | `--continue` | Resume most recent session in project |
 | `--fork-session` | Fork resumed session to new ID |
-| `--resume-session-at <uuid>` | Truncate chain at message (requires `-r`) |
-| `--output-format <fmt>` | `text` (default), `json`, `stream-json` |
+| `--output-format <fmt>` | `text` (default) or `stream-json` |
 | `--include-partial-messages` | Emit SSE partial events (requires stream-json + SSE) |
 | `--mcp-config <path>…` | MCP config file(s) or inline JSON |
 | `--strict-mcp-config` | Only use `--mcp-config` servers |
@@ -56,10 +55,9 @@ jenny -p "prompt text"
 |------|----------|
 | No prompt | Print usage; exit non-zero |
 | Multiple `-p` flags | Joins values with a single newline |
-| Positional + `-p` both given | Positional wins when `-p` empty; otherwise positional is joined after `-p` |
+| Positional + `-p` both given | When `-p` is set, positional args are **ignored**; only `-p` values are used |
 | `--output-format stream-json` | Requires prompt (`-p` or positional) |
 | `--include-partial-messages` | Requires `--output-format stream-json` |
-| `--resume-session-at` | Requires `-r` / `--resume` |
 | `--continue` with no prior sessions | Exit non-zero with error "no sessions to continue" |
 
 ## Exit Codes
@@ -93,7 +91,7 @@ Help (`-h`) exits 0. Version (`--version`) uses `constants.Version` for unified 
 | `OPENAI_BASE_URL` | Base URL for OpenAI-compatible API (e.g., `https://api.openai.com/v1`). When set, selects the OpenAI provider instead of the default Anthropic provider. |
 | `OPENAI_API_KEY` | API key for OpenAI-compatible backend. Sent as `Authorization: Bearer <key>`. |
 | `OPENAI_DEFAULT_MODEL` | Default model name for OpenAI provider (e.g., `gpt-5.4-nano`). Takes precedence over `ANTHROPIC_MODEL` when OpenAI provider is active. |
-| `OPENAI_WIRE_API` | Wire protocol version for OpenAI API. Supported values: `chat` (default). Set to `responses` to get a startup error (not yet supported). |
+| `OPENAI_WIRE_API` | Wire protocol version for OpenAI API. Supported values: `chat` (default) or `responses` (Responses API). |
 
 ## Jenny Gaps vs Target Spec
 
@@ -104,7 +102,7 @@ Help (`-h`) exits 0. Version (`--version`) uses `constants.Version` for unified 
 | `--continue` | Wired |
 | `--no-session-persistence` | Wired |
 | `--fork-session` | Wired |
-| stream-json stdout guard | Wired |
+| stream-json to stdout | Wired |
 
 ## Acceptance Criteria
 

@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -13,7 +15,17 @@ import (
 )
 
 // defaultMaxConcurrency is the default maximum parallel tool execution count.
+// Override with JENNY_MAX_TOOL_CONCURRENCY environment variable.
 const defaultMaxConcurrency = 10
+
+func maxToolConcurrency() int {
+	if v := os.Getenv("JENNY_MAX_TOOL_CONCURRENCY"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return defaultMaxConcurrency
+}
 
 // toolGroup represents a batch of tools to execute together.
 type toolGroup struct {
@@ -42,6 +54,7 @@ type toolUseBlock struct {
 type ToolExecutor struct {
 	tools          []tool.Tool
 	cwd            string
+	mu             sync.Mutex // protects cwd from concurrent modification
 	maxConcurrency int
 	// streamCfg is used for cross-turn state (permission denials, discovered skills).
 	// When nil, cross-turn features are disabled.
@@ -53,7 +66,7 @@ func NewToolExecutor(tools []tool.Tool, cwd string) *ToolExecutor {
 	return &ToolExecutor{
 		tools:          tools,
 		cwd:            cwd,
-		maxConcurrency: defaultMaxConcurrency,
+		maxConcurrency: maxToolConcurrency(),
 	}
 }
 
@@ -198,7 +211,7 @@ func (e *ToolExecutor) partitionGroups(toolUseBlocks []toolUseBlock) []toolGroup
 				index: i,
 				tool:  t,
 			})
-		} else if isReadOnlyTool(block.Name) {
+		} else if isReadOnlyTool(block.Name) || tool.IsConcurrencySafe(t) {
 			if currentBatchType != "" && currentBatchType != "readonly" {
 				flushBatch()
 			}
@@ -296,6 +309,11 @@ func (e *ToolExecutor) executeParallel(parentCtx context.Context, batch []toolUs
 					Interrupted: interrupted,
 				}
 			} else {
+				if execResult.NewCwd != "" {
+					e.mu.Lock()
+					e.cwd = execResult.NewCwd
+					e.mu.Unlock()
+				}
 				results[tw.index] = toolResult{
 					ToolUseID: tw.block.ID,
 					Content:   execResult.Content,
@@ -368,6 +386,9 @@ func (e *ToolExecutor) executeSerial(parentCtx context.Context, batch []toolUseW
 				cancel()
 			}
 		} else {
+			if execResult.NewCwd != "" {
+				e.cwd = execResult.NewCwd
+			}
 			results[tw.index] = toolResult{
 				ToolUseID: tw.block.ID,
 				Content:   execResult.Content,

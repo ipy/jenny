@@ -185,12 +185,15 @@ func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Messag
 	}
 
 	if len(systemPrompt) > 0 || systemPromptSuffix != "" {
-		if len(systemPrompt) > 0 {
-			reqBody.System = append(reqBody.System, AnthropicContentBlock{
-				Type:         BlockTypeText,
-				Text:         strings.Join(systemPrompt, "\n\n"),
-				CacheControl: &AnthropicCacheControl{Type: "ephemeral"},
-			})
+		for i, part := range systemPrompt {
+			cb := AnthropicContentBlock{
+				Type: BlockTypeText,
+				Text: part,
+			}
+			if i == len(systemPrompt)-1 {
+				cb.CacheControl = &AnthropicCacheControl{Type: "ephemeral"}
+			}
+			reqBody.System = append(reqBody.System, cb)
 		}
 		if systemPromptSuffix != "" {
 			reqBody.System = append(reqBody.System, AnthropicContentBlock{
@@ -416,12 +419,15 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 		}
 
 		if len(systemPrompt) > 0 || systemPromptSuffix != "" {
-			if len(systemPrompt) > 0 {
-				reqBody.System = append(reqBody.System, AnthropicContentBlock{
-					Type:         BlockTypeText,
-					Text:         strings.Join(systemPrompt, "\n\n"),
-					CacheControl: &AnthropicCacheControl{Type: "ephemeral"},
-				})
+			for i, part := range systemPrompt {
+				cb := AnthropicContentBlock{
+					Type: BlockTypeText,
+					Text: part,
+				}
+				if i == len(systemPrompt)-1 {
+					cb.CacheControl = &AnthropicCacheControl{Type: "ephemeral"}
+				}
+				reqBody.System = append(reqBody.System, cb)
 			}
 			if systemPromptSuffix != "" {
 				reqBody.System = append(reqBody.System, AnthropicContentBlock{

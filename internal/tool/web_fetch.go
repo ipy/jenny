@@ -205,10 +205,6 @@ func (t *WebFetchTool) InputSchema() map[string]any {
 				"type":        "string",
 				"description": "HTTP(S) URL to fetch (max 2000 characters)",
 			},
-			"prompt": map[string]any{
-				"type":        "string",
-				"description": "Optional prompt to apply to fetched content for summarization",
-			},
 		},
 		"required": []string{"url"},
 	}

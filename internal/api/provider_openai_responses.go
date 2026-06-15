@@ -228,24 +228,24 @@ func (p *openAIResponsesProvider) buildInput(messages []Message, toolResults []T
 
 	// Blocks after the first one are added as system messages
 	// (The first block systemPrompt[0] is handled via reqBody.Instructions)
-	if len(systemPrompt) > 1 {
-		remaining := strings.Join(systemPrompt[1:], "\n\n")
+	if len(systemPrompt) > 1 || systemPromptSuffix != "" {
+		var contentBlocks []map[string]any
+		for _, part := range systemPrompt[1:] {
+			contentBlocks = append(contentBlocks, map[string]any{
+				"type": "input_text",
+				"text": part,
+			})
+		}
+		if systemPromptSuffix != "" {
+			contentBlocks = append(contentBlocks, map[string]any{
+				"type": "input_text",
+				"text": systemPromptSuffix,
+			})
+		}
 		input = append(input, map[string]any{
-			"type": "message",
-			"role": RoleSystem,
-			"content": []map[string]any{
-				{"type": "input_text", "text": remaining},
-			},
-		})
-	}
-
-	if systemPromptSuffix != "" {
-		input = append(input, map[string]any{
-			"type": "message",
-			"role": RoleSystem,
-			"content": []map[string]any{
-				{"type": "input_text", "text": systemPromptSuffix},
-			},
+			"type":    "message",
+			"role":    RoleSystem,
+			"content": contentBlocks,
 		})
 	}
 

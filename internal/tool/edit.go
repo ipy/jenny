@@ -294,6 +294,14 @@ func (t *EditTool) executeGlobal(filePath, oldString, newString string, replaceA
 		}, nil
 	}
 
+	// Detect UTF-16 BOM — editing these files isn't supported (would corrupt encoding)
+	if isUTF16BOM(currentContent) {
+		return &ToolResult{
+			Content: "File appears to be UTF-16 encoded (BOM detected). Convert to UTF-8 before editing.",
+			IsError: true,
+		}, nil
+	}
+
 	// Normalize line endings: CRLF -> LF for matching
 	content := string(currentContent)
 	content = normalizeLineEndings(content)
@@ -710,6 +718,15 @@ func zeroMatchError(content string) *ToolResult {
 func normalizeLineEndings(content string) string {
 	content = strings.ReplaceAll(content, "\r\n", "\n")
 	return content
+}
+
+// isUTF16BOM detects UTF-16 LE or BE byte-order marks at the start of data.
+func isUTF16BOM(data []byte) bool {
+	if len(data) < 2 {
+		return false
+	}
+	// UTF-16 LE: FF FE, UTF-16 BE: FE FF
+	return (data[0] == 0xFF && data[1] == 0xFE) || (data[0] == 0xFE && data[1] == 0xFF)
 }
 
 // isBinary checks if content appears to be binary.

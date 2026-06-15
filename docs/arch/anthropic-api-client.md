@@ -34,7 +34,7 @@ System prompt is a **top-level request parameter**, not a `role: system` message
 }
 ```
 
-Multiple system blocks are supported from prompt assembly (see [`system-prompt.md`](./system-prompt.md)). Jenny applies `cache_control` to the **last block** to protect the stable prefix.
+The system prompt consists of multiple text blocks. Cache control is placed on the final block of the static system prompt to maximize cache hits for the prefix (see [`system-prompt.md`](./system-prompt.md)).
 
 ## Tool Use / Tool Result Pairing
 
@@ -84,9 +84,7 @@ After synthetic error, strip offending image/document blocks from meta user mess
 
 ## Streaming vs Non-Streaming
 
-Target: SSE streaming default with non-streaming fallback (see [`sse-streaming.md`](./sse-streaming.md)).
-
-Jenny gap: non-streaming only today.
+SSE streaming is the default path with non-streaming fallback on incomplete streams (see [`sse-streaming.md`](./sse-streaming.md)).
 
 ## Cache Headers
 

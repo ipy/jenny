@@ -175,7 +175,9 @@ func (p *genaiProvider) doSendMessage(ctx context.Context, messages []Message, t
 	if len(systemPrompt) > 0 || systemPromptSuffix != "" {
 		var parts []GenAIPart
 		if len(systemPrompt) > 0 {
-			parts = append(parts, GenAIPart{Text: strings.Join(systemPrompt, "\n\n")})
+			for _, part := range systemPrompt {
+				parts = append(parts, GenAIPart{Text: part})
+			}
 		}
 		if systemPromptSuffix != "" {
 			parts = append(parts, GenAIPart{Text: systemPromptSuffix})
@@ -247,7 +249,9 @@ func (p *genaiProvider) SendMessageStream(ctx context.Context, messages []Messag
 		if len(systemPrompt) > 0 || systemPromptSuffix != "" {
 			var parts []GenAIPart
 			if len(systemPrompt) > 0 {
-				parts = append(parts, GenAIPart{Text: strings.Join(systemPrompt, "\n\n")})
+				for _, part := range systemPrompt {
+					parts = append(parts, GenAIPart{Text: part})
+				}
 			}
 			if systemPromptSuffix != "" {
 				parts = append(parts, GenAIPart{Text: systemPromptSuffix})

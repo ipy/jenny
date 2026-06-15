@@ -40,13 +40,11 @@ Modifies Jupyter `.ipynb` files only. Modes: replace, insert, delete. Read-befor
 
 | Mode | Behavior |
 |------|----------|
-| replace | Set source; reset execution_count/outputs for code cells |
+| replace | Set source; reset execution_count/outputs for code cells. Fails with error if cell not found. |
 | insert | Splice after target or index 0; assign random id nbformat ≥4.5 |
 | delete | Splice out cell |
 
-Auto-convert replace→insert when replacing past end (default cell_type code).
-
-Write JSON indent=1; preserve encoding/line endings from read metadata.
+Write via `json.MarshalIndent` (UTF-8, indent=1).
 
 Update readFileState (offset undefined to break Read dedup).
 

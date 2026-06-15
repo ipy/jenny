@@ -73,16 +73,16 @@ All providers MUST emit `StreamContentBlock` entries with `Type: "stream_event"`
 
 The Anthropic event types emitted are: `message_start`, `content_block_start`, `content_block_delta`, `content_block_stop`, `message_delta`, `message_stop`.
 
-### System Prompt Suffix Isolation
+### System Prompt Multi-Block Handling
 
-The `systemPromptSuffix` (dynamic per-turn content: git status, cwd, active skills) MUST be sent as a **separate** block to preserve the frozen system prompt prefix for caching:
+The system prompt consists of multiple logical blocks ordered by stability (see [`system-prompt.md`](./system-prompt.md)), followed by an optional `systemPromptSuffix` for dynamic per-turn content. All providers MUST preserve these as separate blocks in the request payload to maximize caching efficiency:
 
 | Provider | Mechanism |
 |----------|-----------|
-| Anthropic | Separate `AnthropicContentBlock` in the `system` array (no `cache_control` on suffix block) |
-| OpenAI ChatCompletion | Separate `system` role message after the frozen system prompt message |
-| OpenAI Responses | Separate `message` item with `role: system` |
-| GenAI | Separate `GenAIPart` within the single `SystemInstruction` content |
+| Anthropic | Multiple `AnthropicContentBlock` in the `system` array; `cache_control` on the last stable block. |
+| OpenAI ChatCompletion | Single `role: system` message with multiple text content blocks at the start of the `messages` array. |
+| OpenAI Responses | Single `message` item with `role: system` and multiple `input_text` content blocks in the `input` array. |
+| GenAI | Single `SystemInstruction` block with multiple `GenAIPart` entries. |
 
 Concatenating the suffix into the system prompt would invalidate the cache on every turn.
 

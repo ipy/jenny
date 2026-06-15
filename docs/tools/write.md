@@ -35,19 +35,13 @@ Write creates or overwrites files. Requires prior Read of same path with matchin
 ## Write Behavior
 
 - Create parent directories (`mkdir -p`).
-- Always write **LF** line endings.
+- Preserves original content bytes (no line-ending normalization).
 - Return structured patch diff in tool result.
 
 ## Post-Write Updates
 
 - Update `readFileState` with new content and mtime.
-- LSP `didChange` notification if LSP connected.
-- File history tracking.
-- Skill directory discovery.
-
-## UNC Paths (Windows)
-
-Skip pre-validation I/O on UNC paths (NTLM leak prevention).
+- Skill directory discovery when the skills framework is enabled. No LSP or IDE file-history integration (headless CLI).
 
 ## Edge Cases
 

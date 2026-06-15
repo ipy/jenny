@@ -23,8 +23,8 @@ Discovers and activates skills from project and user directories on file tool op
 
 On Read, Write, Edit path access:
 
-- `discoverSkillDirsForPaths`
-- `activateConditionalSkillsForPaths`
+- `SkillActivator.ActivateForPath(path)` — checks if any skill matches the accessed path
+- Matching is done via `Skill.MatchesPath()`: either path-within-root or `activation_glob` pattern
 
 ## Sources
 

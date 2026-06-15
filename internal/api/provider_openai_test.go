@@ -378,8 +378,17 @@ func TestOpenAIProvider_SystemPrompt(t *testing.T) {
 		if firstMsg["role"] != "system" {
 			t.Errorf("expected first message to be system, got %v", firstMsg["role"])
 		}
-		if firstMsg["content"] != "You are a helpful assistant." {
-			t.Errorf("expected system content, got %v", firstMsg["content"])
+		// Content is now an array of blocks
+		content, ok := firstMsg["content"].([]any)
+		if !ok {
+			t.Fatalf("expected content array, got %v", firstMsg["content"])
+		}
+		if len(content) == 0 {
+			t.Fatal("expected non-empty content array")
+		}
+		firstBlock := content[0].(map[string]any)
+		if firstBlock["type"] != "text" || firstBlock["text"] != "You are a helpful assistant." {
+			t.Errorf("unexpected content block: %v", firstBlock)
 		}
 
 		w.Header().Set("Content-Type", "application/json")

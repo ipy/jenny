@@ -35,7 +35,7 @@ Filter by permission deny rules and required MCP servers.
 
 ## Model Aliases
 
-`sonnet`, `opus`, `haiku` → concrete models via resolver.
+`sonnet`, `opus`, `haiku` map to concrete models when passed as the subagent `model` parameter. Unknown values pass through unchanged (direct pass-through; no separate resolver step at runtime).
 
 ## One-Shot Types
 

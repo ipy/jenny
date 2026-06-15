@@ -59,8 +59,9 @@ func (c *HTTPClient) Request(ctx context.Context, method, url string, headers ht
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)
 		return &HTTPError{
-			StatusCode: resp.StatusCode,
-			Message:    string(respBody),
+			StatusCode:  resp.StatusCode,
+			Message:     string(respBody),
+			ShouldRetry: parseShouldRetry(resp.Header),
 		}
 	}
 
@@ -106,18 +107,31 @@ func (c *HTTPClient) StreamRequest(ctx context.Context, method, url string, head
 		respBody, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		return nil, &HTTPError{
-			StatusCode: resp.StatusCode,
-			Message:    string(respBody),
+			StatusCode:  resp.StatusCode,
+			Message:     string(respBody),
+			ShouldRetry: parseShouldRetry(resp.Header),
 		}
 	}
 
 	return resp.Body, nil
 }
 
+// parseShouldRetry extracts the x-should-retry header value.
+// Returns nil if header is absent, otherwise a pointer to the boolean value.
+func parseShouldRetry(h http.Header) *bool {
+	v := h.Get("x-should-retry")
+	if v == "" {
+		return nil
+	}
+	val := v == "true"
+	return &val
+}
+
 // HTTPError represents an HTTP error response.
 type HTTPError struct {
-	StatusCode int
-	Message    string
+	StatusCode  int
+	Message     string
+	ShouldRetry *bool // from x-should-retry header; nil if not present
 }
 
 func (e *HTTPError) Error() string {

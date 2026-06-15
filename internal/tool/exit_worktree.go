@@ -111,21 +111,23 @@ func (t *ExitWorktreeTool) Execute(ctx context.Context, input map[string]any, cw
 			}, nil
 		}
 
-		// Clear worktree state
-		t.session.ClearWorktree()
+		// Clear worktree state and restore cwd
+		originalCwd := t.session.ClearWorktree()
 
 		return &ToolResult{
 			Content: fmt.Sprintf("worktree removed: %s", worktreePath),
 			IsError: false,
+			NewCwd:  originalCwd,
 		}, nil
 	}
 
 	// Keep action - just exit the session, leave worktree intact
-	t.session.ClearWorktree()
+	originalCwd := t.session.ClearWorktree()
 
 	return &ToolResult{
 		Content: fmt.Sprintf("exited worktree session: %s (worktree preserved)", worktreePath),
 		IsError: false,
+		NewCwd:  originalCwd,
 	}, nil
 }
 

@@ -42,8 +42,8 @@ API client retries transient failures with exponential backoff. Foreground agent
 
 `MAX_529_RETRIES = 3` consecutive 529 errors:
 
-- Then try fallback model if configured.
-- Else throw `CannotRetryError` with message **Repeated 529 Overloaded errors**.
+- Then throw `CannotRetryError` with message **Repeated 529 Overloaded errors**.
+- No automatic fallback to a different model.
 
 ## Foreground vs Background
 
@@ -74,8 +74,7 @@ On max-output-tokens stop reason:
 
 | Case | Expected behavior |
 |------|-------------------|
-| Model switch on fallback | Preserve messages; new model param |
-| 529 during streaming | Count toward 529 budget; may trigger fallback |
+| 529 during streaming | Count toward 529 budget; fails after cap (no model fallback) |
 | Budget exhausted mid-retry | Stop with distinct error |
 
 ## Acceptance Criteria

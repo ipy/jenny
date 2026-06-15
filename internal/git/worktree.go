@@ -86,9 +86,36 @@ func ValidateWorktreeDir(worktreePath string) (bool, error) {
 	return true, nil
 }
 
+// ValidateRefName checks that a git ref name is safe to pass as argument.
+// Rejects names starting with '-' (flag injection) and containing shell metacharacters.
+func ValidateRefName(ref string) error {
+	if ref == "" {
+		return fmt.Errorf("ref name cannot be empty")
+	}
+	if strings.HasPrefix(ref, "-") {
+		return fmt.Errorf("ref name cannot start with '-'")
+	}
+	for _, c := range ref {
+		if c == ' ' || c == '\t' || c == '\n' || c == '~' || c == '^' || c == ':' || c == '\\' || c == '*' || c == '?' || c == '[' {
+			return fmt.Errorf("ref name contains invalid character %q", string(c))
+		}
+	}
+	if strings.Contains(ref, "..") {
+		return fmt.Errorf("ref name cannot contain '..'")
+	}
+	if strings.HasSuffix(ref, ".lock") {
+		return fmt.Errorf("ref name cannot end with '.lock'")
+	}
+	return nil
+}
+
 // CreateWorktree creates a new git worktree at the specified path with a new branch.
 // The worktree is created at .claude/worktrees/<branch> relative to the repo root.
 func CreateWorktree(repoRoot, branch string) (string, error) {
+	if err := ValidateRefName(branch); err != nil {
+		return "", fmt.Errorf("invalid branch name: %w", err)
+	}
+
 	worktreePath := filepath.Join(repoRoot, ".claude", "worktrees", branch)
 
 	// Check if repo root is valid git repository

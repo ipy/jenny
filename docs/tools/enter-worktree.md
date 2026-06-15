@@ -22,11 +22,11 @@ Creates git worktree and switches session cwd to isolated copy.
 - Reject if already in worktree session
 - Slug: alphanumeric segments, max 64 chars; random slug if omitted
 - Resolve to canonical git root first
-- Clear system prompt sections + memory caches on cwd switch
+- Prompt/memory caches are **not** explicitly cleared; caches invalidate naturally via mtime/generation counters.
 
 ## Acceptance Criteria
 
 - **AC1:** Reject double worktree entry.
 - **AC2:** Slug validation enforced.
 - **AC3:** Random slug when omitted.
-- **AC4:** Prompt/memory caches cleared on switch.
+- **AC4:** Caches invalidate naturally on cwd switch (no explicit flush).

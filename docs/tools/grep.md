@@ -27,7 +27,7 @@ Grep searches file contents via ripgrep. Read-only, concurrency-safe.
 | `output_mode` | `files_with_matches` | `content`, `files_with_matches`, `count` |
 | `head_limit` | 250 | Max matches; `0` = unlimited |
 | `offset` | 0 | Skip first N matches (pagination) |
-| `-i`, `-n`, `-A`, `-B`, `-C` | — | Ripgrep passthrough |
+| `i`, `n`, `A`, `B`, `C` | — | Case-insensitive, line numbers, after/before/context lines |
 | `multiline` | false | Multiline mode |
 | `type` | — | File type filter |
 
@@ -40,41 +40,19 @@ Grep searches file contents via ripgrep. Read-only, concurrency-safe.
 
 ## Backend Selection
 
-The GrepTool prefers ripgrep (`rg`) when it is available on the host
-and falls back to a small in-process Go search engine otherwise. The
-selection is automatic, per-call:
+GrepTool shells out to ripgrep (`rg`) when available:
 
-1. **Sandbox active with a configured `RipgrepConfig.Command`** —
-   use the sandboxed binary. If that binary is missing, fall through
-   to step 2.
-2. **`rg` is on `PATH`** — shell out to it.
-3. **Otherwise** — call the in-process backend in
-   `internal/grepinproc`. This backend uses `filepath.WalkDir` and
-   `regexp.FindAllIndex` and produces the same text format as
-   ripgrep, so the post-processing pipeline (head_limit, offset, 20K
-   char cap) works identically for both backends.
+1. **Sandbox active with configured `RipgrepConfig.Command`** — use that binary path.
+2. **`rg` on `PATH`** — use host ripgrep.
+3. **Otherwise** — return an error indicating ripgrep is not available (fail-fast; no silent fallback).
 
-The fallback exists so jenny can run in environments where ripgrep
-cannot be installed (locked-down CI, minimal containers, no
-package manager). The trade-off vs. ripgrep:
-
-| | ripgrep | in-process |
-|---|---|---|
-| Speed on large repos | very fast (Rust + SIMD) | slower (pure Go) |
-| External binary required | yes | no |
-| `.gitignore` integration | yes (rg-native) | no (uses `.git`/`.svn` skip only) |
-| `--type` | yes (rg built-in types) | yes (subset, see `internal/grepinproc/adapter.go`) |
-| Symlink handling | rg-native | follows `os.Stat` |
-
-Both backends honor the same input schema and produce the same
-output format. Callers (and tests) do not need to know which
-backend ran.
+When sandbox specifies a configured ripgrep command that is missing or fails to execute, the error is surfaced to the agent.
 
 ## Output Limits
 
 - Total output capped ~**20K characters** (`maxResultSizeChars`).
 - Ripgrep **timeout → error** (not empty result).
-- Default mode `files_with_matches`; sort by mtime.
+- Default mode `files_with_matches` (ripgrep default ordering; no mtime sort).
 
 ## Pagination
 

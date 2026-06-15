@@ -254,13 +254,25 @@ func (t *GlobTool) Execute(ctx context.Context, input map[string]any, cwd string
 		matches = matches[:maxResults]
 	}
 
-	// Build result content - list of relative paths (forward slashes for cross-platform consistency)
+	// Build result content - list of paths relative to cwd
 	var content strings.Builder
 	for i, m := range matches {
 		if i > 0 {
 			content.WriteString("\n")
 		}
-		path := m.path
+		// Convert from searchRoot-relative to cwd-relative
+		var path string
+		if searchRoot == cwd {
+			path = m.path
+		} else {
+			absPath := filepath.Join(searchRoot, m.path)
+			relToCwd, err := filepath.Rel(cwd, absPath)
+			if err != nil {
+				path = m.path // fallback to searchRoot-relative
+			} else {
+				path = relToCwd
+			}
+		}
 		if runtime.GOOS == "windows" {
 			path = filepath.ToSlash(path)
 		}

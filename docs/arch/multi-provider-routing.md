@@ -22,7 +22,7 @@ Specifications for high-availability routing across multiple LLM providers, mode
 - **Cost Optimization**: Prefer low-cost models (e.g., DeepSeek) for standard tasks.
 - **Capability Routing**: Seamlessly switch to specialized models (e.g., Claude 3.5 Sonnet) for vision or high-reasoning tasks.
 - **Cache Preservation**: Maintain session stickiness to a single model/provider to maximize Prompt Caching efficiency.
-- **Load Balancing**: Distribute load across different sessions using Round-Robin or Random selection.
+- **Load Balancing**: Cross-session round-robin for new sessions; sequential key failover within an account on errors.
 
 ## Configuration Schema
 
@@ -104,13 +104,16 @@ The routing engine operates on a three-layered recovery logic to balance availab
 - **Condition**: All keys for the current model are exhausted (all in cooldown or failed), or `allow_fallback: true` with a permanent failure.
 - **Action**: Move to the next `match` entry in the Profile's `targets` list.
 - **Goal**: Ensure task completion at the cost of cache efficiency. Once a fallback occurs, the session locks (sticky) to the new endpoint.
-- **Behavior when all targets are exhausted**: Returns `ErrAllProvidersExhausted`. The last-failed endpoint's health is **not** recorded; callers should call `router.ReportError` explicitly if needed.
+- **Behavior when all targets are exhausted**: Returns `ErrAllProvidersExhausted`. The last-failed endpoint's health **is** recorded via `RecordFailure` before returning.
 
 ## Load Balancing
 
-- **Intra-Account**: Keys within an `Account` are traversed **sequentially in list order** (not round-robin). The `KeyIndex` field tracks the last-known-good position to avoid re-selecting the same key on repeated failover attempts. "Round-robin" refers to cross-session load distribution, not intra-account rotation.
-- **Cross-Session**: Each `SelectEndpoint` call increments a monotonic global counter; the candidate index is `counter % len(candidates)`. This ensures different sessions pick distinct positions in the pool without coordination.
-- **`balanced` mode**: `routing_mode: "balanced"` causes every call to re-evaluate from the candidate pool (bypassing the sticky session cache). No `SessionState` is written; each request is independent. This sacrifices prompt-cache continuity for load distribution.
+Two-tier approach:
+
+- **Cross-session (round-robin)**: Each `SelectEndpoint` call increments a global counter; candidate index = `counter % len(candidates)`. Distributes new sessions across the pool.
+- **Intra-account (sequential failover)**: Keys within an account are tried **sequentially** on failure (L2). `KeyIndex` tracks position to avoid re-selecting exhausted keys.
+
+`routing_mode: "balanced"` bypasses sticky session cache and re-evaluates from the candidate pool each call.
 
 ## Health & Cooldown
 
@@ -124,11 +127,6 @@ The `HealthRegistry` tracks endpoint health with a consecutive-failure counter:
 | Cooldown refresh | Each additional failure while in cooldown resets the timer |
 
 When a key reaches 3 consecutive failures it enters a 30-second cooldown. During cooldown `IsHealthy` returns `false` for that key. A single successful call clears all failure state and the cooldown timer.
-
-## Load Balancing
-
-- **Intra-Account**: `keys` within an `Account` are always used in a Round-Robin fashion to distribute quota usage.
-- **Cross-Session**: When a new session starts, `selection_policy: round_robin` ensures that different sessions pick different candidates from the pool of matching models, preventing a single provider from being overwhelmed.
 
 ## Default Values
 

@@ -30,20 +30,16 @@ type SubagentType struct {
 // FilterTools returns a filtered allowlist excluding denied tools.
 // If allowedTools contains "*", start with all known tools and subtract denied.
 // Otherwise, start with allowedTools and remove any entries in denied or deniedTools.
+// Deny rules support wildcard suffix (e.g., "mcp__server__*" denies all tools with that prefix).
 // Returns a new slice (does not mutate the type).
 func (t SubagentType) FilterTools(denied []string) []string {
 	// Build combined deny list: explicit denied + type's deniedTools
-	denyMap := make(map[string]bool)
-	for _, d := range denied {
-		denyMap[d] = true
-	}
-	for _, d := range t.deniedTools {
-		denyMap[d] = true
-	}
+	allDenied := make([]string, 0, len(denied)+len(t.deniedTools))
+	allDenied = append(allDenied, denied...)
+	allDenied = append(allDenied, t.deniedTools...)
 
 	// If allowedTools contains "*", return all tools except denied
 	if len(t.allowedTools) == 1 && t.allowedTools[0] == "*" {
-		// All known tool names
 		allTools := []string{
 			"Read", "Write", "Edit", "Bash", "Glob", "Grep",
 			"WebSearch", "WebFetch", "LSP", "Skill", "NotebookEdit", "ReadMcpResource",
@@ -51,7 +47,7 @@ func (t SubagentType) FilterTools(denied []string) []string {
 		}
 		var result []string
 		for _, tool := range allTools {
-			if !denyMap[tool] {
+			if !matchesDenyRule(tool, allDenied) {
 				result = append(result, tool)
 			}
 		}
@@ -61,11 +57,28 @@ func (t SubagentType) FilterTools(denied []string) []string {
 	// Otherwise, filter from allowedTools in single pass
 	var result []string
 	for _, tool := range t.allowedTools {
-		if !denyMap[tool] {
+		if !matchesDenyRule(tool, allDenied) {
 			result = append(result, tool)
 		}
 	}
 	return result
+}
+
+// matchesDenyRule checks if a tool name matches any deny rule.
+// Supports exact match and wildcard suffix (e.g., "mcp__server__*").
+func matchesDenyRule(toolName string, denyRules []string) bool {
+	for _, rule := range denyRules {
+		if rule == toolName {
+			return true
+		}
+		if strings.HasSuffix(rule, "*") {
+			prefix := strings.TrimSuffix(rule, "*")
+			if strings.HasPrefix(toolName, prefix) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // CanResume returns whether this subagent type supports resuming a session.

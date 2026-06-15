@@ -71,5 +71,5 @@ Streaming uses Server-Sent Events (SSE). Both Chat and Responses API implementat
 - **AC2:** Correctly maps Anthropic-style tool results to OpenAI `role: tool` messages.
 - **AC3:** Supports real SSE streaming without full-body buffering.
 - **AC4:** Supports `OPENAI_WIRE_API=responses` with optimization for `instructions` field.
-- **AC5:** Handles multi-block system prompts by joining them (Chat API) or splitting them (Responses API).
+- **AC5:** Handles multi-block system prompts by sending them as separate system messages.
 

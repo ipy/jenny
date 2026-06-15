@@ -23,19 +23,22 @@ Bash executes shell commands with permission classifier, optional sandbox, read-
 | Param | Description |
 |-------|-------------|
 | `command` | Shell command string |
-| `timeout` | Max execution time (ms) |
+| `timeout` | Max execution time in **seconds** (default 30) |
 | `run_in_background` | Spawn tracked background task |
 | `dangerouslyDisableSandbox` | Per-invocation sandbox opt-out (internal) |
 
 ## Permission Flow
 
 ```
-bashToolHasPermission()
-    → dangerous-command gate
-    → read-only pipeline check (if read-only mode)
-    → classifier (unless bypass permissions)
+NewCommandGate(skipPermissions)
+    → CheckCommand() — blocked patterns (substitution, device paths, git injection, …)
+    → CheckDevicePathsInCommand()
+    → CheckPipelineSegments() — read-only allowlist per pipeline segment
+    → path validation (unless skipPermissions or cd)
     → shouldUseSandbox() unless dangerouslyDisableSandbox
 ```
+
+`--dangerously-skip-permissions` bypasses gate checks via `skipPermissions`.
 
 ## Read-Only Mode
 
@@ -53,7 +56,7 @@ In-place `sed` edits may be simulated as file edits internally:
 
 - Parse sed command → apply as Edit/Write.
 - Never expose internal `_simulatedSedEdit` in tool schema.
-- Track git attribution; notify on file changes.
+- No git attribution; writes files directly via Edit/Write internals.
 
 ## Output Limits
 
@@ -70,11 +73,11 @@ In-place `sed` edits may be simulated as file edits internally:
 - `run_in_background`: spawn tracked shell task.
 - Progress events after ~2s.
 - Block standalone `sleep ≥2` seconds — use TaskOutput with block=true.
-- Auto-background long sync agents when configured (~15s assistant mode).
+- Auto-background hint emitted for foreground commands exceeding **120s**.
 
 ## Exit Codes
 
-Non-zero exit may receive semantic interpretation via `interpretCommandResult` (optional).
+Non-zero exit codes are returned as-is in tool output; the agent interprets them from stdout/stderr context.
 
 ## Edge Cases
 

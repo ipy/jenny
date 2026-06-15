@@ -514,6 +514,75 @@ func TestBashTool_SedSimulation(t *testing.T) {
 	}
 }
 
+// TestBashTool_DevicePathBlocked ensures device paths are blocked in commands.
+func TestBashTool_DevicePathBlocked(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping Unix path test on Windows")
+	}
+	tool := NewBashTool(false)
+	cwd := t.TempDir()
+
+	cases := []struct {
+		cmd     string
+		blocked bool
+	}{
+		{"cat /dev/urandom", true},
+		{"cat /dev/null", true},
+		{"cat /proc/self/fd/0", true},
+		{"echo hello", false},
+	}
+
+	for _, tc := range cases {
+		result, err := tool.Execute(context.Background(), map[string]any{"command": tc.cmd}, cwd)
+		if err != nil {
+			t.Fatalf("unexpected error for %q: %v", tc.cmd, err)
+		}
+		if tc.blocked && !result.IsError {
+			t.Errorf("expected %q to be blocked", tc.cmd)
+		}
+		if !tc.blocked && result.IsError {
+			t.Errorf("expected %q to be allowed, got: %s", tc.cmd, result.Content)
+		}
+	}
+}
+
+// TestBashTool_BackgroundGateSecurity ensures the command gate blocks dangerous
+// commands even when run_in_background is true.
+func TestBashTool_BackgroundGateSecurity(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping Unix path test on Windows")
+	}
+	tool := NewBashTool(false)
+	cwd := t.TempDir()
+
+	// Process substitution must be blocked in background mode
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"command":           "cat <(echo pwned)",
+		"run_in_background": true,
+	}, cwd)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected security error for process substitution in background")
+	}
+	if !strings.Contains(result.Content, "Security error") {
+		t.Errorf("expected security error message, got: %s", result.Content)
+	}
+
+	// Command substitution must be blocked in background mode
+	result, err = tool.Execute(context.Background(), map[string]any{
+		"command":           "echo $(whoami)",
+		"run_in_background": true,
+	}, cwd)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected security error for command substitution in background")
+	}
+}
+
 // TestBashTool_SkipPermissions tests AC2: cwd bypass with skipPermissions flag
 func TestBashTool_SkipPermissions(t *testing.T) {
 	if runtime.GOOS == "windows" {

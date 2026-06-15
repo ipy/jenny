@@ -226,14 +226,22 @@ func (p *openAIProvider) doSendMessage(ctx context.Context, messages []Message, 
 func (p *openAIProvider) buildMessages(messages []Message, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string) []OpenAIMessage {
 	var sdkMessages []OpenAIMessage
 
-	if len(systemPrompt) > 0 {
+	if len(systemPrompt) > 0 || systemPromptSuffix != "" {
 		sdkMsg := OpenAIMessage{Role: RoleSystem}
-		sdkMsg.SetContent(strings.Join(systemPrompt, "\n\n"))
-		sdkMessages = append(sdkMessages, sdkMsg)
-	}
-	if systemPromptSuffix != "" {
-		sdkMsg := OpenAIMessage{Role: RoleSystem}
-		sdkMsg.SetContent(systemPromptSuffix)
+		var blocks []map[string]any
+		for _, part := range systemPrompt {
+			blocks = append(blocks, map[string]any{
+				"type": "text",
+				"text": part,
+			})
+		}
+		if systemPromptSuffix != "" {
+			blocks = append(blocks, map[string]any{
+				"type": "text",
+				"text": systemPromptSuffix,
+			})
+		}
+		sdkMsg.Content, _ = json.Marshal(blocks)
 		sdkMessages = append(sdkMessages, sdkMsg)
 	}
 

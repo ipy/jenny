@@ -38,9 +38,7 @@ Uses server-side `web_search_20250305` tool schema internally.
 
 ## Errors
 
-Surface server `error_code` as string in result.
-
-Progress events for query updates and result counts.
+API errors are surfaced as standard tool error results. Internal server `error_code` values are not forwarded to the agent.
 
 ## Acceptance Criteria
 
@@ -48,4 +46,4 @@ Progress events for query updates and result counts.
 - **AC2:** Max 8 searches per call.
 - **AC3:** allowed_domains XOR blocked_domains.
 - **AC4:** Unsupported model returns clear error.
-- **AC5:** Server error codes in result text.
+- **AC5:** API errors return actionable tool error messages.

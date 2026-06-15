@@ -49,8 +49,6 @@ AUTOCOMPACT_BUFFER_TOKENS = max(modelMaxOutputTokens + 5_000, 13_000)
 
 Auto-compact when estimated tokens ≥ `autoCompactThreshold`.
 
-Subtract `snipTokensFreed` when snip already removed messages but usage metadata still reflects pre-snip size.
-
 **Disabled when:** `DISABLE_COMPACT`, `DISABLE_AUTO_COMPACT`, user setting off, or `querySource` is `compact` / `session_memory`.
 
 ## Summary Reserve

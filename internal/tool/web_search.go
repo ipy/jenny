@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 )
 
 // WebSearch limits.
 const (
-	webSearchMinQueryLen = 2 // AC2: minimum query length
-	webSearchMaxResults  = 8 // AC3: maximum results per call
+	webSearchMinQueryLen      = 2 // AC2: minimum query length
+	webSearchMaxResults       = 8 // AC3: maximum results per call
+	webSearchMaxCallsPerAgent = 8 // maximum searches per agent session
 )
 
 // WebSearchMaxResults is the maximum results per call for web search.
@@ -37,7 +39,8 @@ func isModelSupported(model string) bool {
 // WebSearchTool provides server-side web search via the Anthropic API's
 // web_search_20250305 tool schema.
 type WebSearchTool struct {
-	model string // model name for gating check
+	model     string // model name for gating check
+	callCount atomic.Int32
 }
 
 // NewWebSearchTool creates a new WebSearchTool.
@@ -87,6 +90,15 @@ func (t *WebSearchTool) InputSchema() map[string]any {
 // This Execute() call validates inputs and handles local error cases.
 // AC4 (model gating) is checked here; AC5 (server errors) are surfaced by the API.
 func (t *WebSearchTool) Execute(ctx context.Context, input map[string]any, cwd string) (*ToolResult, error) {
+	// Enforce max searches per agent session
+	count := t.callCount.Add(1)
+	if int(count) > webSearchMaxCallsPerAgent {
+		return &ToolResult{
+			Content: fmt.Sprintf("Maximum web searches per session reached (%d). Use previously fetched results or web_fetch for specific URLs.", webSearchMaxCallsPerAgent),
+			IsError: true,
+		}, nil
+	}
+
 	// AC4: Check model support
 	if !isModelSupported(t.model) {
 		return &ToolResult{

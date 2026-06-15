@@ -27,9 +27,10 @@ The system prompt is split into 4 blocks, from most stable to most volatile:
 | Block | Stability | Content | Implementation |
 |-------|-----------|---------|----------------|
 | 1 | Global (Most stable) | Default intro + tool list + redaction instructions | `buildSystemPrompt()` |
-| 2 | Machine/Session stable | Platform (OS/Arch) + skills manifest + append prompt | `buildSystemPrompt()` |
+| 2 | Machine/Session stable | Platform (OS/Arch) + skills manifest | `buildSystemPrompt()` |
 | 3 | Project stable | **CWD (Working Directory)** + Memory content (`AGENTS.md`) | `buildSystemPrompt()` |
 | 4 | Turn stable (Most volatile) | Current Date + Git status | `buildSystemPrompt()` |
+| 5 | User customization | `appendSystemPrompt` (when set) | Appended after Block 4 |
 
 Rationale: Placing CWD in Block 3 ensures that if you switch projects, Block 1 and 2 (OS/Arch and Jenny version) can still hit the cache. Placing Date and Git Status in Block 4 ensures that even if they change across sessions, the first 3 blocks remain cache-hit candidates.
 
@@ -41,7 +42,7 @@ Implementation: `internal/agent/engine_loop.go` captures the result from first `
 
 ### Cache-Control Marker
 
-In the Anthropic provider, a `cache_control: { type: "ephemeral" }` marker is applied to the **last block** of the system prompt (`system[-1]`). 
+In the Anthropic provider, system prompt blocks are sent as an array of content blocks. The `cache_control: { type: "ephemeral" }` marker is placed on the final block of the main system prompt (Block 4 or Block 5 if custom append is used), maximizing cache hits for the entire prefix.
 
 ### Resume Persistence (Cross-Process)
 
@@ -60,7 +61,7 @@ AssembleSystemPrompt(cfg, tools, cwd)
     │           → freeze into cfg.CachedSystemPrompt
     │           → persist joined string to transcript
     │
-    └─ API call: [block1, block2, block3, block4(cache_control)]
+    └─ API call: multiple system blocks with cache_control on last stable block
 ```
 
 ## Default Sections
@@ -114,7 +115,7 @@ When tool search enabled: omit deferred tool **descriptions** from API schemas (
 | Input | Effect |
 |-------|--------|
 | `customSystemPrompt` | Replaces all default sections |
-| `appendSystemPrompt` | Appended after custom or defaults (unless `overrideSystemPrompt` set) |
+| `appendSystemPrompt` | Appended as Block 5 after Date/Git (unless `overrideSystemPrompt` set) |
 | `overrideSystemPrompt` | Suppresses append |
 
 ## Edge Cases
@@ -152,7 +153,7 @@ When tool search enabled: omit deferred tool **descriptions** from API schemas (
 - **AC20:** Subdirectory CLAUDE.md is not loaded.
 - **AC21:** Two calls to `AssembleSystemPrompt` with same cfg in same process return identical slices.
 - **AC22:** `DynamicSystemSuffix` is always empty to protect cache prefix stability.
-- **AC23:** Anthropic API request body.System has multiple blocks; the last block carries `cache_control`.
+- **AC23:** Anthropic API request body.System is an array of content blocks with `cache_control` on the last stable block.
 - **AC24:** Resume restores `CachedSystemPrompt` from transcript; system prompt does not change.
 - **AC25:** `--print-system-prompt` output ends with a newline character to prevent shell prompt overlap.
 - **AC26:** Default intro mentions the scratchpad directory and the `$JENNY_SCRATCHPAD` prefix for Read/Write/Edit tools.

@@ -24,7 +24,7 @@ Task-related tool specifications for the Todo v2 system and related background t
 
 ### Overview
 
-In-session todo list for agent planning. Stored per agent/session key.
+In-session todo list for agent planning. Stored **in-memory only** per process (not persisted to disk).
 
 ### Behavior
 
@@ -33,7 +33,7 @@ In-session todo list for agent planning. Stored per agent/session key.
 
 ### Acceptance Criteria
 
-- **AC1:** Todos persist per session key.
+- **AC1:** Todos stored in-memory for the current process only.
 - **AC2:** All completed clears list.
 - **AC3:** Disabled when Todo v2 on.
 
@@ -49,12 +49,12 @@ subject, description, optional activeForm, metadata.
 
 ### Hooks
 
-Hooks may block creation and roll back (delete task) on failure.
+Hooks may block creation; on failure the error is returned (no task rollback).
 
 ### Acceptance Criteria
 
 - **AC1:** Only enabled with Todo v2.
-- **AC2:** Hook failure rolls back task.
+- **AC2:** Hook failure returns error without creating a task.
 
 ## TaskGet Tool
 
@@ -181,7 +181,7 @@ Spawns subagents with typed tool allowlists. Wire tool name `Agent` (legacy alia
 | Sync | Final text result |
 | Async | `{ status: async_launched, agentId, outputFile }` |
 
-Per-type tools via `resolveAgentTools`. Partial extraction on interrupt.
+Per-type tools via `SubagentType.FilterTools()` and `FindBuiltin()`. Partial extraction on interrupt.
 
 ### Acceptance Criteria
 

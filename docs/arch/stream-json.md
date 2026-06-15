@@ -27,7 +27,6 @@ Headless Jenny runs emit **NDJSON** (newline-delimited JSON) on **stdout only**.
 ## Requirements
 
 - Requires non-interactive mode (`-p` / `--print` or positional prompt).
-- Install stdout guard when `--output-format stream-json` to prevent non-JSON leakage to stdout.
 - JSON stringify must escape U+2028/U+2029 for NDJSON safety.
 
 ## Common Fields
@@ -121,14 +120,14 @@ All events include a `kind` field for Claude Code parser compatibility. **jenny 
 ```json
 {
   "type": "assistant",
-  "kind": "assistant",
+  "kind": "message",
   "message": { … },
   "session_id": "sess_…",
   "uuid": "…"
 }
 ```
 
-The `kind` value matches the event `type` (e.g., `"assistant"`, `"user"`, `"result"`).
+The `kind` value is normalized for SDK consumers: `assistant`, `user`, `result`, and `system` events use `"message"`; `tool_call`/`tool_use` use `"tool_call"`. Other types pass through unchanged.
 
 ### `usage` Field on `assistant` Messages
 
@@ -371,7 +370,7 @@ When output is capped due to `max_tokens`, the `result` event includes `error_ma
 ## Acceptance Criteria
 
 - **AC1:** Every stdout line valid JSON when format is stream-json.
-- **AC2:** Flat tool_use events use `parameters` key.
+- **AC2:** Flat tool_use events use `input` key (not `parameters`).
 - **AC3:** Terminal line is always `type: result` with usage snake_case fields.
 - **AC4:** `session_id` consistent across init, turns, and result.
 - **AC5:** Partial events only when `--include-partial-messages` and SSE enabled.

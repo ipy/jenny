@@ -31,10 +31,10 @@ All three fields must be non-empty on every line. The `session_id` and `cwd` val
 ## Transcript Location
 
 ```
-.jenny/transcripts/<session_id>.jsonl
+.jenny/sessions/<session_id>/transcript.jsonl
 ```
 
-Each line is one JSON object. The directory is created on first write.
+Each line is one JSON object. The session directory is created on first write.
 
 ## Chain Participants vs Non-Chain Entries
 
@@ -55,7 +55,6 @@ Not every persisted line becomes an API message on reload.
 |----------|----------|-------------------|
 | Progress / ephemeral | `progress`, `bash_progress`, `powershell_progress`, `mcp_progress` | UI/telemetry only; skipped for API chain |
 | Metadata | `queue-operation`, `custom-title`, `tag`, `file-history-snapshot`, `content-replacement` | Stored; not sent to model |
-| Tombstones | Deleted message markers | Remove referenced UUID from chain |
 
 **Critical:** Progress messages must never become chain nodes. Reloading a transcript with progress entries must not fork or duplicate the conversation.
 
@@ -63,17 +62,9 @@ Legacy transcripts may contain `type: "progress"` entries; on load, rewire `pare
 
 ## Write Path
 
-1. Append each turn after it completes (buffered write queue per project).
+1. Append each turn synchronously after it completes (no write buffer).
 2. Use append mode for crash recovery (partial last line may be discarded on parse).
-3. Register shutdown hook to **flush** pending writes before exit.
-
-## Tombstone Deletion
-
-When a message is deleted mid-session, the storage layer may rewrite the transcript to remove it.
-
-- **Fast path:** Tail splice when deletion is near end of file.
-- **Slow path:** Full rewrite when deletion is earlier in file.
-- **OOM guard:** Full rewrite capped at **50 MiB** (`MAX_TOMBSTONE_REWRITE_BYTES`). Beyond this cap, refuse rewrite or use alternative strategy that does not load entire file into memory.
+3. `FlushPendingWrites()` is a no-op hook (writes are already synchronous).
 
 ## Persistence Disable
 
@@ -88,7 +79,7 @@ When persistence is disabled (e.g. `--no-session-persistence`):
 | Case | Expected behavior |
 |------|-------------------|
 | Malformed JSONL line | Skip line; log warning; continue parsing |
-| Multi-GB transcript | Tombstone rewrite must respect 50 MiB cap |
+| Multi-GB transcript | Append-only; no in-place rewrite |
 | Process killed mid-write | Resume from last complete lines; skip partial tail |
 | `sessionProjectDir` vs cwd drift | Resolve project dir consistently at save and load |
 | Concurrent sessions same ID | Last writer wins; document as undefined (single process assumed) |
@@ -101,9 +92,8 @@ When persistence is disabled (e.g. `--no-session-persistence`):
 ## Acceptance Criteria
 
 - **AC1:** Chain rebuild includes only user/assistant/attachment/system participants; progress types excluded.
-- **AC2:** Tombstone full rewrite refuses or streams when file exceeds 50 MiB.
-- **AC3:** Shutdown flush completes before process exit when persistence enabled.
-- **AC4:** With persistence disabled, no files written under `.jenny/transcripts/`.
+- **AC3:** Shutdown completes without data loss when persistence enabled (synchronous writes).
+- **AC4:** With persistence disabled, no files written under `.jenny/sessions/`.
 - **AC5:** Append-only writes survive normal crash (at most one partial line lost).
 - **AC6:** The `session_id` emitted in the stream-json `system` event and `result` event equals the stem of the `.jsonl` transcript file created in the same run.
 - **AC7:** Every transcript line has a non-empty `cwd` field equal to the absolute path of the directory from which jenny was invoked.

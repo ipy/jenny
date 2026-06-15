@@ -79,12 +79,20 @@ func computeBackoff(attempt int, cfg RetryConfig, retryAfter *time.Duration) tim
 }
 
 // isRetryable checks if an HTTP status code or error is retryable.
+// Respects x-should-retry header from Anthropic when present.
 func isRetryable(statusCode int, err error) bool {
 	if err != nil {
 		// Context cancellation is NOT retryable — the caller explicitly cancelled.
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return false
 		}
+
+		// Check x-should-retry header if the error carries it
+		var httpErr *HTTPError
+		if errors.As(err, &httpErr) && httpErr.ShouldRetry != nil {
+			return *httpErr.ShouldRetry
+		}
+
 		// Transient network errors are retryable.
 		var netErr net.Error
 		if errors.As(err, &netErr) {

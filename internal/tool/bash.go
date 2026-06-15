@@ -70,6 +70,12 @@ func (t *BashTool) Name() string {
 	return "Bash"
 }
 
+// ConcurrencySafe returns false — bash commands must execute serially
+// to maintain consistent cwd state and avoid interleaving output.
+func (t *BashTool) ConcurrencySafe() bool {
+	return false
+}
+
 // Description returns a description of the tool.
 func (t *BashTool) Description() string {
 	return "Execute shell commands. Use this to run bash commands like ls, cat, pwd, etc. Note: bash is a generic exec tool and does not apply .gitignore/.jennyignore filtering — use the Glob tool for ignore-aware file discovery."
@@ -142,6 +148,14 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 
 	// Handle background execution (AC3)
 	if isBackgroundExecution(input) {
+		// Security: validate command even for background execution
+		gate := NewCommandGate(t.skipPermissions)
+		if err := gate.CheckCommand(command); err != nil {
+			return &ToolResult{
+				Content: fmt.Sprintf("Security error: %v", err),
+				IsError: true,
+			}, nil
+		}
 		return t.executeBackground(command, t.commandCwd, input)
 	}
 
@@ -150,6 +164,14 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 
 	// Check command against blocked patterns
 	if err := gate.CheckCommand(command); err != nil {
+		return &ToolResult{
+			Content: fmt.Sprintf("Security error: %v", err),
+			IsError: true,
+		}, nil
+	}
+
+	// Check for device paths in command arguments
+	if err := gate.CheckDevicePathsInCommand(command); err != nil {
 		return &ToolResult{
 			Content: fmt.Sprintf("Security error: %v", err),
 			IsError: true,

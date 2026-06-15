@@ -23,6 +23,23 @@ type Tool interface {
 	Execute(ctx context.Context, input map[string]any, cwd string) (*ToolResult, error)
 }
 
+// ConcurrentTool is an optional interface that tools can implement to declare
+// whether they are safe to run concurrently with other tools.
+// Tools that don't implement this are assumed to be concurrency-safe unless
+// the executor applies name-based overrides (e.g., Bash is always serial).
+type ConcurrentTool interface {
+	ConcurrencySafe() bool
+}
+
+// IsConcurrencySafe returns whether a tool declares itself safe for concurrent execution.
+// Returns true (safe) if the tool does not implement ConcurrentTool.
+func IsConcurrencySafe(t Tool) bool {
+	if ct, ok := t.(ConcurrentTool); ok {
+		return ct.ConcurrencySafe()
+	}
+	return true
+}
+
 // ToolUse represents a tool use request from the model.
 type ToolUse struct {
 	ID   string         `json:"id"`

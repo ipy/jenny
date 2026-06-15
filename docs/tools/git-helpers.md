@@ -17,12 +17,12 @@ depends_on:
 
 Filesystem-based git introspection without spawning `git` for hot paths: repo root, worktrees, ref safety, shallow detection, cached branch/HEAD/remote.
 
-## findGitRoot(startPath)
+## GetRoot(startPath)
 
 Walk up from startPath seeking `.git` as directory **or** file (worktree/submodule).
 
 - Memoized LRU cache (max 50 entries).
-- Returns normalized path (NFC) or null.
+- Returns normalized path or error if not in a repo.
 
 ## .git File vs Directory
 
@@ -43,17 +43,19 @@ Security checks for malicious `.git` / `commondir`:
 
 ## Shallow Clone
 
-`isShallowClone()`: true iff `{commonDir}/shallow` exists.
+`isShallowClone()`: true iff `{gitDir}/shallow` exists (per-worktree git dir, not shared commondir).
 
 ## Branch / HEAD / Remote Cache
 
-`GitFileWatcher`: watch HEAD, config, current branch ref (1s interval).
+Per-call `stat` check on HEAD, branch ref, and config files invalidates cached values.
 
-Worktree: branch refs + config from `commonDir`.
+Exported API:
 
-Cached: `getCachedBranch()`, `getCachedHead()`, `getCachedRemoteUrl()`, `getCachedDefaultBranch()`.
+- `GetBranch(rootPath)` — current branch or detached HEAD SHA
+- `GetHead(rootPath)` — current HEAD SHA
+- `GetRemoteUrl(rootPath)` — `remote.origin.url` from config
 
-Invalidate on any watched file change.
+Worktree: branch refs + config read from the worktree's own `gitDir`.
 
 ## Ref Safety
 
@@ -64,14 +66,14 @@ Reject path traversal (`..`), leading `-`, shell metacharacters in refs/SHAs fro
 | Case | Expected behavior |
 |------|-------------------|
 | Detached HEAD | Raw hex SHA only |
-| Symref chains | Follow in loose refs and packed-refs |
+| Symref chains | Follow loose refs only; **packed-refs not supported** (works for 99% of repos) |
 | Submodule .git file | Separate repo if no commondir |
 | Bare repo worktree | Canonical root may be common dir |
 
 ## Acceptance Criteria
 
-- **AC1:** findGitRoot cached and consistent for nested paths.
-- **AC2:** Valid worktree resolves refs from common dir.
+- **AC1:** GetRoot cached and consistent for nested paths.
+- **AC2:** Valid worktree resolves refs from worktree git dir.
 - **AC3:** Malicious commondir rejected.
-- **AC4:** isShallowClone detects shallow file.
-- **AC5:** Cache invalidates on ref change.
+- **AC4:** isShallowClone detects shallow file in per-worktree gitDir.
+- **AC5:** Cache invalidates on ref file mtime change.

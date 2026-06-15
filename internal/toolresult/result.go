@@ -13,4 +13,6 @@ type ToolResult struct {
 	OutputFile string `json:"output_file,omitempty"`
 	// CacheHit indicates the result was served from cache (file unchanged since last read).
 	CacheHit bool `json:"cache_hit,omitempty"`
+	// NewCwd signals the executor to switch the working directory (e.g., worktree enter/exit).
+	NewCwd string `json:"-"`
 }

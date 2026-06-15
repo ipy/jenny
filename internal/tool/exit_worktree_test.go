@@ -79,7 +79,7 @@ func TestExitWorktreeTool_Execute_MissingAction(t *testing.T) {
 
 	// Set up shared session
 	session := &WorktreeSession{}
-	session.SetWorktree("/some/path")
+	session.SetWorktree("/some/path", "/original")
 	tool.WithWorktreeSession(session)
 
 	result, err := tool.Execute(ctx, map[string]any{}, "/tmp")
@@ -100,7 +100,7 @@ func TestExitWorktreeTool_Execute_InvalidAction(t *testing.T) {
 
 	// Set up shared session
 	session := &WorktreeSession{}
-	session.SetWorktree("/some/path")
+	session.SetWorktree("/some/path", "/original")
 	tool.WithWorktreeSession(session)
 
 	result, err := tool.Execute(ctx, map[string]any{"action": "delete"}, "/tmp")
@@ -127,7 +127,7 @@ func TestExitWorktreeTool_Execute_KeepAction(t *testing.T) {
 
 	// Set up shared session
 	session := &WorktreeSession{}
-	session.SetWorktree(worktreePath)
+	session.SetWorktree(worktreePath, "/original")
 	tool.WithWorktreeSession(session)
 
 	result, err := tool.Execute(ctx, map[string]any{"action": "keep"}, tmpDir)
@@ -156,7 +156,7 @@ func TestExitWorktreeTool_Execute_CleanRemove(t *testing.T) {
 
 	// Set up shared session
 	session := &WorktreeSession{}
-	session.SetWorktree(worktreePath)
+	session.SetWorktree(worktreePath, "/original")
 	tool.WithWorktreeSession(session)
 
 	result, err := tool.Execute(ctx, map[string]any{"action": "remove"}, tmpDir)
@@ -192,7 +192,7 @@ func TestExitWorktreeTool_Execute_DirtyRemoveWithoutDiscard(t *testing.T) {
 
 	// Set up shared session
 	session := &WorktreeSession{}
-	session.SetWorktree(worktreePath)
+	session.SetWorktree(worktreePath, "/original")
 	tool.WithWorktreeSession(session)
 
 	result, err := tool.Execute(ctx, map[string]any{"action": "remove"}, tmpDir)
@@ -229,7 +229,7 @@ func TestExitWorktreeTool_Execute_DirtyRemoveWithDiscard(t *testing.T) {
 
 	// Set up shared session
 	session := &WorktreeSession{}
-	session.SetWorktree(worktreePath)
+	session.SetWorktree(worktreePath, "/original")
 	tool.WithWorktreeSession(session)
 
 	result, err := tool.Execute(ctx, map[string]any{"action": "remove", "discard_changes": true}, tmpDir)
