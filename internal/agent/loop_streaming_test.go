@@ -19,10 +19,10 @@ import (
 	"github.com/ipy/jenny/internal/tool"
 )
 
-// TestAC2_NoStreamRequestStart verifies that stream_request_start is NOT emitted.
+// TestAC1_NoStreamRequestStart verifies that stream_request_start is NOT emitted.
 // Per spec: stream_request_start is a jenny extension that Claude Code QueryEngine
 // discards internally, so it should not be present in Jenny's stream-json output.
-func TestAC2_NoStreamRequestStart(t *testing.T) {
+func TestAC1_NoStreamRequestStart(t *testing.T) {
 	server := makeMockStreamServer(t, nil)
 	defer server.Close()
 
@@ -81,9 +81,9 @@ func TestAC2_NoStreamRequestStart(t *testing.T) {
 	}
 }
 
-// TestAC2_NoStreamRequestStartWhenDisabled verifies that stream_request_start
-// is NOT emitted when streaming is disabled (AC2).
-func TestAC2_NoStreamRequestStartWhenDisabled(t *testing.T) {
+// TestAC1_NoStreamRequestStartWhenDisabled verifies that stream_request_start
+// is NOT emitted when streaming is disabled (AC1).
+func TestAC1_NoStreamRequestStartWhenDisabled(t *testing.T) {
 	server := makeMockStreamServer(t, nil)
 	defer server.Close()
 

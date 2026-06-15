@@ -65,11 +65,23 @@ type QueryEngine struct {
 	currentStopSequence string
 	currentUsage        api.Usage
 
+	// Thinking tokens state (AC3: thinking_tokens events per SDK alignment)
+	thinkingBlockState map[int]*thinkingBlockState // keyed by content block index
+
 	// Secret redaction (AC1: secret redaction)
 	secretRedactor *redact.SecretRedactor
 
 	// Skill activator for tracking active skills in system prompt
 	skillActivator tool.SkillActivator
+}
+
+// thinkingBlockState tracks the accumulated thinking tokens for a single thinking block.
+type thinkingBlockState struct {
+	EstimatedTokens      int       // Running total of accumulated thinking tokens
+	AccumulatedThisCycle int       // Tokens accumulated since last emission (for delta)
+	TotalTextLen         int       // Cumulative text length across all deltas for this block
+	PrevTotalTextLen     int       // Text length seen on the previous call (for delta calculation)
+	LastEmitTime         time.Time // Time of last thinking_tokens emission
 }
 
 // QueryEngineOption defines a functional option for QueryEngine.
