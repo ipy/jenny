@@ -110,6 +110,60 @@ func TestMaybeExtractArchive_NoOpWhenDirectoryExists(t *testing.T) {
 	}
 }
 
+// TestMaybeExtractArchive_KeepArchiveEnv: when JENNY_COMPACT_KEEP_ARCHIVE is
+// set to a non-empty value, MaybeExtractArchive must rebuild the session
+// directory and leave the archive on disk. This is the call site that
+// previously failed on Windows because the underlying compact.ExtractArchive
+// invoked os.Remove while the archive handle was still open; this test
+// exercises the keepArchive=true branch at the session layer to keep that
+// wiring covered alongside the AC5/AC8 keepArchive test in the compact
+// package.
+func TestMaybeExtractArchive_KeepArchiveEnv(t *testing.T) {
+	home := t.TempDir()
+	withJennyHomeCompact(t, home)
+
+	sessionsDir := filepath.Join(home, "sessions")
+	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	sessDir := filepath.Join(sessionsDir, "sess-1")
+	if err := os.MkdirAll(sessDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sessDir, "transcript.jsonl"), []byte(`{"type":"user","content":"hello"}`+"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if err := compact.CompactOne(sessionsDir, "sess-1", false, os.Stdout, os.Stderr); err != nil {
+		t.Fatalf("CompactOne: %v", err)
+	}
+	archive := filepath.Join(sessionsDir, "sess-1.tar.gz")
+
+	t.Setenv("JENNY_COMPACT_KEEP_ARCHIVE", "1")
+	if err := MaybeExtractArchive("sess-1"); err != nil {
+		t.Fatalf("MaybeExtractArchive: %v", err)
+	}
+	if _, err := os.Stat(archive); err != nil {
+		t.Errorf("archive was removed despite JENNY_COMPACT_KEEP_ARCHIVE=1: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(sessDir, "transcript.jsonl")); err != nil {
+		t.Errorf("transcript.jsonl missing after extract: %v", err)
+	}
+
+	// And once the knob is cleared, the default behaviour re-asserts itself.
+	t.Setenv("JENNY_COMPACT_KEEP_ARCHIVE", "")
+	// Remove the previously extracted directory so MaybeExtractArchive will
+	// fall through to the archive-extract branch.
+	if err := os.RemoveAll(sessDir); err != nil {
+		t.Fatalf("RemoveAll: %v", err)
+	}
+	if err := MaybeExtractArchive("sess-1"); err != nil {
+		t.Fatalf("MaybeExtractArchive (default): %v", err)
+	}
+	if _, err := os.Stat(archive); !os.IsNotExist(err) {
+		t.Errorf("archive should be removed when JENNY_COMPACT_KEEP_ARCHIVE is empty: err=%v", err)
+	}
+}
+
 // TestMaybeExtractArchive_NoOpWhenNothingToExtract: no directory, no archive
 // → no-op success.
 func TestMaybeExtractArchive_NoOpWhenNothingToExtract(t *testing.T) {
