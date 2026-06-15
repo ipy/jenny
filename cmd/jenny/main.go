@@ -294,6 +294,21 @@ func run() error {
 		pluginRoots = append(pluginRoots, homePluginRoots...)
 
 		discoveredSkills = discoverAndMergePluginSkills(discoveredSkills, pluginRoots)
+
+		// Build plugin info for init event (dedup by name)
+		seenPlugins := make(map[string]bool)
+		for _, root := range pluginRoots {
+			loaded := loadPluginFromRoot(root)
+			if loaded == nil || seenPlugins[loaded.Manifest.Name] {
+				continue
+			}
+			seenPlugins[loaded.Manifest.Name] = true
+			pluginInfo = append(pluginInfo, cli.PluginInitInfo{
+				Name:   loaded.Manifest.Name,
+				Path:   root,
+				Source: "project",
+			})
+		}
 	}
 
 	var tools []tool.Tool

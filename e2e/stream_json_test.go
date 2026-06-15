@@ -645,17 +645,26 @@ func TestStreamJSONUserToolResultFormat(t *testing.T) {
 // TestStreamJSONGap_InitExtendedFields tests that jenny includes all init extended fields.
 // AC4: Checks for all 8 fields: analytics_disabled, product_feedback_disabled, agents, plugins,
 // skills, slash_commands, memory_paths, apiKeySource.
+// Uses WorkDirFiles to provision a skill and a plugin so that non-empty output is verified.
 func TestStreamJSONGap_InitExtendedFields(t *testing.T) {
 	runE2ESuite(t, []*harness.TestCase{
 		{
 			ID:          "stream-json.init.has-extended-fields",
 			Category:    "stream-json",
-			Description: "init event includes all extended fields (8 total)",
+			Description: "init event includes all extended fields (8 total) with real data",
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "say hi",
 				Format:   "stream-json",
 				Cassette: "echo-hello",
+			},
+			WorkDirFiles: map[string]string{
+				// A skill so that skills/ slash_commands are populated
+				".jenny/skills/test-skill/SKILL.md": "---\ndescription: e2e test skill\n---\n# Test Skill\n",
+				// A plugin (marker dir inside plugin root) so that plugins field is populated
+				"test-plugin/.jenny-plugin/plugin.json": `{"name":"test-plugin","version":"0.1.0"}`,
+				// .git/HEAD so git.GetRoot succeeds for memory_paths
+				".git/HEAD": "ref: refs/heads/main\n",
 			},
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,
@@ -663,7 +672,7 @@ func TestStreamJSONGap_InitExtendedFields(t *testing.T) {
 					FirstEvent: &harness.EventExpectation{
 						Type:          "system",
 						HasFields:     []string{"analytics_disabled", "product_feedback_disabled", "agents", "plugins", "skills", "slash_commands", "memory_paths", "apiKeySource"},
-						FieldNotEmpty: []string{"analytics_disabled", "product_feedback_disabled", "agents", "skills", "apiKeySource"},
+						FieldNotEmpty: []string{"analytics_disabled", "product_feedback_disabled", "agents", "plugins", "skills", "slash_commands", "memory_paths", "apiKeySource"},
 					},
 				},
 			},
