@@ -332,12 +332,12 @@ activation_glob: "**/*.go"
 
 # Test
 `)
-	description, activationGlob := parseSkillMetadata(content)
-	if description != "Test skill" {
-		t.Errorf("expected description 'Test skill', got %q", description)
+	meta := parseSkillMetadata(content)
+	if meta.Description != "Test skill" {
+		t.Errorf("expected description 'Test skill', got %q", meta.Description)
 	}
-	if activationGlob != "**/*.go" {
-		t.Errorf("expected activation_glob '**/*.go', got %q", activationGlob)
+	if meta.ActivationGlob != "**/*.go" {
+		t.Errorf("expected activation_glob '**/*.go', got %q", meta.ActivationGlob)
 	}
 }
 
@@ -346,11 +346,51 @@ func TestParseSkillMetadata_WithoutActivationGlob(t *testing.T) {
 
 Some content.
 `)
-	description, activationGlob := parseSkillMetadata(content)
-	if description == "" {
+	meta := parseSkillMetadata(content)
+	if meta.Description == "" {
 		t.Error("expected non-empty description")
 	}
-	if activationGlob != "" {
-		t.Errorf("expected empty activation_glob, got %q", activationGlob)
+	if meta.ActivationGlob != "" {
+		t.Errorf("expected empty activation_glob, got %q", meta.ActivationGlob)
+	}
+}
+
+func TestParseSkillMetadata_WithAllowedTools(t *testing.T) {
+	content := []byte(`---
+description: Restricted skill
+allowed_tools: "Read Glob Grep Bash(git:*)"
+---
+
+# Restricted
+
+Only uses read-only tools.
+`)
+	meta := parseSkillMetadata(content)
+	if meta.Description != "Restricted skill" {
+		t.Errorf("expected description 'Restricted skill', got %q", meta.Description)
+	}
+	if len(meta.AllowedTools) != 4 {
+		t.Fatalf("expected 4 allowed tools, got %d: %v", len(meta.AllowedTools), meta.AllowedTools)
+	}
+	expected := []string{"Read", "Glob", "Grep", "Bash(git:*)"}
+	for i, tool := range meta.AllowedTools {
+		if tool != expected[i] {
+			t.Errorf("allowed_tools[%d]: got %q, want %q", i, tool, expected[i])
+		}
+	}
+}
+
+func TestParseSkillMetadata_WithoutAllowedTools(t *testing.T) {
+	content := []byte(`---
+description: Open skill
+---
+
+# Open
+
+Can use anything.
+`)
+	meta := parseSkillMetadata(content)
+	if len(meta.AllowedTools) != 0 {
+		t.Errorf("expected empty allowed_tools, got %v", meta.AllowedTools)
 	}
 }

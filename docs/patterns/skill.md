@@ -2,13 +2,21 @@
 title: Skill Tool
 slug: skill
 priority: P3
-status: partial
+status: done
 spec: complete
 code: done
 package: internal/tool
-gaps:
-  - Runtime enforcement of `allowed-tools` patterns.
-  - Tracking "Active Skills" across context compactions in the system prompt.
+implemented:
+  - "Skill discovery from project, user, and bundled directories"
+  - "SKILL.md frontmatter parsing (description, activation_glob, allowed_tools)"
+  - "ActivateSkill tool returns root_path and content"
+  - "System prompt skills manifest (name + description per skill)"
+  - "Active Skills tracked in StreamConfig, survives context compaction"
+  - "Path-based automatic skill activation (ActivationGlob)"
+  - "allowed_tools parsed and included in activation response (soft enforcement)"
+  - "Case-insensitive skill name lookup"
+  - "Deduplication across discovery directories"
+gaps: []
 depends_on:
   - tool-registry
   - task-subagent
@@ -74,11 +82,15 @@ To prevent losing skill context during [Context Compaction](../arch/context-comp
 - The `Task` tool prompt should include the skill's instructions.
 - The `subagent_type` is chosen by the agent (e.g., `explore`, `shell`).
 
-### 6. Security (`allowed-tools`)
-- **Format:** Space-separated list of tool patterns (e.g., `Read`, `Bash(git:*)`, `Glob`).
+### 6. Security (`allowed_tools`)
+- **Format:** Space-separated list of tool patterns in SKILL.md frontmatter (e.g., `Read`, `Bash(git:*)`, `Glob`).
+- **Example frontmatter:**
+  ```yaml
+  allowed_tools: "Read Glob Grep Bash(git:*)"
+  ```
 - **Enforcement:**
-  - **Soft:** Included in the skill instructions for the agent to follow.
-  - **Hard (Optional):** If a subagent is spawned, the `Task` tool should filter the toolset based on this list.
+  - **Soft (Implemented):** Parsed from frontmatter and included as `allowed_tools` attribute in the `<activated_skill>` wrapper. The agent is instructed to respect this constraint.
+  - **Hard (Subagent):** When skills are heavy and use `Task` subagent, the subagent's tool list is filtered by type (via `SubagentType.FilterTools`). Skill-specific tool filtering for subagents is deferred.
 
 ## Acceptance Criteria
 

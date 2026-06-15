@@ -2,15 +2,24 @@
 title: MCP Configuration
 slug: mcp-config
 priority: P0
-status: partial
+status: done
 spec: complete
-code: partial
+code: done
 package: internal/mcp
+implemented:
+  - "CLI flags (--mcp-config, --strict-mcp-config)"
+  - "Config file loading with mcpServers wrapper"
+  - "Multiple config file merge (later wins)"
+  - "Environment variable expansion (${VAR} and ${VAR:-default})"
+  - "Strict mode skips plugin sources"
+  - "Plugin MCP server discovery and merge"
+  - "Server definition supports command/args/env (stdio) and url/headers (HTTP)"
+  - "Transport selection: command → stdio, url → HTTP"
 gaps:
   - "Managed-domains-only mode and enterprise policy enforcement not implemented"
   - "Orphaned plugin cache exclusion from search tools not implemented"
-  - "Strict mode excludes plugin sources (enterprise policy enforcement deferred to P4)"
   - "OAuth credentials and OpenID Connect Discovery not supported in server definition"
+defer_to: P4
 depends_on:
   - cli
 ---
@@ -27,7 +36,7 @@ Jenny loads Model Context Protocol (MCP) server definitions from config files an
 | `--mcp-config <path>…` | One or more JSON file paths or inline JSON strings; repeatable |
 | `--strict-mcp-config` | Use **only** `--mcp-config` servers; ignore user/project/local/plugin sources |
 
-**Gap (Jenny today):** flag is wired to runtime (stdio transport only).
+Both stdio (`command` field) and HTTP (`url` field) servers are supported.
 
 ## Config Merge Precedence
 
@@ -47,16 +56,28 @@ Each server entry supports:
 ```json
 {
   "mcpServers": {
-    "my-server": {
+    "my-stdio-server": {
       "command": "npx",
       "args": ["-y", "@example/mcp-server"],
-      "env": { "API_KEY": "${MY_API_KEY}" },
+      "env": { "API_KEY": "${MY_API_KEY}" }
+    },
+    "my-http-server": {
       "url": "https://example.com/mcp",
       "headers": { "Authorization": "Bearer ${TOKEN:-default}" }
     }
   }
 }
 ```
+
+### Transport Selection
+
+| Fields present | Transport used |
+|---------------|----------------|
+| `command` | Stdio (subprocess) |
+| `url` (no `command`) | HTTP (Streamable HTTP) |
+| Neither | Skipped (invalid) |
+
+If both `command` and `url` are specified, `command` takes precedence (stdio transport).
 
 ### Environment Variable Expansion
 

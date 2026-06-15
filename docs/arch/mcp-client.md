@@ -4,11 +4,26 @@ slug: mcp-client
 priority: P0
 status: partial
 spec: complete
-code: partial
+code: done
 package: internal/mcp
+implemented:
+  - "Stdio transport (subprocess JSON-RPC)"
+  - "HTTP Streamable transport (MCP spec 2025-03-26)"
+  - "Transport interface abstraction"
+  - "Session management (Mcp-Session-Id)"
+  - "Auto re-initialization on session expiry (HTTP 404)"
+  - "Custom headers from config"
+  - "Configurable timeouts (MCP_HTTP_REQUEST_TIMEOUT)"
+  - "SSE response parsing with request ID matching"
+  - "Content truncation (MCP_MAX_OUTPUT_CHARS)"
+  - "Binary tool results persisted to disk"
+  - "Cursor-based pagination for tools/list and resources/list"
+  - "Tool naming normalization with empty-string fallback"
+  - "Resource cache with generation-based invalidation"
+  - "ConnectAll supports both stdio and HTTP"
 gaps:
   - "OAuth 2.1 authorization not implemented"
-  - "Resource cache is minimal (missing support for notifications/resources/list_changed)"
+  - "Resource cache: notifications/resources/list_changed not handled (requires async loop)"
   - "Progress events not implemented (notifications/progress)"
   - "Prompts (prompts/list, prompts/get) not implemented"
   - "Resource templates (resources/templates/list) not implemented"
@@ -17,7 +32,7 @@ gaps:
   - "Logging (logging/setLevel, notifications/message) not implemented"
   - "Icons metadata not supported"
   - "Tasks (experimental) not implemented"
-  - "Asynchronous message loop for handling server-initiated requests/notifications (sampling, list_changed, logging) not implemented"
+  - "Asynchronous message loop for server-initiated requests/notifications not implemented"
   - "SSE stream resumability (Last-Event-ID) not implemented"
   - "GET-based server-to-client SSE stream not implemented"
 defer_to: P4
@@ -82,13 +97,15 @@ Per MCP spec 2025-03-26. Single HTTP endpoint, JSON-RPC over POST.
 - Request timeout: 120s default (tool calls may be long-running)
 - Configurable via environment: `MCP_HTTP_REQUEST_TIMEOUT` (value in seconds)
 
-## OAuth and 401 Handling
+## OAuth and 401 Handling (Not Implemented — P4)
 
-On HTTP 401 from MCP server:
+Planned behavior for when OAuth is implemented:
 
 1. Attempt token refresh via stored OAuth credentials.
 2. Retry request once with refreshed token.
 3. If refresh fails, mark server status `needs-auth` and surface error to operator (no interactive prompt in headless mode).
+
+Currently, static auth tokens can be passed via `headers` config field (e.g., `"Authorization": "Bearer <token>"`).
 
 ## Tool Naming
 
@@ -98,7 +115,7 @@ MCP tools are exposed to the model with normalized names:
 mcp__<normalized_server>__<normalized_tool>
 ```
 
-Normalization: lowercase, non-alphanumeric → underscore, collapse repeats.
+Normalization: lowercase, non-alphanumeric → underscore, collapse repeats, trim. If normalization produces an empty string, falls back to `"unnamed"`.
 
 Example: server `My Server`, tool `List Files` → `mcp__my_server__list_files`
 
@@ -141,9 +158,9 @@ Invalidate cache on:
 - Session expired
 - `notifications/resources/list_changed`
 
-## Progress Events
+## Progress Events (Not Implemented — P4)
 
-During long MCP tool calls, emit progress entries (not chain nodes):
+Planned: During long MCP tool calls, emit progress entries (not chain nodes):
 
 - `mcp_progress` with `status: started | completed`
 - Yield separately from final tool_result in stream-json
@@ -171,12 +188,12 @@ Both transports implement a common interface:
 ```go
 type Transport interface {
     SendRequest(ctx context.Context, req jsonRPCRequest) (*jsonRPCResponse, error)
-    SendNotification(notif jsonRPCRequest) error
+    SendNotification(ctx context.Context, notif jsonRPCRequest) error
     Close() error
 }
 ```
 
-This allows the Client to be transport-agnostic after connection.
+This allows the Client to be transport-agnostic after connection. The `doRequest` method routes to the appropriate transport and handles session re-initialization for HTTP.
 
 ## Acceptance Criteria
 

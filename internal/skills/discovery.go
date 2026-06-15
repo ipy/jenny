@@ -14,7 +14,8 @@ type Skill struct {
 	Description    string
 	RootPath       string
 	Content        string
-	ActivationGlob string // glob pattern for automatic activation (e.g., "**/*.go")
+	ActivationGlob string   // glob pattern for automatic activation (e.g., "**/*.go")
+	AllowedTools   []string // tool patterns this skill is permitted to use (empty = all)
 }
 
 // MatchesPath checks if the given path matches this skill's activation criteria.
@@ -182,16 +183,16 @@ func Discover(dirs ...string) ([]Skill, error) {
 				continue
 			}
 
-			// Extract name and metadata from the skill
 			name := entry.Name()
-			description, activationGlob := parseSkillMetadata(content)
+			meta := parseSkillMetadata(content)
 
 			skills = append(skills, Skill{
 				Name:           name,
-				Description:    description,
+				Description:    meta.Description,
 				RootPath:       skillPath,
 				Content:        string(content),
-				ActivationGlob: activationGlob,
+				ActivationGlob: meta.ActivationGlob,
+				AllowedTools:   meta.AllowedTools,
 			})
 		}
 	}
@@ -199,13 +200,19 @@ func Discover(dirs ...string) ([]Skill, error) {
 	return skills, nil
 }
 
-// parseSkillMetadata extracts metadata (description, activation_glob) from SKILL.md content.
+// skillMetadata holds parsed SKILL.md frontmatter fields.
+type skillMetadata struct {
+	Description    string
+	ActivationGlob string
+	AllowedTools   []string
+}
+
+// parseSkillMetadata extracts metadata from SKILL.md content.
 // It first looks for YAML frontmatter fields, then falls back to the first line for description.
-func parseSkillMetadata(content []byte) (description string, activationGlob string) {
-	// Check for YAML frontmatter
+func parseSkillMetadata(content []byte) skillMetadata {
+	var meta skillMetadata
 	contentStr := string(content)
 
-	// Look for description and activation_glob in frontmatter
 	if strings.HasPrefix(contentStr, "---\n") || strings.HasPrefix(contentStr, "---\r\n") {
 		parts := strings.SplitN(contentStr[4:], "\n---", 2)
 		if len(parts) >= 2 {
@@ -215,14 +222,23 @@ func parseSkillMetadata(content []byte) (description string, activationGlob stri
 					desc = strings.TrimSpace(desc)
 					desc = strings.Trim(desc, "\"'")
 					if desc != "" {
-						description = desc
+						meta.Description = desc
 					}
 				}
 				if glob, ok := strings.CutPrefix(line, "activation_glob:"); ok {
 					glob = strings.TrimSpace(glob)
 					glob = strings.Trim(glob, "\"'")
 					if glob != "" {
-						activationGlob = glob
+						meta.ActivationGlob = glob
+					}
+				}
+				if tools, ok := strings.CutPrefix(line, "allowed_tools:"); ok {
+					tools = strings.TrimSpace(tools)
+					tools = strings.Trim(tools, "\"'")
+					if tools != "" {
+						for _, t := range strings.Fields(tools) {
+							meta.AllowedTools = append(meta.AllowedTools, t)
+						}
 					}
 				}
 			}
@@ -235,19 +251,19 @@ func parseSkillMetadata(content []byte) (description string, activationGlob stri
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		if description == "" {
+		if meta.Description == "" {
 			if len(line) > 100 {
 				line = line[:97] + "..."
 			}
-			description = line
+			meta.Description = line
 		}
 		break
 	}
 
-	if description == "" {
-		description = "No description available"
+	if meta.Description == "" {
+		meta.Description = "No description available"
 	}
-	return description, activationGlob
+	return meta
 }
 
 // ReadSkillContent reads the full content of a SKILL.md file.

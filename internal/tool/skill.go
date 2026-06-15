@@ -84,8 +84,12 @@ func (t *SkillTool) Execute(ctx context.Context, input map[string]any, cwd strin
 	}
 
 	// Return the skill content wrapped in activated_skill tags
-	// Include the root_path as an attribute for path resolution
-	content := fmt.Sprintf("<activated_skill root_path=%q>\n%s\n</activated_skill>", skill.RootPath, skill.Content)
+	var attrs strings.Builder
+	fmt.Fprintf(&attrs, " root_path=%q", skill.RootPath)
+	if len(skill.AllowedTools) > 0 {
+		fmt.Fprintf(&attrs, " allowed_tools=%q", strings.Join(skill.AllowedTools, " "))
+	}
+	content := fmt.Sprintf("<activated_skill%s>\n%s\n</activated_skill>", attrs.String(), skill.Content)
 
 	// Register the activation if an activator is provided
 	if t.activator != nil {
