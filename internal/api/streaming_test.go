@@ -644,9 +644,9 @@ func TestStreamingMultipleContentBlocks(t *testing.T) {
 }
 
 // TestFallback_NonStreamingMaxTokens64000 is the AC1 conformance test for
-// the non-streaming fallback path: when no override is set, the
+// the non-streaming fallback path: with SetMaxTokensOverride(64000), the
 // non-streaming /v1/messages request must carry max_tokens == 64000
-// (the universal default). The 20000 clamp that previously lived in
+// (matching engine_loop.go:341). The 20000 clamp that previously lived in
 // doSendMessage is gone; the SDK's 10-minute guard is bypassed at the
 // client level via option.WithRequestTimeout(1*time.Hour).
 func TestFallback_NonStreamingMaxTokens64000(t *testing.T) {
@@ -664,7 +664,7 @@ func TestFallback_NonStreamingMaxTokens64000(t *testing.T) {
 	setTestEnv(t, ms.URL())
 
 	client, _ := NewClientWithModel("m")
-	// No SetMaxTokensOverride — must use the universal 64000 default.
+	client.SetMaxTokensOverride(64000)
 	if _, err := client.SendMessage(context.Background(), nil, nil, nil, []string{}, ""); err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}

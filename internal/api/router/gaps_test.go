@@ -148,6 +148,11 @@ func TestSticky_401DoesNotRetry(t *testing.T) {
 	}))
 	defer srv.Close()
 
+	// Point the OpenAI provider at the mock server so ensureClient()
+	// doesn't connect to a real API that may hang.
+	t.Setenv("OPENAI_BASE_URL", srv.URL)
+	t.Setenv("OPENAI_API_KEY", "sk-test-key")
+
 	cfg := &Config{
 		Providers: []Provider{
 			{
