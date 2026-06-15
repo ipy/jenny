@@ -81,8 +81,9 @@ func (e *QueryEngine) executeAndProcessTools(ctx context.Context, toolUseBlocks 
 	executor := NewToolExecutorWithStreamConfig(e.tools, cwd, e.streamCfg)
 
 	// Register progress handler if streaming is enabled
+	var unregisterProgress func()
 	if e.streamCfg.Enabled {
-		mcp.RegisterProgressHandler(func(token any, progress, total float64) {
+		unregisterProgress = mcp.RegisterProgressHandler(func(token any, progress, total float64) {
 			// In our implementation, the token is the tool_use_id string
 			if toolUseID, ok := token.(string); ok {
 				// Find the tool name for this ID from execBlocks
@@ -106,6 +107,11 @@ func (e *QueryEngine) executeAndProcessTools(ctx context.Context, toolUseBlocks 
 	}
 
 	execResults, err := executor.Execute(ctx, execBlocks)
+
+	// Unregister progress handler to prevent memory growth across turns
+	if unregisterProgress != nil {
+		unregisterProgress()
+	}
 	if err != nil {
 		return nil, false, fmt.Errorf("executing tools: %w", err)
 	}

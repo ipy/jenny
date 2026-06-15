@@ -39,6 +39,17 @@ type Client struct {
 	muNotif       sync.Mutex
 
 	done chan struct{}
+
+	// bgErr captures errors from BackgroundListen SSE connection
+	bgErr error
+	muBg  sync.Mutex
+}
+
+// Err returns the error from the background SSE connection, if any.
+func (c *Client) Err() error {
+	c.muBg.Lock()
+	defer c.muBg.Unlock()
+	return c.bgErr
 }
 
 // Notification represents a JSON-RPC notification.
@@ -567,6 +578,9 @@ func (c *Client) Connect(ctx context.Context) error {
 		// Start background listener for SSE notifications
 		go func() {
 			if err := c.transport.BackgroundListen(context.Background()); err != nil {
+				c.muBg.Lock()
+				c.bgErr = err
+				c.muBg.Unlock()
 				log.Debug("MCP HTTP background listener failed", "server", c.Name, "error", err)
 			}
 		}()
@@ -647,15 +661,24 @@ func GetProgressToken(ctx context.Context) any {
 type ProgressHandler func(token any, progress, total float64)
 
 var (
-	progressHandlers   []ProgressHandler
+	progressHandlers   = make(map[uint64]ProgressHandler)
 	progressHandlersMu sync.Mutex
+	progressHandlerID uint64
 )
 
 // RegisterProgressHandler registers a global handler for progress notifications.
-func RegisterProgressHandler(h ProgressHandler) {
+// Returns an unregister function that removes the handler when called.
+func RegisterProgressHandler(h ProgressHandler) func() {
 	progressHandlersMu.Lock()
 	defer progressHandlersMu.Unlock()
-	progressHandlers = append(progressHandlers, h)
+	progressHandlerID++
+	id := progressHandlerID
+	progressHandlers[id] = h
+	return func() {
+		progressHandlersMu.Lock()
+		delete(progressHandlers, id)
+		progressHandlersMu.Unlock()
+	}
 }
 
 // handleNotification processes an incoming MCP notification.

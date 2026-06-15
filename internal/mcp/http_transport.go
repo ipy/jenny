@@ -98,48 +98,50 @@ func (t *HTTPTransport) BackgroundListen(ctx context.Context) error {
 		t.mu.Unlock()
 	}
 
-	go func() {
-		defer resp.Body.Close()
-		scanner := bufio.NewScanner(resp.Body)
-		var currentEvent string
-		var dataLines []string
+	// SSE listener - blocks until connection drops or error
+	defer resp.Body.Close()
+	scanner := bufio.NewScanner(resp.Body)
+	var currentEvent string
+	var dataLines []string
 
-		for scanner.Scan() {
-			line := scanner.Text()
-			if line == "" {
-				if len(dataLines) > 0 {
-					data := strings.Join(dataLines, "\n")
-					if currentEvent == "" || currentEvent == "message" {
-						var msg struct {
-							Method string          `json:"method"`
-							Params json.RawMessage `json:"params"`
-						}
-						if err := json.Unmarshal([]byte(data), &msg); err == nil && msg.Method != "" {
-							t.mu.Lock()
-							handler := t.notifHandler
-							t.mu.Unlock()
-							if handler != nil {
-								handler(Notification{
-									Method: msg.Method,
-									Params: msg.Params,
-								})
-							}
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			if len(dataLines) > 0 {
+				data := strings.Join(dataLines, "\n")
+				if currentEvent == "" || currentEvent == "message" {
+					var msg struct {
+						Method string          `json:"method"`
+						Params json.RawMessage `json:"params"`
+					}
+					if err := json.Unmarshal([]byte(data), &msg); err == nil && msg.Method != "" {
+						t.mu.Lock()
+						handler := t.notifHandler
+						t.mu.Unlock()
+						if handler != nil {
+							handler(Notification{
+								Method: msg.Method,
+								Params: msg.Params,
+							})
 						}
 					}
-					dataLines = nil
-					currentEvent = ""
 				}
-				continue
+				dataLines = nil
+				currentEvent = ""
 			}
-
-			if strings.HasPrefix(line, "event:") {
-				currentEvent = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
-			} else if strings.HasPrefix(line, "data:") {
-				dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
-			}
+			continue
 		}
-	}()
 
+		if strings.HasPrefix(line, "event:") {
+			currentEvent = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+		} else if strings.HasPrefix(line, "data:") {
+			dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("SSE stream error: %w", err)
+	}
 	return nil
 }
 

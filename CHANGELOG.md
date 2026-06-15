@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-### Fixed
+### Added
 - MCP Maturity and Windows Native Consolidation (P4 Refinement)
   - AC1: MCP Asynchronous Notifications via background loop
   - AC2: Streamed Progress Events in stream-json output
