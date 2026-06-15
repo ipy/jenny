@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 	// The "testing" import below is required by NewTestServer, which provides
 	// a test-harness convenience wrapper around NewMockServer + Lookup.
 	// It is deliberately kept in this non-test file because NewTestServer is
@@ -57,6 +58,10 @@ type MockServer struct {
 	// E5: Custom path handlers, keyed by "METHOD /path" (e.g., "POST /v1/chat/completions").
 	// Checked before the default /cassette/<id>/v1/messages dispatcher.
 	pathHandlers map[string]http.HandlerFunc
+
+	// E6: Response delay in milliseconds, keyed by cassetteID.
+	// Applied before serving the response to simulate network latency.
+	delays map[string]int
 
 	// extMu protects the5 extension maps above against concurrent access.
 	// Setters run in test code; reads happen in handle() from the HTTP server goroutine.
@@ -172,6 +177,23 @@ func (m *MockServer) SetPathHandler(pathPattern string, handler func(w http.Resp
 		m.pathHandlers = make(map[string]http.HandlerFunc)
 	}
 	m.pathHandlers[pathPattern] = handler
+	return m
+}
+
+// SetDelay sets a response delay in milliseconds for a given cassetteID.
+// Applied before serving the response to simulate network latency.
+// Zero delay clears the override.
+func (m *MockServer) SetDelay(cassetteID string, delayMs int) *MockServer {
+	m.extMu.Lock()
+	defer m.extMu.Unlock()
+	if delayMs <= 0 {
+		delete(m.delays, cassetteID)
+	} else {
+		if m.delays == nil {
+			m.delays = make(map[string]int)
+		}
+		m.delays[cassetteID] = delayMs
+	}
 	return m
 }
 
@@ -354,7 +376,14 @@ func (m *MockServer) handle(w http.ResponseWriter, r *http.Request) {
 		if ct, ok := m.contentTypes[cassetteID]; ok && ct != "" {
 			contentType = ct
 		}
+		// E6: Apply delay before serving response
+		delayMs := m.delays[cassetteID]
 		m.extMu.Unlock()
+
+		// Sleep if delay is configured
+		if delayMs > 0 {
+			time.Sleep(time.Duration(delayMs) * time.Millisecond)
+		}
 
 		w.Header().Set("Content-Type", contentType)
 		w.Header().Set("Cache-Control", "no-cache")
@@ -383,7 +412,14 @@ func (m *MockServer) handle(w http.ResponseWriter, r *http.Request) {
 	if ct, ok := m.contentTypes[cassetteID]; ok && ct != "" {
 		contentType = ct
 	}
+	// E6: Apply delay before serving response
+	delayMs := m.delays[cassetteID]
 	m.extMu.Unlock()
+
+	// Sleep if delay is configured
+	if delayMs > 0 {
+		time.Sleep(time.Duration(delayMs) * time.Millisecond)
+	}
 
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "no-cache")

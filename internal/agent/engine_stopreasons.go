@@ -250,6 +250,26 @@ func (e *QueryEngine) emitSuccessResult(resp *api.Response, finalResult, session
 		}
 	}
 
+	// Calculate TTFT stream (time to first stream event) in milliseconds
+	// firstStreamTime is set when stream_request_start is emitted (R2 fix)
+	var ttftStreamMs int64
+	if !e.firstStreamTime.IsZero() && !e.lastAPIStartTime.IsZero() {
+		ttftStreamMs = e.firstStreamTime.Sub(e.lastAPIStartTime).Milliseconds()
+		if ttftStreamMs < 0 {
+			ttftStreamMs = 0
+		}
+	}
+
+	// Calculate time to request (pre-API processing time) in milliseconds
+	// turnStartTime is set at the start of each turn iteration
+	var timeToRequestMs int64
+	if !e.turnStartTime.IsZero() && !e.lastAPIStartTime.IsZero() {
+		timeToRequestMs = e.lastAPIStartTime.Sub(e.turnStartTime).Milliseconds()
+		if timeToRequestMs < 0 {
+			timeToRequestMs = 0
+		}
+	}
+
 	msg := StreamMessage{
 		Type:            "result",
 		Subtype:         "success",
@@ -260,7 +280,9 @@ func (e *QueryEngine) emitSuccessResult(resp *api.Response, finalResult, session
 		IsError:         false,
 		StopReason:      string(resp.StopReason),
 		TTFTMs:          ttftMs,
-		TerminalReason:   mapTerminalReason(string(resp.StopReason)),
+		TTFTStreamMs:    ttftStreamMs,
+		TimeToRequestMs: timeToRequestMs,
+		TerminalReason:  mapTerminalReason(string(resp.StopReason)),
 		APIErrorStatus:  nil, // null on success
 		DurationMs:      time.Since(e.startTime).Milliseconds(),
 		DurationAPIMs:   e.totalAPIDurationMs,

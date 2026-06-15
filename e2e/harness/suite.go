@@ -16,6 +16,8 @@ type SuiteRunner struct {
 	Config     *Config
 	Tests      []*TestCase
 	mockServer *MockServer
+	// pendingDelay stores delay to apply when mock server is first created
+	pendingDelay int
 }
 
 // NewSuiteRunner creates a new test suite runner.
@@ -47,6 +49,17 @@ func (sr *SuiteRunner) Close() {
 	if sr.mockServer != nil {
 		sr.mockServer.Close()
 		sr.mockServer = nil
+	}
+}
+
+// SetMockDelay sets a response delay for a given cassette ID.
+// This is used to simulate network latency for timing tests.
+func (sr *SuiteRunner) SetMockDelay(cassetteID string, delayMs int) {
+	if sr.mockServer != nil {
+		sr.mockServer.SetDelay(cassetteID, delayMs)
+	} else {
+		// Store for later application when mock server is created
+		sr.pendingDelay = delayMs
 	}
 }
 

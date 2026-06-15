@@ -567,13 +567,14 @@ func TestStreamJSON_ReferenceAlignment(t *testing.T) {
 
 // TestStreamJSONGap_ResultExtendedFields tests that jenny includes extended result timing fields.
 // This test verifies: ttft_ms, ttft_stream_ms, time_to_request_ms, terminal_reason, api_error_status on result.
-// Note: timing fields may be omitted (omitempty) in fast test environments (mock API) when values are 0.
+// AC3: All 5 fields must be present in result event.
+// Uses mock API delay to ensure timing values are non-zero.
 func TestStreamJSONGap_ResultExtendedFields(t *testing.T) {
-	runE2ESuite(t, []*harness.TestCase{
+	runE2ESuiteWithDelay(t, []*harness.TestCase{
 		{
 			ID:          "stream-json.result.has-extended-timing",
 			Category:    "stream-json",
-			Description: "result event includes ttft_ms, ttft_stream_ms, time_to_request_ms fields (may be omitted when 0)",
+			Description: "result event includes all 5 timing fields: ttft_ms, ttft_stream_ms, time_to_request_ms, terminal_reason, api_error_status",
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "say hi",
@@ -585,9 +586,8 @@ func TestStreamJSONGap_ResultExtendedFields(t *testing.T) {
 				StreamJSON: &harness.StreamJSONExpectation{
 					LastEvent: &harness.EventExpectation{
 						Type:      "result",
-						// Required fields that must be present
-						HasFields: []string{"ttft_ms", "terminal_reason", "api_error_status"},
-						// Timing fields may be present (>=0) or absent (omitempty when 0 in fast test env)
+						// AC3: All 5 fields must be present (spec requirement)
+						HasFields: []string{"ttft_ms", "ttft_stream_ms", "time_to_request_ms", "terminal_reason", "api_error_status"},
 					},
 				},
 			},
@@ -614,7 +614,7 @@ func TestStreamJSONGap_ResultExtendedFields(t *testing.T) {
 				},
 			},
 		},
-	})
+	}, 10) // 10ms delay to ensure non-zero timing values
 }
 
 // TestStreamJSONUserToolResultFormat verifies tool_use_result format variations.
