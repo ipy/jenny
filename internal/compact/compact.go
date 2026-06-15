@@ -293,12 +293,17 @@ func ExtractArchive(archivePath, destParent, id string, keepArchive bool) error 
 	if err != nil {
 		return fmt.Errorf("opening archive: %w", err)
 	}
-	defer f.Close()
+	closed := false
+	defer func() {
+		if !closed {
+			_ = f.Close()
+		}
+	}()
+
 	gz, err := gzip.NewReader(f)
 	if err != nil {
 		return fmt.Errorf("gzip reader: %w", err)
 	}
-	defer gz.Close()
 	tr := tar.NewReader(gz)
 
 	prefix := id + "/"
@@ -341,6 +346,19 @@ func ExtractArchive(archivePath, destParent, id string, keepArchive bool) error 
 		}
 	}
 
+	// Close BOTH the gzip reader and the underlying file handle before
+	// removing the archive. POSIX would tolerate the open handle, but
+	// Windows DeleteFileW refuses while any handle is open
+	// (ERROR_SHARING_VIOLATION), breaking `jenny --resume <id>` for any
+	// archived session. Mirror the cleanup ordering used in writeArchive.
+	if err := gz.Close(); err != nil {
+		return fmt.Errorf("closing gzip reader: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("closing archive: %w", err)
+	}
+	closed = true
+
 	if !keepArchive {
 		if err := os.Remove(archivePath); err != nil {
 			return fmt.Errorf("removing archive after extract: %w", err)
@@ -349,16 +367,45 @@ func ExtractArchive(archivePath, destParent, id string, keepArchive bool) error 
 	return nil
 }
 
+// knownFlag returns true when s is a long-form flag (--flag) or short-form
+// flag (-f) that ParseCompactArgs recognises. This is used to reorder args
+// so that flags survive Go's flag package restriction that stops parsing
+// after the first non-flag argument.
+func knownFlag(s string) bool {
+	switch s {
+	case "--dry-run", "--force", "--help", "-h":
+		return true
+	}
+	return false
+}
+
 // ParseCompactArgs parses the args slice (excluding the subcommand name
 // itself) for `jenny compact`. Returns (positional id, dryRun, force, help).
+//
+// Go's flag package stops parsing at the first non-flag argument, so we
+// reorder known flags before any positional id to support both
+// `jenny compact <id> --force` and `jenny compact --force <id>`.
 func ParseCompactArgs(args []string) (id string, dryRun, force, help bool, err error) {
+	// Separate known flags from positional args, preserving relative order
+	// among flags so the last flag value wins (e.g. --force after --dry-run).
+	var flagArgs, positional []string
+	for _, a := range args {
+		if knownFlag(a) || (len(a) > 1 && a[0] == '-' && !knownFlag(a)) {
+			// Pass through recognised flags and unknown -- flags (the parser
+			// will reject unknown flags with an error).
+			flagArgs = append(flagArgs, a)
+		} else {
+			positional = append(positional, a)
+		}
+	}
+
 	fs := flag.NewFlagSet("jenny compact", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.BoolVar(&dryRun, "dry-run", false, "Print would-compact lines and exit")
 	fs.BoolVar(&force, "force", false, "Overwrite an existing archive")
 	fs.BoolVar(&help, "help", false, "Print usage and exit")
 	fs.BoolVar(&help, "h", false, "Print usage and exit (alias)")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(append(flagArgs, positional...)); err != nil {
 		return "", false, false, false, err
 	}
 	rest := fs.Args()
