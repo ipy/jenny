@@ -67,6 +67,13 @@ type RetryPolicy struct {
 
 // LoadConfig loads a YAML configuration file and returns the parsed Config.
 // Returns nil, nil if the file does not exist.
+//
+// Per spec "Backward Compatibility" → "Coexistence": if the YAML file exists
+// and parses, environment-based providers are APPENDED to the YAML's provider
+// list (under names like "legacy-anthropic", "legacy-openai", "legacy-genai").
+// The YAML's providers retain priority for matching. This is the spec's
+// "merging environment-based keys into a temporary legacy provider for
+// debugging" behavior.
 func LoadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -81,10 +88,36 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
+	// Merge environment-based providers into the loaded config so the YAML
+	// remains the source of truth while env-derived keys are still usable
+	// (e.g., for the implicit default profile's fallback chain).
+	envCfg := SynthesizeConfigFromEnv()
+	if envCfg != nil {
+		mergeLegacyProviders(&cfg, envCfg.Providers)
+	}
+
 	// Apply defaults
 	applyDefaults(&cfg)
 
 	return &cfg, nil
+}
+
+// mergeLegacyProviders appends env-derived providers to the YAML config
+// unless a provider with the same name already exists. Names like
+// "legacy-anthropic" are reserved for the env-synthesis path.
+func mergeLegacyProviders(cfg *Config, legacy []Provider) {
+	for _, lp := range legacy {
+		exists := false
+		for _, p := range cfg.Providers {
+			if p.Name == lp.Name {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			cfg.Providers = append(cfg.Providers, lp)
+		}
+	}
 }
 
 // applyDefaults sets default values for omitted configuration fields.

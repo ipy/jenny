@@ -2,10 +2,18 @@
 title: Multi-Provider Routing
 slug: multi-provider-routing
 priority: P2
-status: not_started
+status: partial
 spec: complete
-code: not_started
+code: partial
 package: internal/api, internal/agent
+gaps:
+  - Round-robin/random selection are session-hash based, not counter based — keys with healthy status are not truly load balanced
+  - "balanced" routing_mode is not implemented (only "sticky" is honored)
+  - Env-var synthesis does not merge with YAML config (it replaces it)
+  - Subagent `profile=` parameter is not wired through to the router
+  - CLI does not call router.Init on startup; router is unreachable from main flows
+  - Layer 1 does not distinguish 401 (Permanent) from 5xx (Retryable) — see StickyClient.SendMessage
+  - No HTTP-layer test coverage for the StickyClient fallback chain (only SelectEndpoint unit tests)
 depends_on:
   - anthropic-api-client
   - message-normalization

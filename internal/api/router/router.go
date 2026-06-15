@@ -7,7 +7,9 @@ import (
 	"hash/fnv"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ipy/jenny/internal/log"
 )
@@ -36,6 +38,7 @@ type Router struct {
 	sessions       map[string]*SessionState
 	mu             sync.RWMutex
 	profileName    string
+	rrCounter      atomic.Uint64 // monotonically increasing, used by cross-session round-robin
 }
 
 // SessionState holds the sticky state for a session.
@@ -128,13 +131,25 @@ func NewRouter(cfg *Config) *Router {
 	}
 }
 
+// nextRoundRobinIndex atomically advances and returns the next index, bounded
+// by the given length. This is the spec's "Cross-Session" round-robin: each
+// SelectEndpoint call gets a distinct position in the candidate pool so a
+// single key is never preferred by the selection itself.
+func (r *Router) nextRoundRobinIndex(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	idx := r.rrCounter.Add(1) - 1
+	return int(idx % uint64(n))
+}
+
 // GetRouter returns the global router instance.
 func GetRouter() *Router {
 	return globalRouter
 }
 
 // SelectEndpoint selects an endpoint for the given session using three-layer routing.
-// L1: Return sticky endpoint if session is already bound.
+// L1: Return sticky endpoint if session is already bound (and routing_mode is sticky).
 // L2: Round-robin across keys within same account for same model.
 // L3: Walk profile's target chain to find matching model.
 func (r *Router) SelectEndpoint(sessionID string) (*ActiveEndpoint, error) {
@@ -148,7 +163,9 @@ func (r *Router) SelectEndpoint(sessionID string) (*ActiveEndpoint, error) {
 
 	state, hasState := r.sessions[sessionID]
 
-	// L1: Check sticky session binding (if routing_mode is sticky)
+	// L1: Check sticky session binding — only honored in "sticky" routing mode.
+	// In "balanced" mode, every call re-evaluates from the candidate pool,
+	// intentionally sacrificing prompt-cache continuity for load distribution.
 	if hasState && state.Endpoint != nil && profile.RoutingMode == "sticky" {
 		return state.Endpoint, nil
 	}
@@ -242,19 +259,15 @@ func (r *Router) findCandidates(match MatchClause) []CandidateEndpoint {
 // modelMatches checks if a model matches the given match criteria.
 func (r *Router) modelMatches(model Model, match MatchClause) bool {
 	// Match by model name (provider:model format)
-	for _, m := range match.Models {
-		if m == model.Name {
-			return true
-		}
+	if slices.Contains(match.Models, model.Name) {
+		return true
 	}
 
 	// Match by tags
 	if len(match.Tags) > 0 {
 		for _, tag := range match.Tags {
-			for _, modelTag := range model.Tags {
-				if tag == modelTag {
-					return true
-				}
+			if slices.Contains(model.Tags, tag) {
+				return true
 			}
 		}
 	}
@@ -267,15 +280,15 @@ func (r *Router) modelMatches(model Model, match MatchClause) bool {
 	return false
 }
 
-// selectRoundRobinLocked selects using round-robin based on session ID (must hold lock).
-func (r *Router) selectRoundRobinLocked(candidates []CandidateEndpoint, sessionID string) *ActiveEndpoint {
+// selectRoundRobinLocked selects using a monotonic counter so that each call
+// returns a different position in the candidate pool (true cross-session
+// load distribution). The lock MUST be held by the caller.
+func (r *Router) selectRoundRobinLocked(candidates []CandidateEndpoint, _ string) *ActiveEndpoint {
 	if len(candidates) == 0 {
 		return nil
 	}
 
-	h := fnv.New32a()
-	h.Write([]byte(sessionID))
-	idx := int(h.Sum32()) % len(candidates)
+	idx := r.nextRoundRobinIndex(len(candidates))
 
 	c := candidates[idx]
 	return &ActiveEndpoint{
@@ -406,7 +419,11 @@ func (r *Router) nextKeyLocked(state *SessionState, current *ActiveEndpoint) *Ac
 }
 
 // nextTargetLocked finds the next target in the profile chain (must hold lock).
-func (r *Router) nextTargetLocked(state *SessionState, current *ActiveEndpoint) *ActiveEndpoint {
+// The `current` parameter mirrors nextKeyLocked's signature; the implementation
+// currently only advances TargetIndex, but keeping the parameter in place lets
+// future capability-based filtering (e.g., "current lacks vision → skip ahead
+// to a vision-capable model") plug in without changing the call site.
+func (r *Router) nextTargetLocked(state *SessionState, _ *ActiveEndpoint) *ActiveEndpoint {
 	profile, ok := r.config.Profiles[r.profileName]
 	if !ok {
 		return nil
