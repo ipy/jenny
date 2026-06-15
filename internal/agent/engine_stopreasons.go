@@ -273,7 +273,7 @@ func (e *QueryEngine) emitSuccessResult(resp *api.Response, finalResult, session
 	msg := StreamMessage{
 		Type:            "result",
 		Subtype:         "success",
-		Result:         finalResult,
+		Result:          finalResult,
 		SessionID:       sessionID,
 		Uuid:            GenerateUUID(),
 		Usage:           usage,

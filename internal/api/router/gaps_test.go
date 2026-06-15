@@ -164,9 +164,9 @@ func TestSticky_401DoesNotRetry(t *testing.T) {
 		},
 		Profiles: map[string]Profile{
 			"default": {
-				Targets:     []Target{{Match: MatchClause{Models: []string{"m"}}}},
-				RoutingMode: "sticky",
-				RetryPolicy: RetryPolicy{MaxRetries: 3, Backoff: "exponential"},
+				Targets:       []Target{{Match: MatchClause{Models: []string{"m"}}}},
+				RoutingMode:   "sticky",
+				RetryPolicy:   RetryPolicy{MaxRetries: 3, Backoff: "exponential"},
 				AllowFallback: new(true),
 			},
 		},

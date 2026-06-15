@@ -153,6 +153,22 @@ func isGenAIEnvSet() bool {
 	return false
 }
 
+// DetectAPIKeySource returns the name of the API provider whose env vars are
+// set, in priority order matching NewClientWithModel:
+// "openai" > "genai" > "anthropic". Returns "none" if no credentials detected.
+func DetectAPIKeySource() string {
+	if os.Getenv("OPENAI_BASE_URL") != "" {
+		return "openai"
+	}
+	if isGenAIEnvSet() {
+		return "genai"
+	}
+	if os.Getenv("ANTHROPIC_API_KEY") != "" {
+		return "anthropic"
+	}
+	return "none"
+}
+
 // SetModel sets the model to use.
 func (c *Client) SetModel(model string) {
 	if setter, ok := c.provider.(interface{ SetModel(string) }); ok {

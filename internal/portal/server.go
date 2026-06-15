@@ -299,14 +299,14 @@ func (p *Portal) runIdleMonitor(ctx context.Context) {
 	}
 }
 
-	// findAvailablePort finds an available port starting from the given port.
-	func findAvailablePort(start int) (int, error) {
-		for port := start; port < 65535; port++ {
-			ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
-			if err == nil {
-				ln.Close()
-				return port, nil
-			}
+// findAvailablePort finds an available port starting from the given port.
+func findAvailablePort(start int) (int, error) {
+	for port := start; port < 65535; port++ {
+		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+		if err == nil {
+			ln.Close()
+			return port, nil
 		}
-		return 0, fmt.Errorf("no available port found")
 	}
+	return 0, fmt.Errorf("no available port found")
+}

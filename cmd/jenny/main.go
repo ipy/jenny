@@ -13,8 +13,10 @@ import (
 	"github.com/ipy/jenny/internal/api/router"
 	"github.com/ipy/jenny/internal/cli"
 	"github.com/ipy/jenny/internal/constants"
+	"github.com/ipy/jenny/internal/git"
 	"github.com/ipy/jenny/internal/log"
 	"github.com/ipy/jenny/internal/mcp"
+	"github.com/ipy/jenny/internal/memdir"
 	"github.com/ipy/jenny/internal/plugin"
 	"github.com/ipy/jenny/internal/redact"
 	"github.com/ipy/jenny/internal/session"
@@ -268,6 +270,7 @@ func run() error {
 
 	// Discover skills from project .jenny/skills/ directory and bundled default directory
 	var discoveredSkills []skills.Skill
+	var pluginInfo []cli.PluginInitInfo
 
 	// AC4: Bare mode skips all skill discovery
 	if !flags.Bare {
@@ -335,6 +338,12 @@ func run() error {
 	}
 	redactMode := redact.ParseRedactMode(redactModeStr)
 
+	// Compute memory path for init event
+	var memoryPaths map[string]string
+	if projectRoot, err := git.GetRoot(cwd); err == nil {
+		memoryPaths = map[string]string{"auto": memdir.MemoryPathFromProjectRoot(projectRoot)}
+	}
+
 	// Build stream config
 	// AC4: Create ReadFileCache and pass it through StreamConfig for engine-level wiring
 	streamCfg := agent.StreamConfig{
@@ -356,6 +365,8 @@ func run() error {
 		MaxBudgetUSD:       flags.MaxBudgetUsd,
 		RedactMode:         redactMode,
 		Effort:             flags.Effort,
+		Plugins:            pluginInfo,
+		MemoryPaths:        memoryPaths,
 	}
 
 	// AC3-streamconfig-inheritance: Set parent config on runner for named agent inheritance

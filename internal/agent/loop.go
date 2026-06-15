@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/ipy/jenny/internal/api"
@@ -17,40 +16,6 @@ import (
 
 // Ensure ReadFileCache type is used (via StreamConfig field)
 var _ *tool.ReadFileCache
-
-// detectAPIKeySource reports the API key source based on environment variables.
-// This matches the provider selection logic in api/client.go.
-func detectAPIKeySource() string {
-	if os.Getenv("ANTHROPIC_API_KEY") != "" || os.Getenv("ANTHROPIC_AUTH_TOKEN") != "" {
-		return "anthropic"
-	}
-	if os.Getenv("OPENAI_API_KEY") != "" {
-		return "openai"
-	}
-	if os.Getenv("GOOGLE_API_KEY") != "" || os.Getenv("GENAI_API_KEY") != "" || os.Getenv("GEMINI_API_KEY") != "" {
-		return "gemini"
-	}
-	return "none"
-}
-
-// detectInstalledSkills returns the list of skill names from ~/.jenny/skills/ directory.
-func detectInstalledSkills() []string {
-	skillsDir := filepath.Join(constants.JennyHomeDir(), "skills")
-	entries, err := os.ReadDir(skillsDir)
-	if err != nil {
-		return []string{}
-	}
-	var names []string
-	for _, e := range entries {
-		if e.IsDir() {
-			names = append(names, e.Name())
-		}
-	}
-	if names == nil {
-		names = []string{}
-	}
-	return names
-}
 
 // chainParticipantTypes are entry types that produce chain participant messages
 // in RebuildMessages. These are the types that generate non-empty API messages.
@@ -419,23 +384,47 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 		for name := range cfg.MCPConfig {
 			mcpServerNames = append(mcpServerNames, name)
 		}
+		// Build agent list from built-in subagent types
+		builtins := BuiltinTypes()
+		agentNames := make([]string, len(builtins))
+		for i, bt := range builtins {
+			agentNames[i] = bt.Name
+		}
+
+		// Build skill names and slash commands (skills are the slash commands)
+		skillNames := make([]string, len(cfg.Skills))
+		slashCmdNames := make([]string, len(cfg.Skills))
+		for i, skill := range cfg.Skills {
+			skillNames[i] = skill.Name
+			slashCmdNames[i] = skill.Name
+		}
+
+		// Convert plugin info to init-event format
+		pluginSummaries := make([]cli.PluginInitInfo, len(cfg.Plugins))
+		copy(pluginSummaries, cfg.Plugins)
+
 		initMsg := cli.StreamMessage{
-			Type:              "system",
-			Subtype:           "init",
-			SessionID:         sessionID,
-			ParentToolUseID:   nil,
-			Uuid:              GenerateUUID(),
-			Model:             engine.Model(),
-			CWD:               cwd,
-			Tools:             toolNames,
-			ClaudeCodeVersion: constants.Version,
-			PermissionMode:    "default",
-			FastModeState:     "off",
-			OutputStyle:       "default",
-			MCPServers:        mcpServerNames,
-			AnalyticsDisabled: true,
-			APIKeySource:      detectAPIKeySource(),
-			Skills:            detectInstalledSkills(),
+			Type:                    "system",
+			Subtype:                 "init",
+			SessionID:               sessionID,
+			ParentToolUseID:         nil,
+			Uuid:                    GenerateUUID(),
+			Model:                   engine.Model(),
+			CWD:                     cwd,
+			Tools:                   toolNames,
+			ClaudeCodeVersion:       constants.Version,
+			PermissionMode:          "default",
+			FastModeState:           "off",
+			OutputStyle:             "default",
+			MCPServers:              mcpServerNames,
+			AnalyticsDisabled:       true,
+			ProductFeedbackDisabled: true,
+			Agents:                  agentNames,
+			Skills:                  skillNames,
+			SlashCommands:           slashCmdNames,
+			Plugins:                 pluginSummaries,
+			MemoryPaths:             cfg.MemoryPaths,
+			APIKeySource:            api.DetectAPIKeySource(),
 		}
 		_ = cli.WriteStreamJSON(initMsg)
 	}

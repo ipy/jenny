@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/ipy/jenny/internal/api"
+	"github.com/ipy/jenny/internal/cli"
 	"github.com/ipy/jenny/internal/mcp"
 	"github.com/ipy/jenny/internal/redact"
 	"github.com/ipy/jenny/internal/session"
@@ -49,6 +50,8 @@ type StreamConfig struct {
 	CachedSystemPrompt   []string                    // Frozen system prompt blocks from first assembly (cache-friendly)
 	Skills               []skills.Skill              // Discovered skills for manifest
 	ActiveSkills         []ActivatedSkill            // Skills activated this session (survives compaction)
+	Plugins              []cli.PluginInitInfo        // Loaded plugins for init event
+	MemoryPaths          map[string]string           // Memory directory paths for init event
 	// Non-compacted: survives context compaction.
 	PermissionDenials []string // Denied tool executions (toolName + inputKey pairs) for cross-turn caching
 	// Non-compacted: survives context compaction.
@@ -132,7 +135,7 @@ type StreamMessage struct {
 	StopReason        string             `json:"stop_reason,omitempty"`
 	TTFTMs            int64              `json:"ttft_ms,omitempty"`
 	TTFTStreamMs      int64              `json:"ttft_stream_ms,omitempty"`
-	TimeToRequestMs    int64              `json:"time_to_request_ms,omitempty"`
+	TimeToRequestMs   int64              `json:"time_to_request_ms,omitempty"`
 	TerminalReason    string             `json:"terminal_reason,omitempty"`
 	APIErrorStatus    *string            `json:"api_error_status,omitempty"`
 	ParentToolUseID   *string            `json:"parent_tool_use_id,omitempty"`

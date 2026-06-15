@@ -80,7 +80,7 @@ First line after startup:
   "product_feedback_disabled": true,
   "uuid": "…",
   "memory_paths": { "auto": "/path/to/memory/" },
-  "agents": ["claude", "Explore", …],
+  "agents": ["general-purpose", "explore", "plan", "shell", "verification"],
   "slash_commands": ["adapt", "audit", …],
   "skills": ["adapt", "audit", …],
   "plugins": [{ "name": "gopls-lsp", "path": "…", "source": "…" }]
@@ -90,12 +90,16 @@ First line after startup:
 Required fields:
 - `cwd`, `session_id`, `tools`, `mcp_servers`, `model`, `permissionMode`, `fast_mode_state`, `output_style`, `claude_code_version`, `uuid`
 
-Common optional fields:
-- `apiKeySource`: Source of API key (`"none"` for no API key)
-- `analytics_disabled`, `product_feedback_disabled`: Boolean flags
-- `memory_paths`: Object with `auto` path for session memory directory
-- `agents`: Array of available agent names
-- `slash_commands`, `skills`, `plugins`: Feature enablement lists
+Implemented:
+- `apiKeySource`: Source of API key (`"none"`, `"anthropic"`, `"openai"`, `"genai"`)
+- `agents`: List of built-in subagent type names
+- `plugins`: List of discovered plugins with name, path, and source
+- `skills`: List of discovered skill names
+- `slash_commands`: List of skill names (skills are invoked as `/cmd`)
+- `memory_paths`: Object with `auto` memory directory path
+
+Not relevant (jenny has neither):
+- `analytics_disabled`, `product_feedback_disabled`: Boolean flags (`true` for both — jenny has neither analytics nor product feedback)
 
 ### `stream_request_start`
 

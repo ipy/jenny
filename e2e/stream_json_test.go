@@ -585,7 +585,7 @@ func TestStreamJSONGap_ResultExtendedFields(t *testing.T) {
 				ExitCode: 0,
 				StreamJSON: &harness.StreamJSONExpectation{
 					LastEvent: &harness.EventExpectation{
-						Type:      "result",
+						Type: "result",
 						// AC3: All 5 fields must be present (spec requirement)
 						HasFields: []string{"ttft_ms", "ttft_stream_ms", "time_to_request_ms", "terminal_reason", "api_error_status"},
 					},
@@ -606,7 +606,7 @@ func TestStreamJSONGap_ResultExtendedFields(t *testing.T) {
 				ExitCode: 0,
 				StreamJSON: &harness.StreamJSONExpectation{
 					LastEvent: &harness.EventExpectation{
-						Type:      "result",
+						Type: "result",
 						FieldEquals: map[string]any{
 							"api_error_status": nil,
 						},
@@ -642,15 +642,15 @@ func TestStreamJSONUserToolResultFormat(t *testing.T) {
 	})
 }
 
-// TestStreamJSONGap_InitExtendedFields tests that jenny includes extended init fields.
-// AC4: Checks for 3 implemented fields: analytics_disabled, apiKeySource, skills.
-// The remaining 4 fields (memory_paths, agents, plugins, slash_commands) are deferred.
+// TestStreamJSONGap_InitExtendedFields tests that jenny includes all init extended fields.
+// AC4: Checks for all 8 fields: analytics_disabled, product_feedback_disabled, agents, plugins,
+// skills, slash_commands, memory_paths, apiKeySource.
 func TestStreamJSONGap_InitExtendedFields(t *testing.T) {
 	runE2ESuite(t, []*harness.TestCase{
 		{
 			ID:          "stream-json.init.has-extended-fields",
 			Category:    "stream-json",
-			Description: "init event includes analytics_disabled, apiKeySource, skills",
+			Description: "init event includes all extended fields (8 total)",
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "say hi",
@@ -662,8 +662,8 @@ func TestStreamJSONGap_InitExtendedFields(t *testing.T) {
 				StreamJSON: &harness.StreamJSONExpectation{
 					FirstEvent: &harness.EventExpectation{
 						Type:          "system",
-						HasFields:     []string{"analytics_disabled", "apiKeySource", "skills"},
-						FieldNotEmpty: []string{"analytics_disabled", "apiKeySource"},
+						HasFields:     []string{"analytics_disabled", "product_feedback_disabled", "agents", "plugins", "skills", "slash_commands", "memory_paths", "apiKeySource"},
+						FieldNotEmpty: []string{"analytics_disabled", "product_feedback_disabled", "agents", "skills", "apiKeySource"},
 					},
 				},
 			},

@@ -263,29 +263,41 @@ func Parse() (*Flags, error) {
 // Field order matches the headless-agent reference format: type, then payload,
 // then session_id, parent_tool_use_id, uuid, then remaining fields.
 type StreamMessage struct {
-	Type              string   `json:"type"`
-	Kind              string   `json:"kind,omitempty"`
-	Subtype           string   `json:"subtype,omitempty"`
-	Content           string   `json:"content,omitempty"`
-	SessionID         string   `json:"session_id,omitempty"`
-	ParentToolUseID   *string  `json:"parent_tool_use_id"`
-	Uuid              string   `json:"uuid,omitempty"`
-	Result            string   `json:"result,omitempty"`
-	Model             string   `json:"model,omitempty"`
-	CWD               string   `json:"cwd,omitempty"`
-	Tools             []string `json:"tools,omitempty"`
-	ToolName          string   `json:"tool_name,omitempty"`
-	ToolInput         any      `json:"input,omitempty"`
-	IsError           bool     `json:"is_error,omitempty"`
-	IsPartial         bool     `json:"is_partial,omitempty"`
-	ClaudeCodeVersion string   `json:"claude_code_version,omitempty"`
-	PermissionMode    string   `json:"permissionMode,omitempty"`
-	FastModeState     string   `json:"fast_mode_state,omitempty"`
-	OutputStyle       string   `json:"output_style,omitempty"`
-	MCPServers        []string `json:"mcp_servers,omitempty"`
-	AnalyticsDisabled bool     `json:"analytics_disabled,omitempty"`
-	APIKeySource      string   `json:"apiKeySource,omitempty"`
-	Skills            []string `json:"skills,omitempty"`
+	Type                    string            `json:"type"`
+	Kind                    string            `json:"kind,omitempty"`
+	Subtype                 string            `json:"subtype,omitempty"`
+	Content                 string            `json:"content,omitempty"`
+	SessionID               string            `json:"session_id,omitempty"`
+	ParentToolUseID         *string           `json:"parent_tool_use_id"`
+	Uuid                    string            `json:"uuid,omitempty"`
+	Result                  string            `json:"result,omitempty"`
+	Model                   string            `json:"model,omitempty"`
+	CWD                     string            `json:"cwd,omitempty"`
+	Tools                   []string          `json:"tools,omitempty"`
+	ToolName                string            `json:"tool_name,omitempty"`
+	ToolInput               any               `json:"input,omitempty"`
+	IsError                 bool              `json:"is_error,omitempty"`
+	IsPartial               bool              `json:"is_partial,omitempty"`
+	ClaudeCodeVersion       string            `json:"claude_code_version,omitempty"`
+	PermissionMode          string            `json:"permissionMode,omitempty"`
+	FastModeState           string            `json:"fast_mode_state,omitempty"`
+	OutputStyle             string            `json:"output_style,omitempty"`
+	MCPServers              []string          `json:"mcp_servers,omitempty"`
+	AnalyticsDisabled       bool              `json:"analytics_disabled,omitempty"`
+	ProductFeedbackDisabled bool              `json:"product_feedback_disabled,omitempty"`
+	Agents                  []string          `json:"agents,omitempty"`
+	SlashCommands           []string          `json:"slash_commands,omitempty"`
+	Plugins                 []PluginInitInfo  `json:"plugins,omitempty"`
+	Skills                  []string          `json:"skills,omitempty"`
+	MemoryPaths             map[string]string `json:"memory_paths,omitempty"`
+	APIKeySource            string            `json:"apiKeySource,omitempty"`
+}
+
+// PluginInitInfo holds summary information about a loaded plugin for the init event.
+type PluginInitInfo struct {
+	Name   string `json:"name"`
+	Path   string `json:"path"`
+	Source string `json:"source"`
 }
 
 // MarshalJSON implements custom marshaling for StreamMessage to:
@@ -370,15 +382,31 @@ func (s StreamMessage) MarshalJSON() ([]byte, error) {
 	if s.AnalyticsDisabled {
 		fields = append(fields, `"analytics_disabled":true`)
 	}
-	if s.APIKeySource != "" {
-		fields = append(fields, `"apiKeySource":`+encodeString(s.APIKeySource))
+	if s.ProductFeedbackDisabled {
+		fields = append(fields, `"product_feedback_disabled":true`)
 	}
-	// Always emit skills as array (even if empty) for init events compatibility
-	if s.Skills != nil {
+	if len(s.Agents) > 0 {
+		agentsBytes, _ := json.Marshal(s.Agents)
+		fields = append(fields, `"agents":`+string(agentsBytes))
+	}
+	if len(s.SlashCommands) > 0 {
+		scBytes, _ := json.Marshal(s.SlashCommands)
+		fields = append(fields, `"slash_commands":`+string(scBytes))
+	}
+	if len(s.Plugins) > 0 {
+		pluginsBytes, _ := json.Marshal(s.Plugins)
+		fields = append(fields, `"plugins":`+string(pluginsBytes))
+	}
+	if len(s.Skills) > 0 {
 		skillsBytes, _ := json.Marshal(s.Skills)
 		fields = append(fields, `"skills":`+string(skillsBytes))
-	} else {
-		fields = append(fields, `"skills":[]`)
+	}
+	if len(s.MemoryPaths) > 0 {
+		mpBytes, _ := json.Marshal(s.MemoryPaths)
+		fields = append(fields, `"memory_paths":`+string(mpBytes))
+	}
+	if s.APIKeySource != "" {
+		fields = append(fields, `"apiKeySource":`+encodeString(s.APIKeySource))
 	}
 
 	return []byte("{" + strings.Join(fields, ",") + "}"), nil

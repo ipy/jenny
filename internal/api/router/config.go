@@ -10,7 +10,7 @@ import (
 
 // Config represents the top-level routing configuration.
 type Config struct {
-	Providers []Provider `yaml:"providers"`
+	Providers []Provider         `yaml:"providers"`
 	Profiles  map[string]Profile `yaml:"profiles"`
 }
 
@@ -43,7 +43,7 @@ type Model struct {
 type Profile struct {
 	Targets         []Target    `yaml:"targets"`
 	RoutingMode     string      `yaml:"routing_mode"`     // sticky, balanced
-	SelectionPolicy string     `yaml:"selection_policy"` // round_robin, random
+	SelectionPolicy string      `yaml:"selection_policy"` // round_robin, random
 	RetryPolicy     RetryPolicy `yaml:"retry_policy"`
 	AllowFallback   *bool       `yaml:"allow_fallback"`
 }

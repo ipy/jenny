@@ -228,10 +228,10 @@ func (p *Portal) getSessionMeta(sessionID string) (*SessionMeta, error) {
 		if pid, err := strconv.Atoi(strings.TrimSpace(string(pidData))); err == nil {
 			meta.PID = pid
 			if isProcessAlive(pid) {
-					meta.Status = "running"
-				} else {
-					meta.Status = "exited"
-				}
+				meta.Status = "running"
+			} else {
+				meta.Status = "exited"
+			}
 		}
 	}
 

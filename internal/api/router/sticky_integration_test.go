@@ -36,10 +36,10 @@ func (d *directHandler) SendMessageStream(_ context.Context, _ []api.Message, _ 
 	return ch, &api.StreamResult{}
 }
 
-func (d *directHandler) SetMaxTokensOverride(int)               {}
-func (d *directHandler) SetRetryConfig(api.RetryConfig)         {}
-func (d *directHandler) SetBackground(bool)                    {}
-func (d *directHandler) SetThinkingConfig(api.ThinkingConfig)   {}
+func (d *directHandler) SetMaxTokensOverride(int)             {}
+func (d *directHandler) SetRetryConfig(api.RetryConfig)       {}
+func (d *directHandler) SetBackground(bool)                   {}
+func (d *directHandler) SetThinkingConfig(api.ThinkingConfig) {}
 
 // stickyClientWithHandler builds a StickyClient that talks to a real
 // httptest server, bypassing api.Client entirely.
@@ -164,9 +164,9 @@ func TestSticky_L1BackoffRespectsContextCancel_viaHTTPHandler(t *testing.T) {
 	cfg := minimalConfig()
 	cfg.Providers[0].BaseURL = srv.URL
 	cfg.Profiles["fast"] = Profile{
-		Targets:     []Target{{Match: MatchClause{Models: []string{"model-a"}}}},
-		RoutingMode: "sticky",
-		RetryPolicy: RetryPolicy{MaxRetries: 5, Backoff: "exponential"},
+		Targets:       []Target{{Match: MatchClause{Models: []string{"model-a"}}}},
+		RoutingMode:   "sticky",
+		RetryPolicy:   RetryPolicy{MaxRetries: 5, Backoff: "exponential"},
 		AllowFallback: new(true),
 	}
 	r := NewRouter(cfg)
@@ -219,9 +219,9 @@ func minimalConfig() *Config {
 		},
 		Profiles: map[string]Profile{
 			"default": {
-				Targets:     []Target{{Match: MatchClause{Models: []string{"model-a"}}}},
-				RoutingMode: "sticky",
-				RetryPolicy: RetryPolicy{MaxRetries: 5, Backoff: "exponential"},
+				Targets:       []Target{{Match: MatchClause{Models: []string{"model-a"}}}},
+				RoutingMode:   "sticky",
+				RetryPolicy:   RetryPolicy{MaxRetries: 5, Backoff: "exponential"},
 				AllowFallback: new(true),
 			},
 		},
@@ -245,9 +245,9 @@ func twoKeyConfig() *Config {
 		},
 		Profiles: map[string]Profile{
 			"default": {
-				Targets:     []Target{{Match: MatchClause{Models: []string{"model-a"}}}},
-				RoutingMode: "sticky",
-				RetryPolicy: RetryPolicy{MaxRetries: 5, Backoff: "exponential"},
+				Targets:       []Target{{Match: MatchClause{Models: []string{"model-a"}}}},
+				RoutingMode:   "sticky",
+				RetryPolicy:   RetryPolicy{MaxRetries: 5, Backoff: "exponential"},
 				AllowFallback: new(true),
 			},
 		},

@@ -10,6 +10,8 @@
 #   JENNY_BIN       - path to jenny binary (default: ./jenny)
 #   REFERENCE_BIN   - path to claude binary (default: claude)
 
+set -e
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$REPO_DIR"

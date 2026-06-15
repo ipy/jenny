@@ -55,9 +55,9 @@ type QueryEngine struct {
 	// API timing (AC3: duration_api_ms)
 	lastAPIStartTime   time.Time
 	totalAPIDurationMs int64
-	firstTokenTime     time.Time   // Time of first content block received (for ttft_ms calculation)
-	firstStreamTime    time.Time   // Time of first stream event (for ttft_stream_ms calculation)
-	turnStartTime      time.Time   // Time the current turn started (for time_to_request_ms calculation)
+	firstTokenTime     time.Time // Time of first content block received (for ttft_ms calculation)
+	firstStreamTime    time.Time // Time of first stream event (for ttft_stream_ms calculation)
+	turnStartTime      time.Time // Time the current turn started (for time_to_request_ms calculation)
 
 	// Stream event state (for assistant event construction)
 	currentMessageID    string
