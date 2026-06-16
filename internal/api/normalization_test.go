@@ -690,3 +690,230 @@ func TestNormalizeMessages_CallsNormalizeTools(t *testing.T) {
 		}
 	})
 }
+
+// TestSSNF_ContentBlockValidation tests SSNF Pass 2C: Content Block Validation.
+// These tests verify the edge cases that occur during session resume.
+// Run: go test ./internal/api/ -run "TestSSNF_ContentBlockValidation" -v -count=1
+func TestSSNF_ContentBlockValidation(t *testing.T) {
+	t.Run("AC1: whitespace-only text block stripped", func(t *testing.T) {
+		messages := []Message{
+			{Role: RoleUser, Content: "Hello"},
+			{Role: RoleAssistant, Content: "   \n\t  "}, // whitespace-only content
+		}
+
+		normalized, _, _ := NormalizeMessages(messages, nil, Capabilities{})
+
+		// Whitespace-only content should be stripped to empty
+		if normalized[1].Content != "" {
+			t.Errorf("expected whitespace-only content to be stripped, got %q", normalized[1].Content)
+		}
+	})
+
+	t.Run("AC1: non-whitespace text preserved", func(t *testing.T) {
+		messages := []Message{
+			{Role: RoleUser, Content: "Hello"},
+			{Role: RoleAssistant, Content: "  Hello world  "}, // has actual content
+		}
+
+		normalized, _, _ := NormalizeMessages(messages, nil, Capabilities{})
+
+		if normalized[1].Content != "  Hello world  " {
+			t.Errorf("expected content to be preserved, got %q", normalized[1].Content)
+		}
+	})
+
+	t.Run("AC2: empty content in non-final assistant gets placeholder", func(t *testing.T) {
+		messages := []Message{
+			{Role: RoleUser, Content: "Hello"},
+			{Role: RoleAssistant, Content: "", ToolUse: nil}, // empty content, no tool_use
+			{Role: RoleUser, Content: "Thanks"}, // another user message makes this non-final
+		}
+
+		normalized, _, _ := NormalizeMessages(messages, nil, Capabilities{})
+
+		// Second assistant message should get [No content] placeholder
+		if normalized[1].Content != "[No content]" {
+			t.Errorf("expected [No content] placeholder, got %q", normalized[1].Content)
+		}
+	})
+
+	t.Run("AC2: final assistant message empty allowed", func(t *testing.T) {
+		messages := []Message{
+			{Role: RoleUser, Content: "Hello"},
+			{Role: RoleAssistant, Content: "", ToolUse: nil}, // empty, no tool_use
+			// This is the final message - used for prefill, so empty is allowed
+		}
+
+		normalized, _, _ := NormalizeMessages(messages, nil, Capabilities{})
+
+		// Final assistant message should remain empty (for prefill)
+		if normalized[1].Content != "" {
+			t.Errorf("expected final assistant empty content to be preserved, got %q", normalized[1].Content)
+		}
+	})
+
+	t.Run("AC2: assistant with tool_use empty content allowed", func(t *testing.T) {
+		messages := []Message{
+			{Role: RoleUser, Content: "Hello"},
+			{Role: RoleAssistant, Content: "", ToolUse: []ToolUseBlock{
+				{ID: "call_1", Name: "Bash", Input: map[string]any{"cmd": "ls"}},
+			}},
+			{Role: RoleUser, Content: "Done"},
+		}
+
+		normalized, _, _ := NormalizeMessages(messages, nil, Capabilities{})
+
+		// Assistant with tool_use should keep empty content (tool call expected)
+		if normalized[1].Content != "" {
+			t.Errorf("expected assistant with tool_use to keep empty content, got %q", normalized[1].Content)
+		}
+	})
+
+	t.Run("AC3: trailing thinking block stripped", func(t *testing.T) {
+		messages := []Message{
+			{Role: RoleUser, Content: "Hello"},
+			{Role: RoleAssistant, Content: "Let me think about this.<thinking>analyzing the problem</thinking>"},
+		}
+
+		normalized, _, _ := NormalizeMessages(messages, nil, Capabilities{})
+
+		// Trailing thinking block should be stripped
+		if normalized[1].Content != "Let me think about this." {
+			t.Errorf("expected trailing thinking block stripped, got %q", normalized[1].Content)
+		}
+	})
+
+	t.Run("AC3: trailing redacted_thinking block stripped", func(t *testing.T) {
+		messages := []Message{
+			{Role: RoleUser, Content: "Hello"},
+			{Role: RoleAssistant, Content: "Here's my response.<thinking type=\"redacted\">SIG_DATA</thinking>"},
+		}
+
+		normalized, _, _ := NormalizeMessages(messages, nil, Capabilities{})
+
+		// Trailing redacted_thinking block should be stripped
+		if normalized[1].Content != "Here's my response." {
+			t.Errorf("expected trailing redacted_thinking block stripped, got %q", normalized[1].Content)
+		}
+	})
+
+	t.Run("AC3: multiple trailing thinking blocks stripped", func(t *testing.T) {
+		messages := []Message{
+			{Role: RoleUser, Content: "Hello"},
+			{Role: RoleAssistant, Content: "Done.<thinking>thought 1</thinking><thinking>thought 2</thinking>"},
+		}
+
+		normalized, _, _ := NormalizeMessages(messages, nil, Capabilities{})
+
+		// All trailing thinking blocks should be stripped
+		if normalized[1].Content != "Done." {
+			t.Errorf("expected all trailing thinking blocks stripped, got %q", normalized[1].Content)
+		}
+	})
+
+	t.Run("AC3: thinking block in middle preserved", func(t *testing.T) {
+		messages := []Message{
+			{Role: RoleUser, Content: "Hello"},
+			{Role: RoleAssistant, Content: "<thinking>thinking</thinking>Here is my response."},
+		}
+
+		normalized, _, _ := NormalizeMessages(messages, nil, Capabilities{})
+
+		// Thinking block in middle should be preserved (not trailing)
+		expectedContent := "<thinking>thinking</thinking>Here is my response."
+		if normalized[1].Content != expectedContent {
+			t.Errorf("expected thinking block in middle to be preserved, got %q", normalized[1].Content)
+		}
+	})
+
+	t.Run("AC4: orphaned thinking-only message dropped", func(t *testing.T) {
+		messages := []Message{
+			{Role: RoleUser, Content: "Hello"},
+			{Role: RoleAssistant, Content: "<thinking>only thinking</thinking>"},
+			{Role: RoleUser, Content: "Thanks"},
+		}
+
+		normalized, _, _ := NormalizeMessages(messages, nil, Capabilities{})
+
+		// Thinking-only message should be dropped
+		if len(normalized) != 2 {
+			t.Errorf("expected 2 messages after dropping thinking-only, got %d", len(normalized))
+		}
+		// Verify the user message is preserved
+		if normalized[1].Role != RoleUser || normalized[1].Content != "Thanks" {
+			t.Errorf("expected user message preserved, got %+v", normalized[1])
+		}
+	})
+
+	t.Run("AC4: orphaned redacted_thinking-only message dropped", func(t *testing.T) {
+		messages := []Message{
+			{Role: RoleUser, Content: "Hello"},
+			{Role: RoleAssistant, Content: "<thinking type=\"redacted\">SIG</thinking>"},
+			{Role: RoleUser, Content: "Thanks"},
+		}
+
+		normalized, _, _ := NormalizeMessages(messages, nil, Capabilities{})
+
+		// Redacted thinking-only message should be dropped
+		if len(normalized) != 2 {
+			t.Errorf("expected 2 messages after dropping redacted thinking-only, got %d", len(normalized))
+		}
+	})
+
+	t.Run("AC4: assistant with text and thinking preserved", func(t *testing.T) {
+		messages := []Message{
+			{Role: RoleUser, Content: "Hello"},
+			{Role: RoleAssistant, Content: "<thinking>thinking</thinking>Here is my response."},
+			{Role: RoleUser, Content: "Thanks"},
+		}
+
+		normalized, _, _ := NormalizeMessages(messages, nil, Capabilities{})
+
+		// Assistant message with text should be preserved
+		if len(normalized) != 3 {
+			t.Errorf("expected 3 messages, got %d", len(normalized))
+		}
+		if normalized[1].Role != RoleAssistant {
+			t.Errorf("expected assistant message at index 1")
+		}
+	})
+
+	t.Run("AC4: assistant with tool_use preserved even if content is thinking", func(t *testing.T) {
+		messages := []Message{
+			{Role: RoleUser, Content: "Hello"},
+			{Role: RoleAssistant, Content: "<thinking>thinking</thinking>", ToolUse: []ToolUseBlock{
+				{ID: "call_1", Name: "Bash", Input: map[string]any{"cmd": "ls"}},
+			}},
+			{Role: RoleUser, Content: "Thanks"},
+		}
+
+		normalized, _, _ := NormalizeMessages(messages, nil, Capabilities{})
+
+		// Assistant with tool_use should be preserved
+		if len(normalized) != 3 {
+			t.Errorf("expected 3 messages (tool_use preserved), got %d", len(normalized))
+		}
+	})
+
+	t.Run("AC5: normalization logs include content block validation", func(t *testing.T) {
+		messages := []Message{
+			{Role: RoleUser, Content: "Hello"},
+			{Role: RoleAssistant, Content: "   \n\t  "}, // whitespace-only
+			{Role: RoleUser, Content: "Thanks"},
+		}
+
+		_, _, logs := NormalizeMessages(messages, nil, Capabilities{})
+
+		// Check that ContentBlockValidation logs are generated
+		foundValidationLog := false
+		for _, log := range logs {
+			if log.Pass == "ContentBlockValidation" {
+				foundValidationLog = true
+				break
+			}
+		}
+		if !foundValidationLog {
+			t.Error("expected NormalizationLog entry for ContentBlockValidation")
+		}
+	})
+}

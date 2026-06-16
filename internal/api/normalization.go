@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 )
-
 // NormalizationLog records an action taken by the normalization pipeline.
 type NormalizationLog struct {
 	Pass    string // Name of the normalization pass
@@ -43,6 +43,20 @@ func NormalizeMessages(messages []Message, tools []ToolParam, caps Capabilities)
 	// Flatten tool_result content (universal)
 	messages = flattenToolResultContent(messages)
 
+	// Track which messages originally had mixed thinking (both redacted and non-redacted)
+	// This must be done BEFORE stripCredentialBoundArtifacts because that function removes
+	// redacted thinking, and we need to know if the original message had both types.
+	mixedThinkingMap := make(map[int]bool)
+	for i, msg := range messages {
+		if msg.Role == RoleAssistant {
+			trimmed := strings.TrimSpace(msg.Content)
+			afterStrippingRedacted := redactedThinkingPattern.ReplaceAllString(trimmed, "")
+			if strings.TrimSpace(afterStrippingRedacted) != "" && containsRedactedThinking(msg.Content) {
+				mixedThinkingMap[i] = true
+			}
+		}
+	}
+
 	// Strip credential-bound artifacts (redacted_thinking) when key mismatch detected
 	messages, stripLogs := stripCredentialBoundArtifacts(messages, caps)
 	logs = append(logs, stripLogs...)
@@ -56,6 +70,14 @@ func NormalizeMessages(messages []Message, tools []ToolParam, caps Capabilities)
 
 	// Merge consecutive same-role messages (universal)
 	normalizedMessages = MergeConsecutiveSameRole(normalizedMessages)
+
+	// Content block validation (SSNF Pass 2C): handles edge cases from session resume
+	// Determine if credential stripping was applicable and performed:
+	// - If caps.OriginalAPIKey != "" and keys match: stripping skipped, preserve redacted_thinking
+	// - If caps.OriginalAPIKey == "" or keys don't match: stripping performed or N/A, drop orphaned thinking
+	strippingWasSkipped := caps.OriginalAPIKey != "" && len(stripLogs) == 0
+	normalizedMessages, contentLogs := validateContentBlocks(normalizedMessages, &logs, strippingWasSkipped, mixedThinkingMap)
+	logs = append(logs, contentLogs...)
 
 	return normalizedMessages, normalizedTools, logs
 }
@@ -242,4 +264,198 @@ func stripCredentialBoundArtifacts(messages []Message, caps Capabilities) ([]Mes
 	}
 
 	return result, logs
+}
+
+// validateContentBlocks applies SSNF Pass 2C: Content Block Validation.
+// It handles edge cases from session resume:
+// - AC1: Strip whitespace-only text blocks
+// - AC2: Insert placeholder for empty content in non-final assistant messages
+// - AC3: Strip trailing thinking/redacted_thinking blocks
+// - AC4: Drop messages that contain only thinking/redacted_thinking blocks
+// The stripSkipped parameter indicates whether credential-bound artifact stripping
+// was skipped (keys match). When true, we preserve redacted_thinking messages.
+func validateContentBlocks(messages []Message, logs *[]NormalizationLog, stripSkipped bool, mixedThinkingMap map[int]bool) ([]Message, []NormalizationLog) {
+	if len(messages) == 0 {
+		return messages, nil
+	}
+
+	var contentLogs []NormalizationLog
+
+	// Patterns for parsing content blocks from string content
+	thinkingPattern := regexp.MustCompile(`<thinking(\s+type="[^"]*")?>[\s\S]*?</thinking>`)
+	whitespaceOnlyPattern := regexp.MustCompile(`^\s*$`)
+
+	// Pass 1: AC4 - Drop messages with only thinking blocks (before other processing)
+	// Pass stripSkipped to preserve redacted_thinking when keys match (stripping was skipped).
+	messages = dropOrphanedThinkingMessages(messages, &contentLogs, thinkingPattern, stripSkipped, mixedThinkingMap)
+
+	// Pass 2: AC3 - Strip trailing thinking/redacted_thinking blocks
+	messages = stripTrailingThinkingBlocks(messages, &contentLogs, thinkingPattern)
+	// Pass 3: AC1 - Strip whitespace-only text content blocks
+	for i := range messages {
+		if messages[i].Role != RoleAssistant {
+			continue
+		}
+		content := messages[i].Content
+		if content != "" && whitespaceOnlyPattern.MatchString(content) {
+			messages[i].Content = ""
+			contentLogs = append(contentLogs, NormalizationLog{
+				Pass:    "ContentBlockValidation",
+				Message: "Stripped whitespace-only text block",
+			})
+		}
+	}
+
+	// Pass 4: AC2 - Insert placeholder for empty content in non-final assistant messages
+	for i := 0; i < len(messages)-1; i++ {
+		if messages[i].Role == RoleAssistant && messages[i].Content == "" && len(messages[i].ToolUse) == 0 {
+			messages[i].Content = "[No content]"
+			contentLogs = append(contentLogs, NormalizationLog{
+				Pass:    "ContentBlockValidation",
+				Message: "Inserted [No content] placeholder for empty assistant message",
+			})
+		}
+	}
+
+	return messages, contentLogs
+}
+
+// dropOrphanedThinkingMessages removes assistant messages that contain only
+// thinking and/or redacted_thinking blocks (with no text or tool_use).
+// The stripSkipped parameter indicates whether credential-bound artifact stripping
+// was skipped (keys match). When true, we preserve redacted_thinking messages.
+// The mixedThinkingMap indicates which messages originally had both non-redacted and redacted thinking.
+func dropOrphanedThinkingMessages(messages []Message, logs *[]NormalizationLog, pattern *regexp.Regexp, stripSkipped bool, mixedThinkingMap map[int]bool) []Message {
+	var result []Message
+	droppedCount := 0
+
+	// Pattern to match redacted_thinking blocks
+	redactedOnlyPattern := regexp.MustCompile(`<thinking type="redacted"[^>]*>[\s\S]*?</thinking>`)
+
+	for i, msg := range messages {
+		if msg.Role != RoleAssistant {
+			result = append(result, msg)
+			continue
+		}
+
+		content := msg.Content
+		if isThinkingOnlyContent(content, pattern) && len(msg.ToolUse) == 0 {
+			// Check if this message has ONLY redacted thinking blocks
+			trimmed := strings.TrimSpace(content)
+			afterStrippingRedacted := redactedOnlyPattern.ReplaceAllString(trimmed, "")
+			if strings.TrimSpace(afterStrippingRedacted) == "" {
+				// Only redacted thinking blocks
+				if stripSkipped {
+					// Stripping was skipped (keys match) - preserve the message
+					// because the redacted_thinking is not credential-bound in this case
+					result = append(result, msg)
+				} else {
+					// Stripping was performed (keys didn't match or N/A) - drop orphaned message
+					droppedCount++
+				}
+				continue
+			}
+			// Has non-redacted thinking content
+			if mixedThinkingMap[i] {
+				// Message originally had both non-redacted and redacted thinking.
+				// After stripping redacted, preserve for AC3 to handle trailing thinking.
+				result = append(result, msg)
+			} else {
+				// Message originally had only non-redacted thinking - drop it (AC4)
+				droppedCount++
+			}
+			continue
+		}
+
+		result = append(result, msg)
+	}
+
+	if droppedCount > 0 {
+		*logs = append(*logs, NormalizationLog{
+			Pass:    "ContentBlockValidation",
+			Message: fmt.Sprintf("Dropped %d message(s) with only thinking blocks", droppedCount),
+		})
+	}
+
+	return result
+}
+
+// containsRedactedThinking checks if content contains redacted_thinking blocks.
+func containsRedactedThinking(content string) bool {
+	return redactedThinkingPattern.MatchString(content)
+}
+
+// stripTrailingThinkingBlocks removes thinking/redacted_thinking blocks
+// from the end of assistant message content strings.
+func stripTrailingThinkingBlocks(messages []Message, logs *[]NormalizationLog, pattern *regexp.Regexp) []Message {
+	strippedCount := 0
+
+	for i := range messages {
+		if messages[i].Role != RoleAssistant || messages[i].Content == "" {
+			continue
+		}
+
+		original := messages[i].Content
+		stripped := stripTrailingThinking(messages[i].Content, pattern)
+
+		if stripped != original {
+			messages[i].Content = stripped
+			strippedCount++
+		}
+	}
+
+	if strippedCount > 0 {
+		*logs = append(*logs, NormalizationLog{
+			Pass:    "ContentBlockValidation",
+			Message: fmt.Sprintf("Stripped trailing thinking block(s) from %d message(s)", strippedCount),
+		})
+	}
+
+	return messages
+}
+
+// isThinkingOnlyContent checks if content consists solely of thinking blocks.
+func isThinkingOnlyContent(content string, pattern *regexp.Regexp) bool {
+	trimmed := strings.TrimSpace(content)
+	if trimmed == "" {
+		return false
+	}
+
+	stripped := pattern.ReplaceAllString(trimmed, "")
+	return strings.TrimSpace(stripped) == ""
+}
+
+// stripTrailingThinking removes trailing thinking blocks from content string.
+func stripTrailingThinking(content string, pattern *regexp.Regexp) string {
+	result := content
+
+	for {
+		trimmed := strings.TrimRight(result, " \t\n\r")
+		if trimmed == "" {
+			return ""
+		}
+
+		if !strings.HasSuffix(trimmed, "</thinking>") {
+			break
+		}
+
+		endIdx := len(trimmed) - len("</thinking>")
+		startIdx := strings.LastIndex(trimmed[:endIdx], "<thinking")
+		if startIdx == -1 {
+			break
+		}
+
+		// Check if there's actual content before this thinking block
+		prefix := trimmed[:startIdx]
+		nonThinkingContent := pattern.ReplaceAllString(prefix, "")
+		if strings.TrimSpace(nonThinkingContent) == "" {
+			// Nothing but more thinking blocks before this one - don't strip
+			break
+		}
+
+		// There's actual content before this thinking block - strip it
+		result = trimmed[:startIdx]
+	}
+
+	return result
 }
