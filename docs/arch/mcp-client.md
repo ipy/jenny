@@ -30,9 +30,9 @@ implemented:
   - "GET-based server-to-client SSE stream"
   - "Resource subscriptions (resources/subscribe, resources/unsubscribe)"
   - "Server icons metadata (icon/darkIcon URLs from serverInfo)"
+  - "Tasks API (tasks/list, tasks/create, tasks/get, tasks/cancel)"
 gaps:
   - "OAuth 2.1 authorization not implemented"
-  - "Tasks (experimental) not implemented"
 status: done
 defer_to: P4
 depends_on:

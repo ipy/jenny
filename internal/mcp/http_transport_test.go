@@ -899,6 +899,42 @@ func newFakeHTTPMCPServer(t *testing.T) *httptest.Server {
 				Result:  json.RawMessage(`{}`),
 			})
 
+		case "tasks/list":
+			json.NewEncoder(w).Encode(jsonRPCResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Result:  json.RawMessage(`{"tasks":[{"name":"build-project","description":"Build the project","inputSchema":{"type":"object","properties":{"target":{"type":"string"}}}},{"name":"test-suite","description":"Run the test suite","inputSchema":{"type":"object"}}]}`),
+			})
+
+		case "tasks/create":
+			taskName, _ := req.Params["name"].(string)
+			taskID := fmt.Sprintf("http-task-%s", taskName)
+			result := fmt.Sprintf(`{"id":"%s","name":"%s","status":"pending"}`, taskID, taskName)
+			json.NewEncoder(w).Encode(jsonRPCResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Result:  json.RawMessage(result),
+			})
+
+		case "tasks/get":
+			taskID, _ := req.Params["id"].(string)
+			if taskID == "" {
+				taskID = "http-test-task-id"
+			}
+			result := fmt.Sprintf(`{"id":"%s","name":"build-project","status":"completed","result":{"output":"Build successful"}}`, taskID)
+			json.NewEncoder(w).Encode(jsonRPCResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Result:  json.RawMessage(result),
+			})
+
+		case "tasks/cancel":
+			json.NewEncoder(w).Encode(jsonRPCResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Result:  json.RawMessage(`{}`),
+			})
+
 		default:
 			json.NewEncoder(w).Encode(jsonRPCResponse{
 				JSONRPC: "2.0",

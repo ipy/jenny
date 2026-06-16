@@ -8,6 +8,8 @@ package main
 
 import (
 	"bufio"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -115,6 +117,26 @@ func main() {
 		case "notifications/initialized", "notifications/shutdown":
 			// Notifications have no response
 			continue
+
+		case "tasks/list":
+			resp.Result = json.RawMessage(`{"tasks":[{"name":"build-project","description":"Build the project","inputSchema":{"type":"object","properties":{"target":{"type":"string"}}}},{"name":"test-suite","description":"Run the test suite","inputSchema":{"type":"object"}}]}`)
+
+		case "tasks/create":
+			taskName, _ := req.Params["name"].(string)
+			b := make([]byte, 16)
+			rand.Read(b)
+			taskID := hex.EncodeToString(b)
+			resp.Result = json.RawMessage(fmt.Sprintf(`{"id":"%s","name":"%s","status":"pending"}`, taskID, taskName))
+
+		case "tasks/get":
+			taskID, _ := req.Params["id"].(string)
+			if taskID == "" {
+				taskID = "test-task-id"
+			}
+			resp.Result = json.RawMessage(fmt.Sprintf(`{"id":"%s","name":"build-project","status":"completed","result":{"output":"Build successful"}}`, taskID))
+
+		case "tasks/cancel":
+			resp.Result = json.RawMessage(`{}`)
 
 		default:
 			resp.Error = &jsonRPCError{Code: -32601, Message: "method not found"}

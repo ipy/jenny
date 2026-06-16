@@ -227,6 +227,22 @@ type MCPPrompt struct {
 	ServerName  string
 }
 
+// TaskTemplate represents a task template declared by the MCP server.
+type TaskTemplate struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	InputSchema any    `json:"inputSchema,omitempty"`
+}
+
+// TaskInfo represents a task instance and its status.
+type TaskInfo struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Status string `json:"status"` // pending, running, completed, failed, cancelled
+	Result any    `json:"result,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
 // MCPPromptArg represents an argument for an MCP prompt.
 type MCPPromptArg struct {
 	Name        string
@@ -1147,6 +1163,136 @@ func (c *Client) UnsubscribeResource(ctx context.Context, uri string) error {
 	if resp.Error != nil {
 		return fmt.Errorf("resources/unsubscribe error: %s (code %d)", resp.Error.Message, resp.Error.Code)
 	}
+	return nil
+}
+
+// ListTasks discovers task templates from the MCP server.
+func (c *Client) ListTasks(ctx context.Context) ([]TaskTemplate, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.proc == nil && c.transport == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+
+	req := jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      nextJSONID(),
+		Method:  "tasks/list",
+	}
+
+	resp, err := c.doRequest(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("tasks/list request failed: %w", err)
+	}
+
+	if resp.Error != nil {
+		return nil, fmt.Errorf("tasks/list error: %s (code %d)", resp.Error.Message, resp.Error.Code)
+	}
+
+	var result struct {
+		Tasks []TaskTemplate `json:"tasks"`
+	}
+	if err := json.Unmarshal(resp.Result, &result); err != nil {
+		return nil, fmt.Errorf("parsing tasks/list result: %w", err)
+	}
+
+	return result.Tasks, nil
+}
+
+// CreateTask creates a task instance on the MCP server.
+func (c *Client) CreateTask(ctx context.Context, name string, arguments map[string]any) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.proc == nil && c.transport == nil {
+		return "", fmt.Errorf("not connected to MCP server %s", c.Name)
+	}
+
+	req := jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      nextJSONID(),
+		Method:  "tasks/create",
+		Params:  map[string]any{"name": name, "arguments": arguments},
+	}
+
+	resp, err := c.doRequest(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("tasks/create request failed: %w", err)
+	}
+
+	if resp.Error != nil {
+		return "", fmt.Errorf("tasks/create error: %s (code %d)", resp.Error.Message, resp.Error.Code)
+	}
+
+	var result struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(resp.Result, &result); err != nil {
+		return "", fmt.Errorf("parsing tasks/create result: %w", err)
+	}
+
+	return result.ID, nil
+}
+
+// GetTask queries the status of a task on the MCP server.
+func (c *Client) GetTask(ctx context.Context, taskID string) (*TaskInfo, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.proc == nil && c.transport == nil {
+		return nil, fmt.Errorf("not connected to MCP server %s", c.Name)
+	}
+
+	req := jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      nextJSONID(),
+		Method:  "tasks/get",
+		Params:  map[string]any{"id": taskID},
+	}
+
+	resp, err := c.doRequest(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("tasks/get request failed: %w", err)
+	}
+
+	if resp.Error != nil {
+		return nil, fmt.Errorf("tasks/get error: %s (code %d)", resp.Error.Message, resp.Error.Code)
+	}
+
+	var task TaskInfo
+	if err := json.Unmarshal(resp.Result, &task); err != nil {
+		return nil, fmt.Errorf("parsing tasks/get result: %w", err)
+	}
+
+	return &task, nil
+}
+
+// CancelTask cancels a task on the MCP server.
+func (c *Client) CancelTask(ctx context.Context, taskID string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.proc == nil && c.transport == nil {
+		return fmt.Errorf("not connected to MCP server %s", c.Name)
+	}
+
+	req := jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      nextJSONID(),
+		Method:  "tasks/cancel",
+		Params:  map[string]any{"id": taskID},
+	}
+
+	resp, err := c.doRequest(ctx, req)
+	if err != nil {
+		return fmt.Errorf("tasks/cancel request failed: %w", err)
+	}
+
+	if resp.Error != nil {
+		return fmt.Errorf("tasks/cancel error: %s (code %d)", resp.Error.Message, resp.Error.Code)
+	}
+
 	return nil
 }
 

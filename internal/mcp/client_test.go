@@ -838,3 +838,290 @@ func TestGetServerIcons_NotFound(t *testing.T) {
 	}
 }
 
+// TestClientListTasks tests AC1: ListTasks discovers task templates from the MCP server.
+func TestClientListTasks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping MCP subprocess integration test on Windows")
+	}
+
+	// Build the fake MCP server
+	execDir, err := os.Getwd()
+	if err != nil {
+		t.Skipf("skipping test: could not get working directory: %v", err)
+	}
+	serverSrc := execDir + "/testdata/fake-mcp-server"
+	serverBin := execDir + "/testdata/fake-mcp-server/fake-mcp-server"
+
+	cmd := exec.Command("go", "build", "-o", serverBin, serverSrc)
+	if err := cmd.Run(); err != nil {
+		t.Skipf("skipping test: could not build fake MCP server: %v", err)
+	}
+
+	// Create and connect client
+	client := NewClient("test-tasks-server", serverBin, nil, nil)
+	ctx := context.Background()
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Disconnect()
+
+	// List tasks
+	tasks, err := client.ListTasks(ctx)
+	if err != nil {
+		t.Fatalf("ListTasks failed: %v", err)
+	}
+
+	if len(tasks) == 0 {
+		t.Error("expected at least one task template")
+	}
+
+	// Verify task template structure
+	foundBuild := false
+	for _, task := range tasks {
+		if task.Name == "build-project" {
+			foundBuild = true
+			if task.Description == "" {
+				t.Error("expected non-empty description for build-project task")
+			}
+			break
+		}
+	}
+	if !foundBuild {
+		t.Error("expected to find 'build-project' task template")
+	}
+}
+
+// TestClientCreateTask tests AC2: CreateTask creates a task instance and returns the ID.
+func TestClientCreateTask(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping MCP subprocess integration test on Windows")
+	}
+
+	// Build the fake MCP server
+	execDir, err := os.Getwd()
+	if err != nil {
+		t.Skipf("skipping test: could not get working directory: %v", err)
+	}
+	serverSrc := execDir + "/testdata/fake-mcp-server"
+	serverBin := execDir + "/testdata/fake-mcp-server/fake-mcp-server"
+
+	cmd := exec.Command("go", "build", "-o", serverBin, serverSrc)
+	if err := cmd.Run(); err != nil {
+		t.Skipf("skipping test: could not build fake MCP server: %v", err)
+	}
+
+	// Create and connect client
+	client := NewClient("test-tasks-server", serverBin, nil, nil)
+	ctx := context.Background()
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Disconnect()
+
+	// Create a task
+	taskID, err := client.CreateTask(ctx, "build-project", map[string]any{"target": "all"})
+	if err != nil {
+		t.Fatalf("CreateTask failed: %v", err)
+	}
+
+	if taskID == "" {
+		t.Error("expected non-empty task ID")
+	}
+}
+
+// TestClientGetTask tests AC3: GetTask queries task status.
+func TestClientGetTask(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping MCP subprocess integration test on Windows")
+	}
+
+	// Build the fake MCP server
+	execDir, err := os.Getwd()
+	if err != nil {
+		t.Skipf("skipping test: could not get working directory: %v", err)
+	}
+	serverSrc := execDir + "/testdata/fake-mcp-server"
+	serverBin := execDir + "/testdata/fake-mcp-server/fake-mcp-server"
+
+	cmd := exec.Command("go", "build", "-o", serverBin, serverSrc)
+	if err := cmd.Run(); err != nil {
+		t.Skipf("skipping test: could not build fake MCP server: %v", err)
+	}
+
+	// Create and connect client
+	client := NewClient("test-tasks-server", serverBin, nil, nil)
+	ctx := context.Background()
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Disconnect()
+
+	// Get task status
+	task, err := client.GetTask(ctx, "test-task-id")
+	if err != nil {
+		t.Fatalf("GetTask failed: %v", err)
+	}
+
+	if task == nil {
+		t.Fatal("expected non-nil task info")
+	}
+
+	if task.ID == "" {
+		t.Error("expected non-empty task ID")
+	}
+
+	if task.Status == "" {
+		t.Error("expected non-empty task status")
+	}
+}
+
+// TestClientCancelTask tests AC4: CancelTask cancels a task.
+func TestClientCancelTask(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping MCP subprocess integration test on Windows")
+	}
+
+	// Build the fake MCP server
+	execDir, err := os.Getwd()
+	if err != nil {
+		t.Skipf("skipping test: could not get working directory: %v", err)
+	}
+	serverSrc := execDir + "/testdata/fake-mcp-server"
+	serverBin := execDir + "/testdata/fake-mcp-server/fake-mcp-server"
+
+	cmd := exec.Command("go", "build", "-o", serverBin, serverSrc)
+	if err := cmd.Run(); err != nil {
+		t.Skipf("skipping test: could not build fake MCP server: %v", err)
+	}
+
+	// Create and connect client
+	client := NewClient("test-tasks-server", serverBin, nil, nil)
+	ctx := context.Background()
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Disconnect()
+
+	// Cancel a task
+	err = client.CancelTask(ctx, "test-task-id")
+	if err != nil {
+		t.Errorf("CancelTask failed: %v", err)
+	}
+}
+
+// TestClientTasks_NotConnected tests that tasks methods return error when not connected.
+func TestClientTasks_NotConnected(t *testing.T) {
+	client := NewClient("test-server", "nonexistent-command", nil, nil)
+
+	// Test ListTasks
+	_, err := client.ListTasks(context.Background())
+	if err == nil {
+		t.Error("expected error from ListTasks when not connected")
+	}
+
+	// Test CreateTask
+	_, err = client.CreateTask(context.Background(), "test", nil)
+	if err == nil {
+		t.Error("expected error from CreateTask when not connected")
+	}
+
+	// Test GetTask
+	_, err = client.GetTask(context.Background(), "test-id")
+	if err == nil {
+		t.Error("expected error from GetTask when not connected")
+	}
+
+	// Test CancelTask
+	err = client.CancelTask(context.Background(), "test-id")
+	if err == nil {
+		t.Error("expected error from CancelTask when not connected")
+	}
+}
+
+// TestHTTPClientListTasks tests tasks/list over HTTP transport.
+func TestHTTPClientListTasks(t *testing.T) {
+	server := newFakeHTTPMCPServer(t)
+	defer server.Close()
+
+	client := NewHTTPClient("test-http-tasks", server.URL, nil)
+	ctx := context.Background()
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+	defer client.Disconnect()
+
+	tasks, err := client.ListTasks(ctx)
+	if err != nil {
+		t.Fatalf("ListTasks over HTTP failed: %v", err)
+	}
+
+	if len(tasks) == 0 {
+		t.Error("expected at least one task template from HTTP server")
+	}
+}
+
+// TestHTTPClientCreateTask tests tasks/create over HTTP transport.
+func TestHTTPClientCreateTask(t *testing.T) {
+	server := newFakeHTTPMCPServer(t)
+	defer server.Close()
+
+	client := NewHTTPClient("test-http-tasks", server.URL, nil)
+	ctx := context.Background()
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+	defer client.Disconnect()
+
+	taskID, err := client.CreateTask(ctx, "build-project", map[string]any{"target": "all"})
+	if err != nil {
+		t.Fatalf("CreateTask over HTTP failed: %v", err)
+	}
+
+	if taskID == "" {
+		t.Error("expected non-empty task ID from HTTP server")
+	}
+}
+
+// TestHTTPClientGetTask tests tasks/get over HTTP transport.
+func TestHTTPClientGetTask(t *testing.T) {
+	server := newFakeHTTPMCPServer(t)
+	defer server.Close()
+
+	client := NewHTTPClient("test-http-tasks", server.URL, nil)
+	ctx := context.Background()
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+	defer client.Disconnect()
+
+	task, err := client.GetTask(ctx, "http-test-task-id")
+	if err != nil {
+		t.Fatalf("GetTask over HTTP failed: %v", err)
+	}
+
+	if task == nil {
+		t.Fatal("expected non-nil task info")
+	}
+
+	if task.Status != "completed" {
+		t.Errorf("expected status 'completed', got %q", task.Status)
+	}
+}
+
+// TestHTTPClientCancelTask tests tasks/cancel over HTTP transport.
+func TestHTTPClientCancelTask(t *testing.T) {
+	server := newFakeHTTPMCPServer(t)
+	defer server.Close()
+
+	client := NewHTTPClient("test-http-tasks", server.URL, nil)
+	ctx := context.Background()
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+	defer client.Disconnect()
+
+	err := client.CancelTask(ctx, "http-test-task-id")
+	if err != nil {
+		t.Errorf("CancelTask over HTTP failed: %v", err)
+	}
+}
