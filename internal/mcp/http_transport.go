@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -223,8 +224,8 @@ func (t *HTTPTransport) SendRequest(ctx context.Context, req jsonRPCRequest) (*j
 	case http.StatusUnauthorized:
 		// AC3: If OAuth is configured, try token refresh
 		if t.tokenEndpoint != "" && t.tokenStore != nil {
-			token, found, loadErr := t.tokenStore.Load(t.url)
-			if loadErr == nil && found && token != nil && token.RefreshToken != "" {
+			token, loadErr := t.tokenStore.Load(t.url)
+			if loadErr == nil && token != nil && token.RefreshToken != "" {
 				// Attempt refresh
 				newToken, refreshErr := t.refreshToken(ctx, token.RefreshToken)
 				if refreshErr == nil {
@@ -289,10 +290,13 @@ func (t *HTTPTransport) SendRequest(ctx context.Context, req jsonRPCRequest) (*j
 
 // refreshToken attempts to refresh the OAuth access token using the refresh token.
 func (t *HTTPTransport) refreshToken(ctx context.Context, refreshToken string) (*OAuthToken, error) {
-	data := strings.NewReader(fmt.Sprintf("grant_type=refresh_token&refresh_token=%s&client_id=%s",
-		refreshToken, t.clientID))
+	data := url.Values{
+		"grant_type":    {"refresh_token"},
+		"refresh_token": {refreshToken},
+		"client_id":     {t.clientID},
+	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.tokenEndpoint, data)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.tokenEndpoint, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("creating refresh request: %w", err)
 	}

@@ -24,13 +24,13 @@ import (
 
 // Client represents an MCP client connection to a server.
 type Client struct {
-	Name   string // Original server name
-	cmd    string
-	args   []string
-	env    map[string]string
-	proc   *proc
-	mu     sync.Mutex
-	icons  map[string]string // Icons from serverInfo (set after initialization)
+	Name  string // Original server name
+	cmd   string
+	args  []string
+	env   map[string]string
+	proc  *proc
+	mu    sync.Mutex
+	icons map[string]string // Icons from serverInfo (set after initialization)
 
 	respChans map[string]chan *jsonRPCResponse
 	muResp    sync.Mutex

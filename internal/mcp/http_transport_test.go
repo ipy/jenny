@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -1080,12 +1082,12 @@ func TestOAuthTokenStore(t *testing.T) {
 	}
 
 	// Load the token
-	loaded, found, err := store.Load("http://example.com/mcp")
+	loaded, err := store.Load("http://example.com/mcp")
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
-	if !found {
-		t.Fatal("expected to find stored token")
+	if loaded == nil {
+		t.Fatal("expected non-nil token")
 	}
 	if loaded.AccessToken != "test-access-token" {
 		t.Errorf("AccessToken = %q, want %q", loaded.AccessToken, "test-access-token")
@@ -1098,7 +1100,7 @@ func TestOAuthTokenStore(t *testing.T) {
 	}
 }
 
-// TestOAuthTokenStore_NonExistent tests AC2: loading non-existent token returns (nil, false, nil).
+// TestOAuthTokenStore_NonExistent tests AC2: loading non-existent token returns os.ErrNotExist.
 func TestOAuthTokenStore_NonExistent(t *testing.T) {
 	// Override JennyHomeDir to use temp dir
 	origFunc := constants.JennyHomeDirFunc
@@ -1106,12 +1108,12 @@ func TestOAuthTokenStore_NonExistent(t *testing.T) {
 	defer func() { constants.JennyHomeDirFunc = origFunc }()
 
 	store := NewOAuthTokenStore()
-	loaded, found, err := store.Load("http://nonexistent.example.com/mcp")
-	if err != nil {
-		t.Fatalf("Load should not error for non-existent token: %v", err)
+	loaded, err := store.Load("http://nonexistent.example.com/mcp")
+	if err == nil {
+		t.Fatal("expected error for non-existent token")
 	}
-	if found {
-		t.Error("expected found=false for non-existent token")
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("expected os.ErrNotExist, got: %v", err)
 	}
 	if loaded != nil {
 		t.Errorf("expected nil token for non-existent token, got %v", loaded)
@@ -1119,6 +1121,7 @@ func TestOAuthTokenStore_NonExistent(t *testing.T) {
 }
 
 // TestHTTPTransportOAuthRefresh tests AC3: transport refreshes token on 401 and retries.
+// This test exercises the full config path via SetOAuthConfig, not private field bypass.
 func TestHTTPTransportOAuthRefresh(t *testing.T) {
 	requestCount := 0
 	var mu sync.Mutex
@@ -1163,23 +1166,24 @@ func TestHTTPTransportOAuthRefresh(t *testing.T) {
 	}))
 	defer mcpServer.Close()
 
-	// Set up OAuth token store with initial token
+	// Override JennyHomeDir to use temp dir so SetOAuthConfig's store uses it.
+	// This exercises the real public config path (SetOAuthConfig) instead of
+	// poking transport.tokenStore directly.
 	origFunc := constants.JennyHomeDirFunc
 	constants.JennyHomeDirFunc = func() string { return t.TempDir() }
 	defer func() { constants.JennyHomeDirFunc = origFunc }()
 
-	store := NewOAuthTokenStore()
+	// Create transport and configure via public API
+	transport := NewHTTPTransport(mcpServer.URL, nil)
+	transport.SetOAuthConfig(tokenServer.URL, "test-client", "test-secret")
+
+	// Pre-populate the store that SetOAuthConfig created (same temp dir)
 	initialToken := &OAuthToken{
 		AccessToken:  "expired-token",
 		RefreshToken: "valid-refresh-token",
 		TokenType:    "Bearer",
 	}
-	_ = store.Store(mcpServer.URL, initialToken)
-
-	// Create transport with OAuth config pointing to token endpoint
-	transport := NewHTTPTransport(mcpServer.URL, nil)
-	transport.SetOAuthConfig(tokenServer.URL, "test-client", "test-secret")
-	transport.tokenStore = store
+	_ = transport.tokenStore.Store(mcpServer.URL, initialToken)
 
 	ctx := context.Background()
 	req := jsonRPCRequest{
@@ -1224,23 +1228,22 @@ func TestHTTPTransportOAuthRefresh_Failure(t *testing.T) {
 	}))
 	defer mcpServer.Close()
 
-	// Set up OAuth token store with initial token
+	// Override JennyHomeDir to use temp dir for the store created by SetOAuthConfig.
 	origFunc := constants.JennyHomeDirFunc
 	constants.JennyHomeDirFunc = func() string { return t.TempDir() }
 	defer func() { constants.JennyHomeDirFunc = origFunc }()
 
-	store := NewOAuthTokenStore()
+	// Create transport and configure via public API
+	transport := NewHTTPTransport(mcpServer.URL, nil)
+	transport.SetOAuthConfig(tokenServer.URL, "test-client", "test-secret")
+
+	// Pre-populate the store with a refresh token
 	initialToken := &OAuthToken{
 		AccessToken:  "expired-token",
 		RefreshToken: "valid-refresh-token",
 		TokenType:    "Bearer",
 	}
-	_ = store.Store(mcpServer.URL, initialToken)
-
-	// Create transport with OAuth config pointing to failing token endpoint
-	transport := NewHTTPTransport(mcpServer.URL, nil)
-	transport.SetOAuthConfig(tokenServer.URL, "test-client", "test-secret")
-	transport.tokenStore = store
+	_ = transport.tokenStore.Store(mcpServer.URL, initialToken)
 
 	ctx := context.Background()
 	req := jsonRPCRequest{
