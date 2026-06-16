@@ -158,8 +158,8 @@ func TestReadMcpResourceTool_MissingURI(t *testing.T) {
 	if !result.IsError {
 		t.Error("expected IsError=true for missing uri")
 	}
-	if !strings.Contains(result.Content, "uri parameter is required") {
-		t.Errorf("expected 'uri parameter is required' error, got: %s", result.Content)
+	if !strings.Contains(result.Content, "either uri or template parameter is required for 'read' action") {
+		t.Errorf("expected 'either uri or template parameter is required for 'read' action' error, got: %s", result.Content)
 	}
 }
 

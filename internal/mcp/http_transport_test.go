@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -392,18 +393,35 @@ func TestHTTPTransportSessionExpired(t *testing.T) {
 
 // TestHTTPClientAutoReinitOnSessionExpiry tests AC6: Client auto re-inits on 404.
 func TestHTTPClientAutoReinitOnSessionExpiry(t *testing.T) {
-	requestCount := 0
+	postRequestCount := 0
 	var mu sync.Mutex
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		requestCount++
-		count := requestCount
-		mu.Unlock()
+		// GET requests (BackgroundListen SSE probe) never consume POST sequence slots.
+		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.Header().Set("Cache-Control", "no-cache")
+			fmt.Fprintf(w, "event: message\ndata: {\"method\":\"ping\"}\n\n")
+			return
+		}
 
+		// Peek at body to distinguish notifications (empty body) from requests.
 		body, _ := io.ReadAll(r.Body)
+		if len(body) == 0 {
+			// Notification — accept without consuming a POST request slot.
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		// Restore body so it can be read again by SendRequest.
+		r.Body = io.NopCloser(bytes.NewReader(body))
+
 		var req jsonRPCRequest
 		json.Unmarshal(body, &req)
+
+		mu.Lock()
+		postRequestCount++
+		count := postRequestCount
+		mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
 

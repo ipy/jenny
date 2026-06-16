@@ -195,16 +195,9 @@ func TestAC8_DoubleStart(t *testing.T) {
 // TestSessionList verifies AC3: sessions endpoint returns session list.
 func TestSessionList(t *testing.T) {
 	// Set JENNY_HOME to temp dir so we get a clean session directory
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	// Create a mock session directory
 	sessionID := "test-session-123"
@@ -273,16 +266,9 @@ func TestSessionList(t *testing.T) {
 // TestStatsEndpoint verifies AC6: stats endpoint returns global stats.
 func TestStatsEndpoint(t *testing.T) {
 	// Set JENNY_HOME to temp dir so we get a clean session directory
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -318,16 +304,9 @@ func TestStatsEndpoint(t *testing.T) {
 // TestAC6_TokenCount verifies AC6: stats endpoint correctly counts tokens (not double-counting).
 func TestAC6_TokenCount(t *testing.T) {
 	// Set JENNY_HOME to temp dir so we get a clean session directory
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	// Create a mock session with known token counts
 	sessionID := "test-token-session"
@@ -382,16 +361,9 @@ func TestAC6_TokenCount(t *testing.T) {
 // TestKillSession verifies AC5: kill endpoint terminates session.
 func TestKillSession(t *testing.T) {
 	// Set JENNY_HOME to temp dir so we get a clean session directory
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	// Create a mock session with a real running process
 	sessionID := "test-kill-session"
@@ -547,16 +519,9 @@ func TestAC6_ServeHTML(t *testing.T) {
 // TestAC7_EmptyStats verifies AC7: stats endpoint returns zeroed JSON when no sessions exist.
 func TestAC7_EmptyStats(t *testing.T) {
 	// Set JENNY_HOME to temp dir so we get a clean session directory
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -786,16 +751,9 @@ func TestAC2_ShutdownOrder(t *testing.T) {
 // TestStartSession verifies AC1: POST /api/sessions/start spawns a subprocess and returns session info.
 func TestStartSession(t *testing.T) {
 	// Set JENNY_HOME to temp dir
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -865,16 +823,9 @@ func TestStartSession(t *testing.T) {
 // TestResumeSession verifies AC2: POST /api/sessions/:id/resume resumes a session.
 func TestResumeSession(t *testing.T) {
 	// Set JENNY_HOME to temp dir
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -943,16 +894,9 @@ func TestResumeSession(t *testing.T) {
 // TestStartSessionValidation verifies validation for POST /api/sessions/start.
 func TestStartSessionValidation(t *testing.T) {
 	// Set JENNY_HOME to temp dir
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -994,16 +938,9 @@ func TestStartSessionValidation(t *testing.T) {
 
 // TestStartSession_WithModel verifies AC1: backend accepts optional model field.
 func TestStartSession_WithModel(t *testing.T) {
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -1038,16 +975,9 @@ func TestStartSession_WithModel(t *testing.T) {
 
 // TestStartSession_WithCWD verifies AC2: backend accepts optional cwd field.
 func TestStartSession_WithCWD(t *testing.T) {
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -1084,16 +1014,9 @@ func TestStartSession_WithCWD(t *testing.T) {
 
 // TestDeleteSession verifies AC1: delete endpoint removes session directory.
 func TestDeleteSession(t *testing.T) {
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	// Create mock session
 	sessionID := "test-delete-session"
@@ -1148,16 +1071,9 @@ func TestDeleteSession(t *testing.T) {
 
 // TestDeleteRunningSession verifies AC1: deleting running session returns 409.
 func TestDeleteRunningSession(t *testing.T) {
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	// Create session with pid pointing to our own process (which is alive)
 	sessionID := "test-running-session"
@@ -1199,16 +1115,9 @@ func TestDeleteRunningSession(t *testing.T) {
 
 // TestDeletedSessionNotInList verifies AC2: after deletion, session no longer appears in list.
 func TestDeletedSessionNotInList(t *testing.T) {
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	// Create mock session
 	sessionID := "test-list-after-delete"
@@ -1288,19 +1197,10 @@ func TestDeletedSessionNotInList(t *testing.T) {
 
 // TestListSkills verifies AC1: GET /api/skills returns installed skills.
 func TestListSkills(t *testing.T) {
-	origJennyHome := os.Getenv("JENNY_HOME")
-	origAgentsHome := os.Getenv("JENNY_AGENTS_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	os.Setenv("JENNY_AGENTS_HOME", filepath.Join(tmpDir, "agents"))
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-		os.Setenv("JENNY_AGENTS_HOME", origAgentsHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	t.Setenv("JENNY_AGENTS_HOME", filepath.Join(tmpDir, "agents"))
+	defer os.RemoveAll(tmpDir)
 
 	// Create a mock skill directory with SKILL.md
 	skillsDir := filepath.Join(tmpDir, "skills")
@@ -1388,19 +1288,10 @@ func TestListSkills(t *testing.T) {
 
 // TestListSkills_Empty verifies skills endpoint returns [] when no skills installed.
 func TestListSkills_Empty(t *testing.T) {
-	origJennyHome := os.Getenv("JENNY_HOME")
-	origAgentsHome := os.Getenv("JENNY_AGENTS_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	os.Setenv("JENNY_AGENTS_HOME", filepath.Join(tmpDir, "agents"))
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-		os.Setenv("JENNY_AGENTS_HOME", origAgentsHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	t.Setenv("JENNY_AGENTS_HOME", filepath.Join(tmpDir, "agents"))
+	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -1436,19 +1327,10 @@ func TestListSkills_Empty(t *testing.T) {
 
 // TestListSkills_TildePath verifies AC3: skill paths use tilde prefix (~/.jenny/skills/).
 func TestListSkills_TildePath(t *testing.T) {
-	origJennyHome := os.Getenv("JENNY_HOME")
-	origAgentsHome := os.Getenv("JENNY_AGENTS_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	os.Setenv("JENNY_AGENTS_HOME", filepath.Join(tmpDir, "agents"))
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-		os.Setenv("JENNY_AGENTS_HOME", origAgentsHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	t.Setenv("JENNY_AGENTS_HOME", filepath.Join(tmpDir, "agents"))
+	defer os.RemoveAll(tmpDir)
 
 	// Create a mock skill
 	skillsDir := filepath.Join(tmpDir, "skills", "test-skill")
@@ -1542,16 +1424,9 @@ func TestListSkills_RequiresAuth(t *testing.T) {
 
 // TestListMCPServers verifies AC1: GET /api/mcp/servers returns configured MCP servers.
 func TestListMCPServers(t *testing.T) {
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	// Create mcp.json with 2 servers (one enabled, one disabled)
 	mcpConfig := `{
@@ -1638,16 +1513,9 @@ func TestListMCPServers(t *testing.T) {
 
 // TestListMCPServers_Empty verifies mcp servers endpoint returns [] when no mcp.json.
 func TestListMCPServers_Empty(t *testing.T) {
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -1681,16 +1549,9 @@ func TestListMCPServers_Empty(t *testing.T) {
 
 // TestListMCPServers_InvalidJSON verifies mcp servers endpoint returns 400 for invalid JSON.
 func TestListMCPServers_InvalidJSON(t *testing.T) {
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	// Create invalid mcp.json
 	mcpPath := filepath.Join(tmpDir, "mcp.json")
@@ -1899,16 +1760,9 @@ func TestMarketplaceBrowse_InvalidURL(t *testing.T) {
 
 // TestMarketplaceInstall_AlreadyInstalled verifies AC2: already installed returns 409.
 func TestMarketplaceInstall_AlreadyInstalled(t *testing.T) {
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	// Create a mock skill directory (already installed)
 	skillsDir := filepath.Join(tmpDir, "skills", "test-skill")
@@ -1943,16 +1797,9 @@ func TestMarketplaceInstall_AlreadyInstalled(t *testing.T) {
 
 // TestMarketplaceInstall_Skill verifies skill installation creates directory.
 func TestMarketplaceInstall_Skill(t *testing.T) {
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -2056,16 +1903,9 @@ func TestMarketplaceInstall_RequiresAuth(t *testing.T) {
 
 // TestMarketplaceInstall_Validation verifies install endpoint validates request body.
 func TestMarketplaceInstall_Validation(t *testing.T) {
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -2105,16 +1945,9 @@ func TestMarketplaceInstall_Validation(t *testing.T) {
 
 // TestMarketplaceInstall_Skill_Success verifies AC2: skill installation downloads and extracts tar.gz.
 func TestMarketplaceInstall_Skill_Success(t *testing.T) {
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	// Create a test tar.gz in memory
 	tarBuf := new(bytes.Buffer)
@@ -2201,16 +2034,9 @@ func TestMarketplaceInstall_Skill_Success(t *testing.T) {
 // TestMarketplaceInstall_MCP_NoExistingConfig verifies MCP install doesn't panic when mcp.json doesn't exist.
 // This tests the fix for the nil map panic: config must be initialized before accessing it.
 func TestMarketplaceInstall_MCP_NoExistingConfig(t *testing.T) {
-	origJennyHome := os.Getenv("JENNY_HOME")
-	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Setenv("JENNY_HOME", tmpDir)
-	defer func() {
-		os.RemoveAll(tmpDir)
-		os.Setenv("JENNY_HOME", origJennyHome)
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("JENNY_HOME", tmpDir)
+	defer os.RemoveAll(tmpDir)
 
 	// Create a test tar.gz with manifest.json
 	tarBuf := new(bytes.Buffer)
