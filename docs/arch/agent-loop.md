@@ -9,10 +9,7 @@ package: internal/agent
 defer_to: P3
 depends_on:
   - anthropic-api-client
-gaps:
-  - No doc coverage of thinking block handling
-  - No doc coverage of tool result spill-to-disk
-  - No doc coverage of compaction/retry caps
+gaps: []
 ---
 # Core Agent Loop
 
@@ -255,6 +252,53 @@ Debug-level logging includes:
 - API request details (model, system prompt, tool count)
 - Tool registration info
 - Response processing details
+## Thinking Block Handling
+
+When the model emits a `thinking` or `redacted_thinking` content block during SSE streaming, the agent loop processes it as follows:
+
+1. **Streaming accumulation**: `thinking` deltas are accumulated via `api.DeltaTypeThinking` events. The full thinking text is built incrementally.
+2. **Assistant emission**: When the thinking block completes (`content_block_stop`), the engine emits an `assistant` event (in stream-json mode) containing the complete thinking block as part of the message content. See `internal/agent/engine_stream.go`: `emitAssistantEvent`.
+3. **thinking_tokens events**: During active thinking, periodic `system/subtype: thinking_tokens` system events are emitted (every ~100ms or on `content_block_stop`), carrying `estimated_tokens` (running total) and `estimated_tokens_delta` (increment since last event). See `internal/agent/engine_stream.go`: `emitThinkingTokens` / `emitThinkingTokensFinal`.
+4. **Signature handling**: If the thinking block includes a cryptographic signature (for verification), it is preserved in the assistant event's `signature` field.
+
+```json
+{"type":"system","subtype":"thinking_tokens","session_id":"sess_abc","uuid":"uuid-123","estimated_tokens":42,"estimated_tokens_delta":42}
+{"type":"assistant","content":[{"type":"thinking","thinking":"Let me analyze...","signature":"sig-abc"}],"message_idx":1}
+```
+
+Source: `internal/agent/engine_loop.go` (thinking delta handling), `internal/agent/engine_stream.go` (event emission), `internal/agent/thinking_tokens_test.go` (tests).
+
+## Tool Result Spill-to-Disk
+
+When a tool's output exceeds `maxMCPOutputChars` (default 100,000 characters, configurable via `MCP_MAX_OUTPUT_CHARS`), the result is:
+
+1. **Truncated** to the first N characters with a `[Content truncated…]` notice appended.
+2. **Binary content persisted** to disk via `persistBinaryToolResult` in `internal/mcp/client.go`, writing to the scratchpad directory.
+3. The truncated content is returned to the model; the full content is available on disk at the reported path.
+
+This prevents oversized tool outputs from bloating the message context while preserving access to the complete result for debugging or secondary processing.
+
+Source: `internal/mcp/client.go` (output truncation and binary persistence), `constants.ScratchpadDir()` (spill directory).
+
+## Compaction & Retry Caps
+
+### Compaction
+
+Context compaction is triggered when the total token count exceeds a threshold (≈60% of model context window). The engine rewrites the message history by:
+
+1. **Summarizing** earlier turns into a condensed `compacted_boundary` system message.
+2. **Preserving** the last N turns (including the pending tool results) unchanged.
+3. **Emitting** a `system/subtype: compact_boundary` event in stream-json mode with metadata (`trigger`, `pre_tokens`, `preserved_segment`).
+
+Compaction is only triggered between turns (not mid-stream). Source: `internal/agent/compact.go` (`compactMessages`), `internal/agent/engine_loop.go` (compaction trigger).
+
+### Retry Caps
+
+- **API retries**: On transient API failures (5xx, network errors), the API client retries up to `MaxRetries` times (default 10) with exponential backoff (base delay 500ms, max 32s, ±25% jitter). See `internal/api/retry.go`.
+- **Max turns**: The agent loop respects `maxTurns` / `MaxIterations` (default 0 = unlimited). When exceeded, the loop terminates with `error_max_turns`.
+- **Max tokens**: When the API returns `stop_reason: max_tokens`, the engine emits `subtype: error_max_tokens` with detailed metadata (`category`, `output_tokens`, `max_output_tokens`, `input_tokens`, `threshold`). See `internal/agent/engine_stopreasons.go`: `handleStopMaxTokens`.
+- **Max budget**: When cost exceeds `MaxBudgetUSD`, the loop terminates with `error_budget_exceeded`.
+
 ## Related Specifications
 
 | Topic | Spec |
