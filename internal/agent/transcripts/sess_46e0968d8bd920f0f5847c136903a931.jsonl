@@ -1,1 +1,0 @@
-{"type":"result","output":"Hello! I'm here and ready. I can see you have some work in progress:\n\n- Modified files: `task.go` and `task_test.go`\n- Several untracked transcript files in the `transcripts/` directory\n\nWhat would you like to work on?"}

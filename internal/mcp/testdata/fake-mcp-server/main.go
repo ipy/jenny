@@ -1,6 +1,9 @@
 // Fake MCP server for integration testing.
 // This simple program implements the MCP protocol over stdio.
 // Build with: go build -o fake-mcp-server ./testdata/fake-mcp-server
+//
+// For testing, set TEST_RECORD_REQUESTS=1 and TEST_REQUEST_LOG=/path/to/file
+// to write JSON-encoded requests to a log file for test verification.
 package main
 
 import (
@@ -13,9 +16,9 @@ import (
 
 type jsonRPCRequest struct {
 	JSONRPC string                 `json:"jsonrpc"`
-	ID      any `json:"id"`
+	ID      any                    `json:"id"`
 	Method  string                 `json:"method"`
-	Params map[string]interface{} `json:"params,omitempty"`
+	Params  map[string]interface{} `json:"params,omitempty"`
 }
 
 type jsonRPCResponse struct {
@@ -28,6 +31,25 @@ type jsonRPCResponse struct {
 type jsonRPCError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
+}
+
+// recordRequest writes a JSON-encoded request to the log file if TEST_REQUEST_LOG is set.
+func recordRequest(req *jsonRPCRequest) {
+	logPath := os.Getenv("TEST_REQUEST_LOG")
+	if logPath == "" {
+		return
+	}
+	data, err := json.Marshal(req)
+	if err != nil {
+		return
+	}
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	f.Write(data)
+	f.WriteString("\n")
 }
 
 func main() {
@@ -49,6 +71,7 @@ func main() {
 		if err := json.Unmarshal([]byte(line), &req); err != nil {
 			return
 		}
+		recordRequest(&req)
 
 		resp := jsonRPCResponse{JSONRPC: "2.0", ID: req.ID}
 

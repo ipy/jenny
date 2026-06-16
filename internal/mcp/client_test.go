@@ -516,8 +516,18 @@ func TestClientSubscribeResource(t *testing.T) {
 		t.Skipf("skipping test: could not build fake MCP server: %v", err)
 	}
 
-	// Create and connect client
-	client := NewClient("test-server", serverBin, nil, nil)
+	// Create a temp file for request logging
+	logFile, err := os.CreateTemp("", "subscribe-request-*.log")
+	if err != nil {
+		t.Fatalf("failed to create temp log file: %v", err)
+	}
+	logPath := logFile.Name()
+	logFile.Close()
+	defer os.Remove(logPath)
+
+	// Create and connect client with request logging
+	envMap := map[string]string{"TEST_REQUEST_LOG": logPath}
+	client := NewClient("test-server", serverBin, nil, envMap)
 	ctx := context.Background()
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("failed to connect: %v", err)
@@ -525,9 +535,39 @@ func TestClientSubscribeResource(t *testing.T) {
 	defer client.Disconnect()
 
 	// Subscribe should succeed
-	err = client.SubscribeResource(ctx, "file:///test.txt")
+	testURI := "file:///test.txt"
+	err = client.SubscribeResource(ctx, testURI)
 	if err != nil {
 		t.Errorf("SubscribeResource failed: %v", err)
+	}
+
+	// Verify the outgoing request: method and params.uri
+	logData, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("failed to read request log: %v", err)
+	}
+
+	// Parse all logged requests and find the resources/subscribe one
+	found := false
+	for _, line := range strings.Split(strings.TrimSpace(string(logData)), "\n") {
+		if line == "" {
+			continue
+		}
+		var req jsonRPCRequest
+		if err := json.Unmarshal([]byte(line), &req); err != nil {
+			continue
+		}
+		if req.Method == "resources/subscribe" {
+			found = true
+			uri, _ := req.Params["uri"].(string)
+			if uri != testURI {
+				t.Errorf("expected params.uri=%q, got %q", testURI, uri)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("resources/subscribe request was not sent to the server")
 	}
 }
 
@@ -550,8 +590,18 @@ func TestClientUnsubscribeResource(t *testing.T) {
 		t.Skipf("skipping test: could not build fake MCP server: %v", err)
 	}
 
-	// Create and connect client
-	client := NewClient("test-server", serverBin, nil, nil)
+	// Create a temp file for request logging
+	logFile, err := os.CreateTemp("", "unsubscribe-request-*.log")
+	if err != nil {
+		t.Fatalf("failed to create temp log file: %v", err)
+	}
+	logPath := logFile.Name()
+	logFile.Close()
+	defer os.Remove(logPath)
+
+	// Create and connect client with request logging
+	envMap := map[string]string{"TEST_REQUEST_LOG": logPath}
+	client := NewClient("test-server", serverBin, nil, envMap)
 	ctx := context.Background()
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("failed to connect: %v", err)
@@ -559,9 +609,39 @@ func TestClientUnsubscribeResource(t *testing.T) {
 	defer client.Disconnect()
 
 	// Unsubscribe should succeed
-	err = client.UnsubscribeResource(ctx, "file:///test.txt")
+	testURI := "file:///test.txt"
+	err = client.UnsubscribeResource(ctx, testURI)
 	if err != nil {
 		t.Errorf("UnsubscribeResource failed: %v", err)
+	}
+
+	// Verify the outgoing request: method and params.uri
+	logData, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("failed to read request log: %v", err)
+	}
+
+	// Parse all logged requests and find the resources/unsubscribe one
+	found := false
+	for _, line := range strings.Split(strings.TrimSpace(string(logData)), "\n") {
+		if line == "" {
+			continue
+		}
+		var req jsonRPCRequest
+		if err := json.Unmarshal([]byte(line), &req); err != nil {
+			continue
+		}
+		if req.Method == "resources/unsubscribe" {
+			found = true
+			uri, _ := req.Params["uri"].(string)
+			if uri != testURI {
+				t.Errorf("expected params.uri=%q, got %q", testURI, uri)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("resources/unsubscribe request was not sent to the server")
 	}
 }
 
