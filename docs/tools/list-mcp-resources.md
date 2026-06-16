@@ -6,10 +6,8 @@ status: partial
 spec: complete
 code: partial
 package: internal/mcp
-gaps:
-  - "Cursor-based pagination (pagination/list) not implemented"
-  - "Resource templates not included in listing"
-# Reviewed 2026-06-08: gaps verified as still accurate
+gaps: []
+# Reviewed 2026-06-16: all gaps addressed
 depends_on:
   - mcp-client
 ---

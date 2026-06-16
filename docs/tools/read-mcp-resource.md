@@ -8,8 +8,7 @@ code: partial
 package: internal/tool
 gaps:
   - "Resource subscriptions (subscribe/unsubscribe) not implemented"
-  - "Support for reading resource templates (URI templates) not implemented"
-# Reviewed 2026-06-08: gaps verified as still accurate
+# Reviewed 2026-06-16: resource templates implemented in P4
 depends_on:
   - mcp-client
 ---

@@ -29,12 +29,9 @@ implemented:
   - "Progress events (notifications/progress)"
 gaps:
   - "OAuth 2.1 authorization not implemented"
-  - "Resource subscriptions (resources/subscribe, notifications/resources/updated) not implemented"
+  - "Resource subscriptions (resources/subscribe) not implemented"
   - "Icons metadata not supported"
   - "Tasks (experimental) not implemented"
-  - "Asynchronous message loop for server-initiated requests/notifications not implemented"
-  - "SSE stream resumability (Last-Event-ID) not implemented"
-  - "GET-based server-to-client SSE stream not implemented"
 defer_to: P4
 depends_on:
   - mcp-config
