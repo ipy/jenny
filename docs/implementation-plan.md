@@ -124,7 +124,6 @@ Implement in this order:
 7. - [x] SSE streaming from API — [`sse-streaming.md`](./arch/sse-streaming.md) _(moved from P2)_
    - Stream via server-sent events; yield partial text as it arrives ✓
    - On streaming failure with fallback configured, retry non-streaming ✓
-   - Emit `stream_request_start` before each API iteration ✓
 
 8. - [x] Stream-json output (NDJSON) — [`stream-json.md`](./arch/stream-json.md)
    - One JSON object per line on stdout; debug on stderr
