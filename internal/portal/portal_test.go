@@ -197,7 +197,6 @@ func TestSessionList(t *testing.T) {
 	// Set JENNY_HOME to temp dir so we get a clean session directory
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	// Create a mock session directory
 	sessionID := "test-session-123"
@@ -268,7 +267,6 @@ func TestStatsEndpoint(t *testing.T) {
 	// Set JENNY_HOME to temp dir so we get a clean session directory
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -306,7 +304,6 @@ func TestAC6_TokenCount(t *testing.T) {
 	// Set JENNY_HOME to temp dir so we get a clean session directory
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	// Create a mock session with known token counts
 	sessionID := "test-token-session"
@@ -363,7 +360,6 @@ func TestKillSession(t *testing.T) {
 	// Set JENNY_HOME to temp dir so we get a clean session directory
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	// Create a mock session with a real running process
 	sessionID := "test-kill-session"
@@ -521,7 +517,6 @@ func TestAC7_EmptyStats(t *testing.T) {
 	// Set JENNY_HOME to temp dir so we get a clean session directory
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -753,7 +748,6 @@ func TestStartSession(t *testing.T) {
 	// Set JENNY_HOME to temp dir
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -825,7 +819,6 @@ func TestResumeSession(t *testing.T) {
 	// Set JENNY_HOME to temp dir
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -896,7 +889,6 @@ func TestStartSessionValidation(t *testing.T) {
 	// Set JENNY_HOME to temp dir
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -940,7 +932,6 @@ func TestStartSessionValidation(t *testing.T) {
 func TestStartSession_WithModel(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -977,7 +968,6 @@ func TestStartSession_WithModel(t *testing.T) {
 func TestStartSession_WithCWD(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -1016,7 +1006,6 @@ func TestStartSession_WithCWD(t *testing.T) {
 func TestDeleteSession(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	// Create mock session
 	sessionID := "test-delete-session"
@@ -1073,7 +1062,6 @@ func TestDeleteSession(t *testing.T) {
 func TestDeleteRunningSession(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	// Create session with pid pointing to our own process (which is alive)
 	sessionID := "test-running-session"
@@ -1117,7 +1105,6 @@ func TestDeleteRunningSession(t *testing.T) {
 func TestDeletedSessionNotInList(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	// Create mock session
 	sessionID := "test-list-after-delete"
@@ -1200,7 +1187,6 @@ func TestListSkills(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
 	t.Setenv("JENNY_AGENTS_HOME", filepath.Join(tmpDir, "agents"))
-	defer os.RemoveAll(tmpDir)
 
 	// Create a mock skill directory with SKILL.md
 	skillsDir := filepath.Join(tmpDir, "skills")
@@ -1291,7 +1277,6 @@ func TestListSkills_Empty(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
 	t.Setenv("JENNY_AGENTS_HOME", filepath.Join(tmpDir, "agents"))
-	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -1330,7 +1315,6 @@ func TestListSkills_TildePath(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
 	t.Setenv("JENNY_AGENTS_HOME", filepath.Join(tmpDir, "agents"))
-	defer os.RemoveAll(tmpDir)
 
 	// Create a mock skill
 	skillsDir := filepath.Join(tmpDir, "skills", "test-skill")
@@ -1426,7 +1410,6 @@ func TestListSkills_RequiresAuth(t *testing.T) {
 func TestListMCPServers(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	// Create mcp.json with 2 servers (one enabled, one disabled)
 	mcpConfig := `{
@@ -1515,7 +1498,6 @@ func TestListMCPServers(t *testing.T) {
 func TestListMCPServers_Empty(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -1551,7 +1533,6 @@ func TestListMCPServers_Empty(t *testing.T) {
 func TestListMCPServers_InvalidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	// Create invalid mcp.json
 	mcpPath := filepath.Join(tmpDir, "mcp.json")
@@ -1762,7 +1743,6 @@ func TestMarketplaceBrowse_InvalidURL(t *testing.T) {
 func TestMarketplaceInstall_AlreadyInstalled(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	// Create a mock skill directory (already installed)
 	skillsDir := filepath.Join(tmpDir, "skills", "test-skill")
@@ -1799,7 +1779,6 @@ func TestMarketplaceInstall_AlreadyInstalled(t *testing.T) {
 func TestMarketplaceInstall_Skill(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -1905,7 +1884,6 @@ func TestMarketplaceInstall_RequiresAuth(t *testing.T) {
 func TestMarketplaceInstall_Validation(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 	p, err := startWithConfig(ctx, tmpDir, 10*time.Minute)
@@ -1947,7 +1925,6 @@ func TestMarketplaceInstall_Validation(t *testing.T) {
 func TestMarketplaceInstall_Skill_Success(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	// Create a test tar.gz in memory
 	tarBuf := new(bytes.Buffer)
@@ -2036,7 +2013,6 @@ func TestMarketplaceInstall_Skill_Success(t *testing.T) {
 func TestMarketplaceInstall_MCP_NoExistingConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
-	defer os.RemoveAll(tmpDir)
 
 	// Create a test tar.gz with manifest.json
 	tarBuf := new(bytes.Buffer)

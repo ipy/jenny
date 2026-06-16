@@ -224,8 +224,8 @@ func TestReadMcpResourceTool_InputSchemaRequiredFields(t *testing.T) {
 	if !ok {
 		t.Fatal("expected required field")
 	}
-	if len(required) != 2 {
-		t.Errorf("expected 2 required fields, got %d", len(required))
+	if len(required) != 1 {
+		t.Errorf("expected 1 required field, got %d", len(required))
 	}
 }
 

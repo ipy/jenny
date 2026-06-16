@@ -7,14 +7,15 @@ import (
 )
 
 func TestScratchpadDir(t *testing.T) {
-	// Override JennyHomeDir to use tmpDir
+	// Override JennyHomeDir to use a captured t.TempDir value
+	tmpDir := t.TempDir()
 	originalFunc := JennyHomeDirFunc
-	JennyHomeDirFunc = func() string { return "/tmp/jenny-test" }
+	JennyHomeDirFunc = func() string { return tmpDir }
 	defer func() { JennyHomeDirFunc = originalFunc }()
 
 	// Test that ScratchpadDir returns correct path
 	scratchpadDir := ScratchpadDir()
-	expected := filepath.Join("/tmp/jenny-test", "scratchpad")
+	expected := filepath.Join(tmpDir, "scratchpad")
 	if scratchpadDir != expected {
 		t.Errorf("expected %s, got %s", expected, scratchpadDir)
 	}
