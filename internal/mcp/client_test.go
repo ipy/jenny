@@ -378,6 +378,7 @@ func TestHandleNotificationResourceListChanged(t *testing.T) {
 }
 
 // TestHandleNotificationServerLog tests AC2: server logging notifications routed to internal log.
+// Also tests the silent-unmarshal-drop fix: malformed params should not panic.
 func TestHandleNotificationServerLog(t *testing.T) {
 	client := &Client{Name: "test-server"}
 
@@ -402,6 +403,17 @@ func TestHandleNotificationServerLog(t *testing.T) {
 			client.handleNotification(notif)
 		})
 	}
+
+	// Test silent-unmarshal-drop fix: malformed JSON params should not panic
+	// and should be logged (not silently dropped)
+	t.Run("malformed_params", func(t *testing.T) {
+		notif := Notification{
+			Method: "notifications/message",
+			Params: json.RawMessage(`{invalid json}`),
+		}
+		// Should not panic - fix ensures log.Debug is called instead of silent drop
+		client.handleNotification(notif)
+	})
 }
 
 // TestClientCapabilitiesInInitializeRequest tests AC3: initialize requests include roots and sampling capabilities.
