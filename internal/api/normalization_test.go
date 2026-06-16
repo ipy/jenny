@@ -380,7 +380,7 @@ func TestNormalization_CredentialBoundArtifactStripping(t *testing.T) {
 		}
 	})
 
-	t.Run("AC3: Non-redacted thinking preserved", func(t *testing.T) {
+	t.Run("AC3: Non-redacted thinking preserved (message has text so AC4 keeps it)", func(t *testing.T) {
 		// Set ANTHROPIC_API_KEY to "current-key" to simulate the current environment
 		origKey := os.Getenv("ANTHROPIC_API_KEY")
 		defer os.Setenv("ANTHROPIC_API_KEY", origKey)
@@ -391,20 +391,30 @@ func TestNormalization_CredentialBoundArtifactStripping(t *testing.T) {
 		messages := []Message{
 			{
 				Role:    "assistant",
-				Content: `<thinking>valid chain of thought</thinking><thinking type="redacted">SIG</thinking>`,
+				Content: "My response.<thinking>valid chain of thought</thinking>More text.<thinking type=\"redacted\">SIG</thinking>",
+				// Non-redacted thinking is in the middle (not trailing), so AC3 won't strip it.
+				// Text ensures AC4 doesn't drop; trailing redacted makes AC3 applicable after strip.
 			},
 		}
 
 		normalized, _, _ := NormalizeMessages(messages, nil, caps)
 
-		// Non-redacted thinking should be preserved
+		// Non-redacted thinking should be preserved (in the middle, not trailing)
 		if !containsString(normalized[0].Content, `<thinking>valid chain of thought</thinking>`) {
 			t.Errorf("non-redacted thinking should be preserved, but content is: %s", normalized[0].Content)
 		}
 
-		// Redacted thinking should be stripped
+		// Redacted thinking should be stripped (Pass 2D: credential-bound artifact stripping)
 		if containsRedactedThinking(normalized[0].Content) {
 			t.Errorf("redacted_thinking should be stripped, but found in: %s", normalized[0].Content)
+		}
+
+		// Text should be preserved
+		if !containsString(normalized[0].Content, "My response.") {
+			t.Errorf("text should be preserved, content is: %s", normalized[0].Content)
+		}
+		if !containsString(normalized[0].Content, "More text.") {
+			t.Errorf("text after thinking should be preserved, content is: %s", normalized[0].Content)
 		}
 	})
 
@@ -420,15 +430,21 @@ func TestNormalization_CredentialBoundArtifactStripping(t *testing.T) {
 		messages := []Message{
 			{
 				Role:    "assistant",
-				Content: `<thinking type="redacted">SIG_DATA</thinking>`,
+				Content: "\u003cthinking type=\"redacted\"\u003eSIG_DATA\u003c/thinking\u003eMy response.",
+				// Redacted thinking is at the beginning (not trailing), so AC3 won't strip it.
+				// Text ensures AC4 doesn't drop; keys match so Pass 2D stripping is skipped.
 			},
 		}
 
 		normalized, _, _ := NormalizeMessages(messages, nil, caps)
 
-		// When keys match, redacted_thinking should be preserved
+		// When keys match, redacted_thinking should be preserved (not stripped by Pass 2D)
 		if !containsRedactedThinking(normalized[0].Content) {
 			t.Errorf("redacted_thinking should be preserved when keys match, but content is: %s", normalized[0].Content)
+		}
+		// Text must also be preserved
+		if !containsString(normalized[0].Content, "My response.") {
+			t.Errorf("text should be preserved when keys match, but content is: %s", normalized[0].Content)
 		}
 	})
 

@@ -54,23 +54,10 @@ func NormalizeMessages(messages []Message, tools []ToolParam, caps Capabilities)
 	// Flatten tool_result content (universal)
 	messages = flattenToolResultContent(messages)
 
-	// Build mixedThinkingMap from pre-strip content. A message is "mixed" if it
-	// contains both redacted and non-redacted thinking. This must be done before
-	// stripCredentialBoundArtifacts because that pass removes redacted blocks,
-	// making it impossible to detect original mixed content afterward.
-	// Indices align with the post-merge slice: merge happens after this map is
-	// built, so a merged message at index j inherits the map entry of its first
-	// component (the slot that survives the merge).
-	mixedThinkingMap := make(map[int]bool)
-	for i, msg := range messages {
-		if msg.Role == RoleAssistant {
-			trimmed := strings.TrimSpace(msg.Content)
-			afterStrippingRedacted := redactedThinkingPattern.ReplaceAllString(trimmed, "")
-			if strings.TrimSpace(afterStrippingRedacted) != "" && redactedThinkingPattern.MatchString(trimmed) {
-				mixedThinkingMap[i] = true
-			}
-		}
-	}
+	// Merge consecutive same-role messages (universal) — done early so that
+	// credential-bound artifact detection and content block validation operate
+	// on the collapsed representation.
+	messages = MergeConsecutiveSameRole(messages)
 
 	// Strip credential-bound artifacts (redacted_thinking) when key mismatch detected
 	messages, stripLogs := stripCredentialBoundArtifacts(messages, caps)
@@ -83,14 +70,8 @@ func NormalizeMessages(messages []Message, tools []ToolParam, caps Capabilities)
 		normalizedMessages[i].ToolResults = deduplicateToolResults(msg.ToolResults)
 	}
 
-	// Merge consecutive same-role messages (universal)
-	normalizedMessages = MergeConsecutiveSameRole(normalizedMessages)
-
 	// Content block validation (SSNF Pass 2C): handles edge cases from session resume.
-	// strippingWasSkipped is true when OriginalAPIKey matches current key (no stripping occurred).
-	// In that case, redacted_thinking is valid and must not be dropped by AC4.
-	strippingWasSkipped := caps.OriginalAPIKey != "" && len(stripLogs) == 0
-	normalizedMessages, contentLogs := validateContentBlocks(normalizedMessages, &logs, mixedThinkingMap, strippingWasSkipped)
+	normalizedMessages, contentLogs := validateContentBlocks(normalizedMessages, &logs)
 	logs = append(logs, contentLogs...)
 
 	return normalizedMessages, normalizedTools, logs
@@ -280,27 +261,22 @@ func stripCredentialBoundArtifacts(messages []Message, caps Capabilities) ([]Mes
 // - AC1: Strip whitespace-only text blocks
 // - AC2: Insert placeholder for empty content in non-final assistant messages
 // - AC3: Strip trailing thinking/redacted_thinking blocks
-// - AC4: Drop messages that contain only thinking/redacted_thinking blocks
+// - AC4: Drop messages that contain only thinking/redacted_thinking blocks (unconditional)
 //
 // This function operates on the Message.Content string field using regex patterns.
 // The Content field holds the wire-format concatenation of all content blocks (text,
 // thinking, redacted_thinking) as produced by the transcript layer. This differs
-// from the ContentBlock type used in API responses (client.go).
-//
-// Parameters:
-//   - mixedThinkingMap: built pre-strip/pre-merge; marks messages that originally had both
-//     redacted and non-redacted thinking (these must be preserved so AC3 strips trailing).
-//   - strippingWasSkipped: true when credential stripping was skipped (API keys matched);
-//     in that case, redacted_thinking is valid and must not be dropped by AC4.
-func validateContentBlocks(messages []Message, logs *[]NormalizationLog, mixedThinkingMap map[int]bool, strippingWasSkipped bool) ([]Message, []NormalizationLog) {
+// from the ContentBlock type used in API responses (client.go Message struct has
+// Content string + Thinking string, not []ContentBlock).
+func validateContentBlocks(messages []Message, logs *[]NormalizationLog) ([]Message, []NormalizationLog) {
 	if len(messages) == 0 {
 		return messages, nil
 	}
 
 	var contentLogs []NormalizationLog
 
-	// Pass 1: AC4 — Drop messages with only thinking blocks
-	messages = dropOrphanedThinkingMessages(messages, &contentLogs, mixedThinkingMap, strippingWasSkipped)
+	// Pass 1: AC4 — Drop messages with only thinking blocks (unconditional per spec)
+	messages = dropOrphanedThinkingMessages(messages, &contentLogs)
 
 	// Pass 2: AC3 — Strip trailing thinking/redacted_thinking blocks
 	messages = stripTrailingThinkingBlocks(messages, &contentLogs)
@@ -333,38 +309,23 @@ func validateContentBlocks(messages []Message, logs *[]NormalizationLog, mixedTh
 
 	return messages, contentLogs
 }
+
 // dropOrphanedThinkingMessages removes assistant messages that contain only
 // thinking and/or redacted_thinking blocks (with no text or tool_use).
-// Per AC4: drop any assistant message containing only thinking/redacted_thinking blocks.
-// The mixedThinkingMap indicates messages that originally had both redacted and
-// non-redacted thinking — these are preserved so AC3 can strip the trailing thinking.
-// strippingWasSkipped is true when no credential stripping occurred (keys matched);
-// in that case, redacted_thinking is valid and must not be dropped.
-func dropOrphanedThinkingMessages(messages []Message, logs *[]NormalizationLog, mixedThinkingMap map[int]bool, strippingWasSkipped bool) []Message {
+// Per AC4: drop unconditionally — applies regardless of message position or
+// any other derived state such as credential-stripping decisions.
+func dropOrphanedThinkingMessages(messages []Message, logs *[]NormalizationLog) []Message {
 	var result []Message
 	droppedCount := 0
 
-	for i, msg := range messages {
+	for _, msg := range messages {
 		if msg.Role != RoleAssistant {
 			result = append(result, msg)
 			continue
 		}
 
-		content := msg.Content
-		if isThinkingOnlyContent(content) && len(msg.ToolUse) == 0 {
-			// If stripping was skipped (keys match), redacted_thinking is valid — preserve.
-			if strippingWasSkipped {
-				result = append(result, msg)
-				continue
-			}
-			// Stripping was performed: check if message originally had mixed thinking.
-			if mixedThinkingMap[i] {
-				// Originally had non-redacted + redacted — preserve for AC3 to strip trailing.
-				result = append(result, msg)
-			} else {
-				// Pure thinking-only message — drop per AC4.
-				droppedCount++
-			}
+		if isThinkingOnlyContent(msg.Content) && len(msg.ToolUse) == 0 {
+			droppedCount++
 			continue
 		}
 
