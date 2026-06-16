@@ -7,12 +7,7 @@ spec: complete
 code: done
 defer_to: P3
 package: internal/cli, internal/agent
-gaps:
-  - "kind" field emitted on every event — Claude Code SDK schema does not include this
-  - "tool_call started/completed" format — Claude Code uses "tool_progress" instead
-  - "stream_request_start" emitted before each API iteration — Claude Code discards this internally
-  - jenny emits one "assistant" per turn (aggregated); Claude Code emits one per content block with shared message.id
-  - Missing `system/subtype: thinking_tokens` events emitted during thinking blocks
+gaps: []
 depends_on:
   - cli
   - agent-loop
@@ -44,13 +39,12 @@ Every event carries these fields in declaration order:
 
 ```
 1. system/init          (once per process start or resume)
-2. stream_request_start (before each API iteration; jenny extension)
-3. stream_event        (raw SSE deltas when --include-partial-messages)
-4. assistant           (aggregated final message after content_block_stop)
-5. tool_call/started   (before tool execution)
-6. tool_call/completed (after tool execution)
-7. user (aggregated tool result batch after last tool_call completed)
-8. [repeat 2-7 for each turn]
+2. stream_event        (raw SSE deltas when --include-partial-messages)
+3. assistant           (per content block after content_block_stop)
+4. tool_progress/started   (before tool execution)
+5. tool_progress/completed (after tool execution)
+6. user (aggregated tool result batch after last tool_progress completed)
+7. [repeat 2-6 for each turn]
 …
 N. result              (terminal line, always last)
 ```
@@ -99,35 +93,6 @@ Implemented:
 
 Not relevant (jenny has neither):
 - `analytics_disabled`, `product_feedback_disabled`: Boolean flags (`true` for both — jenny has neither analytics nor product feedback)
-
-### `stream_request_start`
-
-Emitted before each API iteration. **This is a jenny extension** — not part of the headless-agent reference format.
-
-```json
-{
-  "type": "stream_request_start",
-  "session_id": "sess_…",
-  "parent_tool_use_id": null,
-  "uuid": "…"
-}
-```
-
-### `kind` Field
-
-All events include a `kind` field for Claude Code parser compatibility. **jenny extension** — Claude Code does not emit this field.
-
-```json
-{
-  "type": "assistant",
-  "kind": "message",
-  "message": { … },
-  "session_id": "sess_…",
-  "uuid": "…"
-}
-```
-
-The `kind` value is normalized for SDK consumers: `assistant`, `user`, `result`, and `system` events use `"message"`; `tool_call`/`tool_use` use `"tool_call"`. Other types pass through unchanged.
 
 ### `usage` Field on `assistant` Messages
 
@@ -211,20 +176,11 @@ Emitted after tool execution completes, before the next API iteration. Includes 
 
 ### `tool_progress` (Claude Code uses `tool_progress`, not `tool_call`)
 
-Claude Code emits `tool_progress` for long-running tool progress updates. jenny emits `tool_call started/completed` instead — this is a jenny-specific format.
+Claude Code emits `tool_progress` for long-running tool progress updates. jenny emits `tool_progress` events, matching the Claude Code SDK schema.
 
 ```json
-// jenny-only (not in Claude Code SDK schema)
-{ "type": "tool_call", "subtype": "started", "tool_name": "Bash", "tool_use_id": "…", "session_id": "sess_…", "parent_tool_use_id": null, "uuid": "…" }
-{ "type": "tool_call", "subtype": "completed", "tool_use_id": "…", "is_error": false, "session_id": "sess_…", "parent_tool_use_id": null, "uuid": "…" }
-```
-
-### `stream_request_start` (jenny extension)
-
-Emitted before each API iteration. **jenny extension** — Claude Code QueryEngine discards this internally and does not emit it to SDK consumers.
-
-```json
-{ "type": "stream_request_start", "session_id": "sess_…", "parent_tool_use_id": null, "uuid": "…" }
+{ "type": "tool_progress", "subtype": "started", "tool_name": "Bash", "tool_use_id": "…", "session_id": "sess_…", "parent_tool_use_id": null, "uuid": "…" }
+{ "type": "tool_progress", "subtype": "completed", "tool_use_id": "…", "is_error": false, "session_id": "sess_…", "parent_tool_use_id": null, "uuid": "…" }
 ```
 
 ### `stream_event` (partial messages)
