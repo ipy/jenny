@@ -2,14 +2,15 @@
 title: ListMcpResources Tool
 slug: list-mcp-resources
 priority: P2
-status: partial
+status: done
 spec: complete
-code: partial
+code: done
 package: internal/mcp
 implemented:
   - "Resource templates"
   - "notifications/resources/list_changed"
   - "Resource subscriptions (subscribe/unsubscribe)"
+  - "Server icons metadata"
 gaps: []
 # Reviewed 2026-06-16: all gaps addressed
 depends_on:

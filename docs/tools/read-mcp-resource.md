@@ -2,14 +2,16 @@
 title: ReadMcpResource Tool
 slug: read-mcp-resource
 priority: P2
-status: partial
+status: done
 spec: complete
-code: partial
+code: done
 package: internal/tool
 implemented:
   - "Resource templates"
   - "notifications/resources/list_changed"
   - "Resource subscriptions (subscribe/unsubscribe)"
+  - "Binary content persistence to disk"
+  - "Server icons metadata"
 gaps: []
 # Reviewed 2026-06-16: resource templates and subscriptions implemented
 depends_on:
