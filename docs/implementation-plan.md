@@ -240,7 +240,7 @@ Implement in this order:
 
 - [x] Tasks (TodoWrite, TaskCreate, TaskGet, TaskList, TaskUpdate, TaskStop, TaskOutput, TaskSubAgent) — [`tasks.md`](./tools/tasks.md)
 - [x] EnterWorktree / ExitWorktree — [`enter-worktree.md`](./tools/enter-worktree.md), [`exit-worktree.md`](./tools/exit-worktree.md)
-- [ ] Native Windows Support — [`windows-support.md`](./arch/windows-support.md)
+- [x] Native Windows Support — [`windows-support.md`](./arch/windows-support.md)
 
 ---
 

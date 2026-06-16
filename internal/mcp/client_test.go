@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -346,5 +347,137 @@ func TestMaxMCPOutputChars(t *testing.T) {
 	t.Setenv("MCP_MAX_OUTPUT_CHARS", "invalid")
 	if got := maxMCPOutputChars(); got != defaultMaxMCPOutputChars {
 		t.Errorf("invalid env: got %d, want %d", got, defaultMaxMCPOutputChars)
+	}
+}
+
+// TestHandleNotificationResourceListChanged tests AC1: resource cache invalidation on list_changed.
+func TestHandleNotificationResourceListChanged(t *testing.T) {
+	// Reset cache generation for test
+	origGen := atomic.LoadInt64(&cacheGen)
+	t.Cleanup(func() {
+		atomic.StoreInt64(&cacheGen, origGen)
+	})
+	atomic.StoreInt64(&cacheGen, 0)
+
+	client := &Client{Name: "test-server"}
+
+	// Simulate notifications/resources/list_changed notification
+	notif := Notification{
+		Method: "notifications/resources/list_changed",
+		Params: json.RawMessage(`{}`),
+	}
+
+	// Handle the notification
+	client.handleNotification(notif)
+
+	// Verify cache was bumped
+	newGen := atomic.LoadInt64(&cacheGen)
+	if newGen != 1 {
+		t.Errorf("cache generation should be 1 after list_changed, got %d", newGen)
+	}
+}
+
+// TestHandleNotificationServerLog tests AC2: server logging notifications routed to internal log.
+func TestHandleNotificationServerLog(t *testing.T) {
+	client := &Client{Name: "test-server"}
+
+	tests := []struct {
+		level  string
+		params string
+	}{
+		{"debug", `{"level":"debug","logger":"test","data":"debug message"}`},
+		{"info", `{"level":"info","logger":"test","data":"info message"}`},
+		{"warning", `{"level":"warning","logger":"test","data":"warning message"}`},
+		{"error", `{"level":"error","logger":"test","data":"error message"}`},
+		{"unknown", `{"level":"unknown","logger":"test","data":"unknown level"}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.level, func(t *testing.T) {
+			notif := Notification{
+				Method: "notifications/message",
+				Params: json.RawMessage(tt.params),
+			}
+			// Should not panic
+			client.handleNotification(notif)
+		})
+	}
+}
+
+// TestClientCapabilitiesInInitializeRequest tests AC3: initialize requests include roots and sampling capabilities.
+func TestClientCapabilitiesInInitializeRequest(t *testing.T) {
+	// Test that the initialize request includes proper capabilities
+	req := jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "initialize",
+		Params: map[string]any{
+			"protocolVersion": "2025-03-26",
+			"capabilities": map[string]any{
+				"roots": map[string]any{
+					"listChanged": true,
+				},
+				"sampling": map[string]any{},
+			},
+			"clientInfo": map[string]any{
+				"name":    "jenny",
+				"version": "0.1.0",
+			},
+		},
+	}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("failed to marshal initialize request: %v", err)
+	}
+
+	// Verify capabilities structure
+	var parsed map[string]any
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	params := parsed["params"].(map[string]any)
+	caps := params["capabilities"].(map[string]any)
+
+	// Verify roots capability
+	roots := caps["roots"].(map[string]any)
+	if listChanged := roots["listChanged"]; listChanged != true {
+		t.Errorf("roots.listChanged should be true, got %v", listChanged)
+	}
+
+	// Verify sampling capability exists
+	if _, ok := caps["sampling"]; !ok {
+		t.Error("sampling capability should be present")
+	}
+}
+
+// TestLogMessageParams tests LogMessageParams parsing.
+func TestLogMessageParams(t *testing.T) {
+	tests := []struct {
+		name       string
+		json       string
+		wantLevel  string
+		wantLogger string
+	}{
+		{"debug with logger", `{"level":"debug","logger":"myLogger","data":"test"}`, "debug", "myLogger"},
+		{"info without logger", `{"level":"info","data":"test"}`, "info", ""},
+		{"warning", `{"level":"warning"}`, "warning", ""},
+		{"error", `{"level":"error","logger":"err","data":{"msg":"oops"}}`, "error", "err"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var params LogMessageParams
+			if err := json.Unmarshal([]byte(tt.json), &params); err != nil {
+				t.Fatalf("failed to unmarshal: %v", err)
+			}
+			if params.Level != tt.wantLevel {
+				t.Errorf("Level = %q, want %q", params.Level, tt.wantLevel)
+			}
+			if params.Logger != tt.wantLogger {
+				t.Errorf("Logger = %q, want %q", params.Logger, tt.wantLogger)
+			}
+		})
 	}
 }

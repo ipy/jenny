@@ -191,7 +191,7 @@ type promptGetResult struct {
 
 // promptMessage represents a message in a prompt.
 type promptMessage struct {
-	Role    string         `json:"role"`
+	Role    string        `json:"role"`
 	Content promptContent `json:"content"`
 }
 
@@ -663,7 +663,7 @@ type ProgressHandler func(token any, progress, total float64)
 var (
 	progressHandlers   = make(map[uint64]ProgressHandler)
 	progressHandlersMu sync.Mutex
-	progressHandlerID uint64
+	progressHandlerID  uint64
 )
 
 // RegisterProgressHandler registers a global handler for progress notifications.
@@ -679,6 +679,13 @@ func RegisterProgressHandler(h ProgressHandler) func() {
 		delete(progressHandlers, id)
 		progressHandlersMu.Unlock()
 	}
+}
+
+// LogMessageParams represents the parameters for a notifications/message notification.
+type LogMessageParams struct {
+	Level  string `json:"level"`
+	Logger string `json:"logger,omitempty"`
+	Data   any    `json:"data,omitempty"`
 }
 
 // handleNotification processes an incoming MCP notification.
@@ -700,6 +707,31 @@ func (c *Client) handleNotification(notif Notification) {
 		if err := json.Unmarshal(notif.Params, &params); err == nil {
 			log.Info("MCP resource updated", "server", c.Name, "uri", params.URI)
 			bumpCacheGen() // Invalidate resource cache on update
+		}
+	case "notifications/resources/list_changed":
+		// AC1: Invalidate resource cache when server signals list change
+		log.Debug("MCP resource list changed", "server", c.Name)
+		bumpCacheGen()
+	case "notifications/message":
+		// AC2: Route server logging notifications to internal log system
+		var params LogMessageParams
+		if err := json.Unmarshal(notif.Params, &params); err == nil {
+			msg := "MCP server log"
+			if params.Logger != "" {
+				msg = fmt.Sprintf("MCP server log [%s]", params.Logger)
+			}
+			switch params.Level {
+			case "debug":
+				log.Debug(msg, "server", c.Name, "level", params.Level, "data", params.Data)
+			case "info":
+				log.Info(msg, "server", c.Name, "level", params.Level, "data", params.Data)
+			case "warning":
+				log.Warn(msg, "server", c.Name, "level", params.Level, "data", params.Data)
+			case "error":
+				log.Error(msg, "server", c.Name, "level", params.Level, "data", params.Data)
+			default:
+				log.Debug(msg, "server", c.Name, "level", params.Level, "data", params.Data)
+			}
 		}
 	}
 
@@ -770,13 +802,19 @@ func (c *Client) RegisterNotificationHandler(handler func(Notification)) {
 // initializeViaTransport performs the MCP handshake using the HTTP transport.
 // Caller must hold c.mu.
 func (c *Client) initializeViaTransport(ctx context.Context) error {
+	// AC3: Advertise roots and sampling capabilities per MCP spec baseline
 	req := jsonRPCRequest{
 		JSONRPC: "2.0",
 		ID:      nextJSONID(),
 		Method:  "initialize",
 		Params: map[string]any{
 			"protocolVersion": "2025-03-26",
-			"capabilities":    map[string]any{},
+			"capabilities": map[string]any{
+				"roots": map[string]any{
+					"listChanged": true,
+				},
+				"sampling": map[string]any{},
+			},
 			"clientInfo": map[string]any{
 				"name":    "jenny",
 				"version": "0.1.0",
@@ -816,14 +854,19 @@ func (c *Client) initializeViaTransport(ctx context.Context) error {
 
 // initialize performs the MCP handshake.
 func (c *Client) initialize(ctx context.Context) error {
-	// Send initialize request
+	// AC3: Advertise roots and sampling capabilities per MCP spec baseline
 	req := jsonRPCRequest{
 		JSONRPC: "2.0",
 		ID:      nextJSONID(),
 		Method:  "initialize",
 		Params: map[string]any{
 			"protocolVersion": "2025-03-26",
-			"capabilities":    map[string]any{},
+			"capabilities": map[string]any{
+				"roots": map[string]any{
+					"listChanged": true,
+				},
+				"sampling": map[string]any{},
+			},
 			"clientInfo": map[string]any{
 				"name":    "jenny",
 				"version": "0.1.0",
