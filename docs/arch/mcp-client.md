@@ -31,10 +31,9 @@ implemented:
   - "Resource subscriptions (resources/subscribe, resources/unsubscribe)"
   - "Server icons metadata (icon/darkIcon URLs from serverInfo)"
   - "Tasks API (tasks/list, tasks/create, tasks/get, tasks/cancel)"
-gaps:
+  - "OAuth 2.1 token refresh and 401 retry (device-less: refresh_token grant only)"
   - "OAuth 2.1 authorization not implemented"
 status: done
-defer_to: P4
 depends_on:
   - mcp-config
 ---

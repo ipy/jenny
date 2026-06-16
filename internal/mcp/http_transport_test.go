@@ -12,6 +12,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/ipy/jenny/internal/constants"
 )
 
 // TestHTTPTransportConnect tests AC2: HTTP transport connects and completes initialization.
@@ -1052,5 +1054,264 @@ func TestHTTPClientSubscribeResource_ServerError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "Method not found") {
 		t.Errorf("expected 'Method not found' in error, got: %v", err)
+	}
+}
+
+// --- OAuth Tests ---
+
+// TestOAuthTokenStore tests AC2: OAuthTokenStore Store/Load round-trip.
+func TestOAuthTokenStore(t *testing.T) {
+	// Override JennyHomeDir to use temp dir
+	origFunc := constants.JennyHomeDirFunc
+	constants.JennyHomeDirFunc = func() string { return t.TempDir() }
+	defer func() { constants.JennyHomeDirFunc = origFunc }()
+
+	store := NewOAuthTokenStore()
+	token := &OAuthToken{
+		AccessToken:  "test-access-token",
+		RefreshToken: "test-refresh-token",
+		TokenType:    "Bearer",
+	}
+
+	// Store the token
+	err := store.Store("http://example.com/mcp", token)
+	if err != nil {
+		t.Fatalf("Store failed: %v", err)
+	}
+
+	// Load the token
+	loaded, found, err := store.Load("http://example.com/mcp")
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if !found {
+		t.Fatal("expected to find stored token")
+	}
+	if loaded.AccessToken != "test-access-token" {
+		t.Errorf("AccessToken = %q, want %q", loaded.AccessToken, "test-access-token")
+	}
+	if loaded.RefreshToken != "test-refresh-token" {
+		t.Errorf("RefreshToken = %q, want %q", loaded.RefreshToken, "test-refresh-token")
+	}
+	if loaded.TokenType != "Bearer" {
+		t.Errorf("TokenType = %q, want %q", loaded.TokenType, "Bearer")
+	}
+}
+
+// TestOAuthTokenStore_NonExistent tests AC2: loading non-existent token returns (nil, false, nil).
+func TestOAuthTokenStore_NonExistent(t *testing.T) {
+	// Override JennyHomeDir to use temp dir
+	origFunc := constants.JennyHomeDirFunc
+	constants.JennyHomeDirFunc = func() string { return t.TempDir() }
+	defer func() { constants.JennyHomeDirFunc = origFunc }()
+
+	store := NewOAuthTokenStore()
+	loaded, found, err := store.Load("http://nonexistent.example.com/mcp")
+	if err != nil {
+		t.Fatalf("Load should not error for non-existent token: %v", err)
+	}
+	if found {
+		t.Error("expected found=false for non-existent token")
+	}
+	if loaded != nil {
+		t.Errorf("expected nil token for non-existent token, got %v", loaded)
+	}
+}
+
+// TestHTTPTransportOAuthRefresh tests AC3: transport refreshes token on 401 and retries.
+func TestHTTPTransportOAuthRefresh(t *testing.T) {
+	requestCount := 0
+	var mu sync.Mutex
+
+	// Token endpoint server (simulated OAuth server)
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(OAuthToken{
+			AccessToken:  "new-refreshed-token",
+			RefreshToken: "new-refresh-token",
+			TokenType:    "Bearer",
+		})
+	}))
+	defer tokenServer.Close()
+
+	// MCP server that returns 401 first, then 200
+	mcpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requestCount++
+		count := requestCount
+		mu.Unlock()
+
+		body, _ := io.ReadAll(r.Body)
+		var req jsonRPCRequest
+		json.Unmarshal(body, &req)
+
+		if count == 1 {
+			// First request without valid token → 401
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte("invalid token"))
+			return
+		}
+
+		// Second request with refreshed token → 200
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Mcp-Session-Id", "oauth-session")
+		json.NewEncoder(w).Encode(jsonRPCResponse{
+			JSONRPC: "2.0",
+			ID:      req.ID,
+			Result:  json.RawMessage(`{"protocolVersion":"2025-03-26","capabilities":{},"serverInfo":{"name":"test","version":"1.0"}}`),
+		})
+	}))
+	defer mcpServer.Close()
+
+	// Set up OAuth token store with initial token
+	origFunc := constants.JennyHomeDirFunc
+	constants.JennyHomeDirFunc = func() string { return t.TempDir() }
+	defer func() { constants.JennyHomeDirFunc = origFunc }()
+
+	store := NewOAuthTokenStore()
+	initialToken := &OAuthToken{
+		AccessToken:  "expired-token",
+		RefreshToken: "valid-refresh-token",
+		TokenType:    "Bearer",
+	}
+	_ = store.Store(mcpServer.URL, initialToken)
+
+	// Create transport with OAuth config pointing to token endpoint
+	transport := NewHTTPTransport(mcpServer.URL, nil)
+	transport.SetOAuthConfig(tokenServer.URL, "test-client", "test-secret")
+	transport.tokenStore = store
+
+	ctx := context.Background()
+	req := jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      int64(1),
+		Method:  "initialize",
+	}
+
+	resp, err := transport.SendRequest(ctx, req)
+	if err != nil {
+		t.Fatalf("SendRequest failed after token refresh: %v", err)
+	}
+	if resp.Error != nil {
+		t.Fatalf("unexpected error response: %v", resp.Error)
+	}
+
+	mu.Lock()
+	if requestCount != 2 {
+		t.Errorf("expected 2 requests (original + retry), got %d", requestCount)
+	}
+	mu.Unlock()
+}
+
+// TestHTTPTransportOAuthRefresh_Failure tests AC4: transport returns error when refresh fails.
+func TestHTTPTransportOAuthRefresh_Failure(t *testing.T) {
+	requestCount := 0
+	var mu sync.Mutex
+
+	// Token endpoint server that returns error
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer tokenServer.Close()
+
+	// MCP server that always returns 401
+	mcpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requestCount++
+		mu.Unlock()
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte("invalid token"))
+	}))
+	defer mcpServer.Close()
+
+	// Set up OAuth token store with initial token
+	origFunc := constants.JennyHomeDirFunc
+	constants.JennyHomeDirFunc = func() string { return t.TempDir() }
+	defer func() { constants.JennyHomeDirFunc = origFunc }()
+
+	store := NewOAuthTokenStore()
+	initialToken := &OAuthToken{
+		AccessToken:  "expired-token",
+		RefreshToken: "valid-refresh-token",
+		TokenType:    "Bearer",
+	}
+	_ = store.Store(mcpServer.URL, initialToken)
+
+	// Create transport with OAuth config pointing to failing token endpoint
+	transport := NewHTTPTransport(mcpServer.URL, nil)
+	transport.SetOAuthConfig(tokenServer.URL, "test-client", "test-secret")
+	transport.tokenStore = store
+
+	ctx := context.Background()
+	req := jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      int64(1),
+		Method:  "initialize",
+	}
+
+	_, err := transport.SendRequest(ctx, req)
+	if err == nil {
+		t.Fatal("expected error when token refresh fails")
+	}
+	if !strings.Contains(err.Error(), "HTTP 401") {
+		t.Errorf("expected HTTP 401 error, got: %v", err)
+	}
+
+	mu.Lock()
+	if requestCount != 1 {
+		t.Errorf("expected only 1 request when refresh fails, got %d", requestCount)
+	}
+	mu.Unlock()
+}
+
+// TestHTTPTransport401_NoOAuth tests AC4: transport returns 401 error without OAuth config.
+func TestHTTPTransport401_NoOAuth(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte("auth required"))
+	}))
+	defer server.Close()
+
+	transport := NewHTTPTransport(server.URL, nil)
+	ctx := context.Background()
+
+	req := jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      int64(1),
+		Method:  "initialize",
+	}
+
+	_, err := transport.SendRequest(ctx, req)
+	if err == nil {
+		t.Fatal("expected error for 401 response")
+	}
+	if !strings.Contains(err.Error(), "HTTP 401") {
+		t.Errorf("expected HTTP 401 error, got: %v", err)
+	}
+}
+
+// TestHTTPTransport500_NoOAuth tests AC4: transport returns 500 error without OAuth behavior.
+func TestHTTPTransport500_NoOAuth(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	transport := NewHTTPTransport(server.URL, nil)
+	ctx := context.Background()
+
+	req := jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      int64(1),
+		Method:  "initialize",
+	}
+
+	_, err := transport.SendRequest(ctx, req)
+	if err == nil {
+		t.Fatal("expected error for 500 response")
+	}
+	if !strings.Contains(err.Error(), "HTTP 500") {
+		t.Errorf("expected HTTP 500 error, got: %v", err)
 	}
 }

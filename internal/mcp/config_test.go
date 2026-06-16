@@ -462,3 +462,45 @@ func TestAC2_MCPConfigEnvExpansion(t *testing.T) {
 
 	t.Log("AC2 PASS: env expansion works correctly in MCP config")
 }
+
+// TestLoadConfigOAuthFields tests AC1: MCPServerDef includes OAuth config fields.
+func TestLoadConfigOAuthFields(t *testing.T) {
+	content := `{
+		"mcpServers": {
+			"oauth-server": {
+				"url": "http://localhost:8080",
+				"tokenEndpoint": "https://auth.example.com/token",
+				"clientId": "my-client-id",
+				"clientSecret": "my-client-secret",
+				"scopes": ["read", "write"]
+			}
+		}
+	}`
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.json")
+	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := LoadConfig([]string{configPath}, false)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+
+	server := config["oauth-server"]
+	if server.URL != "http://localhost:8080" {
+		t.Errorf("URL = %q, want %q", server.URL, "http://localhost:8080")
+	}
+	if server.TokenEndpoint != "https://auth.example.com/token" {
+		t.Errorf("TokenEndpoint = %q, want %q", server.TokenEndpoint, "https://auth.example.com/token")
+	}
+	if server.ClientID != "my-client-id" {
+		t.Errorf("ClientID = %q, want %q", server.ClientID, "my-client-id")
+	}
+	if server.ClientSecret != "my-client-secret" {
+		t.Errorf("ClientSecret = %q, want %q", server.ClientSecret, "my-client-secret")
+	}
+	if len(server.Scopes) != 2 || server.Scopes[0] != "read" || server.Scopes[1] != "write" {
+		t.Errorf("Scopes = %v, want [read, write]", server.Scopes)
+	}
+}

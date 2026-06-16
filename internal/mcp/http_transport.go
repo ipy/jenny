@@ -30,13 +30,17 @@ func httpRequestTimeout() time.Duration {
 // All JSON-RPC messages are sent via HTTP POST. The server may respond with
 // either application/json or text/event-stream (SSE).
 type HTTPTransport struct {
-	url          string
-	headers      map[string]string
-	sessionID    string
-	client       *http.Client
-	closed       bool
-	notifHandler func(Notification)
-	mu           sync.Mutex
+	url           string
+	headers       map[string]string
+	sessionID     string
+	client        *http.Client
+	closed        bool
+	notifHandler  func(Notification)
+	mu            sync.Mutex
+	tokenEndpoint string
+	clientID      string
+	clientSecret  string
+	tokenStore    *OAuthTokenStore
 }
 
 // NewHTTPTransport creates a new HTTP transport for the given MCP endpoint URL.
@@ -49,6 +53,16 @@ func NewHTTPTransport(url string, headers map[string]string) *HTTPTransport {
 		client: &http.Client{
 			Timeout: httpRequestTimeout(),
 		},
+	}
+}
+
+// SetOAuthConfig configures OAuth 2.1 token refresh for this transport.
+func (t *HTTPTransport) SetOAuthConfig(tokenEndpoint, clientID, clientSecret string) {
+	t.tokenEndpoint = tokenEndpoint
+	t.clientID = clientID
+	t.clientSecret = clientSecret
+	if tokenEndpoint != "" {
+		t.tokenStore = NewOAuthTokenStore()
 	}
 }
 
@@ -206,10 +220,108 @@ func (t *HTTPTransport) SendRequest(ctx context.Context, req jsonRPCRequest) (*j
 		t.mu.Unlock()
 		return nil, &SessionExpiredError{SessionID: sessionID}
 
+	case http.StatusUnauthorized:
+		// AC3: If OAuth is configured, try token refresh
+		if t.tokenEndpoint != "" && t.tokenStore != nil {
+			token, found, loadErr := t.tokenStore.Load(t.url)
+			if loadErr == nil && found && token != nil && token.RefreshToken != "" {
+				// Attempt refresh
+				newToken, refreshErr := t.refreshToken(ctx, token.RefreshToken)
+				if refreshErr == nil {
+					// Store new token
+					_ = t.tokenStore.Store(t.url, newToken)
+					// Retry the original request with new token
+					// Re-create request since body was already consumed
+					retryReq, err := http.NewRequestWithContext(ctx, http.MethodPost, t.url, bytes.NewReader(body))
+					if err == nil {
+						retryReq.Header.Set("Content-Type", "application/json")
+						retryReq.Header.Set("Accept", "application/json, text/event-stream")
+						if sessionID != "" {
+							retryReq.Header.Set("Mcp-Session-Id", sessionID)
+						}
+						for k, v := range t.headers {
+							retryReq.Header.Set(k, v)
+						}
+						retryReq.Header.Set("Authorization", "Bearer "+newToken.AccessToken)
+						resp.Body.Close()
+						resp, err = t.client.Do(retryReq)
+						if err != nil {
+							return nil, fmt.Errorf("HTTP request failed after token refresh: %w", err)
+						}
+						defer resp.Body.Close()
+
+						// Handle the retry response
+						switch resp.StatusCode {
+						case http.StatusOK:
+							if sid := resp.Header.Get("Mcp-Session-Id"); sid != "" {
+								t.mu.Lock()
+								t.sessionID = sid
+								t.mu.Unlock()
+							}
+							return t.parseResponse(resp, req.ID)
+						case http.StatusNotFound:
+							t.mu.Lock()
+							t.sessionID = ""
+							t.mu.Unlock()
+							return nil, &SessionExpiredError{SessionID: sessionID}
+						case http.StatusUnauthorized:
+							// Refresh didn't help, fall through to error
+							bodyBytes, _ := io.ReadAll(resp.Body)
+							return nil, fmt.Errorf("HTTP 401 after token refresh: %s", string(bodyBytes))
+						default:
+							bodyBytes, _ := io.ReadAll(resp.Body)
+							return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(bodyBytes))
+						}
+					}
+				}
+				// Refresh failed, fall through to return 401 error
+			}
+		}
+		// No OAuth configured or refresh failed, return error as-is
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("HTTP 401: %s", string(bodyBytes))
+
 	default:
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(bodyBytes))
 	}
+}
+
+// refreshToken attempts to refresh the OAuth access token using the refresh token.
+func (t *HTTPTransport) refreshToken(ctx context.Context, refreshToken string) (*OAuthToken, error) {
+	data := strings.NewReader(fmt.Sprintf("grant_type=refresh_token&refresh_token=%s&client_id=%s",
+		refreshToken, t.clientID))
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.tokenEndpoint, data)
+	if err != nil {
+		return nil, fmt.Errorf("creating refresh request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if t.clientSecret != "" {
+		req.SetBasicAuth(t.clientID, t.clientSecret)
+	}
+
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("refresh request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("token refresh failed: HTTP %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var token OAuthToken
+	if err := json.NewDecoder(resp.Body).Decode(&token); err != nil {
+		return nil, fmt.Errorf("parsing token response: %w", err)
+	}
+
+	if token.AccessToken == "" {
+		return nil, fmt.Errorf("token refresh response missing access_token")
+	}
+
+	return &token, nil
 }
 
 // SendNotification sends a JSON-RPC notification via HTTP POST.

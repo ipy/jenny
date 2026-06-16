@@ -585,6 +585,19 @@ func NewHTTPClient(name string, url string, headers map[string]string) *Client {
 	}
 }
 
+// NewHTTPClientWithOAuth creates a new MCP client for the given server (HTTP transport)
+// with OAuth 2.1 token refresh configuration.
+func NewHTTPClientWithOAuth(name string, url string, headers map[string]string, tokenEndpoint, clientID, clientSecret string) *Client {
+	transport := NewHTTPTransport(url, headers)
+	transport.SetOAuthConfig(tokenEndpoint, clientID, clientSecret)
+	return &Client{
+		Name:      name,
+		transport: transport,
+		respChans: make(map[string]chan *jsonRPCResponse),
+		done:      make(chan struct{}),
+	}
+}
+
 // Connect establishes a connection to the MCP server.
 // For HTTP transport, performs the initialization handshake over HTTP.
 // For stdio transport, spawns the subprocess and initializes.
@@ -1575,11 +1588,14 @@ func ConnectAll(cfg map[string]MCPServerDef) error {
 		case def.Command != "":
 			client = NewClient(name, def.Command, def.Args, def.Env)
 		case def.URL != "":
-			client = NewHTTPClient(name, def.URL, def.Headers)
+			if def.TokenEndpoint != "" {
+				client = NewHTTPClientWithOAuth(name, def.URL, def.Headers, def.TokenEndpoint, def.ClientID, def.ClientSecret)
+			} else {
+				client = NewHTTPClient(name, def.URL, def.Headers)
+			}
 		default:
 			continue
 		}
-
 		clients[NormalizeName(name)] = client
 
 		ctx := context.Background()
