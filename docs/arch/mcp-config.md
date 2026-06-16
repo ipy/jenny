@@ -42,10 +42,14 @@ Both stdio (`command` field) and HTTP (`url` field) servers are supported.
 
 When not in strict mode, configs merge from lowest to highest priority (later wins):
 
-1. Plugin bundled configs
-2. User config directory
-3. Project config directory
-4. Local / enterprise overrides
+1. Plugin bundled configs (from discovered plugins)
+2. `~/.agents/mcp.json` (cross-tool shared user config)
+3. `~/.jenny/mcp.json` (jenny-specific user config)
+4. `<cwd>/.agents/mcp.json` (cross-tool shared project config)
+5. CLI `--mcp-config` files (explicit override)
+6. Local / enterprise overrides
+
+`~/.jenny/mcp.json` and `~/.agents/mcp.json` are loaded automatically (no CLI flag required) when not in bare or strict mode. This ensures MCP servers installed via the Portal UI (which writes `~/.jenny/mcp.json`) are also available in CLI sessions.
 
 Enterprise connectors may inject additional policy constraints.
 

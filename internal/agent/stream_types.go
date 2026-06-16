@@ -127,29 +127,29 @@ type Message = api.Message
 // Field order matches the headless-agent reference format: type, then event|message|payload,
 // then parent_tool_use_id, session_id, uuid, then remaining fields.
 type StreamMessage struct {
-	Type              string             `json:"type"`
-	Subtype           string             `json:"subtype,omitempty"`
-	IsError           bool               `json:"is_error"`
-	DurationMs        int64              `json:"duration_ms,omitempty"`
-	DurationAPIMs     int64              `json:"duration_api_ms,omitempty"`
-	NumTurns          int                `json:"num_turns,omitempty"`
-	Result            string             `json:"result,omitempty"`
-	StopReason        string             `json:"stop_reason,omitempty"`
-	TTFTMs            int64              `json:"ttft_ms,omitempty"`
-	TTFTStreamMs      int64              `json:"ttft_stream_ms,omitempty"`
-	TimeToRequestMs   int64              `json:"time_to_request_ms,omitempty"`
-	TerminalReason    string             `json:"terminal_reason,omitempty"`
-	APIErrorStatus    *string            `json:"api_error_status,omitempty"`
-	ParentToolUseID   *string            `json:"parent_tool_use_id,omitempty"`
-	SessionID         string             `json:"session_id,omitempty"`
-	TotalCostUSD      float64            `json:"total_cost_usd,omitempty"`
-	Uuid                    string             `json:"uuid,omitempty"`
-	EstimatedTokens         int                `json:"estimated_tokens"`
-	EstimatedTokensDelta    int                `json:"estimated_tokens_delta"`
-	Usage                   *Usage             `json:"usage,omitempty"`
-	ModelUsage        any                `json:"modelUsage,omitempty"`
-	PermissionDenials []PermissionDenial `json:"permission_denials,omitempty"`
-	FastModeState     string             `json:"fast_mode_state,omitempty"`
+	Type                 string             `json:"type"`
+	Subtype              string             `json:"subtype,omitempty"`
+	IsError              bool               `json:"is_error"`
+	DurationMs           int64              `json:"duration_ms,omitempty"`
+	DurationAPIMs        int64              `json:"duration_api_ms,omitempty"`
+	NumTurns             int                `json:"num_turns,omitempty"`
+	Result               string             `json:"result,omitempty"`
+	StopReason           string             `json:"stop_reason,omitempty"`
+	TTFTMs               int64              `json:"ttft_ms,omitempty"`
+	TTFTStreamMs         int64              `json:"ttft_stream_ms,omitempty"`
+	TimeToRequestMs      int64              `json:"time_to_request_ms,omitempty"`
+	TerminalReason       string             `json:"terminal_reason,omitempty"`
+	APIErrorStatus       *string            `json:"api_error_status,omitempty"`
+	ParentToolUseID      *string            `json:"parent_tool_use_id,omitempty"`
+	SessionID            string             `json:"session_id,omitempty"`
+	TotalCostUSD         float64            `json:"total_cost_usd,omitempty"`
+	Uuid                 string             `json:"uuid,omitempty"`
+	EstimatedTokens      int                `json:"estimated_tokens"`
+	EstimatedTokensDelta int                `json:"estimated_tokens_delta"`
+	Usage                *Usage             `json:"usage,omitempty"`
+	ModelUsage           any                `json:"modelUsage,omitempty"`
+	PermissionDenials    []PermissionDenial `json:"permission_denials,omitempty"`
+	FastModeState        string             `json:"fast_mode_state,omitempty"`
 	// Legacy/optional fields (not in result reference but used by other event types)
 	Event          any                   `json:"event,omitempty"`
 	Message        any                   `json:"message,omitempty"`

@@ -3,9 +3,9 @@ package agent
 
 import (
 	"bytes"
-	"fmt"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"strings"

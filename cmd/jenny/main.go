@@ -283,13 +283,36 @@ func run() error {
 	// Always add ListMcpResourcesTool - it handles the case of no MCP servers connected
 	mcpTools = append(mcpTools, mcp.NewListMcpResourcesTool())
 
-	// Phase 1: Load plugin MCP servers (lowest priority) if not bare and not strict
+	// Phase 0: Auto-load default MCP configs (~/.agents/mcp.json, ~/.jenny/mcp.json)
+	// if not bare and not strict. These are loaded automatically (no CLI flag required).
 	if !flags.Bare && !flags.StrictMCP {
-		homeDir := ""
-		if hd, err := os.UserHomeDir(); err == nil {
-			homeDir = hd
+		defaultPaths := collectDefaultMCPPaths(cwd, constants.JennyHomeDir(), constants.AgentsHomeDir())
+		if len(defaultPaths) > 0 {
+			defaultConfig, err := mcp.LoadConfig(defaultPaths, false) // strict=false: merge, don't fail
+			if err != nil {
+				// Log but don't fail - default configs are optional
+				fmt.Fprintf(os.Stderr, "warning: loading default MCP config: %v\n", err)
+			} else if defaultConfig != nil {
+				mcpConfig = defaultConfig
+			}
 		}
-		mcpConfig = loadPluginMCPServers(cwd, homeDir)
+	}
+
+	// Phase 1: Load plugin MCP servers (lowest priority) if not bare and not strict.
+	// Merge into existing mcpConfig from Phase 0 (plugin wins on collision? No —
+	// default configs have higher priority than plugin configs, so default wins).
+	if !flags.Bare && !flags.StrictMCP {
+		pluginConfig := loadPluginMCPServers(cwd, constants.JennyHomeDir(), constants.AgentsHomeDir())
+		if mcpConfig == nil {
+			mcpConfig = pluginConfig
+		} else {
+			// Plugin defs only fill gaps — default configs (Phase 0) win on collision
+			for name, def := range pluginConfig {
+				if _, exists := mcpConfig[name]; !exists {
+					mcpConfig[name] = def
+				}
+			}
+		}
 	}
 
 	// Phase 2: Merge CLI MCP config (overrides plugin entries)
@@ -361,6 +384,8 @@ func run() error {
 		pluginRoots := plugin.FindPluginRoots(cwd)
 		homePluginRoots := plugin.FindPluginRoots(constants.JennyHomeDir())
 		pluginRoots = append(pluginRoots, homePluginRoots...)
+		agentsPluginRoots := plugin.FindPluginRoots(constants.AgentsHomeDir())
+		pluginRoots = append(pluginRoots, agentsPluginRoots...)
 
 		discoveredSkills = discoverAndMergePluginSkills(discoveredSkills, pluginRoots)
 

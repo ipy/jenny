@@ -282,7 +282,6 @@ func (p *anthropicProvider) buildMessages(messages []Message, toolResults []Tool
 			}
 		}
 
-
 		sdkMessages = append(sdkMessages, AnthropicMessage{
 			Role:    msg.Role,
 			Content: contentBlocks,

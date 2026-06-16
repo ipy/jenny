@@ -130,6 +130,21 @@ When multiple markers exist in the same directory, `.jenny-plugin` takes priorit
 6. Each plugin root is returned at most once (first marker wins)
 7. Return list of plugin root directories
 
+### Discovery Sources
+
+Plugins are discovered from multiple directory roots, searched in this priority order:
+
+| Source | Path | Scope |
+|--------|------|-------|
+| Project `.jenny-plugin` | `<cwd>/` | Project-local |
+| Project `.agents` | `<cwd>/.agents/` | Project-local (cross-tool) |
+| User `.jenny` | `~/.jenny/` | User-local (jenny-specific) |
+| User `.agents` | `~/.agents/` | User-local (cross-tool shared) |
+
+Project-level roots have higher priority than user-level roots. Within the same level, jenny-specific directories (`.jenny-plugin`/`.jenny`) take priority over cross-tool directories (`.agents`).
+
+This aligns with Claude Code's `@skills-dir` plugin model where `~/.claude/skills/<name>/` directories containing `.claude-plugin/plugin.json` are auto-discovered. Jenny mirrors this for `~/.agents/skills/<name>/` directories containing plugin markers, enabling cross-tool plugin sharing.
+
 ## Loading and Validation
 
 ### ParseManifest

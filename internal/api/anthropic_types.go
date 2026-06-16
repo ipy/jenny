@@ -39,16 +39,16 @@ const (
 
 // AnthropicRequest represents a request to the Anthropic Messages API.
 type AnthropicRequest struct {
-	Model         string                  `json:"model"`
-	Messages      []AnthropicMessage      `json:"messages"`
-	System        []AnthropicContentBlock `json:"system,omitempty"`
-	MaxTokens     int                     `json:"max_tokens"`
-	StopSequences []string                `json:"stop_sequences,omitempty"`
-	Stream        bool                    `json:"stream,omitempty"`
-	Temperature   *float64                `json:"temperature,omitempty"`
-	TopP          *float64                `json:"top_p,omitempty"`
-	TopK          *int                    `json:"top_k,omitempty"`
-	Tools         []AnthropicTool         `json:"tools,omitempty"`
+	Model         string                   `json:"model"`
+	Messages      []AnthropicMessage       `json:"messages"`
+	System        []AnthropicContentBlock  `json:"system,omitempty"`
+	MaxTokens     int                      `json:"max_tokens"`
+	StopSequences []string                 `json:"stop_sequences,omitempty"`
+	Stream        bool                     `json:"stream,omitempty"`
+	Temperature   *float64                 `json:"temperature,omitempty"`
+	TopP          *float64                 `json:"top_p,omitempty"`
+	TopK          *int                     `json:"top_k,omitempty"`
+	Tools         []AnthropicTool          `json:"tools,omitempty"`
 	Thinking      *AnthropicThinkingConfig `json:"thinking,omitempty"`
 }
 

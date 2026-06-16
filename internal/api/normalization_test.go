@@ -742,7 +742,7 @@ func TestSSNF_ContentBlockValidation(t *testing.T) {
 		messages := []Message{
 			{Role: RoleUser, Content: "Hello"},
 			{Role: RoleAssistant, Content: "", ToolUse: nil}, // empty content, no tool_use
-			{Role: RoleUser, Content: "Thanks"}, // another user message makes this non-final
+			{Role: RoleUser, Content: "Thanks"},              // another user message makes this non-final
 		}
 
 		normalized, _, _ := NormalizeMessages(messages, nil, Capabilities{})

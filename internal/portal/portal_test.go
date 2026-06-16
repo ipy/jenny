@@ -1529,12 +1529,13 @@ func TestListMCPServers_Empty(t *testing.T) {
 	t.Log("AC1 PASS: mcp servers endpoint returns [] when no mcp.json")
 }
 
-// TestListMCPServers_InvalidJSON verifies mcp servers endpoint returns 400 for invalid JSON.
+// TestListMCPServers_InvalidJSON verifies mcp servers endpoint skips invalid JSON
+// and returns an empty list (graceful degradation: one bad config doesn't break the endpoint).
 func TestListMCPServers_InvalidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
 
-	// Create invalid mcp.json
+	// Create invalid mcp.json in JENNY_HOME
 	mcpPath := filepath.Join(tmpDir, "mcp.json")
 	if err := os.WriteFile(mcpPath, []byte("invalid json"), 0644); err != nil {
 		t.Fatal(err)
@@ -1554,11 +1555,20 @@ func TestListMCPServers_InvalidJSON(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("expected 400 for invalid JSON, got %d", resp.StatusCode)
+	// Invalid JSON is now skipped (log + continue), so endpoint returns 200 with empty list
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 (skip invalid JSON gracefully), got %d", resp.StatusCode)
 	}
 
-	t.Log("PASS: mcp servers endpoint returns 400 for invalid JSON")
+	var servers []MCPServerInfo
+	if err := json.NewDecoder(resp.Body).Decode(&servers); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(servers) != 0 {
+		t.Errorf("expected empty server list when all config files are invalid, got %d", len(servers))
+	}
+
+	t.Log("PASS: mcp servers endpoint skips invalid JSON and returns empty list")
 }
 
 // TestListMCPServers_RequiresAuth verifies mcp servers endpoint requires auth.

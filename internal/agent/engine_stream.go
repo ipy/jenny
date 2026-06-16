@@ -437,8 +437,8 @@ func (e *QueryEngine) emitThinkingTokens(sessionID string, blockIndex int, newTh
 			Subtype:              "thinking_tokens",
 			SessionID:            sessionID,
 			Uuid:                 GenerateUUID(),
-			EstimatedTokens:       state.EstimatedTokens,
-			EstimatedTokensDelta:  state.AccumulatedThisCycle,
+			EstimatedTokens:      state.EstimatedTokens,
+			EstimatedTokensDelta: state.AccumulatedThisCycle,
 		}
 		data, _ := json.Marshal(msg)
 		fmt.Fprintln(os.Stdout, string(data))
@@ -483,8 +483,8 @@ func (e *QueryEngine) emitThinkingTokensFinal(sessionID string, blockIndex int, 
 			Subtype:              "thinking_tokens",
 			SessionID:            sessionID,
 			Uuid:                 GenerateUUID(),
-			EstimatedTokens:       state.EstimatedTokens,
-			EstimatedTokensDelta:  deltaTokens,
+			EstimatedTokens:      state.EstimatedTokens,
+			EstimatedTokensDelta: deltaTokens,
 		}
 		data, _ := json.Marshal(msg)
 		fmt.Fprintln(os.Stdout, string(data))

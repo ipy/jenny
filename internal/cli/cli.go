@@ -7,11 +7,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/knadh/koanf/v2"
 	"github.com/knadh/koanf/parsers/json"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/posflag"
+	"github.com/knadh/koanf/v2"
 	"github.com/spf13/pflag"
 )
 
@@ -31,16 +31,16 @@ type Flags struct {
 	StrictMCP              bool              `koanf:"strict-mcp-config"`
 	DeniedTools            []string          `koanf:"deny-tool"`
 	Bare                   bool              `koanf:"bare"`
-	SwarmsEnabled          bool              `koanf:"swarm"` // When true, enables named agent delegation (swarm mode)
-	Version                bool              `koanf:"version"` // --version / -v: print version and exit
-	PrintSystemPrompt      bool              `koanf:"print-system-prompt"` // --print-system-prompt: print the assembled system prompt and exit
-	CustomSystemPrompt     string            `koanf:"system-prompt"` // --system-prompt: replaces default system prompt entirely
+	SwarmsEnabled          bool              `koanf:"swarm"`                // When true, enables named agent delegation (swarm mode)
+	Version                bool              `koanf:"version"`              // --version / -v: print version and exit
+	PrintSystemPrompt      bool              `koanf:"print-system-prompt"`  // --print-system-prompt: print the assembled system prompt and exit
+	CustomSystemPrompt     string            `koanf:"system-prompt"`        // --system-prompt: replaces default system prompt entirely
 	AppendSystemPrompt     string            `koanf:"append-system-prompt"` // --append-system-prompt: appended after assembled system prompt
-	MaxIterations          int               `koanf:"max-iterations"` // --max-iterations: maximum loop iterations (0 = unlimited)
-	MaxTurns               int               `koanf:"max-turns"` // --max-turns: maximum number of turns (0 = unlimited)
-	MaxBudgetUsd           float64           `koanf:"max-budget-usd"` // --max-budget-usd: budget limit in USD (0.0 = no limit)
-	Effort                 string            `koanf:"effort"` // --effort: reasoning effort level (low, medium, high)
-	ThinkingBudget         int               `koanf:"thinking-budget"` // --thinking-budget: maximum thinking tokens for Anthropic (AC3)
+	MaxIterations          int               `koanf:"max-iterations"`       // --max-iterations: maximum loop iterations (0 = unlimited)
+	MaxTurns               int               `koanf:"max-turns"`            // --max-turns: maximum number of turns (0 = unlimited)
+	MaxBudgetUsd           float64           `koanf:"max-budget-usd"`       // --max-budget-usd: budget limit in USD (0.0 = no limit)
+	Effort                 string            `koanf:"effort"`               // --effort: reasoning effort level (low, medium, high)
+	ThinkingBudget         int               `koanf:"thinking-budget"`      // --thinking-budget: maximum thinking tokens for Anthropic (AC3)
 	FeatureFlags           map[string]string // feature flags: set from ffv.m after unmarshal
 }
 

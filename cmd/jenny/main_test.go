@@ -470,7 +470,7 @@ func TestLoadPluginMCPServers(t *testing.T) {
 	}
 
 	// Load plugin MCP servers
-	config := loadPluginMCPServers(tmpDir, tmpDir)
+	config := loadPluginMCPServers(tmpDir, tmpDir, "")
 
 	// Verify plugin-server is loaded
 	if config == nil {
@@ -561,7 +561,7 @@ func TestLoadPluginMCPServers_MultiplePlugins(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	config := loadPluginMCPServers(tmpDir, tmpDir)
+	config := loadPluginMCPServers(tmpDir, tmpDir, "")
 
 	if config == nil {
 		t.Fatal("loadPluginMCPServers() returned nil")
@@ -597,7 +597,7 @@ func TestLoadPluginMCPServers_Empty(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	config := loadPluginMCPServers(tmpDir, tmpDir)
+	config := loadPluginMCPServers(tmpDir, tmpDir, "")
 
 	// Should return nil when no MCP servers found
 	if config != nil && len(config) > 0 {
@@ -639,7 +639,7 @@ func TestPluginMCPServersWiring(t *testing.T) {
 	}
 
 	// Phase 1: Load plugin MCP servers
-	pluginConfig := loadPluginMCPServers(tmpDir, tmpDir)
+	pluginConfig := loadPluginMCPServers(tmpDir, tmpDir, "")
 	if pluginConfig == nil {
 		t.Fatal("loadPluginMCPServers() returned nil")
 	}
@@ -801,6 +801,306 @@ func TestSignalContext_Cancellable(t *testing.T) {
 	// AC1: context should be cancelled after signal
 	if ctx.Err() != context.Canceled {
 		t.Errorf("ctx.Err() = %v, want context.Canceled", ctx.Err())
+	}
+}
+
+// TestLoadDefaultMCPConfigs_LoadsJennyMCPJson tests that loadDefaultMCPConfigs
+// automatically loads ~/.jenny/mcp.json when it exists.
+func TestLoadDefaultMCPConfigs_LoadsJennyMCPJson(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Override JennyHomeDir for testing
+	origJennyHomeDir := constants.JennyHomeDirFunc
+	constants.JennyHomeDirFunc = func() string { return tmpDir }
+	defer func() { constants.JennyHomeDirFunc = origJennyHomeDir }()
+
+	// Create ~/.jenny/mcp.json
+	mcpContent := `{
+  "mcpServers": {
+    "jenny-server": {
+      "command": "node",
+      "args": ["jenny-server.js"]
+    }
+  }
+}`
+	mcpPath := filepath.Join(tmpDir, "mcp.json")
+	if err := os.WriteFile(mcpPath, []byte(mcpContent), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	// cwd and agentsHome are empty since we only want to test jenny home dir loading
+	configs := collectDefaultMCPPaths("", tmpDir, "")
+	if len(configs) == 0 {
+		t.Fatal("collectDefaultMCPPaths() returned empty, want at least one config path")
+	}
+
+	// Load the config from the returned paths
+	result, err := mcp.LoadConfig(configs, false)
+	if err != nil {
+		t.Fatalf("mcp.LoadConfig() error = %v", err)
+	}
+
+	server, ok := result["jenny-server"]
+	if !ok {
+		t.Error("expected 'jenny-server' in loaded config from ~/.jenny/mcp.json")
+	}
+	if server.Command != "node" {
+		t.Errorf("server.Command = %q, want %q", server.Command, "node")
+	}
+}
+
+// TestLoadDefaultMCPConfigs_LoadsAgentsMCPJson tests that loadDefaultMCPConfigs
+// automatically loads ~/.agents/mcp.json when it exists (cross-tool shared config).
+func TestLoadDefaultMCPConfigs_LoadsAgentsMCPJson(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Override both home dirs for testing
+	origJennyHomeDir := constants.JennyHomeDirFunc
+	origAgentsHomeDir := constants.AgentsHomeDirFunc
+	jennyHome := filepath.Join(tmpDir, ".jenny")
+	agentsHome := filepath.Join(tmpDir, ".agents")
+	constants.JennyHomeDirFunc = func() string { return jennyHome }
+	constants.AgentsHomeDirFunc = func() string { return agentsHome }
+	defer func() {
+		constants.JennyHomeDirFunc = origJennyHomeDir
+		constants.AgentsHomeDirFunc = origAgentsHomeDir
+	}()
+
+	// Create ~/.agents/mcp.json (no ~/.jenny/mcp.json)
+	if err := os.MkdirAll(agentsHome, 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	mcpContent := `{
+  "mcpServers": {
+    "agents-server": {
+      "command": "python",
+      "args": ["-m", "agents_server"]
+    }
+  }
+}`
+	mcpPath := filepath.Join(agentsHome, "mcp.json")
+	if err := os.WriteFile(mcpPath, []byte(mcpContent), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	// cwd is empty string since we only want to test agents home dir loading
+	configs := collectDefaultMCPPaths("", "", agentsHome)
+	if len(configs) == 0 {
+		t.Fatal("collectDefaultMCPPaths() returned empty, want at least one config path")
+	}
+
+	result, err := mcp.LoadConfig(configs, false)
+	if err != nil {
+		t.Fatalf("mcp.LoadConfig() error = %v", err)
+	}
+
+	server, ok := result["agents-server"]
+	if !ok {
+		t.Error("expected 'agents-server' in loaded config from ~/.agents/mcp.json")
+	}
+	if server.Command != "python" {
+		t.Errorf("server.Command = %q, want %q", server.Command, "python")
+	}
+}
+
+// TestLoadDefaultMCPConfigs_PriorityOrder tests that ~/.jenny/mcp.json overrides
+// ~/.agents/mcp.json (jenny-specific takes priority over cross-tool shared).
+func TestLoadDefaultMCPConfigs_PriorityOrder(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Override both home dirs for testing
+	origJennyHomeDir := constants.JennyHomeDirFunc
+	origAgentsHomeDir := constants.AgentsHomeDirFunc
+	jennyHome := filepath.Join(tmpDir, ".jenny")
+	agentsHome := filepath.Join(tmpDir, ".agents")
+	constants.JennyHomeDirFunc = func() string { return jennyHome }
+	constants.AgentsHomeDirFunc = func() string { return agentsHome }
+	defer func() {
+		constants.JennyHomeDirFunc = origJennyHomeDir
+		constants.AgentsHomeDirFunc = origAgentsHomeDir
+	}()
+
+	// Create both mcp.json files with same server name (jenny wins on collision)
+	if err := os.MkdirAll(jennyHome, 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.MkdirAll(agentsHome, 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+
+	jennyMCP := `{
+  "mcpServers": {
+    "shared-server": {
+      "command": "jenny-node",
+      "args": ["jenny-server.js"]
+    }
+  }
+}`
+	if err := os.WriteFile(filepath.Join(jennyHome, "mcp.json"), []byte(jennyMCP), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	agentsMCP := `{
+  "mcpServers": {
+    "shared-server": {
+      "command": "agents-python",
+      "args": ["-m", "agents_server"]
+    },
+    "agents-only": {
+      "command": "agents-exclusive",
+      "args": ["exclusive.js"]
+    }
+  }
+}`
+	if err := os.WriteFile(filepath.Join(agentsHome, "mcp.json"), []byte(agentsMCP), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	configs := collectDefaultMCPPaths("", jennyHome, agentsHome)
+	// agents config should come first (lower priority), jenny config second (higher priority)
+	// mcp.LoadConfig merges with later files winning, so jenny config paths should be after agents
+
+	result, err := mcp.LoadConfig(configs, false)
+	if err != nil {
+		t.Fatalf("mcp.LoadConfig() error = %v", err)
+	}
+
+	// shared-server should use jenny config (jenny wins on collision since it's loaded later)
+	server, ok := result["shared-server"]
+	if !ok {
+		t.Error("expected 'shared-server' in loaded config")
+	}
+	if server.Command != "jenny-node" {
+		t.Errorf("shared-server.Command = %q, want %q (jenny should override agents)", server.Command, "jenny-node")
+	}
+
+	// agents-only should be present (no collision)
+	if _, ok := result["agents-only"]; !ok {
+		t.Error("expected 'agents-only' from ~/.agents/mcp.json")
+	}
+}
+
+// TestLoadDefaultMCPConfigs_NoFiles tests that loadDefaultMCPConfigs returns
+// empty when no default MCP config files exist.
+func TestLoadDefaultMCPConfigs_NoFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	origJennyHomeDir := constants.JennyHomeDirFunc
+	origAgentsHomeDir := constants.AgentsHomeDirFunc
+	jennyHome := filepath.Join(tmpDir, ".jenny")
+	agentsHome := filepath.Join(tmpDir, ".agents")
+	constants.JennyHomeDirFunc = func() string { return jennyHome }
+	constants.AgentsHomeDirFunc = func() string { return agentsHome }
+	defer func() {
+		constants.JennyHomeDirFunc = origJennyHomeDir
+		constants.AgentsHomeDirFunc = origAgentsHomeDir
+	}()
+
+	// Create dirs but no mcp.json files
+	os.MkdirAll(jennyHome, 0755)
+	os.MkdirAll(agentsHome, 0755)
+
+	configs := collectDefaultMCPPaths("", jennyHome, agentsHome)
+	if len(configs) != 0 {
+		t.Errorf("loadDefaultMCPConfigs() returned %d paths, want 0 when no mcp.json files exist", len(configs))
+	}
+}
+
+// TestLoadPluginMCPServers_AgentsHome tests that loadPluginMCPServers discovers
+// plugins from ~/.agents/ directory (cross-tool shared plugins).
+func TestLoadPluginMCPServers_AgentsHome(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Override AgentsHomeDir for testing
+	origAgentsHomeDir := constants.AgentsHomeDirFunc
+	agentsHome := filepath.Join(tmpDir, ".agents")
+	constants.AgentsHomeDirFunc = func() string { return agentsHome }
+	defer func() { constants.AgentsHomeDirFunc = origAgentsHomeDir }()
+
+	// Create plugin in ~/.agents/ directory (like Claude Code's skills-dir model)
+	pluginRoot := filepath.Join(agentsHome, "skills", "cross-tool-plugin")
+	if err := os.MkdirAll(filepath.Join(pluginRoot, ".claude-plugin"), 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	manifest := `{"name": "cross-tool-plugin", "mcpServers": "./.mcp.json"}`
+	if err := os.WriteFile(filepath.Join(pluginRoot, ".claude-plugin", "plugin.json"), []byte(manifest), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	mcpConfig := `{
+  "mcpServers": {
+    "cross-tool-server": {
+      "command": "node",
+      "args": ["cross-tool-server.js"]
+    }
+  }
+}`
+	if err := os.WriteFile(filepath.Join(pluginRoot, ".mcp.json"), []byte(mcpConfig), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	// Use empty cwd so only agentsHome is searched
+	cwd := filepath.Join(tmpDir, "empty-cwd")
+	os.MkdirAll(cwd, 0755)
+
+	// Override JennyHomeDir to point to a dir with no plugins
+	origJennyHomeDir := constants.JennyHomeDirFunc
+	jennyHome := filepath.Join(tmpDir, ".jenny")
+	os.MkdirAll(jennyHome, 0755)
+	constants.JennyHomeDirFunc = func() string { return jennyHome }
+	defer func() { constants.JennyHomeDirFunc = origJennyHomeDir }()
+
+	config := loadPluginMCPServers(cwd, jennyHome, agentsHome)
+
+	server, ok := config["cross-tool-server"]
+	if !ok {
+		t.Error("expected 'cross-tool-server' from ~/.agents/ plugin to be discovered")
+	}
+	if server.Command != "node" {
+		t.Errorf("server.Command = %q, want %q", server.Command, "node")
+	}
+}
+
+// TestCollectDefaultMCPPaths_ProjectAgentsDir tests that <cwd>/.agents/mcp.json
+// is discovered and included in the returned paths.
+func TestCollectDefaultMCPPaths_ProjectAgentsDir(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create <cwd>/.agents/mcp.json
+	cwd := filepath.Join(tmpDir, "project")
+	if err := os.MkdirAll(filepath.Join(cwd, constants.AgentsDirName), 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	mcpContent := `{
+  "mcpServers": {
+    "project-agents-server": {
+      "command": "node",
+      "args": ["project-agents.js"]
+    }
+  }
+}`
+	mcpPath := filepath.Join(cwd, constants.AgentsDirName, "mcp.json")
+	if err := os.WriteFile(mcpPath, []byte(mcpContent), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	// No jennyHome or agentsHome files — only project-level .agents/mcp.json
+	configs := collectDefaultMCPPaths(cwd, "", "")
+	if len(configs) != 1 {
+		t.Fatalf("collectDefaultMCPPaths() returned %d paths, want 1", len(configs))
+	}
+
+	result, err := mcp.LoadConfig(configs, false)
+	if err != nil {
+		t.Fatalf("mcp.LoadConfig() error = %v", err)
+	}
+
+	server, ok := result["project-agents-server"]
+	if !ok {
+		t.Error("expected 'project-agents-server' from <cwd>/.agents/mcp.json")
+	}
+	if server.Command != "node" {
+		t.Errorf("server.Command = %q, want %q", server.Command, "node")
 	}
 }
 

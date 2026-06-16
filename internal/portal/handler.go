@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
+	"maps"
 	"net/http"
 	"os"
 	"os/exec"
@@ -821,31 +823,41 @@ func readActivationGlob(skillPath string) string {
 }
 
 // handleListMCPServers handles GET /api/mcp/servers.
+// It reads MCP configs from both ~/.agents/mcp.json and ~/.jenny/mcp.json,
+// merging them with jenny-specific config taking priority.
 func (p *Portal) handleListMCPServers(w http.ResponseWriter, r *http.Request) {
-	configPath := filepath.Join(constants.JennyHomeDir(), "mcp.json")
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte("[]"))
-			return
-		}
-		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusInternalServerError)
-		return
-	}
-
-	var config map[string]struct {
+	type mcpServerEntry struct {
 		Command  string   `json:"command"`
 		Args     []string `json:"args"`
 		Disabled bool     `json:"disabled,omitempty"`
 	}
-	if err := json.Unmarshal(data, &config); err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
-		return
+
+	// Read and merge configs from both home dirs (agents first, jenny second = jenny wins)
+	merged := make(map[string]mcpServerEntry)
+
+	for _, configPath := range []string{
+		filepath.Join(constants.AgentsHomeDir(), "mcp.json"),
+		filepath.Join(constants.JennyHomeDir(), "mcp.json"),
+	} {
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			// Log and skip — don't fail the whole endpoint for one bad file
+			log.Printf("portal: read %s: %v", configPath, err)
+			continue
+		}
+		var config map[string]mcpServerEntry
+		if err := json.Unmarshal(data, &config); err != nil {
+			log.Printf("portal: parse %s: %v", configPath, err)
+			continue
+		}
+		maps.Copy(merged, config)
 	}
 
 	var servers []MCPServerInfo
-	for name, server := range config {
+	for name, server := range merged {
 		args := server.Args
 		if args == nil {
 			args = []string{}

@@ -51,10 +51,9 @@ func JennyHomeDir() string {
 	return JennyHomeDirFunc()
 }
 
-// AgentsHomeDir returns the standard shared agent directory (~/.agents).
-// This is the conventional location used by Codex, Claude Code, and other
-// agent tools. Returns "" if os.UserHomeDir() fails.
-func AgentsHomeDir() string {
+// AgentsHomeDirFunc is the function that returns the agents home directory.
+// It can be overridden in tests.
+var AgentsHomeDirFunc = func() string {
 	if h := os.Getenv("JENNY_AGENTS_HOME"); h != "" {
 		return h
 	}
@@ -63,6 +62,13 @@ func AgentsHomeDir() string {
 		return ""
 	}
 	return filepath.Join(home, AgentsDirName)
+}
+
+// AgentsHomeDir returns the standard shared agent directory (~/.agents).
+// This is the conventional location used by Codex, Claude Code, and other
+// agent tools. Returns "" if os.UserHomeDir() fails.
+func AgentsHomeDir() string {
+	return AgentsHomeDirFunc()
 }
 
 // SessionDir returns the directory for a specific session (~/.jenny/sessions/<sessionID>).
