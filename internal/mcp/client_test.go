@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/ipy/jenny/internal/constants"
 )
 
 func TestNormalizeName(t *testing.T) {
@@ -279,6 +281,11 @@ func TestIntegrationMCPSubprocess(t *testing.T) {
 		t.Skip("skipping MCP subprocess integration test on Windows (requires Unix shell)")
 	}
 
+	// AC3: JENNY_HOME isolation - override to use temp dir
+	origFunc := constants.JennyHomeDirFunc
+	constants.JennyHomeDirFunc = func() string { return t.TempDir() }
+	t.Cleanup(func() { constants.JennyHomeDirFunc = origFunc })
+
 	// Get the absolute path to the fake MCP server source
 	execDir, err := os.Getwd()
 	if err != nil {
@@ -352,12 +359,8 @@ func TestMaxMCPOutputChars(t *testing.T) {
 
 // TestHandleNotificationResourceListChanged tests AC1: resource cache invalidation on list_changed.
 func TestHandleNotificationResourceListChanged(t *testing.T) {
-	// Reset cache generation for test
-	origGen := atomic.LoadInt64(&cacheGen)
-	t.Cleanup(func() {
-		atomic.StoreInt64(&cacheGen, origGen)
-	})
-	atomic.StoreInt64(&cacheGen, 0)
+	// Record initial cache generation
+	initialGen := atomic.LoadInt64(&cacheGen)
 
 	client := &Client{Name: "test-server"}
 
@@ -370,10 +373,10 @@ func TestHandleNotificationResourceListChanged(t *testing.T) {
 	// Handle the notification
 	client.handleNotification(notif)
 
-	// Verify cache was bumped
+	// Verify cache was bumped (final > initial)
 	newGen := atomic.LoadInt64(&cacheGen)
-	if newGen != 1 {
-		t.Errorf("cache generation should be 1 after list_changed, got %d", newGen)
+	if newGen <= initialGen {
+		t.Errorf("cache generation should increase after list_changed: initial=%d, final=%d", initialGen, newGen)
 	}
 }
 

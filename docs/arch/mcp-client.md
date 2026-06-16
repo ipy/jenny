@@ -27,6 +27,8 @@ implemented:
   - "Prompts (prompts/list, prompts/get)"
   - "Resource templates (resources/templates/list)"
   - "Progress events (notifications/progress)"
+  - "Asynchronous message loop for server-initiated requests/notifications"
+  - "GET-based server-to-client SSE stream"
 gaps:
   - "OAuth 2.1 authorization not implemented"
   - "Resource subscriptions (resources/subscribe) not implemented"

@@ -32,7 +32,7 @@ type Client struct {
 	transport Transport // HTTP transport (nil for stdio)
 	mu        sync.Mutex
 
-	respChans map[any]chan *jsonRPCResponse
+	respChans map[string]chan *jsonRPCResponse
 	muResp    sync.Mutex
 
 	notifHandlers []func(Notification)
@@ -550,7 +550,7 @@ func NewClient(name string, cmd string, args []string, env map[string]string) *C
 		cmd:       cmd,
 		args:      args,
 		env:       env,
-		respChans: make(map[any]chan *jsonRPCResponse),
+		respChans: make(map[string]chan *jsonRPCResponse),
 		done:      make(chan struct{}),
 	}
 }
@@ -560,7 +560,7 @@ func NewHTTPClient(name string, url string, headers map[string]string) *Client {
 	return &Client{
 		Name:      name,
 		transport: NewHTTPTransport(url, headers),
-		respChans: make(map[any]chan *jsonRPCResponse),
+		respChans: make(map[string]chan *jsonRPCResponse),
 		done:      make(chan struct{}),
 	}
 }
@@ -780,7 +780,7 @@ func (c *Client) loop() {
 				Error:   msg.Error,
 			}
 			c.muResp.Lock()
-			ch, ok := c.respChans[msg.ID]
+			ch, ok := c.respChans[fmt.Sprintf("%v", msg.ID)]
 			if ok {
 				ch <- resp
 			}
@@ -1249,12 +1249,12 @@ func (c *Client) sendRequestStdio(ctx context.Context, req jsonRPCRequest) (*jso
 	// Register response channel before sending request
 	ch := make(chan *jsonRPCResponse, 1)
 	c.muResp.Lock()
-	c.respChans[req.ID] = ch
+	c.respChans[fmt.Sprintf("%v", req.ID)] = ch
 	c.muResp.Unlock()
 
 	defer func() {
 		c.muResp.Lock()
-		delete(c.respChans, req.ID)
+		delete(c.respChans, fmt.Sprintf("%v", req.ID))
 		c.muResp.Unlock()
 	}()
 

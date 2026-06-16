@@ -6,7 +6,11 @@ status: partial
 spec: complete
 code: partial
 package: internal/mcp
-gaps: []
+implemented:
+  - "Resource templates"
+  - "notifications/resources/list_changed"
+gaps:
+  - "Resource subscriptions (subscribe/unsubscribe) not implemented"
 # Reviewed 2026-06-16: all gaps addressed
 depends_on:
   - mcp-client

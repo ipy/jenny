@@ -6,6 +6,9 @@ status: partial
 spec: complete
 code: partial
 package: internal/tool
+implemented:
+  - "Resource templates"
+  - "notifications/resources/list_changed"
 gaps:
   - "Resource subscriptions (subscribe/unsubscribe) not implemented"
 # Reviewed 2026-06-16: resource templates implemented in P4
