@@ -855,7 +855,7 @@ func newFakeHTTPMCPServer(t *testing.T) *httptest.Server {
 			json.NewEncoder(w).Encode(jsonRPCResponse{
 				JSONRPC: "2.0",
 				ID:      req.ID,
-				Result:  json.RawMessage(`{"protocolVersion":"2025-03-26","capabilities":{"tools":{}},"serverInfo":{"name":"fake-http-mcp","version":"1.0.0"}}`),
+				Result:  json.RawMessage(`{"protocolVersion":"2025-03-26","capabilities":{"tools":{}},"serverInfo":{"name":"fake-http-mcp","version":"1.0.0","icons":{"icon":"https://example.com/icon.png","darkIcon":"https://example.com/dark.png"}}}`),
 			})
 
 		case "tools/list":

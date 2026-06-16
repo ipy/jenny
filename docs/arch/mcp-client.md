@@ -2,7 +2,6 @@
 title: MCP Client
 slug: mcp-client
 priority: P0
-status: partial
 spec: complete
 code: done
 package: internal/mcp
