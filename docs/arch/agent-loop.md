@@ -252,6 +252,7 @@ Debug-level logging includes:
 - API request details (model, system prompt, tool count)
 - Tool registration info
 - Response processing details
+
 ## Thinking Block Handling
 
 When the model emits a `thinking` or `redacted_thinking` content block during SSE streaming, the agent loop processes it as follows:
@@ -270,15 +271,28 @@ Source: `internal/agent/engine_loop.go` (thinking delta handling), `internal/age
 
 ## Tool Result Spill-to-Disk
 
-When a tool's output exceeds `maxMCPOutputChars` (default 100,000 characters, configurable via `MCP_MAX_OUTPUT_CHARS`), the result is:
+When an MCP tool result exceeds `maxMCPOutputChars` (default 100,000 characters,
+configurable via `MCP_MAX_OUTPUT_CHARS`), the engine applies content-type-aware handling:
 
-1. **Truncated** to the first N characters with a `[Content truncated…]` notice appended.
-2. **Binary content persisted** to disk via `persistBinaryToolResult` in `internal/mcp/client.go`, writing to the scratchpad directory.
-3. The truncated content is returned to the model; the full content is available on disk at the reported path.
+1. **Text content** (`type: text`): parts are concatenated directly. If the final
+   concatenated output exceeds `maxMCPOutputChars`, it is truncated to the first N
+   characters with a `[Content truncated: original N chars, showing first N chars]`
+   notice appended. Text content is **never** written to a separate file.
+2. **Binary content** (`type: image` / `type: blob`): the base64-encoded data is
+   decoded and written to `$JENNY_HOME/mcp-tool-output/` via
+   `persistBinaryToolResult` in `internal/mcp/client.go`. The result returned to
+   the model includes an inline reference (e.g., `[image saved to: /path/to/file.png]`)
+   rather than the raw bytes. Binary content is always persisted to disk regardless
+   of size — truncation applies only to the overall string length after all parts
+   are assembled.
+3. The result string (potentially truncated text + inline binary paths) is returned
+   to the model in the `tool_result` block.
 
-This prevents oversized tool outputs from bloating the message context while preserving access to the complete result for debugging or secondary processing.
+This prevents oversized tool outputs from bloating the message context while
+preserving access to the complete binary result on disk.
 
-Source: `internal/mcp/client.go` (output truncation and binary persistence), `constants.ScratchpadDir()` (spill directory).
+Source: `internal/mcp/client.go` (output assembly, truncation, binary persistence),
+`constants.JennyHomeDir()` (spill directory `mcp-tool-output/`).
 
 ## Compaction & Retry Caps
 
