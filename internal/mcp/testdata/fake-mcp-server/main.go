@@ -77,7 +77,7 @@ func main() {
 
 		switch req.Method {
 		case "initialize":
-			resp.Result = json.RawMessage(`{"protocolVersion":"2025-03-26","capabilities":{},"serverInfo":{"name":"fake-mcp-server","version":"1.0.0"}}`)
+			resp.Result = json.RawMessage(`{"protocolVersion":"2025-03-26","capabilities":{},"serverInfo":{"name":"fake-mcp-server","version":"1.0.0","icons":{"icon":"https://example.com/icon.png","darkIcon":"https://example.com/dark.png"}}}`)
 
 		case "tools/list":
 			resp.Result = json.RawMessage(`{"tools":[{"name":"test-tool","description":"A test tool","inputSchema":{"type":"object"}},{"name":"echo","description":"Echo back the input","inputSchema":{"type":"object","properties":{"text":{"type":"string"}}}}]}`)

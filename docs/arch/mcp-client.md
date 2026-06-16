@@ -30,10 +30,11 @@ implemented:
   - "Asynchronous message loop for server-initiated requests/notifications"
   - "GET-based server-to-client SSE stream"
   - "Resource subscriptions (resources/subscribe, resources/unsubscribe)"
+  - "Server icons metadata (icon/darkIcon URLs from serverInfo)"
 gaps:
   - "OAuth 2.1 authorization not implemented"
-  - "Icons metadata not supported"
   - "Tasks (experimental) not implemented"
+status: done
 defer_to: P4
 depends_on:
   - mcp-config

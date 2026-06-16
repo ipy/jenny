@@ -3,6 +3,9 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"runtime"
@@ -686,4 +689,214 @@ func TestClientUnsubscribeResourceDisconnected(t *testing.T) {
 	if err == nil {
 		t.Error("expected error when unsubscribing on disconnected client")
 	}
+}
+
+// TestClientIcons_Stdio tests AC2: Client.Icons() returns correct icons from stdio fake server.
+func TestClientIcons_Stdio(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping MCP subprocess integration test on Windows")
+	}
+
+	// Build the fake MCP server
+	execDir, err := os.Getwd()
+	if err != nil {
+		t.Skipf("skipping test: could not get working directory: %v", err)
+	}
+	serverSrc := execDir + "/testdata/fake-mcp-server"
+	serverBin := execDir + "/testdata/fake-mcp-server/fake-mcp-server"
+
+	cmd := exec.Command("go", "build", "-o", serverBin, serverSrc)
+	if err := cmd.Run(); err != nil {
+		t.Skipf("skipping test: could not build fake MCP server: %v", err)
+	}
+
+	// Create and connect client
+	client := NewClient("test-icons-server", serverBin, nil, nil)
+	ctx := context.Background()
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Disconnect()
+
+	// Verify icons are returned
+	icons := client.Icons()
+	if icons == nil {
+		t.Fatal("expected icons to be non-nil after connection")
+	}
+	if iconURL, ok := icons["icon"]; !ok || iconURL != "https://example.com/icon.png" {
+		t.Errorf("expected icon URL 'https://example.com/icon.png', got %q", iconURL)
+	}
+	if darkIconURL, ok := icons["darkIcon"]; !ok || darkIconURL != "https://example.com/dark.png" {
+		t.Errorf("expected darkIcon URL 'https://example.com/dark.png', got %q", darkIconURL)
+	}
+}
+
+// TestClientIcons_HTTP tests AC2: Client.Icons() returns correct icons from HTTP fake server.
+func TestClientIcons_HTTP(t *testing.T) {
+	server := newFakeHTTPMCPServerForIcons(t)
+	defer server.Close()
+
+	client := NewHTTPClient("test-icons-http-server", server.URL, nil)
+	ctx := context.Background()
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Disconnect()
+
+	// Verify icons are returned
+	icons := client.Icons()
+	if icons == nil {
+		t.Fatal("expected icons to be non-nil after connection")
+	}
+	if iconURL, ok := icons["icon"]; !ok || iconURL != "https://example.com/icon.png" {
+		t.Errorf("expected icon URL 'https://example.com/icon.png', got %q", iconURL)
+	}
+	if darkIconURL, ok := icons["darkIcon"]; !ok || darkIconURL != "https://example.com/dark.png" {
+		t.Errorf("expected darkIcon URL 'https://example.com/dark.png', got %q", darkIconURL)
+	}
+}
+
+// TestClientIcons_NoIcons tests that Icons() returns nil for disconnected client.
+func TestClientIcons_NoIcons(t *testing.T) {
+	client := NewClient("test-server", "nonexistent-command", nil, nil)
+
+	// Unconnected client should have nil icons
+	icons := client.Icons()
+	if icons != nil {
+		t.Error("expected nil icons for unconnected client")
+	}
+}
+
+// TestGetServerIcons tests AC3: GetServerIcons returns icons for registered server.
+func TestGetServerIcons(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping MCP subprocess integration test on Windows")
+	}
+
+	// Save and restore global state
+	origClients := clients
+	t.Cleanup(func() {
+		clientsMu.Lock()
+		clients = origClients
+		clientsMu.Unlock()
+	})
+
+	// Reset clients state for this test
+	clientsMu.Lock()
+	clients = make(map[string]*Client)
+	clientsMu.Unlock()
+
+	// Build the fake MCP server
+	execDir, err := os.Getwd()
+	if err != nil {
+		t.Skipf("skipping test: could not get working directory: %v", err)
+	}
+	serverSrc := execDir + "/testdata/fake-mcp-server"
+	serverBin := execDir + "/testdata/fake-mcp-server/fake-mcp-server"
+
+	cmd := exec.Command("go", "build", "-o", serverBin, serverSrc)
+	if err := cmd.Run(); err != nil {
+		t.Skipf("skipping test: could not build fake MCP server: %v", err)
+	}
+
+	// Create and connect client
+	client := NewClient("test-icons-server", serverBin, nil, nil)
+	ctx := context.Background()
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Disconnect()
+
+	// Register the client
+	SetTestClient("test-icons-server", client)
+
+	// Test GetServerIcons
+	icons := GetServerIcons("test-icons-server")
+	if icons == nil {
+		t.Fatal("expected icons from GetServerIcons")
+	}
+	if iconURL, ok := icons["icon"]; !ok || iconURL != "https://example.com/icon.png" {
+		t.Errorf("expected icon URL, got %q", iconURL)
+	}
+}
+
+// TestGetServerIcons_NotFound tests that GetServerIcons returns nil for unknown server.
+func TestGetServerIcons_NotFound(t *testing.T) {
+	// Save and restore global state
+	origClients := clients
+	t.Cleanup(func() {
+		clientsMu.Lock()
+		clients = origClients
+		clientsMu.Unlock()
+	})
+
+	// Reset clients state for this test
+	clientsMu.Lock()
+	clients = make(map[string]*Client)
+	clientsMu.Unlock()
+
+	icons := GetServerIcons("nonexistent-server")
+	if icons != nil {
+		t.Error("expected nil icons for nonexistent server")
+	}
+}
+
+// newFakeHTTPMCPServerForIcons creates a fake HTTP MCP server that returns icons in initialize response.
+func newFakeHTTPMCPServerForIcons(t *testing.T) *httptest.Server {
+	t.Helper()
+
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		var req jsonRPCRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		if req.ID == nil {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		switch req.Method {
+		case "initialize":
+			w.Header().Set("Mcp-Session-Id", "fake-icons-session-id")
+			json.NewEncoder(w).Encode(jsonRPCResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Result:  json.RawMessage(`{"protocolVersion":"2025-03-26","capabilities":{"tools":{}},"serverInfo":{"name":"fake-icons-http-mcp","version":"1.0.0","icons":{"icon":"https://example.com/icon.png","darkIcon":"https://example.com/dark.png"}}}`),
+			})
+
+		case "tools/list":
+			json.NewEncoder(w).Encode(jsonRPCResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Result:  json.RawMessage(`{"tools":[]}`),
+			})
+
+		default:
+			json.NewEncoder(w).Encode(jsonRPCResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Result:  json.RawMessage(`{}`),
+			})
+		}
+	}))
 }

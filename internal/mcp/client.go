@@ -24,13 +24,13 @@ import (
 
 // Client represents an MCP client connection to a server.
 type Client struct {
-	Name      string // Original server name
-	cmd       string
-	args      []string
-	env       map[string]string
-	proc      *proc
-	transport Transport // HTTP transport (nil for stdio)
-	mu        sync.Mutex
+	Name   string // Original server name
+	cmd    string
+	args   []string
+	env    map[string]string
+	proc   *proc
+	mu     sync.Mutex
+	icons  map[string]string // Icons from serverInfo (set after initialization)
 
 	respChans map[string]chan *jsonRPCResponse
 	muResp    sync.Mutex
@@ -39,6 +39,9 @@ type Client struct {
 	muNotif       sync.Mutex
 
 	done chan struct{}
+
+	// transport is HTTP transport (nil for stdio)
+	transport Transport
 
 	// bgErr captures errors from BackgroundListen SSE connection
 	bgErr error
@@ -131,8 +134,9 @@ type initializeResult struct {
 		Resources any `json:"resources"`
 	} `json:"capabilities"`
 	ServerInfo struct {
-		Name    string `json:"name"`
-		Version string `json:"version"`
+		Name    string            `json:"name"`
+		Version string            `json:"version"`
+		Icons   map[string]string `json:"icons,omitempty"`
 	} `json:"serverInfo"`
 }
 
@@ -839,6 +843,9 @@ func (c *Client) initializeViaTransport(ctx context.Context) error {
 		return fmt.Errorf("parsing initialize result: %w", err)
 	}
 
+	// Save icons from serverInfo
+	c.icons = initResult.ServerInfo.Icons
+
 	log.Debug("MCP server initialized (HTTP)",
 		"server", c.Name,
 		"protocolVersion", initResult.ProtocolVersion,
@@ -891,6 +898,9 @@ func (c *Client) initialize(ctx context.Context) error {
 	if err := json.Unmarshal(resp.Result, &initResult); err != nil {
 		return fmt.Errorf("parsing initialize result: %w", err)
 	}
+
+	// Save icons from serverInfo
+	c.icons = initResult.ServerInfo.Icons
 
 	log.Debug("MCP server initialized",
 		"server", c.Name,
@@ -1387,6 +1397,21 @@ func GetClient(serverName string) *Client {
 	clientsMu.RLock()
 	defer clientsMu.RUnlock()
 	return clients[NormalizeName(serverName)]
+}
+
+// GetServerIcons returns the icons metadata for a given server name.
+// Returns nil if the server is not found or does not provide icons.
+func GetServerIcons(serverName string) map[string]string {
+	client := GetClient(serverName)
+	if client == nil {
+		return nil
+	}
+	return client.Icons()
+}
+
+// Icons returns the icons metadata from the server's initialize response.
+func (c *Client) Icons() map[string]string {
+	return c.icons
 }
 
 // ConnectAll connects to all MCP servers in the configuration.
