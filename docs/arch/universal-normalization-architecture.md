@@ -35,11 +35,11 @@ The API requires perfect symmetry between tool requests and results.
     *   **Orphaned Results:** If a `user` message contains a `tool_result` pointing to a non-existent `tool_use_id`, that `tool_result` must be stripped to prevent API rejection.
 
 #### C. Content Block Validation
-Specific block types have strict content requirements that models occasionally violate, or that become invalid due to session boundaries.
+Specific block types have strict content requirements that models occasionally violate, or that become invalid due to session boundaries. The normalization layer operates on the `Message.Content` string field — a wire-format concatenation of all content blocks (text, thinking, redacted_thinking) as produced by the transcript layer — using regex patterns to identify block types. This differs from the `ContentBlock` type used in API responses; the normalization pass does not parse into typed blocks.
 *   **Whitespace-Only Assistant Messages:** The API rejects `assistant` text blocks containing only whitespace (e.g., `\n\n`). If an assistant message consists entirely of whitespace blocks, it must be removed from the history (which may necessitate re-running the Role Alternation pass).
 *   **Empty Assistant Content:** While the *final* assistant message can be empty (for prefill), historical assistant messages cannot. If an intermediate assistant message has an empty content array, a placeholder text block (e.g., `[No content]`) must be inserted.
 *   **Trailing Thinking Blocks:** Assistant messages cannot end with `thinking` or `redacted_thinking` blocks. If they do, the trailing blocks must be stripped until a valid block (text or tool_use) is found, or replaced with a placeholder if the message becomes empty.
-*   **Orphaned Thinking Blocks:** If a resumed session leaves an assistant message containing *only* thinking blocks (with no corresponding text or tool_use sharing the same message ID), the entire message must be dropped.
+*   **Orphaned Thinking Blocks:** If a resumed session leaves an assistant message containing *only* thinking blocks (with no corresponding text or tool_use sharing the same message ID), the entire message must be dropped. This rule is unconditional — it applies regardless of the message's position in history (including as the final message) or any other derived state such as credential-stripping decisions.
 
 #### D. Credential-Bound Artifact Stripping
 Certain API features generate artifacts bound to a specific API key or session (e.g., `redacted_thinking` blocks or specific connector tags).

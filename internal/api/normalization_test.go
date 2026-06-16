@@ -895,6 +895,24 @@ func TestSSNF_ContentBlockValidation(t *testing.T) {
 		}
 	})
 
+	t.Run("AC4: orphaned thinking-only message dropped when final in history", func(t *testing.T) {
+		messages := []Message{
+			{Role: RoleUser, Content: "Hello"},
+			{Role: RoleAssistant, Content: "<thinking>only thinking</thinking>"},
+			// This thinking-only message is the final message — must still be dropped
+		}
+
+		normalized, _, _ := NormalizeMessages(messages, nil, Capabilities{})
+
+		// Thinking-only message must be dropped even though it is the final message
+		if len(normalized) != 1 {
+			t.Errorf("expected 1 message after dropping final-position thinking-only, got %d", len(normalized))
+		}
+		if normalized[0].Role != RoleUser {
+			t.Errorf("expected user message preserved, got role=%s", normalized[0].Role)
+		}
+	})
+
 	t.Run("AC5: normalization logs include content block validation", func(t *testing.T) {
 		messages := []Message{
 			{Role: RoleUser, Content: "Hello"},
