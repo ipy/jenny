@@ -883,6 +883,22 @@ func newFakeHTTPMCPServer(t *testing.T) *httptest.Server {
 				Result:  json.RawMessage(`{"resources":[]}`),
 			})
 
+		case "resources/subscribe":
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(jsonRPCResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Result:  json.RawMessage(`{}`),
+			})
+
+		case "resources/unsubscribe":
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(jsonRPCResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Result:  json.RawMessage(`{}`),
+			})
+
 		default:
 			json.NewEncoder(w).Encode(jsonRPCResponse{
 				JSONRPC: "2.0",
@@ -891,4 +907,114 @@ func newFakeHTTPMCPServer(t *testing.T) *httptest.Server {
 			})
 		}
 	}))
+}
+
+// TestHTTPClientSubscribeResource tests AC2: SubscribeResource over HTTP transport succeeds.
+func TestHTTPClientSubscribeResource(t *testing.T) {
+	server := newFakeHTTPMCPServer(t)
+	defer server.Close()
+
+	client := NewHTTPClient("test-http-server", server.URL, nil)
+	ctx := context.Background()
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+	defer client.Disconnect()
+
+	err := client.SubscribeResource(ctx, "file:///test.txt")
+	if err != nil {
+		t.Errorf("SubscribeResource over HTTP failed: %v", err)
+	}
+}
+
+// TestHTTPClientUnsubscribeResource tests AC3: UnsubscribeResource over HTTP transport succeeds.
+func TestHTTPClientUnsubscribeResource(t *testing.T) {
+	server := newFakeHTTPMCPServer(t)
+	defer server.Close()
+
+	client := NewHTTPClient("test-http-server", server.URL, nil)
+	ctx := context.Background()
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+	defer client.Disconnect()
+
+	err := client.UnsubscribeResource(ctx, "file:///test.txt")
+	if err != nil {
+		t.Errorf("UnsubscribeResource over HTTP failed: %v", err)
+	}
+}
+
+// TestHTTPClientSubscribeResource_ServerError tests AC4: SubscribeResource returns an error
+// when the server responds with a JSON-RPC error (e.g. MethodNotFound, code -32601).
+func TestHTTPClientSubscribeResource_ServerError(t *testing.T) {
+	postRequestCount := 0
+	var mu sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.Header().Set("Cache-Control", "no-cache")
+			fmt.Fprintf(w, "event: message\ndata: {\"method\":\"ping\"}\n\n")
+			return
+		}
+
+		body, _ := io.ReadAll(r.Body)
+		if len(body) == 0 {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
+
+		var req jsonRPCRequest
+		json.Unmarshal(body, &req)
+
+		mu.Lock()
+		postRequestCount++
+		count := postRequestCount
+		mu.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+
+		switch {
+		case count == 1 && req.Method == "initialize":
+			w.Header().Set("Mcp-Session-Id", "error-test-session")
+			json.NewEncoder(w).Encode(jsonRPCResponse{
+				JSONRPC: "2.0", ID: req.ID,
+				Result: json.RawMessage(`{"protocolVersion":"2025-03-26","capabilities":{},"serverInfo":{"name":"test","version":"1.0"}}`),
+			})
+		case count == 2:
+			// Notification (initialized) - accept
+			w.WriteHeader(http.StatusAccepted)
+		case req.Method == "resources/subscribe":
+			// Server returns MethodNotFound for resources/subscribe
+			json.NewEncoder(w).Encode(jsonRPCResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Error:   &jsonRPCError{Code: -32601, Message: "Method not found"},
+			})
+		default:
+			json.NewEncoder(w).Encode(jsonRPCResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Result:  json.RawMessage(`{}`),
+			})
+		}
+	}))
+	defer server.Close()
+
+	client := NewHTTPClient("error-test", server.URL, nil)
+	ctx := context.Background()
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+	defer client.Disconnect()
+
+	err := client.SubscribeResource(ctx, "file:///test.txt")
+	if err == nil {
+		t.Fatal("expected error for MethodNotFound response")
+	}
+	if !strings.Contains(err.Error(), "Method not found") {
+		t.Errorf("expected 'Method not found' in error, got: %v", err)
+	}
 }
