@@ -732,6 +732,9 @@ func (c *Client) handleNotification(notif Notification) {
 			default:
 				log.Debug(msg, "server", c.Name, "level", params.Level, "data", params.Data)
 			}
+		} else {
+			log.Debug("MCP server log notification dropped: failed to unmarshal params",
+				"server", c.Name, "error", err)
 		}
 	}
 
