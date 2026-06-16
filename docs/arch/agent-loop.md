@@ -269,7 +269,7 @@ When the model emits a `thinking` or `redacted_thinking` content block during SS
 
 Source: `internal/agent/engine_loop.go` (thinking delta handling), `internal/agent/engine_stream.go` (event emission), `internal/agent/thinking_tokens_test.go` (tests).
 
-## Tool Result Spill-to-Disk
+## Tool Result Overflow Handling
 
 When an MCP tool result exceeds `maxMCPOutputChars` (default 100,000 characters,
 configurable via `MCP_MAX_OUTPUT_CHARS`), the engine applies content-type-aware handling:
