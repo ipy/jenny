@@ -137,20 +137,29 @@ export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDial
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {/* Model selector */}
+            <label htmlFor="settings-model" style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+              Model
+            </label>
             <SelectField
               id="settings-model"
               value={local.model}
               onChange={(value) => setLocal({ ...local, model: value })}
               options={MODEL_OPTIONS}
               placeholder="default (jenny env)"
+              aria-label="Select model"
             />
 
             {/* Working directory */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <label htmlFor="settings-cwd" style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+                Working Directory
+              </label>
               <TextField
+                id="settings-cwd"
                 value={local.workingDir}
                 onChange={(value) => setLocal({ ...local, workingDir: value })}
                 placeholder="~/path/to/project"
+                aria-label="Working directory path"
               />
               <Button
                 variant="ghost"
@@ -162,12 +171,17 @@ export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDial
             </div>
 
             {/* Prompt prefix */}
+            <label htmlFor="settings-prompt-prefix" style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-text-muted)' }}>
+              Prompt Prefix
+            </label>
             <TextField
+              id="settings-prompt-prefix"
               value={local.promptPrefix}
               onChange={(value) => setLocal({ ...local, promptPrefix: value })}
               placeholder="Add a default prefix to your prompts..."
               multiline
               rows={3}
+              aria-label="Prompt prefix"
             />
           </div>
 

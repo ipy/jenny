@@ -83,6 +83,7 @@ export function EmptyState({ title, hint, icon = '○', action }: EmptyStateProp
         flexDirection: 'column',
         alignItems: 'center',
         gap: '0.75rem',
+        maxWidth: 'min(480px, 90%)',
       }}
     >
       <span style={{ fontSize: '2rem', opacity: 0.4 }}>{icon}</span>
@@ -90,7 +91,7 @@ export function EmptyState({ title, hint, icon = '○', action }: EmptyStateProp
         {title}
       </p>
       {hint && (
-        <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', maxWidth: '320px' }}>
+        <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', maxWidth: 'min(420px, 100%)' }}>
           {hint}
         </p>
       )}

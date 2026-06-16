@@ -17,60 +17,28 @@ export interface SplitPaneProps {
 export function SplitPane({
   master,
   detail,
-  masterWidth = '280px',
-  stackedOnMobile = true,
+  masterWidth = '320px',
+  stackedOnMobile = false,
   className = '',
 }: SplitPaneProps) {
   return (
     <div
-      className={className}
+      className={['split-pane', className].filter(Boolean).join(' ')}
       style={{
+        '--split-master-width': masterWidth,
         display: 'flex',
-        flexDirection: stackedOnMobile ? 'column' : 'row',
+        flexDirection: 'row',
         flexWrap: 'nowrap',
-        gap: '1rem',
+        gap: '0.75rem',
         minHeight: 0,
         alignItems: 'stretch',
         height: '100%',
-      }}
+      } as React.CSSProperties}
     >
-      {/* Master panel */}
-      <div
-        style={{
-          width: stackedOnMobile ? '100%' : masterWidth,
-          flexShrink: 0,
-          borderRadius: '20px',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-          minHeight: 0,
-          background: 'var(--color-glass)',
-          backdropFilter: 'blur(40px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(40px) saturate(180%)',
-          border: '1px solid var(--color-glass-border)',
-          boxShadow: 'var(--shadow-glass)',
-        }}
-      >
+      <div className="split-pane-master" aria-label="Master panel">
         {master}
       </div>
-
-      {/* Detail panel */}
-      <div
-        style={{
-          flex: 1,
-          minWidth: 0,
-          borderRadius: '20px',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-          minHeight: 0,
-          background: 'var(--color-glass)',
-          backdropFilter: 'blur(40px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(40px) saturate(180%)',
-          border: '1px solid var(--color-glass-border)',
-          boxShadow: 'var(--shadow-glass)',
-        }}
-      >
+      <div className="split-pane-detail" aria-label="Detail panel">
         {detail}
       </div>
     </div>

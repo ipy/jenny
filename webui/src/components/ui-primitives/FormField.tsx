@@ -83,6 +83,7 @@ export function SelectField({
           WebkitAppearance: 'none',
           outline: 'none',
           transition: 'border-color 0.15s, box-shadow 0.15s',
+          fontFamily: 'var(--font-mono)',
         }}
       >
         {placeholder && (
@@ -122,6 +123,7 @@ export function SelectField({
 // ── TextField ─────────────────────────────
 
 export interface TextFieldProps {
+  id?: string;
   value: string;
   onChange: (value: string) => void;
   className?: string;
@@ -139,6 +141,7 @@ export interface TextFieldProps {
  * Focus: border turns primary + box-shadow glow.
  */
 export function TextField({
+  id,
   value,
   onChange,
   className = '',
@@ -159,6 +162,7 @@ export function TextField({
     color: 'var(--color-text)',
     outline: 'none',
     width: '100%',
+    fontFamily: 'var(--font-mono)',
     transition: 'border-color 0.15s, box-shadow 0.15s',
     ...style,
   };
@@ -174,6 +178,7 @@ export function TextField({
     };
     return (
       <textarea
+        id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className={className}
@@ -187,6 +192,7 @@ export function TextField({
           ...baseStyle,
           resize: 'vertical',
           minHeight: '80px',
+          boxSizing: 'border-box',
         }}
       />
     );
@@ -194,6 +200,7 @@ export function TextField({
 
   return (
     <input
+      id={id}
       type={type}
       value={value}
       onChange={(e) => onChange(e.target.value)}

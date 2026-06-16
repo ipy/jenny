@@ -79,56 +79,21 @@ export function AppHeader({
 
   return (
     <>
-      {/* Ambient background blobs */}
-      <div
-        style={{
-          position: 'fixed',
-          inset: 0,
-          pointerEvents: 'none',
-          overflow: 'hidden',
-          zIndex: 0,
-        }}
-        aria-hidden="true"
-      >
-        <div
-          style={{
-            position: 'absolute',
-            top: '-10%',
-            left: '-10%',
-            width: '40%',
-            height: '40%',
-            borderRadius: '50%',
-            background: 'oklch(0.55 0.18 285 / 0.05)',
-            filter: 'blur(120px)',
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '-10%',
-            right: '-10%',
-            width: '40%',
-            height: '40%',
-            borderRadius: '50%',
-            background: 'oklch(0.65 0.12 160 / 0.05)',
-            filter: 'blur(120px)',
-          }}
-        />
-      </div>
-
       <header
-        className="glass sticky"
+        className="glass"
         style={{
+          position: 'sticky',
           top: '1rem',
           zIndex: 40,
-          margin: '0 auto',
-          width: `calc(100% - 3rem)`,
+          margin: '0 auto 1rem',
+          width: '100%',
           maxWidth,
-          padding: '0.625rem 1.5rem',
+          padding: '0.625rem 2rem',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           borderRadius: '16px',
+          flexShrink: 0,
         }}
       >
         {/* Left: Brand + Tabs */}
@@ -186,10 +151,11 @@ export function AppHeader({
                       borderRadius: '8px',
                       transition: 'all 0.3s',
                       color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
-                      background: isActive ? 'oklch(0.55 0.18 285 / 0.1)' : 'transparent',
+                      background: isActive ? 'oklch(0.55 0.18 285 / 0.12)' : 'transparent',
                       boxShadow: isActive ? 'inset 0 0 12px var(--color-primary-glow)' : 'none',
                       textDecoration: 'none',
                       whiteSpace: 'nowrap',
+                      border: isActive ? '1px solid oklch(0.55 0.18 285 / 0.2)' : '1px solid transparent',
                     }}
                     onMouseEnter={(e) => {
                       if (!isActive) {
@@ -285,6 +251,7 @@ function LocaleSwitcher({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label="Change language"
+        title="Change language"
         className="focus-ring"
         style={{
           width: '28px',

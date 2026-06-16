@@ -43,7 +43,7 @@ export function Card({
       onClick={onClick}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
-      onKeyDown={onClick ? (e) => e.key === 'Enter' && onClick() : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
     >
       {children}
     </div>
@@ -65,7 +65,7 @@ export interface GlassPanelProps {
  */
 export function GlassPanel({ children, className = '', style, interactive = false, onClick }: GlassPanelProps) {
   return (
-    <div className={['glass', 'glass-panel', interactive ? 'hover-lift' : '', className].filter(Boolean).join(' ')} style={style} onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined} onKeyDown={onClick ? (e) => e.key === 'Enter' && onClick() : undefined}>
+    <div className={['glass', 'glass-panel', interactive ? 'hover-lift' : '', className].filter(Boolean).join(' ')} style={style} onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined} onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}>
       {children}
     </div>
   );

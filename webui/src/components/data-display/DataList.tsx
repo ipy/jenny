@@ -100,16 +100,17 @@ function DataListRow<T extends string>({
         type="button"
         onClick={() => onSelect(item.id)}
         aria-current={isSelected ? 'true' : undefined}
-        className="focus-ring"
+        className={isSelected ? 'glow-primary data-list-row-selected' : 'focus-ring'}
         style={{
           flex: 1,
           textAlign: 'left',
           padding: '0.75rem',
           minWidth: 0,
-          background: isSelected ? 'oklch(0.55 0.18 285 / 0.08)' : 'transparent',
+          background: isSelected ? 'oklch(0.55 0.18 285 / 0.06)' : 'transparent',
           border: 'none',
+          borderLeft: isSelected ? '2px solid var(--color-primary)' : '2px solid transparent',
           cursor: 'pointer',
-          transition: 'background 0.15s',
+          transition: 'background 0.15s, border-left-color 0.15s',
         }}
         onMouseEnter={(e) => {
           if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'var(--color-glass-hover)';
@@ -129,9 +130,10 @@ function DataListRow<T extends string>({
         >
           <span
             style={{
-              fontSize: '0.75rem',
+              fontSize: '0.8125rem',
               fontFamily: 'var(--font-mono)',
               color: isSelected ? 'var(--color-text)' : 'var(--color-text-muted)',
+              fontWeight: isSelected ? 600 : 400,
               transition: 'color 0.15s',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -181,6 +183,8 @@ function ActionButton({ label, onClick }: { label: string; onClick: (e: React.Mo
       type="button"
       onClick={onClick}
       className="focus-ring"
+      aria-label={label}
+      title={label}
       style={{
         flexShrink: 0,
         padding: '0 0.5rem',
@@ -194,9 +198,8 @@ function ActionButton({ label, onClick }: { label: string; onClick: (e: React.Mo
       }}
       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'oklch(0.55 0.18 25 / 0.1)'; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-      aria-label={label}
     >
-      {label === 'Kill' ? '■' : '✕'}
+      {label}
     </button>
   );
 }

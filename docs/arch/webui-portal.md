@@ -141,7 +141,6 @@ curl -s http://127.0.0.1:9222/json/version
 ### Portal Start
 
 ```bash
-cd /Users/sin/work/agents/jenny
 go run . portal
 ```
 

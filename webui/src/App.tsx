@@ -28,6 +28,7 @@ import {
   SettingsDialog,
   type SessionMetadata,
 } from './index';
+import type { DataListItem } from './components/data-display/DataList';
 import { useSettings, type PortalSettings } from './components/feedback/SettingsDialog';
 import { MarketplaceURLBar } from './components/layout/Marketplace/MarketplaceURLBar';
 import { SkillsTab, type SkillInfo } from './components/SkillsTab';
@@ -115,20 +116,31 @@ function AppContent() {
         onLocaleChange={setLocale}
       />
 
-      <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: '0 2.5rem' }}>
-        {activeTab === 'start' && <StartTab onSessionCreated={handleSessionCreated} onOpenSettings={() => setShowSettings(true)} settings={settings} />}
-        {activeTab === 'sessions' && <SessionsTab selectedId={selectedSessionId} onSelect={setSelectedSessionId} projectFilter={projectFilter} onFilterChange={setProjectFilter} />}
-        {activeTab === 'projects' && <ProjectsTab onNavigate={(tab) => setActiveTab(tab as TabId)} onFilter={(cwd) => { setProjectFilter(cwd); setActiveTab('sessions'); }} />}
-        {activeTab === 'skills' && <SkillsTab skills={skills ?? []} loading={skillsLoading} selectedId={selectedSkill} onSelect={setSelectedSkill} />}
-        {activeTab === 'mcp' && <MCPServersTab servers={mcpServers ?? []} loading={mcpServersLoading} selectedId={selectedMcp} onSelect={setSelectedMcp} />}
-        {activeTab === 'plugins' && <PluginsTab plugins={plugins ?? []} loading={pluginsLoading} selectedId={selectedPlugin} onSelect={setSelectedPlugin} />}
-        {activeTab === 'marketplace' && (
-          marketplaceBrowseView ? (
-            <MarketplaceBrowseView onBack={() => setMarketplaceBrowseView(false)} />
-          ) : (
-            <MarketplaceTab onNavigate={(tab) => setActiveTab(tab as TabId)} onBrowse={() => setMarketplaceBrowseView(true)} />
-          )
-        )}
+      <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0, maxWidth: '72rem', width: '100%', margin: '0 auto', paddingLeft: 'var(--spacing-gutter)', paddingRight: 'var(--spacing-gutter)' }}>
+        <TabContent
+          activeTab={activeTab}
+          onSessionCreated={handleSessionCreated}
+          onOpenSettings={() => setShowSettings(true)}
+          settings={settings}
+          selectedSessionId={selectedSessionId}
+          onSelectSession={setSelectedSessionId}
+          projectFilter={projectFilter}
+          onFilterChange={setProjectFilter}
+          skills={skills ?? []}
+          skillsLoading={skillsLoading}
+          selectedSkill={selectedSkill}
+          onSelectSkill={setSelectedSkill}
+          mcpServers={mcpServers ?? []}
+          mcpServersLoading={mcpServersLoading}
+          selectedMcp={selectedMcp}
+          onSelectMcp={setSelectedMcp}
+          plugins={plugins ?? []}
+          pluginsLoading={pluginsLoading}
+          selectedPlugin={selectedPlugin}
+          onSelectPlugin={setSelectedPlugin}
+          marketplaceBrowseView={marketplaceBrowseView}
+          onMarketplaceBrowse={setMarketplaceBrowseView}
+        />
       </main>
 
       <SettingsDialog open={showSettings} onClose={() => setShowSettings(false)} settings={settings} onSave={saveSettings} />
@@ -150,14 +162,13 @@ function StartTab({ onSessionCreated, onOpenSettings, settings }: StartTabProps)
 
   const formatCost = (cost: number) => {
     if (cost < 0.01) return '$0.00';
-    return `$${cost.toFixed(2)}`;
+    return `${cost.toFixed(2)}`;
   };
 
   const handleLaunch = async () => {
     if (!prompt.trim() || launching) return;
     setLaunching(true);
     try {
-      // Merge settings into API body (AC4)
       const body: Record<string, string> = {
         prompt: settings.promptPrefix ? `${settings.promptPrefix}\n${prompt}` : prompt,
       };
@@ -174,9 +185,9 @@ function StartTab({ onSessionCreated, onOpenSettings, settings }: StartTabProps)
   };
 
   return (
-    <div style={{ padding: '2.5rem 0' }}>
+    <div className="page-stack page-shell" style={{ paddingTop: 'var(--spacing-section)' }}>
       {/* Stats row */}
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem' }}>
         <StatCard label="Total Sessions" value={loading ? '...' : String(stats?.total_sessions ?? 0)} />
         <StatCard label="Running" value={loading ? '...' : String(stats?.active_sessions ?? 0)} />
         <StatCard label="Total Cost" value={loading ? '...' : formatCost(stats?.total_cost_usd ?? 0)} />
@@ -184,8 +195,8 @@ function StartTab({ onSessionCreated, onOpenSettings, settings }: StartTabProps)
       </section>
 
       {/* New session panel */}
-      <GlassPanel style={{ padding: '1.75rem', marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      <GlassPanel style={{ padding: 'var(--spacing-card)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
           <h2 style={{ fontSize: '1.125rem', fontWeight: 800, letterSpacing: '-0.02em', margin: 0 }}>{t('portal.new_session')}</h2>
           <TextField
             value={prompt}
@@ -206,7 +217,7 @@ function StartTab({ onSessionCreated, onOpenSettings, settings }: StartTabProps)
       {/* Quick start */}
       <section>
         <h3 className="section-label">{t('portal.recent_projects')}</h3>
-        <p style={{ margin: '0.5rem 0 1rem', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
+        <p style={{ margin: '0.5rem 0 0', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
           No projects yet — start a session to see your working directory here.
         </p>
       </section>
@@ -226,82 +237,54 @@ function SessionsTab({ selectedId: externalSelectedId, onSelect: externalOnSelec
   const { data: sessions, loading, refetch } = useSessions();
   const { t } = useLocale();
 
-  // Use external props if provided, otherwise use internal state
   const selectedId = externalSelectedId !== undefined ? externalSelectedId : internalSelectedId;
   const setSelectedId = externalOnSelect || setInternalSelectedId;
 
-  // Filter sessions by projectFilter if set
   const filteredSessions = projectFilter
     ? sessions?.filter((s: SessionMetadata) => s.cwd === projectFilter)
     : sessions;
 
-  // Transform API sessions to DataList items
   const sessionItems = filteredSessions?.map((s: SessionMetadata) => {
     const timeAgo = formatTimeAgo(s.start_time);
     return {
       id: s.id,
       title: s.cwd ? s.cwd.split(/[\\/]/).filter(Boolean).pop() || s.id : s.id,
       subtitle: `${timeAgo} · ${s.status}`,
-      badge: <Badge variant={s.status === 'running' ? 'success' : 'default'} dot={s.status === 'running'}>{s.status}</Badge>
+      badge: <Badge variant={s.status === 'running' ? 'success' : 'default'} dot={s.status === 'running'}>{s.status}</Badge>,
     };
   }) ?? [];
 
-  // Handle session deletion - deselect and refresh list
   const handleSessionDeleted = () => {
     setSelectedId(null);
     refetch();
   };
 
-  // Clear filter and show all sessions
-  const handleShowAll = () => {
-    onFilterChange('');
-  };
+  const handleShowAll = () => onFilterChange('');
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-    <SplitPane
-      masterWidth="360px"
-      master={
-        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%' }}>
-          {/* Master header */}
-          <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-            <h2 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
-              Sessions
-            </h2>
-            {projectFilter && (
-              <Button variant="ghost" size="sm" onClick={handleShowAll}>
-                {t('portal.show_all')}
-              </Button>
-            )}
-          </div>
-          {/* Session list */}
-          <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-            {loading ? (
-              <div style={{ padding: '1.5rem', textAlign: 'center' }}>
-                <LoadingState label="Loading sessions…" variant="inline" />
-              </div>
-            ) : (
-              <DataList
-                items={sessionItems}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-                selectionLabel="session"
-              />
-            )}
-          </div>
+    <MasterDetailPane
+      title={t('portal.sessions')}
+      items={sessionItems}
+      selectedId={selectedId}
+      onSelect={setSelectedId}
+      loading={loading}
+      emptyMessage="No sessions"
+      selectionLabel="session"
+      extraHeader={
+        projectFilter ? (
+          <Button variant="ghost" size="sm" onClick={handleShowAll}>
+            {t('portal.show_all')}
+          </Button>
+        ) : null
+      }
+      emptyContent={
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-text-dim)', fontSize: '0.875rem' }}>
+          Select a session to view details
         </div>
       }
-      detail={
-        selectedId ? (
-          <SessionDetail session={sessions?.find(s => s.id === selectedId)} onDeleted={handleSessionDeleted} />
-        ) : (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--color-text-dim)', fontSize: '0.875rem' }}>
-            Select a session to view details
-          </div>
-        )
-      }
-    />
-    </div>
+    >
+      {(id) => <SessionDetail session={sessions?.find(s => s.id === id)} onDeleted={handleSessionDeleted} />}
+    </MasterDetailPane>
   );
 }
 
@@ -324,12 +307,11 @@ function SessionDetail({ session, onDeleted }: { session?: SessionMetadata; onDe
   const { confirm } = useConfirm();
   const isRunning = session?.status === 'running';
 
-  // Connect to SSE stream for real-time updates
   useSessionStream(session?.id ?? '', (data) => {
     setEntries(prev => [...prev, data]);
   });
 
-  const formatCost = (cost?: number) => cost ? `$${cost.toFixed(2)}` : '$0.00';
+  const formatCost = (cost?: number) => cost ? `${cost.toFixed(2)}` : '$0.00';
 
   const handleResume = async () => {
     if (!session?.id || !resumePrompt.trim() || resuming) return;
@@ -348,7 +330,6 @@ function SessionDetail({ session, onDeleted }: { session?: SessionMetadata; onDe
 
   const handleDelete = async () => {
     if (!session?.id || deleting) return;
-
     const confirmed = await confirm({
       title: 'Delete Session',
       message: 'Are you sure you want to delete this session? This action cannot be undone.',
@@ -356,9 +337,7 @@ function SessionDetail({ session, onDeleted }: { session?: SessionMetadata; onDe
       cancelLabel: 'Cancel',
       dangerous: true,
     });
-
     if (!confirmed) return;
-
     setDeleting(true);
     try {
       await apiPost(`/api/sessions/${session.id}/delete`, {});
@@ -372,48 +351,40 @@ function SessionDetail({ session, onDeleted }: { session?: SessionMetadata; onDe
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div className="detail-pane-layout">
       {/* Session header */}
-      <header style={{
-        padding: '1.25rem 1.5rem',
-        borderBottom: '1px solid var(--color-border)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        flexShrink: 0,
-        gap: '1rem',
-      }}>
+      <header className="detail-pane-header">
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
             <Badge variant={isRunning ? 'success' : 'default'} dot={isRunning}>
               {isRunning ? 'Running' : 'Exited'}
             </Badge>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--color-text-dim)' }}>
+            <span className="detail-pane-id">
               {session?.id ?? ''}
             </span>
           </div>
-          <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <h2 className="detail-pane-title">
             {session?.cwd ?? 'Session'}
           </h2>
         </div>
 
         {/* Actions */}
-        <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0, alignItems: 'center', flexWrap: 'wrap' }}>
           {isRunning ? (
             <Button variant="danger" size="sm" onClick={() => session?.id && killSession(session.id)}>Stop</Button>
           ) : showResumeInput ? (
-            <>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <TextField
                 value={resumePrompt}
                 onChange={setResumePrompt}
                 placeholder="What should I do next?"
-                style={{ width: '200px' }}
+                style={{ minWidth: '180px', maxWidth: '400px', flex: 1 }}
               />
               <Button variant="primary" size="sm" disabled={!resumePrompt.trim() || resuming} onClick={handleResume}>
                 {resuming ? 'Resuming...' : 'Resume'}
               </Button>
               <Button variant="ghost" size="sm" onClick={() => { setShowResumeInput(false); setResumePrompt(''); }}>Cancel</Button>
-            </>
+            </div>
           ) : (
             <Button variant="primary" size="sm" onClick={() => setShowResumeInput(true)}>Resume</Button>
           )}
@@ -425,8 +396,13 @@ function SessionDetail({ session, onDeleted }: { session?: SessionMetadata; onDe
         </div>
       </header>
 
+      {/* Live region for screen readers */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only" style={{ position: 'absolute', left: '-9999px' }}>
+        Session status: {isRunning ? 'Running' : 'Exited'}
+      </div>
+
       {/* Scrollable content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', minHeight: 0 }}>
+      <div className="detail-pane-body">
         {/* Stats row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem' }}>
           <StatCard label="Token Usage" value={session?.total_tokens ? String(session.total_tokens) : '0'} />
@@ -490,15 +466,15 @@ function ProjectsTab({ onNavigate, onFilter }: ProjectsTabProps) {
 
   if (loading) {
     return (
-      <div style={{ padding: '4rem 0', textAlign: 'center' }}>
-        <LoadingState label={t('common.loading')} variant="inline" />
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-start', paddingTop: '12vh' }}>
+        <LoadingState label={t('common.loading')} variant="full" />
       </div>
     );
   }
 
   if (groups.length === 0) {
     return (
-      <div style={{ padding: '4rem 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', paddingTop: '12vh', gap: '1.5rem' }}>
         <EmptyState
           title={t('portal.no_projects')}
           hint={t('portal.no_projects.hint')}
@@ -511,27 +487,27 @@ function ProjectsTab({ onNavigate, onFilter }: ProjectsTabProps) {
   }
 
   return (
-    <div style={{ padding: '2.5rem 0' }}>
+    <div className="page-stack page-shell" style={{ paddingTop: 'var(--spacing-section)' }}>
       {/* Page header */}
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h2 style={{ marginBottom: '0.25rem' }}>{t('portal.projects')}</h2>
+      <div style={{ marginBottom: 'var(--spacing-section)' }}>
+        <h2 style={{ fontSize: '1.125rem', fontWeight: 800, letterSpacing: '-0.02em', marginBottom: '0.25rem' }}>{t('portal.projects')}</h2>
         <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
           {groups.length} {groups.length === 1 ? 'project' : 'projects'} grouped by working directory
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 'var(--spacing-md)' }}>
         {groups.map(group => (
           <GlassPanel
             key={group.path}
             interactive
-            style={{ padding: '1.5rem', cursor: 'pointer' }}
+            style={{ padding: 'var(--spacing-md)', cursor: 'pointer' }}
             onClick={() => onFilter(group.path)}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--spacing-sm)' }}>
               <div style={{ overflow: 'hidden', minWidth: 0 }}>
-                <h3 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{group.name}</h3>
-                <code style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontFamily: 'var(--font-mono)' }}>
+                <h3 className="detail-pane-title">{group.name}</h3>
+                <code className="detail-pane-id">
                   {group.path || '(no directory)'}
                 </code>
               </div>
@@ -539,13 +515,13 @@ function ProjectsTab({ onNavigate, onFilter }: ProjectsTabProps) {
                 {group.isActive ? 'Active' : 'Idle'}
               </Badge>
             </div>
-            <div style={{ display: 'flex', gap: '1.5rem' }}>
+            <div style={{ display: 'flex', gap: 'var(--spacing-lg)' }}>
               <div style={{ fontSize: '12px' }}>
-                <div style={{ color: 'var(--color-text-muted)', marginBottom: '0.125rem' }}>Sessions</div>
+                <div style={{ color: 'var(--color-text-muted)', marginBottom: 'var(--spacing-xs)' }}>Sessions</div>
                 <div style={{ fontWeight: 600 }}>{group.totalSessions}</div>
               </div>
               <div style={{ fontSize: '12px' }}>
-                <div style={{ color: 'var(--color-text-muted)', marginBottom: '0.125rem' }}>Total Cost</div>
+                <div style={{ color: 'var(--color-text-muted)', marginBottom: 'var(--spacing-xs)' }}>Total Cost</div>
                 <div style={{ fontWeight: 600 }}>${group.totalCost.toFixed(2)}</div>
               </div>
             </div>
@@ -579,49 +555,27 @@ function MarketplaceTab({ onNavigate, onBrowse }: MarketplaceTabProps) {
   const { t } = useLocale();
 
   const categories = [
-    {
-      id: 'skills',
-      name: t('portal.skills'),
-      count: skills?.length ?? 0,
-      icon: '⚡',
-      description: t('marketplace.skills_desc'),
-    },
-    {
-      id: 'mcp',
-      name: t('portal.mcp'),
-      count: mcps?.length ?? 0,
-      icon: '🔌',
-      description: t('marketplace.mcp_desc'),
-    },
-    {
-      id: 'plugins',
-      name: t('portal.plugins'),
-      count: plugins?.length ?? 0,
-      icon: '🧩',
-      description: t('marketplace.plugins_desc'),
-    },
+    { id: 'skills', name: t('portal.skills'), count: skills?.length ?? 0, icon: '⚡', description: t('marketplace.skills_desc') },
+    { id: 'mcp', name: t('portal.mcp'), count: mcps?.length ?? 0, icon: '🔌', description: t('marketplace.mcp_desc') },
+    { id: 'plugins', name: t('portal.plugins'), count: plugins?.length ?? 0, icon: '🧩', description: t('marketplace.plugins_desc') },
   ];
 
   const totalInstalled = categories.reduce((sum, c) => sum + c.count, 0);
 
   if (totalInstalled === 0) {
     return (
-      <div style={{ padding: '4rem 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
-        <EmptyState
-          title={t('marketplace.empty_title')}
-          hint={t('marketplace.empty_hint')}
-        />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', paddingTop: '12vh', gap: '1.5rem' }}>
+        <EmptyState title={t('marketplace.empty_title')} hint={t('marketplace.empty_hint')} />
         <Button variant="primary" onClick={onBrowse}>Browse Marketplace</Button>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '2.5rem 0' }}>
-      {/* Page header */}
-      <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+    <div className="page-stack page-shell" style={{ paddingTop: 'var(--spacing-section)' }}>
+      <div style={{ marginBottom: 'var(--spacing-lg)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--spacing-md)' }}>
         <div>
-          <h2 style={{ marginBottom: '0.25rem' }}>{t('portal.marketplace')}</h2>
+          <h2 style={{ fontSize: '1.125rem', fontWeight: 800, letterSpacing: '-0.02em', marginBottom: '0.25rem' }}>{t('portal.marketplace')}</h2>
           <p style={{ color: 'var(--color-text-muted)', margin: 0, fontSize: '0.875rem' }}>
             {t('portal.marketplace_description', { count: totalInstalled })}
           </p>
@@ -629,28 +583,15 @@ function MarketplaceTab({ onNavigate, onBrowse }: MarketplaceTabProps) {
         <Button variant="outline" onClick={onBrowse}>Browse</Button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--spacing-md)' }}>
         {categories.map((cat) => (
-          <GlassPanel
-            key={cat.id}
-            interactive
-            style={{ padding: '1.5rem', cursor: 'pointer' }}
-            onClick={() => onNavigate(cat.id)}
-          >
-            <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>{cat.icon}</div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>{cat.name}</h3>
-              <Badge variant={cat.count > 0 ? 'success' : 'default'}>
-                {t('portal.installed', { count: cat.count })}
-              </Badge>
+          <GlassPanel key={cat.id} interactive style={{ padding: 'var(--spacing-md)', cursor: 'pointer' }} onClick={() => onNavigate(cat.id)}>
+            <div style={{ fontSize: '2rem', marginBottom: 'var(--spacing-sm)' }}>{cat.icon}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+              <h3 className="detail-pane-title">{cat.name}</h3>
+              <Badge variant={cat.count > 0 ? 'success' : 'default'}>{t('portal.installed', { count: cat.count })}</Badge>
             </div>
-            <p
-              style={{
-                margin: '0.75rem 0 0',
-                color: 'var(--color-text-muted)',
-                fontSize: '0.875rem',
-              }}
-            >
+            <p style={{ margin: 'var(--spacing-sm) 0 0', color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
               {cat.description}
             </p>
           </GlassPanel>
@@ -748,9 +689,9 @@ function MarketplaceBrowseView({ onBack }: MarketplaceBrowseViewProps) {
   };
 
   const pageHeader = (
-    <div style={{ marginBottom: '1.5rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-        <Button variant="ghost" onClick={onBack}>← Back</Button>
+    <div style={{ marginBottom: 'var(--spacing-md)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-md)', flexWrap: 'wrap' }}>
+        <Button variant="ghost" size="sm" onClick={onBack}>← Back</Button>
         <h2 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{t('portal.marketplace')}</h2>
       </div>
       <MarketplaceURLBar
@@ -766,9 +707,9 @@ function MarketplaceBrowseView({ onBack }: MarketplaceBrowseViewProps) {
 
   if (loading) {
     return (
-      <div style={{ padding: '2.5rem 0' }}>
+      <div className="page-shell" style={{ paddingTop: 'var(--spacing-section)', flex: 1, display: 'flex', flexDirection: 'column' }}>
         {pageHeader}
-        <div style={{ padding: '4rem 2rem', textAlign: 'center' }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-start', paddingTop: '12vh' }}>
           <LoadingState label="Loading marketplace…" variant="full" />
         </div>
       </div>
@@ -777,65 +718,52 @@ function MarketplaceBrowseView({ onBack }: MarketplaceBrowseViewProps) {
 
   if (error) {
     return (
-      <div style={{ padding: '2.5rem 0' }}>
+      <div className="page-shell" style={{ paddingTop: 'var(--spacing-section)', flex: 1, display: 'flex', flexDirection: 'column' }}>
         {pageHeader}
-        <EmptyState
-          title="Marketplace source unreachable"
-          hint={`Failed to fetch from:\n${sourceUrl}\n\nEnter a custom marketplace URL above or ensure the source is available.`}
-        />
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-start', paddingTop: '12vh' }}>
+          <EmptyState title="Marketplace source unreachable" hint={`Failed to fetch from:\n${sourceUrl}\n\nEnter a custom marketplace URL above or ensure the source is available.`} />
+        </div>
       </div>
     );
   }
 
   if (items.length === 0) {
     return (
-      <div style={{ padding: '2.5rem 0' }}>
+      <div className="page-shell" style={{ paddingTop: 'var(--spacing-section)', flex: 1, display: 'flex', flexDirection: 'column' }}>
         {pageHeader}
-        <EmptyState
-          title="No items available"
-          hint="No items found in the marketplace. Try a different URL or wait for items to be added."
-        />
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-start', paddingTop: '12vh' }}>
+          <EmptyState title="No items available" hint="No items found in the marketplace. Try a different URL or wait for items to be added." />
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '2.5rem 0' }}>
+    <div className="page-shell page-stack" style={{ paddingTop: 'var(--spacing-section)' }}>
       {pageHeader}
-
-      <div style={{ display: 'grid', gap: '1rem' }}>
+      <div style={{ display: 'grid', gap: 'var(--spacing-md)' }}>
         {items.map((item) => {
           const isInstalled = installed.has(item.name);
           const isInstalling = installing === item.name;
           return (
-            <GlassPanel key={`${item.type}-${item.name}`} style={{ padding: '1.25rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+            <GlassPanel key={`${item.type}-${item.name}`} style={{ padding: 'var(--spacing-md)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--spacing-md)' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: 'var(--spacing-xs)', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '1.25rem' }}>{getTypeIcon(item.type)}</span>
-                    <h3 style={{ margin: 0, fontSize: '0.9375rem', fontWeight: 700 }}>{item.name}</h3>
+                    <h3 className="detail-pane-title">{item.name}</h3>
                     <Badge variant="default">{item.version}</Badge>
                     <Badge variant="default">{item.type}</Badge>
                   </div>
-                  <p
-                    style={{
-                      margin: 0,
-                      color: 'var(--color-text-muted)',
-                      fontSize: '0.875rem',
-                      overflow: 'hidden',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                    }}
-                  >
+                  <p className="line-clamp-2" style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: '0.875rem' }}>
                     {item.description || '(no description)'}
                   </p>
                 </div>
                 <div style={{ flexShrink: 0 }}>
                   {isInstalled ? (
-                    <Button variant="primary" disabled>Installed</Button>
+                    <Button variant="primary" size="sm" disabled>Installed</Button>
                   ) : (
-                    <Button variant="primary" disabled={isInstalling} onClick={() => handleInstall(item)}>
+                    <Button variant="primary" size="sm" disabled={isInstalling} onClick={() => handleInstall(item)}>
                       {isInstalling ? 'Installing...' : 'Install'}
                     </Button>
                   )}
@@ -850,5 +778,124 @@ function MarketplaceBrowseView({ onBack }: MarketplaceBrowseViewProps) {
 }
 
 
+// ── TabContent router ───────────────────────
+
+interface TabContentProps {
+  activeTab: TabId;
+  onSessionCreated: (sessionId: string) => void;
+  onOpenSettings: () => void;
+  settings: PortalSettings;
+  selectedSessionId: string | null;
+  onSelectSession: (id: string | null) => void;
+  projectFilter: string;
+  onFilterChange: (filter: string) => void;
+  skills: SkillInfo[];
+  skillsLoading: boolean;
+  selectedSkill: string | null;
+  onSelectSkill: (id: string | null) => void;
+  mcpServers: MCPServerInfo[];
+  mcpServersLoading: boolean;
+  selectedMcp: string | null;
+  onSelectMcp: (id: string | null) => void;
+  plugins: PluginInfo[];
+  pluginsLoading: boolean;
+  selectedPlugin: string | null;
+  onSelectPlugin: (id: string | null) => void;
+  marketplaceBrowseView: boolean;
+  onMarketplaceBrowse: (v: boolean) => void;
+}
+
+function TabContent(props: TabContentProps) {
+  switch (props.activeTab) {
+    case 'start':
+      return <StartTab onSessionCreated={props.onSessionCreated} onOpenSettings={props.onOpenSettings} settings={props.settings} />;
+    case 'sessions':
+      return <SessionsTab selectedId={props.selectedSessionId} onSelect={props.onSelectSession} projectFilter={props.projectFilter} onFilterChange={props.onFilterChange} />;
+    case 'projects':
+      return <ProjectsTab onNavigate={(tab) => {}} onFilter={(cwd) => { props.onFilterChange(cwd); props.onSelectSession(null); }} />;
+    case 'skills':
+      return <SkillsTab skills={props.skills} loading={props.skillsLoading} selectedId={props.selectedSkill} onSelect={props.onSelectSkill} />;
+    case 'mcp':
+      return <MCPServersTab servers={props.mcpServers} loading={props.mcpServersLoading} selectedId={props.selectedMcp} onSelect={props.onSelectMcp} />;
+    case 'plugins':
+      return <PluginsTab plugins={props.plugins} loading={props.pluginsLoading} selectedId={props.selectedPlugin} onSelect={props.onSelectPlugin} />;
+    case 'marketplace':
+      return props.marketplaceBrowseView
+        ? <MarketplaceBrowseView onBack={() => props.onMarketplaceBrowse(false)} />
+        : <MarketplaceTab onNavigate={(tab) => {}} onBrowse={() => props.onMarketplaceBrowse(true)} />;
+    default:
+      return null;
+  }
+}
+
+// ── MasterDetailPane ────────────────────────
+
+interface MasterDetailPaneProps<T extends string> {
+  title: string;
+  items: { id: T; title: string; subtitle?: string; badge?: React.ReactNode }[];
+  selectedId: T | null;
+  onSelect: (id: T) => void;
+  loading?: boolean;
+  emptyMessage?: string;
+  selectionLabel?: string;
+  extraHeader?: React.ReactNode;
+  children: (selectedId: T) => React.ReactNode;
+  emptyContent?: React.ReactNode;
+}
+
+function MasterDetailPane<T extends string>({
+  title,
+  items,
+  selectedId,
+  onSelect,
+  loading,
+  emptyMessage,
+  selectionLabel,
+  extraHeader,
+  children,
+  emptyContent,
+}: MasterDetailPaneProps<T>) {
+  return (
+    <div className="master-detail-container">
+      <SplitPane
+        masterWidth="320px"
+        master={
+          <div className="master-pane">
+            <div className="master-pane-header">
+              <h2>{title}</h2>
+              {extraHeader}
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+              {loading ? (
+                <div style={{ padding: '1.5rem', textAlign: 'center' }}>
+                  <LoadingState label={`Loading ${title.toLowerCase()}…`} variant="inline" />
+                </div>
+              ) : (
+                <DataList
+                  items={items}
+                  selectedId={selectedId}
+                  onSelect={onSelect}
+                  selectionLabel={selectionLabel}
+                  emptyMessage={emptyMessage}
+                />
+              )}
+            </div>
+          </div>
+        }
+        detail={
+          selectedId ? children(selectedId) : (emptyContent ?? <DetailEmpty />) 
+        }
+      />
+    </div>
+  );
+}
+
+function DetailEmpty() {
+  return (
+    <div className="detail-pane-empty">
+      Select an item to view details
+    </div>
+  );
+}
 
 export default App;

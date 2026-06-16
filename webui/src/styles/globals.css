@@ -1,9 +1,18 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 :root {
   --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, "Cascadia Code", "Cascadia Mono", "SFMono-Regular", Menlo, Consolas, monospace;
-  --spacing-gutter: 2.5rem;
-  --spacing-card: 1.75rem;
-  --spacing-section: 1.5rem;
+  --spacing-gutter: 2rem;
+  --spacing-card: 1.5rem;
+  --spacing-section: 1.25rem;
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
   --focus-ring: 2px solid var(--color-primary);
   --focus-offset: 2px;
   --shadow-glass: 0 2px 12px -4px oklch(0 0 0 / 0.04);
@@ -39,6 +48,9 @@
   --radius-subtle: 14px;
   --radius-button: 10px;
   --radius-badge: 6px;
+
+  --header-height: 64px;
+  --tab-header-height: 48px;
 }
 
 
@@ -159,6 +171,39 @@ body {
 .focus-ring:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-offset);
+}
+
+/* Ensure all interactive elements get visible focus */
+.focus-ring:focus-visible,
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[role="button"]:focus-visible,
+[role="tab"]:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Remove default focus outline for elements using focus-ring class */
+.focus-ring:focus {
+  outline: none;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: more) {
+  .focus-ring:focus-visible,
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  [role="button"]:focus-visible,
+  [role="tab"]:focus-visible {
+    outline: 3px solid CanvasText;
+    outline-offset: 3px;
+  }
 }
 
 /* ════════════════════════════════════════════
@@ -331,12 +376,14 @@ button:disabled,
   padding-left: var(--spacing-gutter);
   padding-right: var(--spacing-gutter);
   padding-top: 0;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .page-stack {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-section);
+  gap: var(--spacing-lg);
 }
 
 .page-shell-header {
@@ -357,6 +404,157 @@ button:disabled,
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+/* ════════════════════════════════════════════
+ * DETAIL PANE LAYOUT
+ * Unified layout for master-detail detail panels
+ * ════════════════════════════════════════════ */
+
+.detail-pane-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.detail-pane-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-shrink: 0;
+  gap: 1rem;
+}
+
+.detail-pane-body {
+  flex: 1;
+  overflow: auto;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-height: 0;
+}
+
+.detail-pane-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--color-text-dim);
+  font-size: 0.875rem;
+}
+
+.detail-pane-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.detail-pane-id {
+  font-size: 11px;
+  color: var(--color-text-dim);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+}
+
+/* Line clamp for text truncation */
+.line-clamp-2 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* ════════════════════════════════════════════
+ * TABS & MASTER DETAIL
+ * ════════════════════════════════════════════ */
+
+.master-detail-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.master-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.master-pane-header {
+  padding: 0.875rem 1.125rem;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  gap: 0.75rem;
+}
+
+.master-pane-header h2 {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* SplitPane layout using CSS classes */
+.split-pane {
+  --split-gap: 0.75rem;
+}
+
+.split-pane-master {
+  flex-shrink: 0;
+  border-radius: var(--radius-glass);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--color-glass);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid var(--color-glass-border);
+  box-shadow: var(--shadow-glass);
+}
+
+.split-pane-detail {
+  flex: 1;
+  min-width: 0;
+  border-radius: var(--radius-glass);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--color-glass);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid var(--color-glass-border);
+  box-shadow: var(--shadow-glass);
+}
+
+@media (min-width: 640px) {
+  .split-pane-master {
+    width: var(--split-master-width, 320px);
+  }
+}
+
+@media (max-width: 639px) {
+  .split-pane-master {
+    width: var(--split-master-width, 200px);
+    min-width: 160px;
+  }
 }
 
 /* ════════════════════════════════════════════
