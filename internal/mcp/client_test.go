@@ -3,9 +3,6 @@ package mcp
 import (
 	"context"
 	"encoding/json"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"os/exec"
 	"runtime"
@@ -733,7 +730,7 @@ func TestClientIcons_Stdio(t *testing.T) {
 
 // TestClientIcons_HTTP tests AC2: Client.Icons() returns correct icons from HTTP fake server.
 func TestClientIcons_HTTP(t *testing.T) {
-	server := newFakeHTTPMCPServerForIcons(t)
+	server := newFakeHTTPMCPServer(t)
 	defer server.Close()
 
 	client := NewHTTPClient("test-icons-http-server", server.URL, nil)
@@ -841,62 +838,3 @@ func TestGetServerIcons_NotFound(t *testing.T) {
 	}
 }
 
-// newFakeHTTPMCPServerForIcons creates a fake HTTP MCP server that returns icons in initialize response.
-func newFakeHTTPMCPServerForIcons(t *testing.T) *httptest.Server {
-	t.Helper()
-
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		var req jsonRPCRequest
-		if err := json.Unmarshal(body, &req); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		if req.ID == nil {
-			w.WriteHeader(http.StatusAccepted)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		switch req.Method {
-		case "initialize":
-			w.Header().Set("Mcp-Session-Id", "fake-icons-session-id")
-			json.NewEncoder(w).Encode(jsonRPCResponse{
-				JSONRPC: "2.0",
-				ID:      req.ID,
-				Result:  json.RawMessage(`{"protocolVersion":"2025-03-26","capabilities":{"tools":{}},"serverInfo":{"name":"fake-icons-http-mcp","version":"1.0.0","icons":{"icon":"https://example.com/icon.png","darkIcon":"https://example.com/dark.png"}}}`),
-			})
-
-		case "tools/list":
-			json.NewEncoder(w).Encode(jsonRPCResponse{
-				JSONRPC: "2.0",
-				ID:      req.ID,
-				Result:  json.RawMessage(`{"tools":[]}`),
-			})
-
-		default:
-			json.NewEncoder(w).Encode(jsonRPCResponse{
-				JSONRPC: "2.0",
-				ID:      req.ID,
-				Result:  json.RawMessage(`{}`),
-			})
-		}
-	}))
-}
