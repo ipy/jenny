@@ -21,6 +21,9 @@ type Capabilities struct {
 	// If non-empty and different from the current ANTHROPIC_API_KEY,
 	// credential-bound artifacts (like redacted_thinking blocks) must be stripped.
 	OriginalAPIKey string
+	// DisableExperimentalBetas when true strips experimental beta fields
+	// (defer_loading, cache_control, eager_input_streaming) from tool definitions.
+	DisableExperimentalBetas bool
 }
 
 // NormalizeMessages is the single gateway for all normalization before JSON serialization.
@@ -32,8 +35,10 @@ type Capabilities struct {
 func NormalizeMessages(messages []Message, tools []ToolParam, caps Capabilities) ([]Message, []ToolParam, []NormalizationLog) {
 	var logs []NormalizationLog
 
-	// Normalize tools: inject __arg__ placeholder for empty properties (universal)
-	normalizedTools := normalizeToolsUniversal(tools, &logs)
+	// Normalize tools: tool schema stabilization (SSNF Pass 1)
+	// - Injects __arg__ placeholder for empty properties (universal)
+	// - Strips experimental beta fields when DisableExperimentalBetas is true
+	normalizedTools := NormalizeTools(tools, caps, &logs)
 
 	// Flatten tool_result content (universal)
 	messages = flattenToolResultContent(messages)
@@ -136,33 +141,72 @@ func flattenToolResultContent(messages []Message) []Message {
 	return messages
 }
 
-// normalizeToolsUniversal applies universal normalization to tools.
-// Empty input_schema.properties get a __arg__ placeholder to satisfy provider requirements.
-func normalizeToolsUniversal(tools []ToolParam, logs *[]NormalizationLog) []ToolParam {
+// NormalizeTools applies tool schema stabilization (SSNF Pass 1):
+// - Injects __arg__ placeholder for tools with empty input_schema
+// - Strips experimental beta fields when DisableExperimentalBetas is true
+func NormalizeTools(tools []ToolParam, caps Capabilities, logs *[]NormalizationLog) []ToolParam {
 	if len(tools) == 0 {
 		return tools
 	}
 
-	result := make([]ToolParam, len(tools))
-	for i, t := range tools {
-		result[i] = t
-		// Universal fix: empty properties get a placeholder
-		// This was previously MiniMax-specific but is now universal
-		if result[i].InputSchema.Properties == nil {
-			result[i].InputSchema.Properties = make(map[string]any)
+	for i := range tools {
+		// Strip experimental beta fields when requested
+		if caps.DisableExperimentalBetas {
+			tools[i] = stripBetaFields(tools[i])
 		}
-		if len(result[i].InputSchema.Properties) == 0 {
-			result[i].InputSchema.Properties["__arg__"] = map[string]any{
-				"type":        "string",
-				"description": "Placeholder argument for empty schema",
-			}
+		// Ensure non-empty schema with __arg__ placeholder
+		tools[i] = ensureNonEmptySchemaWithLog(tools[i], logs)
+	}
+	return tools
+}
+
+// ensureNonEmptySchema injects __arg__ placeholder for tools with empty input_schema.
+func ensureNonEmptySchema(tool ToolParam) ToolParam {
+	// Handle nil InputSchema by creating a new one
+	if tool.InputSchema.Properties == nil {
+		tool.InputSchema.Properties = make(map[string]any)
+	}
+	// Inject __arg__ if properties are empty
+	if len(tool.InputSchema.Properties) == 0 {
+		tool.InputSchema.Properties["__arg__"] = map[string]any{
+			"type":        "string",
+			"description": "Placeholder for tools with no arguments",
+		}
+	}
+	return tool
+}
+
+// ensureNonEmptySchemaWithLog is like ensureNonEmptySchema but also logs the change.
+func ensureNonEmptySchemaWithLog(tool ToolParam, logs *[]NormalizationLog) ToolParam {
+	// Handle nil InputSchema by creating a new one
+	if tool.InputSchema.Properties == nil {
+		tool.InputSchema.Properties = make(map[string]any)
+	}
+	// Inject __arg__ if properties are empty
+	if len(tool.InputSchema.Properties) == 0 {
+		tool.InputSchema.Properties["__arg__"] = map[string]any{
+			"type":        "string",
+			"description": "Placeholder for tools with no arguments",
+		}
+		if logs != nil {
 			*logs = append(*logs, NormalizationLog{
 				Pass:    "EmptySchemaPlaceholder",
 				Message: "Added __arg__ placeholder for tool with empty properties",
 			})
 		}
 	}
-	return result
+	return tool
+}
+
+// stripBetaFields removes experimental beta fields from tool definitions.
+func stripBetaFields(tool ToolParam) ToolParam {
+	if tool.InputSchema.ExtraFields == nil {
+		return tool
+	}
+	delete(tool.InputSchema.ExtraFields, "defer_loading")
+	delete(tool.InputSchema.ExtraFields, "cache_control")
+	delete(tool.InputSchema.ExtraFields, "eager_input_streaming")
+	return tool
 }
 
 // redactedThinkingPattern matches <thinking type="redacted">...</thinking> blocks.

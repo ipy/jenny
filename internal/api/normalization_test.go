@@ -205,7 +205,7 @@ func TestNormalization_ToolResultFlattening_EdgeCases(t *testing.T) {
 
 		messages := []Message{
 			{
-				Role:    "assistant",
+				Role: "assistant",
 				ToolUse: []ToolUseBlock{
 					{
 						ID:    "call_1",
@@ -230,7 +230,7 @@ func TestNormalization_ToolResultFlattening_EdgeCases(t *testing.T) {
 
 		reqs := mock.Requests()
 		msgs, _ := reqs[len(reqs)-1].Body["messages"].([]any)
-		
+
 		// Check assistant message for tool_use
 		assistantMsg, _ := msgs[0].(map[string]any)
 		assistantContent, _ := assistantMsg["content"].([]any)
@@ -463,6 +463,230 @@ func TestNormalization_CredentialBoundArtifactStripping(t *testing.T) {
 		}
 		if !foundLog {
 			t.Error("expected NormalizationLog entry for StripCredentialBoundArtifacts")
+		}
+	})
+}
+
+// TestNormalizeTools_EmptySchema verifies that NormalizeTools injects __arg__ placeholder
+// for tools with empty properties.
+func TestNormalizeTools_EmptySchema(t *testing.T) {
+	tools := []ToolParam{
+		{
+			Name:        "Bash",
+			Description: "Run a bash command",
+			InputSchema: ToolInputSchema{
+				Type:       "object",
+				Properties: map[string]any{},
+			},
+		},
+	}
+
+	result := NormalizeTools(tools, Capabilities{}, nil)
+
+	if len(result) != 1 {
+		t.Fatalf("expected 1 tool, got %d", len(result))
+	}
+
+	props := result[0].InputSchema.Properties
+	if props == nil {
+		t.Fatal("Properties should not be nil")
+	}
+	if len(props) != 1 {
+		t.Fatalf("expected 1 property, got %d", len(props))
+	}
+	if _, ok := props["__arg__"]; !ok {
+		t.Error("expected __arg__ placeholder to be injected")
+	}
+}
+
+// TestNormalizeTools_NilSchema verifies that NormalizeTools handles nil Properties
+// by initializing and injecting __arg__.
+func TestNormalizeTools_NilSchema(t *testing.T) {
+	tools := []ToolParam{
+		{
+			Name:        "Read",
+			Description: "Read a file",
+			InputSchema: ToolInputSchema{
+				Type: "object",
+			},
+		},
+	}
+
+	result := NormalizeTools(tools, Capabilities{}, nil)
+
+	if len(result) != 1 {
+		t.Fatalf("expected 1 tool, got %d", len(result))
+	}
+
+	props := result[0].InputSchema.Properties
+	if props == nil {
+		t.Fatal("Properties should be initialized")
+	}
+	if len(props) != 1 {
+		t.Fatalf("expected 1 property, got %d", len(props))
+	}
+	if _, ok := props["__arg__"]; !ok {
+		t.Error("expected __arg__ placeholder to be injected for nil properties")
+	}
+}
+
+// TestNormalizeTools_PreservesNonEmptySchema verifies that NormalizeTools does not
+// modify tools that already have properties defined.
+func TestNormalizeTools_PreservesNonEmptySchema(t *testing.T) {
+	tools := []ToolParam{
+		{
+			Name:        "Read",
+			Description: "Read a file",
+			InputSchema: ToolInputSchema{
+				Type: "object",
+				Properties: map[string]any{
+					"path": map[string]any{"type": "string"},
+				},
+				Required: []string{"path"},
+			},
+		},
+	}
+
+	result := NormalizeTools(tools, Capabilities{}, nil)
+
+	if len(result) != 1 {
+		t.Fatalf("expected 1 tool, got %d", len(result))
+	}
+
+	props := result[0].InputSchema.Properties
+	if _, ok := props["__arg__"]; ok {
+		t.Error("should not inject __arg__ for tool with existing properties")
+	}
+	if _, ok := props["path"]; !ok {
+		t.Error("existing property 'path' should be preserved")
+	}
+}
+
+// TestNormalizeTools_StripsBetaFields verifies that NormalizeTools strips experimental
+// beta fields (defer_loading, cache_control, eager_input_streaming) when
+// DisableExperimentalBetas is true.
+func TestNormalizeTools_StripsBetaFields(t *testing.T) {
+	tools := []ToolParam{
+		{
+			Name:        "Bash",
+			Description: "Run a bash command",
+			InputSchema: ToolInputSchema{
+				Type: "object",
+				Properties: map[string]any{
+					"cmd": map[string]any{"type": "string"},
+				},
+				ExtraFields: map[string]any{
+					"defer_loading":         true,
+					"cache_control":         map[string]any{"type": "ephemeral"},
+					"eager_input_streaming": true,
+					"$defs":                 map[string]any{},
+				},
+			},
+		},
+	}
+
+	caps := Capabilities{DisableExperimentalBetas: true}
+	result := NormalizeTools(tools, caps, nil)
+
+	if len(result) != 1 {
+		t.Fatalf("expected 1 tool, got %d", len(result))
+	}
+
+	extra := result[0].InputSchema.ExtraFields
+	if extra == nil {
+		t.Fatal("ExtraFields should not be nil")
+	}
+	if _, ok := extra["defer_loading"]; ok {
+		t.Error("defer_loading should be stripped when DisableExperimentalBetas is true")
+	}
+	if _, ok := extra["cache_control"]; ok {
+		t.Error("cache_control should be stripped when DisableExperimentalBetas is true")
+	}
+	if _, ok := extra["eager_input_streaming"]; ok {
+		t.Error("eager_input_streaming should be stripped when DisableExperimentalBetas is true")
+	}
+	// $defs should be preserved (not a beta field)
+	if _, ok := extra["$defs"]; !ok {
+		t.Error("$defs should be preserved (not a beta field)")
+	}
+}
+
+// TestNormalizeTools_EmptyTools verifies that NormalizeTools handles empty tools slice.
+func TestNormalizeTools_EmptyTools(t *testing.T) {
+	tools := []ToolParam{}
+	result := NormalizeTools(tools, Capabilities{}, nil)
+	if result == nil {
+		t.Fatal("result should not be nil for empty input")
+	}
+	if len(result) != 0 {
+		t.Errorf("expected 0 tools, got %d", len(result))
+	}
+}
+
+// TestNormalizeMessages_CallsNormalizeTools verifies that NormalizeMessages applies
+// tool schema stabilization by checking that __arg__ is injected and beta fields
+// are stripped as part of the normalization pipeline.
+func TestNormalizeMessages_CallsNormalizeTools(t *testing.T) {
+	t.Run("injects __arg__ for empty schema", func(t *testing.T) {
+		tools := []ToolParam{
+			{
+				Name:        "Bash",
+				Description: "Run a bash command",
+				InputSchema: ToolInputSchema{
+					Type:       "object",
+					Properties: map[string]any{},
+				},
+			},
+		}
+
+		_, normalizedTools, logs := NormalizeMessages(nil, tools, Capabilities{})
+
+		if len(normalizedTools) != 1 {
+			t.Fatalf("expected 1 tool, got %d", len(normalizedTools))
+		}
+		props := normalizedTools[0].InputSchema.Properties
+		if _, ok := props["__arg__"]; !ok {
+			t.Error("expected __arg__ placeholder to be injected via NormalizeMessages")
+		}
+		// Check log entry exists
+		foundLog := false
+		for _, log := range logs {
+			if log.Pass == "EmptySchemaPlaceholder" {
+				foundLog = true
+				break
+			}
+		}
+		if !foundLog {
+			t.Error("expected NormalizationLog entry for EmptySchemaPlaceholder")
+		}
+	})
+
+	t.Run("strips beta fields when DisableExperimentalBetas is true", func(t *testing.T) {
+		tools := []ToolParam{
+			{
+				Name:        "Bash",
+				Description: "Run a bash command",
+				InputSchema: ToolInputSchema{
+					Type: "object",
+					Properties: map[string]any{
+						"cmd": map[string]any{"type": "string"},
+					},
+					ExtraFields: map[string]any{
+						"defer_loading": true,
+					},
+				},
+			},
+		}
+
+		caps := Capabilities{DisableExperimentalBetas: true}
+		_, normalizedTools, _ := NormalizeMessages(nil, tools, caps)
+
+		if len(normalizedTools) != 1 {
+			t.Fatalf("expected 1 tool, got %d", len(normalizedTools))
+		}
+		extra := normalizedTools[0].InputSchema.ExtraFields
+		if _, ok := extra["defer_loading"]; ok {
+			t.Error("defer_loading should be stripped when DisableExperimentalBetas is true")
 		}
 	})
 }
