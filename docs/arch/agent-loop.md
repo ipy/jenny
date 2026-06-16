@@ -291,8 +291,8 @@ configurable via `MCP_MAX_OUTPUT_CHARS`), the engine applies content-type-aware 
 This prevents oversized tool outputs from bloating the message context while
 preserving access to the complete binary result on disk.
 
-Source: `internal/mcp/client.go` (output assembly, truncation, binary persistence),
-`constants.JennyHomeDir()` (spill directory `mcp-tool-output/`).
+Source: `internal/mcp/client.go` (`maxMCPOutputChars`, `persistBinaryToolResult`,
+`executeToolBlock`), `internal/constants/constants.go` (`JennyHomeDir`).
 
 ## Compaction & Retry Caps
 
