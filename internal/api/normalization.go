@@ -160,34 +160,21 @@ func NormalizeTools(tools []ToolParam, caps Capabilities, logs *[]NormalizationL
 	return tools
 }
 
-// ensureNonEmptySchema injects __arg__ placeholder for tools with empty input_schema.
-func ensureNonEmptySchema(tool ToolParam) ToolParam {
-	// Handle nil InputSchema by creating a new one
-	if tool.InputSchema.Properties == nil {
-		tool.InputSchema.Properties = make(map[string]any)
-	}
-	// Inject __arg__ if properties are empty
-	if len(tool.InputSchema.Properties) == 0 {
-		tool.InputSchema.Properties["__arg__"] = map[string]any{
-			"type":        "string",
-			"description": "Placeholder for tools with no arguments",
-		}
-	}
-	return tool
-}
-
-// ensureNonEmptySchemaWithLog is like ensureNonEmptySchema but also logs the change.
+// ensureNonEmptySchemaWithLog ensures the tool has a valid schema with __arg__ placeholder
+// when no properties are defined, and sets Required to ["__arg__"] accordingly.
 func ensureNonEmptySchemaWithLog(tool ToolParam, logs *[]NormalizationLog) ToolParam {
-	// Handle nil InputSchema by creating a new one
+	// Handle nil Properties by initializing the map
 	if tool.InputSchema.Properties == nil {
 		tool.InputSchema.Properties = make(map[string]any)
 	}
+
 	// Inject __arg__ if properties are empty
 	if len(tool.InputSchema.Properties) == 0 {
 		tool.InputSchema.Properties["__arg__"] = map[string]any{
 			"type":        "string",
 			"description": "Placeholder for tools with no arguments",
 		}
+		tool.InputSchema.Required = []string{"__arg__"}
 		if logs != nil {
 			*logs = append(*logs, NormalizationLog{
 				Pass:    "EmptySchemaPlaceholder",
