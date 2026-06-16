@@ -46,7 +46,7 @@ func TestParsePFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "-p", "hello from -p"}
+	os.Args = []string{"jenny", "--p", "hello from -p"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -62,7 +62,7 @@ func TestParseMultiplePFlags(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "-p", "first", "-p", "second", "-p", "third"}
+	os.Args = []string{"jenny", "--p", "first", "--p", "second", "--p", "third"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -78,7 +78,7 @@ func TestParseModelFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--model", "deepseek-v4-flash", "-p", "hello"}
+	os.Args = []string{"jenny", "--model", "deepseek-v4-flash", "--p", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -94,7 +94,7 @@ func TestParseOutputFormatFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--output-format", "stream-json", "-p", "hello"}
+	os.Args = []string{"jenny", "--output-format", "stream-json", "--p", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -109,7 +109,7 @@ func TestParseMaxIterationsFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--max-iterations", "50", "-p", "hello"}
+	os.Args = []string{"jenny", "--max-iterations", "50", "--p", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -124,7 +124,7 @@ func TestParseMaxIterationsDefault(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "-p", "hello"}
+	os.Args = []string{"jenny", "--p", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -140,7 +140,7 @@ func TestParseVerboseFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--verbose", "-p", "hello"}
+	os.Args = []string{"jenny", "--verbose", "--p", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -156,7 +156,7 @@ func TestParseIncludePartialMessagesFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--include-partial-messages", "-p", "hello"}
+	os.Args = []string{"jenny", "--include-partial-messages", "--p", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -172,7 +172,7 @@ func TestParseSkipPermissionsFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--dangerously-skip-permissions", "-p", "hello"}
+	os.Args = []string{"jenny", "--dangerously-skip-permissions", "--p", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -188,7 +188,7 @@ func TestParseSessionResumeFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "-r", "sess_12345", "-p", "hello"}
+	os.Args = []string{"jenny", "-r", "sess_12345", "--p", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -204,7 +204,7 @@ func TestParseMultipleFlags(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--model", "gpt-4", "--output-format", "stream-json", "--verbose", "-p", "hello"}
+	os.Args = []string{"jenny", "--model", "gpt-4", "--output-format", "stream-json", "--verbose", "--p", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -230,7 +230,7 @@ func TestParsePositionalWithPFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "-p", "from -p", "from positional"}
+	os.Args = []string{"jenny", "--p", "from -p", "from positional"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -261,7 +261,7 @@ func TestParseContinueFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--continue", "-p", "hello"}
+	os.Args = []string{"jenny", "--continue", "--p", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -276,7 +276,7 @@ func TestParseContinueMutuallyExclusiveWithResume(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--continue", "-r", "sess_12345", "-p", "hello"}
+	os.Args = []string{"jenny", "--continue", "-r", "sess_12345", "--p", "hello"}
 
 	_, err := Parse()
 	if err == nil {
@@ -288,7 +288,7 @@ func TestParseContinueMutuallyExclusiveWithNoSessionPersistence(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--continue", "--no-session-persistence", "-p", "hello"}
+	os.Args = []string{"jenny", "--continue", "--no-session-persistence", "--p", "hello"}
 
 	_, err := Parse()
 	if err == nil {
@@ -300,7 +300,7 @@ func TestParseForkSessionRequiresResume(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--fork-session", "-p", "hello"}
+	os.Args = []string{"jenny", "--fork-session", "--p", "hello"}
 
 	_, err := Parse()
 	if err == nil {
@@ -312,7 +312,7 @@ func TestParseForkSessionWithResume(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--fork-session", "-r", "sess_12345", "-p", "hello"}
+	os.Args = []string{"jenny", "--fork-session", "-r", "sess_12345", "--p", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -330,7 +330,7 @@ func TestParseMCPConfigSingleFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--mcp-config", "/path/to/config.json", "-p", "hello"}
+	os.Args = []string{"jenny", "--mcp-config", "/path/to/config.json", "--p", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -348,7 +348,7 @@ func TestParseMCPConfigMultipleFlags(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--mcp-config", "/path/a.json", "--mcp-config", "/path/b.json", "-p", "hello"}
+	os.Args = []string{"jenny", "--mcp-config", "/path/a.json", "--mcp-config", "/path/b.json", "--p", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -369,7 +369,7 @@ func TestParseMCPConfigNoFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "-p", "hello"}
+	os.Args = []string{"jenny", "--p", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -384,7 +384,7 @@ func TestParseFeatureFlags(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "-ff", "redact=disabled", "--feature-flags", "other=true", "-p", "hello"}
+	os.Args = []string{"jenny", "--ff", "redact=disabled", "--feature-flags", "other=true", "--p", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -405,7 +405,7 @@ func TestParseFeatureFlagsInvalid(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "-ff", "invalid", "-p", "hello"}
+	os.Args = []string{"jenny", "--ff", "invalid", "--p", "hello"}
 
 	_, err := Parse()
 	if err == nil {
