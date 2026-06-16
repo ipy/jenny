@@ -496,3 +496,114 @@ func TestLogMessageParams(t *testing.T) {
 		})
 	}
 }
+
+// TestClientSubscribeResource tests AC1: SubscribeResource sends resources/subscribe JSON-RPC request.
+func TestClientSubscribeResource(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping MCP subprocess integration test on Windows")
+	}
+
+	// Build the fake MCP server
+	execDir, err := os.Getwd()
+	if err != nil {
+		t.Skipf("skipping test: could not get working directory: %v", err)
+	}
+	serverSrc := execDir + "/testdata/fake-mcp-server"
+	serverBin := execDir + "/testdata/fake-mcp-server/fake-mcp-server"
+
+	cmd := exec.Command("go", "build", "-o", serverBin, serverSrc)
+	if err := cmd.Run(); err != nil {
+		t.Skipf("skipping test: could not build fake MCP server: %v", err)
+	}
+
+	// Create and connect client
+	client := NewClient("test-server", serverBin, nil, nil)
+	ctx := context.Background()
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Disconnect()
+
+	// Subscribe should succeed
+	err = client.SubscribeResource(ctx, "file:///test.txt")
+	if err != nil {
+		t.Errorf("SubscribeResource failed: %v", err)
+	}
+}
+
+// TestClientUnsubscribeResource tests AC2: UnsubscribeResource sends resources/unsubscribe JSON-RPC request.
+func TestClientUnsubscribeResource(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping MCP subprocess integration test on Windows")
+	}
+
+	// Build the fake MCP server
+	execDir, err := os.Getwd()
+	if err != nil {
+		t.Skipf("skipping test: could not get working directory: %v", err)
+	}
+	serverSrc := execDir + "/testdata/fake-mcp-server"
+	serverBin := execDir + "/testdata/fake-mcp-server/fake-mcp-server"
+
+	cmd := exec.Command("go", "build", "-o", serverBin, serverSrc)
+	if err := cmd.Run(); err != nil {
+		t.Skipf("skipping test: could not build fake MCP server: %v", err)
+	}
+
+	// Create and connect client
+	client := NewClient("test-server", serverBin, nil, nil)
+	ctx := context.Background()
+	if err := client.Connect(ctx); err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer client.Disconnect()
+
+	// Unsubscribe should succeed
+	err = client.UnsubscribeResource(ctx, "file:///test.txt")
+	if err != nil {
+		t.Errorf("UnsubscribeResource failed: %v", err)
+	}
+}
+
+// TestHandleNotificationResourceUpdated tests AC3: notifications/resources/updated invalidates cache.
+func TestHandleNotificationResourceUpdated(t *testing.T) {
+	// Record initial cache generation
+	initialGen := atomic.LoadInt64(&cacheGen)
+
+	client := &Client{Name: "test-server"}
+
+	// Simulate notifications/resources/updated notification
+	notif := Notification{
+		Method: "notifications/resources/updated",
+		Params: json.RawMessage(`{"uri":"file:///test.txt"}`),
+	}
+
+	// Handle the notification
+	client.handleNotification(notif)
+
+	// Verify cache was bumped (final > initial)
+	newGen := atomic.LoadInt64(&cacheGen)
+	if newGen <= initialGen {
+		t.Errorf("cache generation should increase after resource updated: initial=%d, final=%d", initialGen, newGen)
+	}
+}
+
+// TestClientSubscribeResourceDisconnected tests AC4: subscribe fails when not connected.
+func TestClientSubscribeResourceDisconnected(t *testing.T) {
+	client := NewClient("test-server", "nonexistent-command", nil, nil)
+
+	err := client.SubscribeResource(context.Background(), "file:///test.txt")
+	if err == nil {
+		t.Error("expected error when subscribing on disconnected client")
+	}
+}
+
+// TestClientUnsubscribeResourceDisconnected tests AC4: unsubscribe fails when not connected.
+func TestClientUnsubscribeResourceDisconnected(t *testing.T) {
+	client := NewClient("test-server", "nonexistent-command", nil, nil)
+
+	err := client.UnsubscribeResource(context.Background(), "file:///test.txt")
+	if err == nil {
+		t.Error("expected error when unsubscribing on disconnected client")
+	}
+}

@@ -1087,6 +1087,59 @@ func (c *Client) ReadResource(ctx context.Context, uri string) ([]ResourceConten
 	return contents, nil
 }
 
+// SubscribeResource subscribes to changes for a specific resource URI.
+// This allows the client to receive notifications when the resource is updated.
+func (c *Client) SubscribeResource(ctx context.Context, uri string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.proc == nil && c.transport == nil {
+		return fmt.Errorf("not connected to MCP server %s", c.Name)
+	}
+
+	req := jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      nextJSONID(),
+		Method:  "resources/subscribe",
+		Params:  map[string]any{"uri": uri},
+	}
+
+	resp, err := c.doRequest(ctx, req)
+	if err != nil {
+		return fmt.Errorf("resources/subscribe request failed: %w", err)
+	}
+	if resp.Error != nil {
+		return fmt.Errorf("resources/subscribe error: %s (code %d)", resp.Error.Message, resp.Error.Code)
+	}
+	return nil
+}
+
+// UnsubscribeResource unsubscribes from changes for a specific resource URI.
+func (c *Client) UnsubscribeResource(ctx context.Context, uri string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.proc == nil && c.transport == nil {
+		return fmt.Errorf("not connected to MCP server %s", c.Name)
+	}
+
+	req := jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      nextJSONID(),
+		Method:  "resources/unsubscribe",
+		Params:  map[string]any{"uri": uri},
+	}
+
+	resp, err := c.doRequest(ctx, req)
+	if err != nil {
+		return fmt.Errorf("resources/unsubscribe request failed: %w", err)
+	}
+	if resp.Error != nil {
+		return fmt.Errorf("resources/unsubscribe error: %s (code %d)", resp.Error.Message, resp.Error.Code)
+	}
+	return nil
+}
+
 // maxMCPOutputChars is the maximum character count for MCP tool results.
 // Approximate token count: 1 token ≈ 4 chars, so 25000 tokens ≈ 100000 chars.
 // Configurable via MCP_MAX_OUTPUT_CHARS env var.

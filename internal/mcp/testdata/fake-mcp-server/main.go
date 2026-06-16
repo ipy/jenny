@@ -81,6 +81,14 @@ func main() {
 				resp.Result = json.RawMessage(`{"contents":[]}`)
 			}
 
+		case "resources/subscribe":
+			// Accept subscription, return empty result
+			resp.Result = json.RawMessage(`{}`)
+
+		case "resources/unsubscribe":
+			// Accept unsubscription, return empty result
+			resp.Result = json.RawMessage(`{}`)
+
 		case "notifications/initialized", "notifications/shutdown":
 			// Notifications have no response
 			continue

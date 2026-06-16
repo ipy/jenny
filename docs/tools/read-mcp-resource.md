@@ -9,9 +9,9 @@ package: internal/tool
 implemented:
   - "Resource templates"
   - "notifications/resources/list_changed"
-gaps:
-  - "Resource subscriptions (subscribe/unsubscribe) not implemented"
-# Reviewed 2026-06-16: resource templates implemented in P4
+  - "Resource subscriptions (subscribe/unsubscribe)"
+gaps: []
+# Reviewed 2026-06-16: resource templates and subscriptions implemented
 depends_on:
   - mcp-client
 ---

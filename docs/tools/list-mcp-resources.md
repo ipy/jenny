@@ -9,8 +9,8 @@ package: internal/mcp
 implemented:
   - "Resource templates"
   - "notifications/resources/list_changed"
-gaps:
-  - "Resource subscriptions (subscribe/unsubscribe) not implemented"
+  - "Resource subscriptions (subscribe/unsubscribe)"
+gaps: []
 # Reviewed 2026-06-16: all gaps addressed
 depends_on:
   - mcp-client
