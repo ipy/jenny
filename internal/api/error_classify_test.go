@@ -41,7 +41,9 @@ func TestClassifyErrorCommon(t *testing.T) {
 		{"429 tpm", 429, "tpm", CategoryRateLimitTPM},
 		{"429 tokens per minute", 429, "tokens per minute", CategoryRateLimitTPM},
 		{"429 concurrency", 429, "concurrent", CategoryRateLimitConcurrency},
-		{"429 generic", 429, "generic rate limit", CategoryRateLimitRPM}, // "rate" matches RPM in my impl
+		{"429 generic", 429, "generic rate limit", CategoryRateLimitRPM}, // "rate" matches RPM
+		{"429 insufficient", 429, "insufficient credits", CategoryQuotaExhausted},
+		{"429 limit exceeded", 429, "quota limit exceeded", CategoryQuotaExhausted},
 
 		// 7. 5xx mapping
 		{"529 overloaded", 529, "", CategoryServerOverload},
@@ -49,12 +51,15 @@ func TestClassifyErrorCommon(t *testing.T) {
 		{"498 overloaded", 498, "", CategoryServerOverload},
 		{"504 timeout", 504, "", CategoryTimeout},
 		{"500 server error", 500, "", CategoryServerError},
+		{"500 context_length_exceeded", 500, "context_length_exceeded", CategoryContextExhausted},
 
 		// 8. Specific 4xx
 		{"401 auth", 401, "", CategoryAuth},
+		{"401 with safety keyword", 401, "safety", CategoryAuth}, // Verify gate
 		{"403 permission", 403, "", CategoryPermission},
 		{"499 cancelled", 499, "", CategoryCancelled},
 		{"404 model not found", 404, "", CategoryModelNotFound},
+
 
 		// 9. 400 default
 		{"400 invalid request", 400, "invalid parameter", CategoryInvalidRequest},
