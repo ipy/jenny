@@ -622,3 +622,13 @@ func seedReadFileCacheFromTranscript(cache *tool.ReadFileCache, sessionManager *
 
 	return nil
 }
+
+// ModelNotFoundError is returned when all attempted models in a fallback chain
+// return ModelNotFound.
+type ModelNotFoundError struct {
+	Attempted []string
+}
+
+func (e *ModelNotFoundError) Error() string {
+	return fmt.Sprintf("model not found (tried: %s)", strings.Join(e.Attempted, ", "))
+}

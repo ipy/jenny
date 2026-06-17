@@ -161,4 +161,16 @@ type StreamResult struct {
 	MaxTokensErr    *MaxTokensError // Set when stop_reason is "max_tokens"
 	ContextRejected bool            // True when HTTP 400 / prompt_too_long was received
 	StreamComplete  bool            // True when message_stop event was received
+	// ErrorInfo holds structured error details for non-2xx HTTP responses.
+	// Populated by providers before returning; used by the engine to emit
+	// distinct stream-json subtypes (error_content_filter, error_quota_exhausted,
+	// error_model_not_found) instead of a generic "streaming error".
+	ErrorInfo *ErrorInfo
+}
+
+// ErrorInfo holds normalized error metadata for structured stream-json subtypes.
+type ErrorInfo struct {
+	Category    ErrorCategory
+	Message     string // Cleaned human-readable message
+	StatusCode  int
 }

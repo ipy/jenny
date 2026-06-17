@@ -4,6 +4,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -493,8 +494,99 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			e.emitAssistantFinalEvent(sessionID, e.currentMessageID, e.currentStopReason, e.currentStopSequence, toLoopUsage(e.currentUsage), e.model)
 		}
 
+		var resp *api.Response
+
 		// Check if streaming completed with error
 		if streamResult.Error != "" && len(streamResult.Blocks) == 0 {
+			// AC1: ModelNotFound re-entry via non-streaming fallback
+			if streamResult.ErrorCategory == api.CategoryModelNotFound {
+				e.mu.Lock()
+				initialModel := e.model
+				e.mu.Unlock()
+
+				var err error
+				resp, err = e.client.SendMessage(ctx, messages, e.toolParams, nil, systemPrompt, "")
+				if err == nil {
+					// Fallback success: continue turn with this response
+					e.mu.Lock()
+					e.model = resp.Model
+					e.mu.Unlock()
+
+					// Sync streamResult for handleStopReason downstream
+					streamResult.Blocks = resp.Content
+					streamResult.StopReason = resp.StopReason
+					streamResult.Usage = resp.Usage
+					streamResult.Model = resp.Model
+					streamResult.Error = ""
+					streamResult.ErrorCategory = ""
+
+					goto handle_resp
+				}
+
+				// Fallback failed: list all attempted models if it's still ModelNotFound
+				var httpErr *api.HTTPError
+				if errors.As(err, &httpErr) && httpErr.ErrorCategory == api.CategoryModelNotFound {
+					return "", &ModelNotFoundError{Attempted: []string{initialModel}}
+				}
+				return "", err
+			}
+
+			// AC2: Quota/Payment fast-fail
+			if streamResult.ErrorCategory == api.CategoryQuotaExhausted || streamResult.ErrorCategory == api.CategoryPaymentRequired {
+				errMsg := "Quota exceeded. Check your billing settings."
+				if e.streamCfg.Enabled {
+					errSubtype := "error_quota_exhausted"
+					if streamResult.ErrorCategory == api.CategoryPaymentRequired {
+						errSubtype = "error_payment_required"
+					}
+					msg := StreamMessage{
+						Type:            "result",
+						Subtype:         errSubtype,
+						Result:          errMsg,
+						SessionID:       sessionID,
+						ParentToolUseID: nil,
+						Uuid:            GenerateUUID(),
+						Model:           e.model,
+						IsError:         true,
+						StopReason:      "error",
+						APIErrorStatus:  &errMsg,
+						DurationMs:      time.Since(e.startTime).Milliseconds(),
+						DurationAPIMs:   e.totalAPIDurationMs,
+						TotalCostUSD:    e.costState.TotalCostUSD,
+						ModelUsage:      e.buildModelUsage(),
+					}
+					data, _ := json.Marshal(msg)
+					fmt.Fprintln(os.Stdout, string(data))
+				}
+				return "", fmt.Errorf("%s", errMsg)
+			}
+
+			// AC3: Content filter fast-fail
+			if streamResult.ErrorCategory == api.CategoryContentFilter {
+				errMsg := "Content blocked by provider policy."
+				if e.streamCfg.Enabled {
+					msg := StreamMessage{
+						Type:            "result",
+						Subtype:         "error_content_filter",
+						Result:          errMsg,
+						SessionID:       sessionID,
+						ParentToolUseID: nil,
+						Uuid:            GenerateUUID(),
+						Model:           e.model,
+						IsError:         true,
+						StopReason:      "error",
+						APIErrorStatus:  &errMsg,
+						DurationMs:      time.Since(e.startTime).Milliseconds(),
+						DurationAPIMs:   e.totalAPIDurationMs,
+						TotalCostUSD:    e.costState.TotalCostUSD,
+						ModelUsage:      e.buildModelUsage(),
+					}
+					data, _ := json.Marshal(msg)
+					fmt.Fprintln(os.Stdout, string(data))
+				}
+				return "", fmt.Errorf("%s", errMsg)
+			}
+
 			// Check if this is a context_exhausted error from HTTP 400 rejection
 			if streamResult.MaxTokensErr != nil && streamResult.MaxTokensErr.Category == api.CategoryContextExhausted {
 				mte := streamResult.MaxTokensErr
@@ -575,20 +667,23 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			return "", fmt.Errorf("streaming error: %v", streamResult.Error)
 		}
 
+	handle_resp:
 		// Use results from streaming (or fallback)
-		resp := &api.Response{
-			Content:    streamResult.Blocks,
-			StopReason: streamResult.StopReason,
-			Usage:      streamResult.Usage,
-			Model:      streamResult.Model,
+		if resp == nil {
+			resp = &api.Response{
+				Content:    streamResult.Blocks,
+				StopReason: streamResult.StopReason,
+				Usage:      streamResult.Usage,
+				Model:      streamResult.Model,
+			}
 		}
 
-		// Fallback block processing: if blocksChan was empty but streamResult.Blocks has content
-		if textOutput.Len() == 0 && len(toolUseBlocks) == 0 && len(streamResult.Blocks) > 0 {
+		// Fallback block processing: if blocksChan was empty but resp.Content has content
+		if textOutput.Len() == 0 && len(toolUseBlocks) == 0 && len(resp.Content) > 0 {
 			// Collect pending web search results to emit user wrappers after assistant
 			var pendingWebSearchResults []api.ContentBlock
 
-			for _, block := range streamResult.Blocks {
+			for _, block := range resp.Content {
 				switch block.Type {
 				case api.BlockTypeText:
 					// AC1: Redact secrets from text output in fallback path
