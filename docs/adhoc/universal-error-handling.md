@@ -1,15 +1,13 @@
 ---
 title: Universal LLM API Error Handling
 slug: universal-error-handling
-status: not_started
+status: in_progress
 date: 2025-07-10
 package: internal/api
 gaps:
-  - No ErrorCategory enum yet
-  - isPromptTooLong only matches 2 keywords per provider
-  - 413/498/499 not handled
-  - 429 not disaggregated (quota/overload/rate)
+  - Provider-specific keyword expansion deferred to Phase 2
   - Domestic provider business codes ignored
+  - Engine integration deferred to Phase 6
 depends_on:
   - rate-limit-handling
   - multi-provider-routing
