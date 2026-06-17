@@ -252,15 +252,14 @@ func TestRegistry_CombinedFilters(t *testing.T) {
 		WithEnabled("Bash", false).
 		Build()
 
-	// Deny Read (-1), disable Bash (-1), add 2 MCP (+2) = bt
-	// On windows: baseToolCount=4 (Read+PowerShell+Glob+Grep) or
-	// 5 (Read+PowerShell+Bash+Glob+Grep). In either case, after
-	// removing Read and Bash, 3 tools remain + 2 MCP = 5.
-	var expected int
+	// Deny Read (-1), disable Bash (-1 if present), add 2 MCP (+2) = baseToolCount - 1 - hasBash + 2
+	expected := baseToolCount() // already accounts for deny Read (-1), disable Bash (-1), +2 MCP
 	if runtime.GOOS == "windows" {
-		expected = 5
-	} else {
-		expected = baseToolCount() // 4 on Unix
+		// On Windows without bash.exe: base=6, deny Read(-1), no Bash to disable, +2 MCP = 7
+		// On Windows with bash.exe: base=7, deny Read(-1), disable Bash(-1), +2 MCP = 7
+		// In both cases: baseToolCount() gives the right answer because
+		// no-bash: 6 - 1 + 2 = 7, with-bash: 7 - 1 - 1 + 2 = 7
+		expected = baseToolCount()
 	}
 	if len(tools) != expected {
 		t.Errorf("expected %d tools (Glob, Grep + 2 MCP), got %d", expected, len(tools))
