@@ -131,6 +131,7 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 	if runtime.GOOS == "windows" {
 		winGate := NewWindowsCommandGate(t.effectiveLevel())
 		if err := winGate.CheckPath(t.commandCwd); err != nil {
+			t.mu.Unlock()
 			return &ToolResult{
 				Content: fmt.Sprintf("Security error: %v", err),
 				IsError: true,
