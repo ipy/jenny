@@ -534,10 +534,10 @@ func TestAssembleSystemPrompt_RedactionInstruction(t *testing.T) {
 			wantRecoverMsg: true,
 		},
 		{
-			name:           "empty mode (defaults to recover)",
+			name:           "empty mode (defaults to redact)",
 			mode:           "",
 			wantRedactMsg:  true,
-			wantRecoverMsg: true,
+			wantRecoverMsg: false,
 		},
 	}
 

@@ -618,3 +618,70 @@ func TestParsePermissionLevelEnvVar(t *testing.T) {
 		t.Errorf("expected permission-level 'analyze' from env, got %q", flags.PermissionLevel)
 	}
 }
+
+// TestParseRedactModeDefault verifies that with no env var and no flag,
+// RedactMode is empty (the default is applied later by redact.ParseRedactMode).
+func TestParseRedactModeDefault(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Unsetenv("JENNY_REDACT")
+	os.Args = []string{"jenny", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if flags.RedactMode != "" {
+		t.Errorf("expected empty RedactMode when no env/flag set, got %q", flags.RedactMode)
+	}
+}
+
+// TestParseRedactModeEnvVar verifies that JENNY_REDACT is read through koanf.
+func TestParseRedactModeEnvVar(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	t.Setenv("JENNY_REDACT", "recover")
+
+	os.Args = []string{"jenny", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if flags.RedactMode != "recover" {
+		t.Errorf("expected redact-mode 'recover' from env, got %q", flags.RedactMode)
+	}
+}
+
+// TestParseRedactModeFlagOverridesEnv verifies --redact wins over JENNY_REDACT.
+func TestParseRedactModeFlagOverridesEnv(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	t.Setenv("JENNY_REDACT", "recover")
+
+	os.Args = []string{"jenny", "--redact", "disabled", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if flags.RedactMode != "disabled" {
+		t.Errorf("expected --redact 'disabled' to win over env, got %q", flags.RedactMode)
+	}
+}
+
+// TestParseRedactModeInvalid rejects unknown values.
+func TestParseRedactModeInvalid(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "--redact", "banana", "--print", "hello"}
+
+	_, err := Parse()
+	if err == nil {
+		t.Error("expected error for invalid --redact value")
+	}
+}

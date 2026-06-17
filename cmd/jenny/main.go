@@ -441,16 +441,11 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Determine redact mode: CLI flag wins over JENNY_REDACT env var.
-	// Default is "recover" if neither is set.
-	redactModeStr := os.Getenv("JENNY_REDACT")
-	if val, ok := flags.FeatureFlags["redact"]; ok {
-		redactModeStr = val
-	}
-	if redactModeStr == "" {
-		redactModeStr = "recover"
-	}
-	redactMode := redact.ParseRedactMode(redactModeStr)
+	// Redact mode is read by the unified koanf config layer (cli.Flags.RedactMode):
+	//   1. --redact CLI flag (highest)
+	//   2. JENNY_REDACT env var / .jenny/config.json
+	//   3. Default "redact" (one-way) when nothing is set, applied by ParseRedactMode.
+	redactMode := redact.ParseRedactMode(flags.RedactMode)
 
 	// Compute memory path for init event
 	var memoryPaths map[string]string

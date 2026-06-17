@@ -48,7 +48,8 @@ jenny -p "prompt text"
 | `--max-iterations <n>` | Maximum raw loop iterations (0 = unlimited) |
 | `--max-turns <n>` | Maximum number of turns (0 = unlimited) |
 | `--max-budget-usd <n>` | Budget limit in USD (0.0 = no limit) |
-| `-ff`, `--feature-flags <k=v>` | Set specific feature flags (e.g., `-ff redact=disabled`) |
+| `--redact <mode>` | Secret redaction mode: `disabled`, `redact` (default), `recover`. See [secret-redaction.md](./secret-redaction.md). Overrides `JENNY_REDACT`. |
+| `-ff`, `--feature-flags <k=v>` | Set specific feature flags (e.g., `-ff other-flag=true`) |
 
 ## Flag Rules
 
@@ -90,7 +91,7 @@ Help (`-h`) exits 0. Version (`--version`) uses `constants.Version` for unified 
 | `HTTPS_PROXY` | HTTPS proxy URL for API requests. |
 | `JENNY_DEBUG` | Enable debug slog (`1` = DEBUG) |
 | `JENNY_PERMISSION_LEVEL` | Default permission level when `--permission-level` not specified. Values: `read`, `analyze`, `edit`, `execute`, `unrestricted`. Flag overrides env. |
-| `JENNY_REDACT` | Secret redaction mode (`disabled`, `redact`, `recover`) |
+| `JENNY_REDACT` | Default secret redaction mode (`disabled`, `redact` (default), `recover`). `--redact` overrides this. |
 | `JENNY_TRANSCRIPT_DIR` | Override transcript directory (default: `~/.jenny/transcripts`) |
 | `NO_PROXY` | Comma-separated list of domains to bypass proxy for. |
 | `OPENAI_BASE_URL` | Base URL for OpenAI-compatible API (e.g., `https://api.openai.com/v1`). When set, selects the OpenAI provider instead of the default Anthropic provider. |

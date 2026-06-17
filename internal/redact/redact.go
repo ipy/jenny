@@ -53,9 +53,9 @@ type RedactMode string
 const (
 	// ModeDisabled disables secret redaction entirely.
 	ModeDisabled RedactMode = "disabled"
-	// ModeRedact enables one-way secret redaction (cannot be recovered).
+	// ModeRedact enables one-way secret redaction (cannot be recovered; default).
 	ModeRedact RedactMode = "redact"
-	// ModeRecover enables secret redaction with recovery (default).
+	// ModeRecover enables secret redaction with recovery.
 	ModeRecover RedactMode = "recover"
 )
 
@@ -64,12 +64,12 @@ func ParseRedactMode(s string) RedactMode {
 	switch strings.ToLower(s) {
 	case "disabled", "0", "false":
 		return ModeDisabled
-	case "redact":
+	case "1", "true", "redact":
 		return ModeRedact
-	case "recover", "1", "true", "":
+	case "recover":
 		return ModeRecover
 	default:
-		return ModeRecover
+		return ModeRedact
 	}
 }
 
@@ -77,7 +77,7 @@ func ParseRedactMode(s string) RedactMode {
 // gitleaks-aligned rule set.
 func NewSecretRedactor(mode RedactMode) *SecretRedactor {
 	if mode == "" {
-		mode = ModeRecover
+		mode = ModeRedact
 	}
 	return &SecretRedactor{
 		mode:         mode,

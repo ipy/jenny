@@ -30,10 +30,10 @@ func TestParseRedactMode(t *testing.T) {
 		{"false", ModeDisabled},
 		{"redact", ModeRedact},
 		{"recover", ModeRecover},
-		{"1", ModeRecover},
-		{"true", ModeRecover},
-		{"", ModeRecover},
-		{"unknown", ModeRecover},
+		{"1", ModeRedact},
+		{"true", ModeRedact},
+		{"", ModeRedact},
+		{"unknown", ModeRedact},
 	}
 
 	for _, tc := range tests {
@@ -41,6 +41,26 @@ func TestParseRedactMode(t *testing.T) {
 		if got != tc.expected {
 			t.Errorf("ParseRedactMode(%q) = %v; want %v", tc.input, got, tc.expected)
 		}
+	}
+}
+
+func TestNewSecretRedactor_DefaultModeIsRedact(t *testing.T) {
+	// Empty mode should default to ModeRedact (one-way, no recovery).
+	r := NewSecretRedactor("")
+	if !r.Enabled() {
+		t.Error("Default mode should be enabled")
+	}
+	secret := "sk-abcdefghijklmnopqrstT3BlbkFJabcdefghijklmnopqrst"
+	redacted := r.Redact("Key: " + secret)
+	if !strings.Contains(redacted, "[REDACTED:") {
+		t.Errorf("Expected placeholder in redacted output, got: %s", redacted)
+	}
+	// Recover must be a no-op in default mode.
+	if got := r.Recover(redacted); got != redacted {
+		t.Errorf("Recover should be a no-op in default mode, got: %s", got)
+	}
+	if strings.Contains(redacted, secret) {
+		t.Error("Default mode must not retain the original secret in the redacted output")
 	}
 }
 

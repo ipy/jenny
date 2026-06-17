@@ -42,6 +42,7 @@ type Flags struct {
 	MaxBudgetUsd           float64           `koanf:"max-budget-usd"`       // --max-budget-usd: budget limit in USD (0.0 = no limit)
 	Effort                 string            `koanf:"effort"`               // --effort: reasoning effort level (low, medium, high)
 	ThinkingBudget         int               `koanf:"thinking-budget"`      // --thinking-budget: maximum thinking tokens for Anthropic (AC3)
+	RedactMode             string            `koanf:"redact"`               // --redact: JENNY_REDACT; one of disabled|redact|recover (empty = default)
 	FeatureFlags           map[string]string // feature flags: set from ffv.m after unmarshal
 }
 
@@ -98,6 +99,7 @@ func Parse() (*Flags, error) {
 	maxBudgetDefault := k.Float64("max-budget-usd")
 	effortDefault := k.String("effort")
 	thinkingBudgetDefault := k.Int("thinking-budget")
+	redactModeDefault := k.String("redact")
 
 	// Define flags with defaults from koanf.
 	var pFlag []string
@@ -174,6 +176,9 @@ func Parse() (*Flags, error) {
 
 	var thinkingBudget int
 	flags.IntVarP(&thinkingBudget, "thinking-budget", "", thinkingBudgetDefault, "Maximum thinking tokens for Anthropic (AC3)")
+
+	var redactMode string
+	flags.StringVarP(&redactMode, "redact", "", redactModeDefault, "Secret redaction mode (disabled, redact, recover); JENNY_REDACT env var or .jenny/config.json is used when unset")
 
 	// Feature flags as key=value pairs. Seed from env/json layer.
 	featureFlags := make(map[string]string)
@@ -260,6 +265,21 @@ func Parse() (*Flags, error) {
 		}
 		if !found {
 			return nil, fmt.Errorf("invalid --permission-level %q; valid values: %s", parsed.PermissionLevel, strings.Join(validLevels, ", "))
+		}
+	}
+
+	// Validate: --redact must be a valid value if provided.
+	if parsed.RedactMode != "" {
+		validModes := []string{"disabled", "redact", "recover"}
+		found := false
+		for _, m := range validModes {
+			if m == parsed.RedactMode {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("invalid --redact %q; valid values: %s", parsed.RedactMode, strings.Join(validModes, ", "))
 		}
 	}
 

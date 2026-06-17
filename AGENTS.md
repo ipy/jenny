@@ -10,6 +10,11 @@ Every behavior change MUST follow this sequence — **never skip or reorder**:
 
 If requirements are ambiguous, update the doc first; do not guess in code.
 
+### Restriction on Documentation and Version Files
+
+- **Do NOT create arbitrary documentation files** (CHANGELOG.md, etc.) other than specs under `docs/` unless explicitly requested by the user
+- **Do NOT modify version numbers** (in code, config, or any file) unless explicitly requested by the user
+
 ### Guideline
 
 The system is designed to be operated by AI agents. Clear file contracts, structured logs, deterministic state transitions.

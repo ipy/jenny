@@ -23,12 +23,12 @@ Jenny reads files, runs commands, and fetches URLs. Any tool result may contain 
 ## Security Model
 
 - **In-memory only**: Redacted values are never persisted to disk
-- **Default enabled**: Redaction is active by default in `recover` mode.
+- **Default enabled**: Redaction is active by default in `redact` (one-way) mode.
 - **Modes**:
-    - `recover`: Redacts secrets and allows recovery in tool inputs (default).
-    - `redact`: Redacts secrets but does NOT allow recovery (one-way).
+    - `redact`: Redacts secrets but does NOT allow recovery (one-way; default).
+    - `recover`: Redacts secrets and allows recovery in tool inputs.
     - `disabled`: Disables redaction entirely.
-- **Configuration**: Use `JENNY_REDACT` env var or `-ff redact=<mode>` CLI flag.
+- **Configuration**: Use `JENNY_REDACT` env var or `--redact` CLI flag (highest precedence).
 - **LLM instruction**: System prompt instructs LLM to preserve placeholder format
 
 ## API Reference
@@ -95,7 +95,7 @@ When enabled, the following is appended to the system prompt:
 This session has secret redaction enabled. Tool results may contain `[REDACTED:<hex>]` placeholders (e.g. `[REDACTED:a3f1b2c9]`). Copy them verbatim — including the full hex suffix — and never simplify, abbreviate, or otherwise modify them.
 ```
 
-If the mode is `recover` (the default), this sentence is also appended:
+If the mode is `recover`, this sentence is also appended:
 
 ```
 They will be automatically recovered when you use them in tool calls, so you can refer to them directly as needed.
@@ -103,18 +103,17 @@ They will be automatically recovered when you use them in tool calls, so you can
 
 ## Configuration
 
+The redact mode is read from the unified koanf config layer (`.jenny/config.json`, `JENNY_*` env vars, then CLI flags — highest precedence wins). See [cli.md](./cli.md) for the full precedence rule.
+
 ### Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `JENNY_REDACT` | `recover` | Set to `disabled`, `redact`, or `recover`. |
+| `JENNY_REDACT` | `redact` | Set to `disabled`, `redact`, or `recover`. |
 
 ### CLI Flags
 
-Use the feature flag mechanism:
-- `-ff redact=disabled`
-- `-ff redact=redact`
-- `-ff redact=recover`
+- `--redact <mode>` — sets the redact mode; overrides `JENNY_REDACT` when both are set.
 
 ### StreamConfig Field
 
