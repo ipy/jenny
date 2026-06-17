@@ -2,16 +2,13 @@
 title: Marketplace Browsing
 slug: marketplace-browse
 priority: P1
-status: not_started
+status: done
 spec: complete
-code: not_started
+code: partial
 package: internal/portal
 gaps:
-  - Default marketplace URL
-  - tar.gz extraction logic
-  - MCP install to mcp.json
-depends_on:
-  - webui-portal
+  - Marketplace browse view component (React/TypeScript)
+depends_on: []
 ---
 
 # Marketplace Browsing
