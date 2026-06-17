@@ -262,11 +262,13 @@ func (c *Client) SendMessageStream(
 		result.StopReason = providerResult.StopReason
 		result.Usage = providerResult.Usage
 		result.Error = providerResult.Error
+		result.ErrorCategory = providerResult.ErrorCategory
 		result.IsPermanent = providerResult.IsPermanent
 		result.Model = providerResult.Model
 		result.MaxTokensErr = providerResult.MaxTokensErr
 		result.ContextRejected = providerResult.ContextRejected
 		result.StreamComplete = providerResult.StreamComplete
+		result.ErrorInfo = providerResult.ErrorInfo
 
 		// Check if stream was incomplete (no message_stop event)
 		streamIncomplete := !providerResult.StreamComplete

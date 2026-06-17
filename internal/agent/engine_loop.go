@@ -498,8 +498,13 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 
 		// Check if streaming completed with error
 		if streamResult.Error != "" && len(streamResult.Blocks) == 0 {
+			category := streamResult.ErrorCategory
+			if streamResult.ErrorInfo != nil {
+				category = streamResult.ErrorInfo.Category
+			}
+
 			// AC1: ModelNotFound re-entry via non-streaming fallback
-			if streamResult.ErrorCategory == api.CategoryModelNotFound {
+			if category == api.CategoryModelNotFound {
 				e.mu.Lock()
 				initialModel := e.model
 				e.mu.Unlock()
@@ -519,6 +524,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					streamResult.Model = resp.Model
 					streamResult.Error = ""
 					streamResult.ErrorCategory = ""
+					streamResult.ErrorInfo = nil
 
 					goto handle_resp
 				}
@@ -532,11 +538,11 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			}
 
 			// AC2: Quota/Payment fast-fail
-			if streamResult.ErrorCategory == api.CategoryQuotaExhausted || streamResult.ErrorCategory == api.CategoryPaymentRequired {
+			if category == api.CategoryQuotaExhausted || category == api.CategoryPaymentRequired {
 				errMsg := "Quota exceeded. Check your billing settings."
 				if e.streamCfg.Enabled {
 					errSubtype := "error_quota_exhausted"
-					if streamResult.ErrorCategory == api.CategoryPaymentRequired {
+					if category == api.CategoryPaymentRequired {
 						errSubtype = "error_payment_required"
 					}
 					msg := StreamMessage{
@@ -562,7 +568,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			}
 
 			// AC3: Content filter fast-fail
-			if streamResult.ErrorCategory == api.CategoryContentFilter {
+			if category == api.CategoryContentFilter {
 				errMsg := "Content blocked by provider policy."
 				if e.streamCfg.Enabled {
 					msg := StreamMessage{

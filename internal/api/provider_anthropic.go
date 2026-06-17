@@ -493,6 +493,11 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 					httpErr.ErrorCategory = classifyErrorCommon(httpErr.StatusCode, httpErr.Message)
 				}
 				result.ErrorCategory = httpErr.ErrorCategory
+				result.ErrorInfo = &ErrorInfo{
+					Category:   httpErr.ErrorCategory,
+					Message:    httpErr.Message,
+					StatusCode: httpErr.StatusCode,
+				}
 				result.IsPermanent = httpErr.StatusCode >= 400 && httpErr.StatusCode < 500 &&
 					httpErr.StatusCode != 429 && httpErr.StatusCode != 408 && httpErr.StatusCode != 409
 			}

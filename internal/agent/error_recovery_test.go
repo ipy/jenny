@@ -157,3 +157,92 @@ func TestErrorRecovery_ContentFilter(t *testing.T) {
 		t.Errorf("Expected content blocked message, got: %v", err)
 	}
 }
+
+func TestErrorRecovery_ErrorInfo_Priority(t *testing.T) {
+	mock := &mockRequester{}
+
+	// Test that ErrorInfo.Category overrides StreamResult.ErrorCategory
+	mock.sendMessageStreamFunc = func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string, idleTimeout time.Duration, fallbackTimeout time.Duration, onStreamingFallback func(context.Context) (*api.Response, error)) (<-chan api.StreamContentBlock, *api.StreamResult) {
+		ch := make(chan api.StreamContentBlock)
+		close(ch)
+		return ch, &api.StreamResult{
+			Error:         "raw error",
+			ErrorCategory: api.CategoryUnknown,
+			ErrorInfo: &api.ErrorInfo{
+				Category: api.CategoryContentFilter,
+				Message:  "moderated content",
+			},
+		}
+	}
+
+	cfg := &StreamConfig{Enabled: false}
+	engine, _ := NewQueryEngine(cfg, nil, "initial-model", WithClient(mock))
+
+	_, err := engine.SubmitMessage(context.Background(), "hello")
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "Content blocked") {
+		t.Errorf("Expected content blocked message (from path triggered by ErrorInfo.Category), got: %v", err)
+	}
+}
+
+func TestErrorRecovery_PaymentRequired(t *testing.T) {
+	mock := &mockRequester{}
+
+	mock.sendMessageStreamFunc = func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string, idleTimeout time.Duration, fallbackTimeout time.Duration, onStreamingFallback func(context.Context) (*api.Response, error)) (<-chan api.StreamContentBlock, *api.StreamResult) {
+		ch := make(chan api.StreamContentBlock)
+		close(ch)
+		return ch, &api.StreamResult{
+			Error:         "payment required",
+			ErrorCategory: api.CategoryPaymentRequired,
+		}
+	}
+
+	cfg := &StreamConfig{Enabled: false}
+	engine, _ := NewQueryEngine(cfg, nil, "initial-model", WithClient(mock))
+
+	_, err := engine.SubmitMessage(context.Background(), "hello")
+	if err == nil {
+		t.Fatal("Expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "Quota exceeded") {
+		t.Errorf("Expected quota exceeded message for payment required, got: %v", err)
+	}
+}
+
+func TestErrorRecovery_ModelNotFound_ErrorInfo(t *testing.T) {
+	mock := &mockRequester{}
+
+	// First call: streaming ModelNotFound via ErrorInfo
+	mock.sendMessageStreamFunc = func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string, idleTimeout time.Duration, fallbackTimeout time.Duration, onStreamingFallback func(context.Context) (*api.Response, error)) (<-chan api.StreamContentBlock, *api.StreamResult) {
+		ch := make(chan api.StreamContentBlock)
+		close(ch)
+		return ch, &api.StreamResult{
+			Error: "model not found",
+			ErrorInfo: &api.ErrorInfo{
+				Category: api.CategoryModelNotFound,
+			},
+		}
+	}
+
+	// Second call: non-streaming SendMessage succeeds
+	mock.sendMessageFunc = func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
+		return &api.Response{
+			Content: []api.ContentBlock{{Type: api.BlockTypeText, Text: "Fallback success"}},
+			Model:   "fallback-model",
+			Usage:   api.Usage{InputTokens: 10, OutputTokens: 10},
+		}, nil
+	}
+
+	cfg := &StreamConfig{Enabled: false}
+	engine, _ := NewQueryEngine(cfg, nil, "initial-model", WithClient(mock))
+
+	result, err := engine.SubmitMessage(context.Background(), "hello")
+	if err != nil {
+		t.Fatalf("Expected success, got error: %v", err)
+	}
+	if result != "Fallback success" {
+		t.Errorf("Expected 'Fallback success', got '%s'", result)
+	}
+}
