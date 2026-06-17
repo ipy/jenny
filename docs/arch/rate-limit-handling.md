@@ -1,5 +1,5 @@
 ---
-title: Rate Limit Handling
+title: Rate Limit Handling & Universal Error Classification
 slug: rate-limit-handling
 priority: P1
 status: done
@@ -7,9 +7,12 @@ spec: complete
 code: done
 package: internal/api
 gaps:
-  []
+  - Provider-specific business code parsers (讯飞, 智谱, MiniMax, 阿里百炼) → Phase 4
+  - International provider classifiers (OpenRouter error_type, AWS Bedrock, Fireworks, Groq) → Phase 5
+  - Engine-level recovery (quota fast-fail, content-filter message, ModelNotFound re-entry) → Phase 6
 depends_on:
   - anthropic-api-client
+  - universal-error-handling
 ---
 # Rate Limit Handling
 
