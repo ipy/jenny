@@ -2,11 +2,14 @@
 title: Dangerous Command Gate
 slug: dangerous-command-gate
 priority: P1
-status: done
+status: partial
 spec: complete
-code: done
+code: partial
 package: internal/tool
-gaps: []
+gaps:
+  - CheckPipelineSegments() skip path at execute level
+  - Pipeline strategy parameter on CommandGate (allowlist vs skip)
+  - PermissionLevel → gate wiring
 depends_on:
   - tool-registry
 ---
@@ -14,7 +17,7 @@ depends_on:
 
 ## Overview
 
-Before Bash execution, commands pass security validation independent of sandbox. Read-only mode adds pipeline-level checks. `--dangerously-skip-permissions` bypasses classifier only when explicitly set.
+Before Bash execution, commands pass security validation independent of sandbox. Read-only levels (`analyze`/`edit`) add pipeline-level checks. Bypass requires `--permission-level unrestricted` or legacy `--dangerously-skip-permissions`.
 
 ## Blocked Patterns (All Modes)
 
@@ -47,10 +50,17 @@ Security validation is **deterministic and auditable** via `CommandGate` pattern
 
 ## Bypass
 
-`--dangerously-skip-permissions` → permission mode `bypassPermissions`:
+Permission levels control which checks are enforced. See [permission-levels.md](../patterns/permission-levels.md) for the full model.
 
-- Skips classifier and security checks in main permission flow.
-- Must be explicit CLI flag; never default in headless production.
+| Level | `CheckCommand()` | `CheckPipelineSegments()` | Pipeline strategy |
+|-------|-----------------|--------------------------|-------------------|
+| `read` | N/A (Bash blocked) | N/A | — |
+| `analyze` | Enforced | Enforced | Allowlist |
+| `edit` | Enforced | Enforced | Allowlist |
+| `execute` | Enforced | Skipped | Skip read-only check |
+| `unrestricted` | Skipped | Skipped | None |
+
+Legacy `--dangerously-skip-permissions` maps to `unrestricted` level — skips classifier and security checks entirely. Must be explicit CLI flag; never default in headless production.
 
 ## Read Tool Device Blocks
 
@@ -70,5 +80,5 @@ Same device path blocklist for Read tool without reading content.
 - **AC1:** Command substitution blocked before execution.
 - **AC2:** Pipeline security gate rejects mutating segment (output redirection, non-allowlisted commands).
 - **AC3:** Git `-c` injection blocked by security gate.
-- **AC4:** Bypass only with explicit flag.
+- **AC4:** Bypass only via `--permission-level unrestricted` or legacy `--dangerously-skip-permissions` flag (see [permission-levels.md](../patterns/permission-levels.md) AC5/AC6).
 - **AC5:** Device paths blocked in Read and Bash.

@@ -2,11 +2,14 @@
 title: CLI
 slug: cli
 priority: P0
-status: done
+status: partial
 spec: complete
-code: done
+code: partial
 package: internal/cli
-gaps: []
+gaps:
+  - --permission-level flag not yet implemented
+  - --permission-level validation (missing value, invalid value) not yet implemented
+  - --dangerously-skip-permissions + --permission-level interaction not yet implemented
 defer_to: P3
 depends_on:
   []
@@ -40,7 +43,8 @@ jenny -p "prompt text"
 | `--strict-mcp-config` | Only use `--mcp-config` servers |
 | `--no-session-persistence` | Disable transcript read/write |
 | `--verbose` | Debug logging to stderr |
-| `--dangerously-skip-permissions` | Bypass permission/classifier gates |
+| `--dangerously-skip-permissions` | Bypass permission/classifier gates (maps to `--permission-level unrestricted`) |
+| `--permission-level <level>` | Set permission level: `read`, `analyze`, `edit` (default), `execute`, `unrestricted`. See [permission-levels.md](../patterns/permission-levels.md). |
 | `--system-prompt <text>` | Replace the default system prompt entirely |
 | `--append-system-prompt <text>` | Append text after the assembled default system prompt |
 | `--print-system-prompt` | Print the assembled system prompt and exit (no API call) |
@@ -59,6 +63,9 @@ jenny -p "prompt text"
 | `--output-format stream-json` | Requires prompt (`-p` or positional) |
 | `--include-partial-messages` | Requires `--output-format stream-json` |
 | `--continue` with no prior sessions | Exit non-zero with error "no sessions to continue" |
+| Both `--dangerously-skip-permissions` and `--permission-level` | `--dangerously-skip-permissions` wins (unrestricted); warning logged |
+| `--permission-level` without value | Exit non-zero with error "permission level required" |
+| Invalid `--permission-level` value | Exit non-zero with error listing valid levels |
 
 ## Exit Codes
 
@@ -85,6 +92,7 @@ Help (`-h`) exits 0. Version (`--version`) uses `constants.Version` for unified 
 | `HTTP_PROXY` | HTTP proxy URL for API requests. |
 | `HTTPS_PROXY` | HTTPS proxy URL for API requests. |
 | `JENNY_DEBUG` | Enable debug slog (`1` = DEBUG) |
+| `JENNY_PERMISSION_LEVEL` | Default permission level when `--permission-level` not specified. Values: `read`, `analyze`, `edit`, `execute`, `unrestricted`. Flag overrides env. |
 | `JENNY_REDACT` | Secret redaction mode (`disabled`, `redact`, `recover`) |
 | `JENNY_TRANSCRIPT_DIR` | Override transcript directory (default: `~/.jenny/transcripts`) |
 | `NO_PROXY` | Comma-separated list of domains to bypass proxy for. |

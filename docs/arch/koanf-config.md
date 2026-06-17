@@ -37,6 +37,7 @@ The `Flags` struct uses `koanf:"<key>"` tags for unmarshalling:
 - `koanf:"mcp-config"` for MCPConfig (string slice)
 - `koanf:"resume"` for SessionResume
 - `koanf:"deny-tool"` for DeniedTools (string slice)
+- `koanf:"permission-level"` for PermissionLevel
 
 ## Environment Variable Mapping
 
@@ -46,6 +47,7 @@ The `Flags` struct uses `koanf:"<key>"` tags for unmarshalling:
 | `JENNY_OUTPUT_FORMAT` | `output-format` | `JENNY_OUTPUT_FORMAT=stream-json` |
 | `JENNY_VERBOSE` | `verbose` | `JENNY_VERBOSE=true` |
 | `JENNY_MCP_CONFIG` | `mcp-config` | JSON array or single path |
+| `JENNY_PERMISSION_LEVEL` | `permission-level` | `JENNY_PERMISSION_LEVEL=execute` |
 
 ## Acceptance Criteria
 
@@ -61,3 +63,7 @@ The `Flags` struct uses `koanf:"<key>"` tags for unmarshalling:
 - System-wide/global configs (`~/.jenny/config.json`)
 - Removing existing `.env` loading in main.go
 - Changes to agent runtime logic
+
+## Related
+
+- Permission levels: [permission-levels.md](../patterns/permission-levels.md)

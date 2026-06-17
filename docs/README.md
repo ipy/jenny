@@ -126,6 +126,7 @@ Specifications for architectural patterns and optional subsystems.
 | [background-tasks.md](./patterns/background-tasks.md) | Background task handling |
 | [memdir.md](./patterns/memdir.md) | Memory directory management |
 | [memory-extraction.md](./patterns/memory-extraction.md) | Memory extraction patterns |
+| [permission-levels.md](./patterns/permission-levels.md) | Five-level permission model (read→unrestricted) |
 | [sandbox.md](./patterns/sandbox.md) | Sandboxed execution abstraction |
 | [skill.md](./patterns/skill.md) | Skill definition and execution |
 | [skills-framework.md](./patterns/skills-framework.md) | Skills framework architecture |

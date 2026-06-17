@@ -23,6 +23,7 @@ Flat roster of parallel agents — no nested teammates. Team coordination gated 
 - `isAgentSwarmsEnabled` gates team tools together.
 - Teammate spawn via Agent tool `name` param.
 - In-process vs tmux backends supported upstream; headless Jenny may use in-process only.
+- **Permission level inheritance**: Subagent receives parent's `PermissionLevel` via tool-context config struct; cannot escalate. See [permission-levels.md](./permission-levels.md).
 
 ## Out of Scope (Headless v1)
 
@@ -33,3 +34,4 @@ SendMessage, team delete, coordinator messaging.
 - **AC1:** No nested named teammates.
 - **AC2:** Swarm feature flag gates all team tools.
 - **AC3:** Flat delegation only in headless mode.
+- **AC4:** Subagent inherits parent's PermissionLevel and cannot escalate (see [permission-levels.md](./permission-levels.md) AC7).
