@@ -155,6 +155,6 @@ To ensure a seamless transition, the system automatically translates legacy envi
 
 ## Implementation Notes
 
-- **Global Registry**: A singleton that tracks health status and rate-limit cooldowns for all configured Keys and Accounts.
-- **StickyClient**: An `api.Requester` implementation that wraps the routing logic and holds the session-specific `ActiveEndpoint`.
+- **Global Registry**: A singleton that tracks health status and rate-limit cooldowns for all configured keys and accounts.
+- **Sticky Client**: A requester implementation that wraps the routing logic and holds the session-specific active endpoint.
 - **Subagent Integration**: Subagents can specify a profile (e.g., `invoke_agent(profile="vision")`) to trigger specialized routing while inheriting the main session's context.

@@ -85,14 +85,10 @@ Assistant entries with thinking blocks are persisted to `.jsonl` transcripts wit
 {"type":"assistant","content":"The answer is 42.","thinking":"6 * 7 = 42","signature":"sig_abc123"}
 ```
 
-The `TranscriptEntry` struct in `internal/session/manager.go` includes:
+The `TranscriptEntry` struct includes optional `thinking` and `signature` fields persisted to the JSONL transcript:
 
-```go
-type TranscriptEntry struct {
-    // ... existing fields ...
-    Thinking  string `json:"thinking,omitempty"`
-    Signature string `json:"signature,omitempty"`
-}
+```json
+{"type":"assistant","content":"The answer is 42.","thinking":"6 * 7 = 42","signature":"sig_abc123"}
 ```
 
 #### Observation: Prompt Caching

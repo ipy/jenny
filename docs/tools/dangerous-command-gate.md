@@ -7,9 +7,9 @@ spec: complete
 code: partial
 package: internal/tool
 gaps:
-  - CheckPipelineSegments() skip path at execute level
-  - Pipeline strategy parameter on CommandGate (allowlist vs skip)
-  - PermissionLevel → gate wiring
+  - Pipeline segment validation skip path at execute level
+  - Pipeline strategy parameter on command gate (allowlist vs skip)
+  - PermissionLevel integration with command gate
 depends_on:
   - tool-registry
 ---
@@ -46,21 +46,21 @@ Prefer flag-level validation over regex where possible.
 
 ## Pattern-Based Gate
 
-Security validation is **deterministic and auditable** via `CommandGate` pattern checks — no ML classifiers. `CheckCommand()` blocks dangerous constructs; `CheckPipelineSegments()` enforces read-only allowlists on pipeline segments.
+Security validation is **deterministic and auditable** via pattern checks — no ML classifiers. The command gate blocks dangerous constructs; pipeline segment validation enforces read-only allowlists on each segment.
 
 ## Bypass
 
 Permission levels control which checks are enforced. See [permission-levels.md](../patterns/permission-levels.md) for the full model.
 
-| Level | `CheckCommand()` | `CheckPipelineSegments()` | Pipeline strategy |
-|-------|-----------------|--------------------------|-------------------|
+| Level | Blocked pattern check | Pipeline segment check | Pipeline strategy |
+|-------|----------------------|----------------------|-------------------|
 | `read` | N/A (Bash blocked) | N/A | — |
 | `analyze` | Enforced | Enforced | Allowlist |
 | `edit` | Enforced | Enforced | Allowlist |
 | `execute` | Enforced | Skipped | Skip read-only check |
 | `unrestricted` | Skipped | Skipped | None |
 
-Legacy `--dangerously-skip-permissions` maps to `unrestricted` level — skips classifier and security checks entirely. Must be explicit CLI flag; never default in headless production.
+Legacy `--dangerously-skip-permissions` maps to `unrestricted` level — all security checks bypassed entirely. Must be explicit CLI flag; never default in headless production.
 
 ## Read Tool Device Blocks
 

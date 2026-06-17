@@ -181,7 +181,7 @@ Spawns subagents with typed tool allowlists. Wire tool name `Agent` (legacy alia
 | Sync | Final text result |
 | Async | `{ status: async_launched, agentId, outputFile }` |
 
-Per-type tools via `SubagentType.FilterTools()` and `FindBuiltin()`. Partial extraction on interrupt.
+Per-type tool allowlists determined by subagent type. Partial extraction on interrupt.
 
 ### Acceptance Criteria
 

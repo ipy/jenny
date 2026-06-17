@@ -36,9 +36,7 @@ Rationale: Placing CWD in Block 3 ensures that if you switch projects, Block 1 a
 
 ### System Prompt Freeze (Process-Level)
 
-The assembled system blocks are **frozen on first call** and cached as `StreamConfig.CachedSystemPrompt`. Subsequent calls to `AssembleSystemPrompt` within the same process return the identical slice — regardless of git status changes, date changes, or memory content updates across turns.
-
-Implementation: `internal/agent/engine_loop.go` captures the result from first `AssembleSystemPrompt` into `e.streamCfg.CachedSystemPrompt`.
+The assembled system blocks are **frozen on first call** and cached in StreamConfig. Subsequent calls to `AssembleSystemPrompt` within the same process return the identical slice — regardless of git status changes, date changes, or memory content updates across turns.
 
 ### Cache-Control Marker
 
@@ -46,9 +44,7 @@ In the Anthropic provider, system prompt blocks are sent as an array of content 
 
 ### Resume Persistence (Cross-Process)
 
-On first assembly, the frozen system prompt blocks are joined with `\n\n` and persisted to the transcript as a `state` entry with field `system_prompt`. On session resume with `-r`, the `CachedSystemPrompt` is restored as a single-element slice — ensuring the same system prompt bytes are sent across process boundaries.
-
-Implementation: `session.Manager.AppendSystemPrompt()`, `session.Manager.LoadSystemPrompt()`, and `engine.go` restore logic.
+On first assembly, the frozen system prompt blocks are joined with `\n\n` and persisted to the transcript as a `state` entry with field `system_prompt`. On session resume with `-r`, the cached system prompt is restored from the transcript — ensuring the same system prompt bytes are sent across process boundaries.
 
 ## Assembly Flow
 
@@ -81,7 +77,7 @@ The default intro instructs the agent to use it for all intermediate files. To m
 
 The prefix substitution happens **before** the relative-path join with `cwd`, so the agent can write `$JENNY_SCRATCHPAD/foo.txt` regardless of the current working directory. The resolved path is cleaned and validated to be under the scratchpad directory, preventing escape via `..` or symlinks.
 
-Implementation: `internal/tool/scratchpad.go:ResolveScratchpadPrefix`. The `JENNY_SCRATCHPAD` env var is injected in `bash.go` `Execute` and `executeBackground`.
+The scratchpad prefix is resolved before the relative-path join with cwd.
 
 ## DynamicSystemSuffix
 

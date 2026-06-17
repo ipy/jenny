@@ -22,13 +22,13 @@ The Active Skills Persistence feature established the pattern: non-compacted sta
 ## Acceptance Criteria
 
 ### AC1: maxBudgetUsd as QueryEngine method
-`QueryEngine` exposes `SetMaxBudgetUsd(amount float64)` that sets the field on StreamConfig. When set, the engine checks accumulated cost against this budget before each API call. If exceeded, the loop terminates with result error type `error_budget_exceeded`. The existing `maxBudgetUsd` StreamConfig field is not removed — the method is the canonical setter.
+QueryEngine exposes a method to set the maximum budget in USD. When set, the engine checks accumulated cost against this budget before each API call. If exceeded, the loop terminates with result error type `error_budget_exceeded`. The method is the canonical setter for the existing StreamConfig field.
 
 ### AC2: permissionDenials cross-turn persistence
-When a tool execution is denied by the permission gate, the denial reason (tool name + input summary) is recorded in `StreamConfig.PermissionDenials []string`. On subsequent turns within the same SubmitMessage, a tool with identical name and input summary is not re-executed — the engine returns the cached denial. PermissionDenials is a non-compacted field that survives compaction.
+When a tool execution is denied by the permission gate, the denial reason (tool name + input summary) is recorded in StreamConfig. On subsequent turns within the same query, a tool with identical name and input summary is not re-executed — the engine returns the cached denial. Permission denials survive context compaction as a non-compacted field.
 
 ### AC3: discoveredSkillNames cross-turn persistence
-Skill names discovered during execution (e.g., via path-matching in skills framework) are stored in `StreamConfig.DiscoveredSkillNames []string` across turns within the same query. This field is non-compacted and survives compaction. A skill name is only appended if not already present (deduplication).
+Skill names discovered during execution (e.g., via path-matching in skills framework) are stored in StreamConfig across turns within the same query. This field is non-compacted and survives compaction. A skill name is only appended if not already present (deduplication).
 
 ### AC4: No regression on existing ACs
 All existing QueryEngine acceptance criteria (AC1-AC5 from query-engine.md pass, all existing Active Skills Persistence ACs pass, all existing tool tests pass).
@@ -39,22 +39,19 @@ When maxBudgetUsd is 0 (unset), cost checking is skipped entirely — no error, 
 ## Implementation Architecture
 
 ### Non-compacted State Location
-`StreamConfig` already has `ActiveSkills []ActivatedSkill`. Added `PermissionDenials []string` and `DiscoveredSkillNames []string` as sibling fields, marked with comments: `// Non-compacted: survives context compaction.`
+Permission denials and discovered skill names are stored as sibling fields alongside `ActiveSkills` in StreamConfig. All are marked as non-compacted fields that survive context compaction.
 
-### maxBudgetUsd Method
-Added to `internal/agent/engine.go`. Signature: `func (e *QueryEngine) SetMaxBudgetUsd(amount float64)`. Implementation: `e.streamCfg.MaxBudgetUSD = amount`. The cost check lives in `engine_loop.go` before the API call — gate on `e.streamCfg.MaxBudgetUSD > 0 && totalCost >= e.streamCfg.MaxBudgetUSD`.
+### Budget Method
+QueryEngine exposes a setter method for the maximum budget. The cost check runs in the engine loop before each API call — when a budget is set and accumulated cost exceeds it, the loop terminates early.
 
-### permissionDenials Hook Point
-The permission gate is called during tool execution in the executor. After a denial, append to `e.streamCfg.AddPermissionDenial()`. Before executing a tool, check `e.streamCfg.HasPermissionDenial()` for a matching entry. Match on `toolName + toolInputKey` (serialized input keys via `BuildDenialKey()`).
+### Permission Denial Hook Point
+The permission gate is called during tool execution. After a denial, the reason is appended to the denial list. Before executing a tool, the denial list is checked for a matching entry. Match on tool name and serialized input keys (keys sorted alphabetically for deterministic matching).
 
-### discoveredSkillNames Hook Point
-The skills framework's skill discovery (called during tool execution) already accumulates names. Currently stored locally in the loop. Moved to `e.streamCfg.AddDiscoveredSkillName()` with a helper that deduplicates before appending.
+### Discovered Skill Names Hook Point
+Skill names discovered during tool execution are accumulated in StreamConfig with deduplication before appending.
 
 ### Thread Safety
-`AddPermissionDenial`, `HasPermissionDenial`, and `AddDiscoveredSkillName` use `sync.Mutex` on StreamConfig to protect concurrent access from parallel tool execution goroutines. The mutex is embedded in StreamConfig.
-
-### Denial Key Format
-`BuildDenialKey(toolName string, input map[string]any) string` generates a unique key: `toolName:key1=val1,key2=val2` where keys are sorted alphabetically for deterministic matching.
+All concurrent access to StreamConfig denial and skill name lists from parallel tool execution goroutines is protected by a mutex embedded in StreamConfig.
 
 ## Test Coverage
 

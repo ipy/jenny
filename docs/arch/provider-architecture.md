@@ -24,11 +24,11 @@ type Provider interface {
 
 ## Provider Kinds
 
-| Kind | Implementation |
-|------|---------------|-------|
-| `anthropic` | `provider_anthropic.go` |
-| `openai` | `provider_openai.go` |
-| `genai` | `provider_genai.go` |
+| Kind | Description |
+|------|-------------|
+| `anthropic` | Anthropic API (Claude models) |
+| `openai` | OpenAI-compatible API (Chat/Responses) |
+| `genai` | Google GenAI / Vertex AI (Gemini models) |
 
 ## Provider Selection
 
@@ -44,19 +44,18 @@ type Provider interface {
 In June 2026, the architecture underwent a major optimization to address "SDK Bloat." The official SDKs (`openai-go`, `anthropic-sdk-go`, `google.golang.org/genai`) were found to contribute nearly 40MB of binary bloat due to extensive code generation for unsupported endpoints (e.g., Audio, Fine-tuning) and heavy use of generics.
 
 Jenny now implements a **Surgical HTTP Client** approach:
-1. **Lightweight Type Definitions:** We define only the necessary `struct` types for the endpoints we use (e.g., `/chat/completions`, `/v1/messages`). These are located in `*_types.go` files (e.g., `openai_types.go`).
-2. **Polymorphic Field Handling:** We use `json.RawMessage` and custom marshaling logic to robustly handle complex, multi-modal API fields (like Anthropic's `content` arrays or Gemini's `parts`) without needing thousands of generated helper methods.
-3. **Common Transport:** A shared `HTTPClient` (`http.go`) handles retries, context cancellation, and Server-Sent Events (SSE) parsing.
+1. **Lightweight Type Definitions:** Only the necessary struct types for the endpoints used (e.g., `/chat/completions`, `/v1/messages`) are defined, in per-provider type files.
+2. **Polymorphic Field Handling:** `json.RawMessage` and custom marshaling logic handle complex, multi-modal API fields (like Anthropic's `content` arrays or Gemini's `parts`) without needing thousands of generated helper methods.
+3. **Common Transport:** A shared HTTP client handles retries, context cancellation, and Server-Sent Events (SSE) parsing.
 4. **Binary Size Impact:** This approach reduced the stripped binary size from ~34MB to **<8MB**, significantly improving startup time and distribution size.
 
 ## Adding a New Provider
 
-1. **Create the provider file** in `internal/api/provider_<name>.go`
-2. **Implement the `Provider` interface** with `SendMessage`, `SendMessageStream`, and `Kind()`
-3. **Add to `NewClientWithModel`** in `client.go` — add an env var check in the selection chain
-4. **Add provider kind constant** in `provider.go` if you need a distinct `ProviderKind`
-5. **Add tests** — follow the pattern in `provider_openai_test.go`
-6. **Update this doc**
+1. **Create a provider implementation** implementing the `Provider` interface with `SendMessage`, `SendMessageStream`, and `Kind()`
+2. **Register the provider** in the client selection chain with an environment variable check
+3. **Add a provider kind constant** if a distinct `ProviderKind` is needed
+4. **Add tests** — follow the pattern of existing provider tests
+5. **Update this doc**
 
 ### Interface Contract
 
@@ -96,20 +95,15 @@ Providers set `SupportsPromptCaching: true` or `false` in `Capabilities` to cont
 
 ### Retry Logic
 
-The `RetryConfig` struct in `retry.go` provides shared retry configuration. Providers should implement `ProviderWithRetryConfig` and call `sendWithRetry` with exponential backoff for HTTP errors. Retryable status codes: 429, 408, 409, 500, 502, 503, 504, 529.
+Shared retry configuration is available for all providers. Providers should implement the retry config interface and use the shared retry mechanism with exponential backoff for HTTP errors. Retryable status codes: 429, 408, 409, 500, 502, 503, 504, 529.
 
 ## Shared Types and Constants
 
-All types are defined in `client.go`:
-- `Message`, `ToolUseBlock`, `ToolResultBlock`, `ToolResult`, `ToolUse`
-- `Response`, `ContentBlock`, `Usage`, `ToolParam`, `ToolInputSchema`
-- `StreamContentBlock`, `StreamResult`
+Core message and streaming types are defined centrally:
+- Message, tool use/result blocks, response, content block, usage, tool parameters
+- Streaming content block and stream result types
 
-All content block, event, delta, and role constants are centralized in `anthropic_types.go`:
-- Block types: `BlockTypeText`, `BlockTypeThinking`, `BlockTypeToolUse`, `BlockTypeToolResult`, `BlockTypeRedactedThinking`, `BlockTypeWebSearchResult`
-- SSE event types: `EventMessageStart`, `EventContentBlockStart`, `EventContentBlockDelta`, `EventContentBlockStop`, `EventMessageDelta`, `EventMessageStop`
-- Delta types: `DeltaTypeThinking`, `DeltaTypeText`, `DeltaTypeInputJSON`, `DeltaTypeSignature`
-- Message roles: `RoleUser`, `RoleAssistant`, `RoleSystem`
+Content block, event, delta, and role constants are centralized in a shared constants file, ensuring consistent string values across all providers.
 
 Providers MUST use these constants rather than string literals for content block types and roles.
 

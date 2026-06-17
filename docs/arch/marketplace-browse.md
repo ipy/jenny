@@ -92,15 +92,15 @@ Each item has: `name`, `description`, `version`, `download_url`.
 
 ### Backend
 
-1. **handler.go**: Add `MarketplaceItem` type, `handleMarketplaceBrowse`, `handleMarketplaceInstall` handlers
-2. **install.go**: New file with `downloadAndExtract` function using `archive/tar` and `compress/gzip`
+- Marketplace item type and browse/install HTTP handlers
+- Download and extract logic using tar/gzip (stdlib only)
 
 ### Frontend
 
-1. **App.tsx**: Add `MarketplaceBrowseView` component
-2. Marketplace tab shows "Browse" button
-3. Browse view fetches items via API, shows Install buttons
-4. Install updates view state (button → "Installed" / disabled)
+- Marketplace browse view component
+- Marketplace tab shows "Browse" button
+- Browse view fetches items via API, shows Install buttons
+- Install updates view state (button → "Installed" / disabled)
 
 ## Out of Scope
 

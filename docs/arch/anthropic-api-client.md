@@ -115,7 +115,7 @@ Tool serialization uses **universal normalization** — all fixes apply uncondit
 
 ### Universal Normalization
 
-The following passes are applied universally via `NormalizeMessages` in `internal/api/normalization.go`:
+The following passes are applied universally via `NormalizeMessages`:
 
 | Pass | Trigger | Description |
 |------|---------|-------------|

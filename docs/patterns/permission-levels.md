@@ -18,7 +18,7 @@ depends_on:
 
 ## Overview
 
-Replace the binary `skipPermissions bool` with a five-level `PermissionLevel` enum. Each level adds exactly one core capability over the previous, creating a predictable capability ladder. The model separates two orthogonal control axes — **Bash execution** and **file write** — that the current binary flag conflates.
+A five-level `PermissionLevel` capability ladder replaces the current binary `skipPermissions` flag. Each level adds exactly one core capability over the previous, creating a predictable capability ladder. The model separates two orthogonal control axes — **Bash execution** and **file write** — that the current binary flag conflates.
 
 ### Problem Statement
 
@@ -56,7 +56,7 @@ Use case: Audit agents, documentation generators, CI lint reviewers that only ne
 
 #### `analyze` — Read-Only Analysis via Bash
 
-Extends `read` with Bash commands that are provably non-mutating. Every pipeline segment must pass `isSegmentReadOnly()`:
+Extends `read` with Bash commands that are provably non-mutating. Every pipeline segment must pass read-only validation:
 
 - Allowlist: `cat`, `head`, `tail`, `ls`, `find`, `grep`, `rg`, `git log`, `git diff`, `git show`, `git status`, `git branch`, `git remote`, `wc`, `sort`, `uniq`, `echo`, `true`
 - Blocked: `$VAR` expansion (unquoted), output redirection (`>`, `>>`), pipes to mutating commands, `cd && git` escape patterns
@@ -68,7 +68,7 @@ Use case: Security scanners, codebase analysts that need to run `git log --oneli
 
 Extends `analyze` with file write capability via Write/Edit tools. Bash remains on the read-only allowlist.
 
-- Write/Edit require `PathInWorkingDir()` — target must be within cwd or scratchpad
+- Write/Edit require target path to be within cwd or scratchpad
 - Write/Edit require read-before-write — must `Read` the same path before modifying
 - Bash still restricted to 18-command read-only allowlist
 - Edit replaces file content in-place; Write creates or overwrites
@@ -79,15 +79,15 @@ Use case: Code modification agents that edit source files but should not run arb
 
 #### `execute` — Command Execution with Guardrails
 
-Extends `edit` by flipping Bash pipeline validation from allowlist (default-deny) to **skipped** — pipeline segments are no longer restricted to the 18-command read-only allowlist. `CheckCommand()` pattern blocks remain enforced (substitution, injection, device paths), and `validateCommandPaths()` constrains referenced paths to cwd/scratchpad.
+Extends `edit` by allowing Bash mutation commands — pipeline segments are no longer restricted to the read-only allowlist. Dangerous pattern blocks remain enforced (substitution, injection, device paths), and command-referenced paths are constrained to cwd/scratchpad.
 
 - **Allowed**: Any Bash command not matching blocklist patterns
 - **Blocked**: Command substitution (`$()`, backticks), process substitution (`<()`, `>()`), device paths (`/dev/*`), proc environ (`/proc/*/environ`), git config injection (`git -c`, `--exec-path`), carriage return smuggling, ANSI-C quoting tricks
-- `validateCommandPaths()`: Command-referenced paths must be within cwd or scratchpad — this is a filesystem boundary constraint (separate from the mutation-capability axis); it prevents path escape regardless of whether the command itself is mutating.
+- Command-referenced paths must be within cwd or scratchpad — this is a filesystem boundary constraint (separate from the mutation-capability axis); it prevents path escape regardless of whether the command itself is mutating.
 - Sandbox remains active: filesystem and network policy still enforced at OS level
 - Write/Edit rules unchanged from `edit`
 
-The pipeline strategy shift is the key security transition: `analyze`/`edit` enforce a read-only allowlist on every pipeline segment, while `execute` skips that allowlist — any command is allowed through the pipeline gate, but `CheckCommand()` still blocks syntactically dangerous patterns.
+The pipeline strategy shift is the key security transition: `analyze`/`edit` enforce a read-only allowlist on every pipeline segment, while `execute` skips that allowlist — any command is allowed through the pipeline gate, but dangerous pattern blocks still block syntactically dangerous constructs.
 
 Use case: Full development agents that run `go test`, `npm install`, `mkdir`, `cp`, but must not escape sandbox or inject commands.
 
@@ -95,9 +95,9 @@ Use case: Full development agents that run `go test`, `npm install`, `mkdir`, `c
 
 All safety gates disabled. Equivalent to current `--dangerously-skip-permissions`.
 
-- CommandGate: `CheckCommand()` and `CheckPipelineSegments()` skipped entirely
-- Sandbox: Not wrapped
-- Write/Edit: No `PathInWorkingDir()`, no read-before-write
+- Command gate: All checks bypassed
+- Sandbox: Not active
+- Write/Edit: No path restriction, no read-before-write
 - Intended ONLY for trusted, isolated environments
 
 Use case: Emergency recovery, fully trusted CI pipelines, local development with explicit acknowledgment of risk.
@@ -107,9 +107,9 @@ Use case: Emergency recovery, fully trusted CI pipelines, local development with
 | Check | read | analyze | edit | execute | unrestricted |
 |-------|------|---------|------|---------|-------------|
 | Bash execution | Blocked | Allowed | Allowed | Allowed | Allowed |
-| `CheckPipelineSegments()` | N/A | Enforced (allowlist) | Enforced (allowlist) | Skipped | Skipped |
-| `CheckCommand()` pattern blocks | N/A | Enforced | Enforced | Enforced | Skipped |
-| `validateCommandPaths()` | N/A | Enforced | Enforced | Enforced | Skipped |
+| Pipeline read-only allowlist | N/A | Enforced | Enforced | Skipped | Skipped |
+| Dangerous pattern blocks | N/A | Enforced | Enforced | Enforced | Skipped |
+| Command path boundary | N/A | Enforced | Enforced | Enforced | Skipped |
 | Sandbox wrap | N/A | Active | Active | Active | Skipped |
 | Pipeline strategy | — | Allowlist | Allowlist | Skip read-only check | None |
 
@@ -118,12 +118,12 @@ Use case: Emergency recovery, fully trusted CI pipelines, local development with
 | Check | read | analyze | edit | execute | unrestricted |
 |-------|------|---------|------|---------|-------------|
 | Write/Edit tools | Blocked | Blocked | Allowed | Allowed | Allowed |
-| `PathInWorkingDir()` | N/A | N/A | Enforced | Enforced | Skipped |
+| Path within cwd/scratchpad | N/A | N/A | Enforced | Enforced | Skipped |
 | Read-before-write | N/A | N/A | Enforced | Enforced | Skipped |
 
 ## Blocked Patterns at `execute` Level
 
-At `execute`, `CheckCommand()` pattern blocks remain enforced — command substitution, process substitution, device paths, proc environ, git config injection, and all other dangerous constructs. These are the same patterns listed as "Blocked Patterns (All Modes)" in [dangerous-command-gate.md](../tools/dangerous-command-gate.md); see that doc for the full table.
+At `execute`, dangerous pattern blocks remain enforced — command substitution, process substitution, device paths, proc environ, git config injection, and all other dangerous constructs. These are the same patterns listed as "Blocked Patterns (All Modes)" in [dangerous-command-gate.md](../tools/dangerous-command-gate.md); see that doc for the full table.
 
 ## Sandbox Coordination
 
@@ -131,14 +131,14 @@ PermissionLevel and Sandbox are complementary layers:
 
 | Layer | Scope | Enforced At |
 |-------|-------|------------|
-| PermissionLevel | Logical capability boundaries | Application (Go code) |
+| PermissionLevel | Logical capability boundaries | Application |
 | Sandbox | OS-level filesystem/network | Kernel / sandbox-exec |
 
-**Check ownership**: `CheckCommand()` and `CheckPipelineSegments()` belong to `CommandGate` (internal/tool/gate.go). `validateCommandPaths()` and path-based restrictions belong to `BashTool` (internal/tool/bash.go) — they are tool-level checks, not gate-level. Flipping to `unrestricted` skips both gate and tool-level checks.
+Command gate checks (pipeline validation, pattern blocks) are gate-level concerns. Path-based restrictions are tool-level concerns. At `unrestricted`, both gate and tool-level checks are bypassed.
 
-At `execute` level, CommandGate blocks syntactic attacks (substitution, injection) while Sandbox constrains runtime effects (filesystem writes, network access). Neither is sufficient alone — together they provide defense in depth.
+At `execute` level, the command gate blocks syntactic attacks (substitution, injection) while Sandbox constrains runtime effects (filesystem writes, network access). Neither is sufficient alone — together they provide defense in depth.
 
-Sandbox `refreshConfig()` must be called when PermissionLevel changes at runtime (e.g., via session resume with a different level). See [sandbox.md](./sandbox.md) for `refreshConfig()` definition.
+Sandbox configuration must be refreshed when PermissionLevel changes at runtime (e.g., via session resume with a different level). See [sandbox.md](./sandbox.md).
 
 ## CLI Changes
 
@@ -169,8 +169,6 @@ Following [koanf-config.md](../arch/koanf-config.md) layering (highest to lowest
 
 When both `--dangerously-skip-permissions` and `--permission-level` are specified, `--dangerously-skip-permissions` takes precedence (unrestricted) and a warning is logged.
 
-Verified: existing `skipPermissions=true` callers in `gate.go` and `bash.go` skip all checks; mapping to `unrestricted` preserves this behavior exactly.
-
 ## Migration Path
 
 1. **Phase 1**: Add `PermissionLevel` enum; internal code reads it; CLI accepts `--permission-level`; default maps to `edit`; `--dangerously-skip-permissions` maps to `unrestricted`. No behavior change.
@@ -185,11 +183,11 @@ Verified: existing `skipPermissions=true` callers in `gate.go` and `bash.go` ski
 | `read` level + MCP tool that writes | MCP tool gating is out of scope for v1 (see below) |
 | `analyze` level + `echo "hello" > file` | Blocked: output redirection fails read-only check |
 | `edit` level + `npm install` via Bash | Blocked: `npm` not in 18-command allowlist |
-| `execute` level + `rm -rf /` | Blocked by `validateCommandPaths()` (path outside cwd) + Sandbox filesystem policy |
-| `execute` level + `$(whoami)` | Blocked by `CheckCommand()` pattern block (command substitution) |
+| `execute` level + `rm -rf /` | Blocked by path boundary check (path outside cwd) + Sandbox filesystem policy |
+| `execute` level + `$(whoami)` | Blocked by dangerous pattern block (command substitution) |
 | `unrestricted` level + `rm -rf /` | Allowed (no gate); operator assumes full risk |
-| Resume session at different level | Apply new level; call `refreshConfig()` on Sandbox |
-| Subagent inherits level | Subagent receives parent's PermissionLevel via its tool-context config struct; cannot escalate. See [swarm.md](./swarm.md). |
+| Resume session at different level | Apply new level; refresh Sandbox configuration |
+| Subagent inherits level | Subagent receives parent's PermissionLevel via its tool-context config; cannot escalate. See [swarm.md](./swarm.md). |
 
 ## Out of Scope (v1)
 
@@ -207,7 +205,7 @@ Verified: existing `skipPermissions=true` callers in `gate.go` and `bash.go` ski
 - **AC4:** `--permission-level execute` allows Bash mutation commands while blocking dangerous patterns (substitution, injection, device paths).
 - **AC5:** `--dangerously-skip-permissions` maps to `unrestricted` with no behavior change.
 - **AC6:** Both `--dangerously-skip-permissions` and `--permission-level` specified → unrestricted + warning logged to stderr (structured log, following [structured-logging.md](../arch/structured-logging.md)).
-- **AC7:** Subagent receives parent's `PermissionLevel` via tool-context config struct and cannot escalate beyond it (see [swarm.md](./swarm.md)).
+- **AC7:** Subagent receives parent's `PermissionLevel` via tool-context config and cannot escalate beyond it (see [swarm.md](./swarm.md)).
 - **AC8:** Configuration precedence: CLI flag > `JENNY_PERMISSION_LEVEL` env > `.jenny/config.json` key (see [koanf-config.md](../arch/koanf-config.md)).
 - **AC9:** Write/Edit at `edit` and `execute` require a prior `Read` of the same path; `unrestricted` skips the check.
 

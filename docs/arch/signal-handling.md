@@ -18,36 +18,19 @@ The jenny process must respond gracefully to SIGINT (Ctrl+C) and SIGTERM (kill) 
 
 ## Motivation
 
-The `run()` function in `cmd/jenny/main.go` previously used `context.Background()` — a non-cancellable context — for the entire agent session. When the user pressed Ctrl+C, Go's default SIGINT handler killed the process without:
+The process previously used a non-cancellable context for the entire agent session. When the user pressed Ctrl+C, Go's default SIGINT handler killed the process without:
 1. Waiting for in-flight API calls to complete
 2. Flushing session state (cost tracking, transcripts)
 
 ## Implementation
 
-**File: `cmd/jenny/main.go`**
+The main entry point creates a signal-aware context that cancels on SIGINT (Ctrl+C) or SIGTERM:
 
-Replace `context.Background()` with `signal.NotifyContext`:
-
-```go
-import (
-    "context"
-    "os/signal"    // NEW
-    "syscall"     // NEW
-    // ... existing imports
-)
-
-// Create context that cancels on Ctrl+C (SIGINT) or SIGTERM
-ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-defer stop()
-```
-
-**How it works:**
-
-1. `signal.NotifyContext` creates a context derived from `Background()` that cancels when the process receives `os.Interrupt` (Ctrl+C on all platforms) or `syscall.SIGTERM` (kill command on Unix).
-2. When Ctrl+C is pressed, the context is cancelled.
-3. The agent loop's top-of-iteration guard (`if ctx.Err() != nil`) at `internal/agent/engine_loop.go:160` catches this and returns gracefully.
-4. Pending HTTP requests (which use `http.NewRequestWithContext(ctx, ...)`) are immediately aborted.
-5. The `RunStream` return path flushes cost state and session transcript.
+- A signal-notify context is derived from `context.Background()`, listening for `os.Interrupt` and `syscall.SIGTERM`
+- When Ctrl+C is pressed, the context is cancelled
+- The agent loop detects context cancellation at the top of each iteration and returns gracefully
+- Pending HTTP requests (using context-aware request construction) are immediately aborted
+- The `RunStream` return path flushes cost state and session transcript
 
 **Terminal output after Ctrl+C:**
 ```

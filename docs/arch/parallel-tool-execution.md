@@ -16,16 +16,11 @@ depends_on:
 
 ## Overview
 
-The agent loop uses `ToolExecutor` (`internal/agent/executor.go`) to run model-requested tools. Consecutive read-only tools execute in parallel; mutating and shell tools are serialized. Results are returned in **request order**, not completion order.
+The agent loop uses a tool executor to run model-requested tools. Consecutive read-only tools execute in parallel; mutating and shell tools are serialized. Results are returned in **request order**, not completion order.
 
 ## ToolExecutor
 
-```go
-executor := NewToolExecutor(tools, cwd)
-// or with cross-turn state (permission denial cache):
-executor := NewToolExecutorWithStreamConfig(tools, cwd, streamCfg)
-results, err := executor.Execute(ctx, toolUseBlocks)
-```
+The tool executor accepts a tool set and working directory (optionally with cross-turn state for permission denial caching) and returns results in request order.
 
 ## Partitioning (`partitionGroups`)
 

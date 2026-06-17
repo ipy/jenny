@@ -122,65 +122,40 @@ Extraction behavior:
 
 ## Implementation
 
-| Concern | Location |
-|---------|----------|
-| CLI subcommand dispatch + `clean` and `compact` parsers | `internal/cli/cli.go` |
-| `jenny clean` logic | `internal/clean/clean.go` |
-| `jenny compact` archive write + directory walk | `internal/compact/compact.go` |
-| Resume-time archive extraction | `internal/session/manager.go` (or a thin wrapper called from `cmd/jenny/main.go` before resume) |
-| CLI subcommand routing from `cmd/jenny/main.go` | `shouldRunClean()`, `shouldRunCompact()` mirror `shouldLaunchPortal()` |
+| Concern | Responsibility |
+|---------|---------------|
+| CLI subcommand dispatch + `clean` and `compact` parsers | CLI argument parsing |
+| `jenny clean` logic | Walk sessions directory; print or remove entries |
+| `jenny compact` archive write + directory walk | Stream directory into tar.gz archive |
+| Resume-time archive extraction | Transparent extraction when resuming from archived session |
+| CLI subcommand routing | Detect `clean`/`compact` subcommands before main agent flow |
 | Env knob for archive retention after resume | `JENNY_COMPACT_KEEP_ARCHIVE` (any non-empty value = keep) |
 
-### `internal/clean/clean.go`
+### Clean
 
-Exports:
+The clean function walks the sessions directory under Jenny home. If the directory does not exist or has no entries, it prints `nothing to clean` and exits successfully. Otherwise it iterates entries and either prints (dry-run) or removes them. Returns exit code 0 on success.
 
-```go
-// RunClean performs `jenny clean`.
-//   - dryRun: when true, print "would remove:" lines and exit without mutation.
-//   - stdout, stderr: writers for output.
-// Returns exit code (0 = success).
-func RunClean(dryRun bool, stdout, stderr io.Writer) int
-```
+### Compact
 
-The implementation walks `filepath.Join(constants.JennyHomeDir(), "sessions")`. If the directory does not exist or `os.ReadDir` returns no entries, print `nothing to clean` and return 0. Otherwise iterate entries and either print or `os.RemoveAll`.
+The compact function iterates session directories and archives each one:
 
-### `internal/compact/compact.go`
+- Use stdlib `archive/tar` and `compress/gzip` only — no third-party deps.
+- Stream the directory into a temporary file, sync, then atomically rename to the final archive path.
+- The archive root is `<id>/` to keep the archive self-contained.
 
-Exports:
+Key exported operations:
 
-```go
-// RunCompact performs `jenny compact [id]`. Iterates every direct child of
-// the sessions directory when id is empty.
-func RunCompact(id string, dryRun, force bool, stdout, stderr io.Writer) int
-
-// CompactOne compacts a single session directory. Exposed for tests.
-func CompactOne(sessionsDir, id string, force bool, stdout, stderr io.Writer) error
-
-// ExtractArchive extracts <archivePath> into <destParent>/<id>. Used both
-// during resume and by tests. The archive is removed on success unless
-// keepArchive is true.
-func ExtractArchive(archivePath, destParent, id string, keepArchive bool) error
-```
-
-Implementation notes:
-
-- Use `archive/tar` and `compress/gzip` only — no third-party deps.
-- Stream the directory into `<id>.tar.gz.tmp`, `fsync`, `os.Rename` to `<id>.tar.gz`, then `os.RemoveAll(<id>/)`.
-- The tar header `Name` is `<id>/<relative-path>` to keep the archive self-contained.
+- **RunCompact**: Iterate and compact all or a single session directory
+- **CompactOne**: Compact a single session directory (exposed for tests)
+- **ExtractArchive**: Extract an archive to a destination directory; optionally remove the archive after success
 
 ### Resume extraction
 
-A helper `internal/session.MaybeExtractArchive(id string) error` checks: if `sessions/<id>/transcript.jsonl` is missing but `sessions/<id>.tar.gz` exists, call `compact.ExtractArchive` and return any error. Called from `cmd/jenny/main.go` immediately before the `sessionManager.SessionExists` check, so the existing flow continues unmodified.
+Before checking if a session exists on resume, if the session directory is missing but an archive exists, the archive is transparently extracted. This ensures the existing resume flow continues unmodified.
 
 ### CLI plumbing
 
-`internal/cli/cli.go` `Parse()` is extended with two helpers:
-
-- `IsCleanSubcommand(args []string) bool` — true when `args[0] == "clean"`.
-- `IsCompactSubcommand(args []string) bool` — true when `args[0] == "compact"`.
-
-These mirror the existing `shouldLaunchPortal()` pattern. The `Parse()` function itself does not dispatch to them; `cmd/jenny/main.go` calls them after the `shouldLaunchPortal` check.
+The CLI parser detects `clean` and `compact` subcommands via dedicated helper functions, mirroring the existing portal detection pattern. The main entry point calls these after other subcommand checks.
 
 ### Help output
 

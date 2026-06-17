@@ -14,7 +14,7 @@ depends_on:
 
 ## Overview
 
-Jenny builds the tool list via a **fluent builder API** (`internal/tool/registry.go`). The registry assembles built-in tools first, then MCP tools, filtered by deny rules and feature flags.
+Jenny builds the tool list via a **fluent builder API**. The registry assembles built-in tools first, then MCP tools, filtered by deny rules and feature flags.
 
 ## Registration Flow
 

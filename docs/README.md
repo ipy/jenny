@@ -4,6 +4,16 @@ Clean-room specifications for headless agent implementation. Each doc is the sou
 
 **Workflow:** Documentation → Tests (`internal/**/*_test.go`) → Code
 
+### Writing Conventions
+
+Non-adhoc documents (`docs/arch/`, `docs/tools/`, `docs/patterns/`) describe the **desired end-state**, not implementation instructions. Follow these rules:
+
+- **Describe what, not how**: State the expected behavior and constraints, not the code changes needed to achieve them. Write "The target path must be within cwd or scratchpad" instead of "Replace `PathInWorkingDir()` with ...".
+- **No code-operation language**: Avoid verbs like "Replace", "Wire into", "Flip", "Add", "Remove" when describing a feature. These belong in adhoc migration plans, not in spec documents.
+- **No function/method names in behavior descriptions**: Express checks and constraints by their semantic meaning ("dangerous pattern blocks", "command path boundary") rather than by the function that implements them (`CheckCommand()`, `validateCommandPaths()`). Function names belong in code comments, not specs.
+- **No source file references**: Do not reference specific `.go` files or line numbers to explain behavior. Cross-reference other spec documents by slug instead.
+- **Adhoc documents are exempt**: Documents in `docs/adhoc/` (or the Migration Path / Implementation Plan sections within a spec) may freely use code-operation language, function names, and file references — they are transient implementation guides.
+
 ### Ad-hoc Documentation Lifecycle
 For one-time tasks, bug investigations, or transient implementation plans, create documents in the `docs/adhoc/` directory. Once the task is completed and verified, **consolidate** necessary information into existing or new permanent documents in `docs/arch/`, `docs/tools/`, or `docs/patterns/`, then delete the ad-hoc file.
 

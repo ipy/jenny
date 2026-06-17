@@ -81,33 +81,11 @@ Placeholder format: `[REDACTED:<hex>]` where `<hex>` is a random 8-character hex
 
 ### Tool Result Redaction
 
-In `engine_loop.go`, tool results are redacted before being sent to the model:
-
-```go
-// Line ~640: before appending to toolResults
-if e.secretRedactor != nil && e.secretRedactor.Enabled() {
-    emitContent = e.secretRedactor.Redact(emitContent)
-}
-```
+Tool results are redacted before being sent to the model. When the redactor is enabled, the result content is passed through the redactor, which replaces detected secrets with placeholders.
 
 ### Tool Input Recovery
 
-In `engine_loop.go`, tool inputs are recovered before execution:
-
-```go
-// Line ~580: before executor.Execute
-if e.secretRedactor != nil && e.secretRedactor.Enabled() {
-    for i, block := range execBlocks {
-        if inputJSON, err := json.Marshal(block.Input); err == nil {
-            recovered := e.secretRedactor.Recover(string(inputJSON))
-            var ri map[string]any
-            if err := json.Unmarshal([]byte(recovered), &ri); err == nil {
-                execBlocks[i].Input = ri
-            }
-        }
-    }
-}
-```
+Tool inputs are recovered before execution. When the redactor is in recover mode, placeholder values in tool input JSON are replaced with their original secret values before the tool is invoked.
 
 ### System Prompt Instruction
 
@@ -232,22 +210,12 @@ For each rule, in order:
 
 ### Shannon entropy (referenced from gitleaks)
 
-`shannonEntropy(data)` is mirrored verbatim from
-`github.com/zricethezav/gitleaks/v8/detect/utils.go` (gitleaks keeps this
-helper unexported, so the 10-line function is inlined with a `// Copied
-verbatim from ...` comment). All entropy-gated rules call this helper.
+`shannonEntropy(data)` is mirrored from gitleaks' unexported helper
+(the function is inlined with a comment noting the source). All entropy-gated rules call this helper.
 
 ### Why reference, not import?
 
-`github.com/zricethezav/gitleaks/v8/detect.shannonEntropy` is **unexported**
-(lowercase 's'), so it cannot be imported directly. The remaining public
-surface — `detect.NewDetectorDefaultConfig()` + `DetectString()` — is
-available, but running the full gitleaks Detector would pull in viper,
-aho-corasick, semgroup, zerolog, lipgloss, charmbracelet, gitdiff and ~30
-transitive dependencies, plus hundreds of source-code-oriented rules we
-don't need. Reimplementing the rule-based detection model in-package
-keeps the binary lean and the behavior auditable, while matching
-gitleaks' detection capability level.
+The gitleaks Shannon entropy helper is unexported, so it cannot be imported directly. Running the full gitleaks Detector would pull in many transitive dependencies (viper, aho-corasick, etc.) and hundreds of source-code-oriented rules that aren't needed. Reimplementing the rule-based detection model in-package keeps the binary lean and the behavior auditable, while matching gitleaks' detection capability level.
 
 ## Out of Scope
 

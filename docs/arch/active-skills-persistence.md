@@ -28,7 +28,7 @@ Calling `activate_skill` with a valid skill name calls `RegisterActivation` on t
 Reading, writing, or editing a file whose path matches a skill's `activation_glob` calls `ActivateForPath`, which calls `RegisterActivation` for each matching skill. The activator deduplicates so the same skill is not double-counted.
 
 ### AC3: syncActiveSkills wiring
-After every tool execution iteration in the engine loop, `syncActiveSkills()` is called. This method converts `skills.ActivatedSkill` entries to `agent.ActivatedSkill` entries and stores them in `StreamConfig.ActiveSkills`. If the activator is nil, this is a no-op.
+After every tool execution iteration in the engine loop, active skills are synchronized. Skills framework activation entries are converted to agent-level entries and stored in StreamConfig. If the activator is nil, this is a no-op.
 
 ### AC4: Active skills in dynamic suffix
 `DynamicSystemSuffix()` includes an "Active Skills:" section listing all active skills with their name and root path. This section is NOT part of the cached prefix, so it updates every turn without busting prompt caching for the stable ~1000+ token prefix.
@@ -42,8 +42,8 @@ Activating the same skill twice (e.g., reading two files matching the same skill
 ### AC7: Graceful nil-activator degradation
 When `skillActivator` is nil (bare mode or no skills framework), `syncActiveSkills` returns immediately without panic. The system prompt suffix contains no active skills section.
 
-### AC8: Main.go wiring
-Production entry point at `cmd/jenny/main.go` retrieves the skill activator from the registry via `GetSkillActivator()` and passes it to `RunStream` via `agent.WithSkillActivator(skillActivator)` as a `QueryEngineOption`.
+### AC8: Main entry point wiring
+The production entry point retrieves the skill activator from the registry and passes it to the stream runner as a query engine option.
 
 ### AC9: End-to-end tool-to-prompt propagation
 A skill activated via the `activate_skill` tool during a conversation turn is reflected in the system prompt suffix of the next API request, verified by integration tests that mock the activator chain.
@@ -51,32 +51,16 @@ A skill activated via the `activate_skill` tool during a conversation turn is re
 ## Implementation Architecture
 
 ### Type Bridge
-`skills.ActivatedSkill` and `agent.ActivatedSkill` are structurally identical but distinct Go types:
-
-```go
-// skills/skill_activator.go
-type ActivatedSkill struct {
-    Name     string
-    RootPath string
-}
-
-// agent/stream_types.go
-type ActivatedSkill struct {
-    Name     string
-    RootPath string
-}
-```
-
-`syncActiveSkills()` converts between them via a manual copy loop (engine.go lines 377-394).
+The skills framework and the agent engine use structurally identical but distinct types for activated skills. A conversion step bridges between them at each sync point.
 
 ### Prompt Architecture
-Active skills live in `DynamicSystemSuffix()` (prompt.go lines 251-255, via `activeSkillsSection`). This avoids breaking the stable cached prefix which includes intro, memory, tool list, skills manifest, and redaction instruction.
+Active skills live in the dynamic system suffix (not the stable cached prefix). This avoids breaking the cached prefix which includes intro, memory, tool list, skills manifest, and redaction instruction.
 
-### syncActiveSkills Call Site
-`internal/agent/engine_loop.go` lines 702-704, immediately after tool execution completes. This runs every loop iteration, picking up both explicit (tool call) and implicit (path-triggered) activations.
+### Active Skills Sync Point
+Active skills are synchronized immediately after tool execution completes in the engine loop. This runs every loop iteration, picking up both explicit (tool call) and implicit (path-triggered) activations.
 
 ### Registry Wiring
-`WithSkillsFrameworkEnabled` creates a `PathSkillActivator` and stores it in `Registry.skillActivator`. `Registry.Build()` wires it into Read/Write/Edit tools (lines 269-279) and into the SkillTool (lines 331-336). The activator is exposed via `GetSkillActivator()` for the main.go engine wiring.
+When the skills framework is enabled, the registry creates a path-based skill activator and wires it into Read/Write/Edit tools and the Skill tool. The activator is exposed for the main entry point engine wiring.
 
 ## Out of Scope
 

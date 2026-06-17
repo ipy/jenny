@@ -29,22 +29,21 @@ Bash executes shell commands with permission classifier, optional sandbox, read-
 
 ## Permission Flow
 
-```
-NewCommandGate(skipPermissions)
-    → CheckCommand() — blocked patterns (substitution, device paths, git injection, …)
-    → CheckDevicePathsInCommand()
-    → CheckPipelineSegments() — read-only allowlist per pipeline segment
-    → path validation (unless skipPermissions or cd)
-    → shouldUseSandbox() unless dangerouslyDisableSandbox
-```
+Bash execution passes through layered security checks:
 
-`--dangerously-skip-permissions` bypasses gate checks via `skipPermissions`.
+1. **Blocked pattern check** — reject command substitution, device paths, git injection, and other dangerous constructs
+2. **Device path check** — reject references to device files
+3. **Pipeline segment check** — read-only allowlist enforced per pipeline segment (at `analyze`/`edit` levels)
+4. **Path boundary validation** — command-referenced paths must be within cwd/scratchpad (unless `cd` command)
+5. **Sandbox wrapping** — command wrapped in OS-level sandbox (unless per-invocation opt-out)
+
+`--dangerously-skip-permissions` (or `--permission-level unrestricted`) bypasses all gate checks.
 
 ## Read-Only Mode
 
 - Massive allowlist with flag-level validation.
 - Pipelines: every segment must pass read-only check.
-- `isConcurrencySafe` true only for read-only commands.
+- Concurrency safety flag is true only for read-only commands.
 
 ## Sandbox
 
@@ -55,7 +54,7 @@ Wrap command via sandbox backend when enabled (see sandbox.md).
 In-place `sed` edits may be simulated as file edits internally:
 
 - Parse sed command → apply as Edit/Write.
-- Never expose internal `_simulatedSedEdit` in tool schema.
+- Sed simulation is never exposed in the tool schema.
 - No git attribution; writes files directly via Edit/Write internals.
 
 ## Output Limits
@@ -66,7 +65,7 @@ In-place `sed` edits may be simulated as file edits internally:
 ## Timeout and Cwd
 
 - Default/max timeout from tool config.
-- After execution: `resetCwdIfOutsideProject` if cwd drifted outside project root.
+- After execution: cwd is reset if it has drifted outside the project root.
 
 ## Background Execution
 

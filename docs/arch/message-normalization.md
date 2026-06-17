@@ -24,14 +24,14 @@ Two normalization paths exist:
 
 | Path | Scope | Used by | Cache impact |
 |------|-------|---------|-------------|
-| `normalizeNewMessage(msg)` | Content-level only: strip virtual/progress markers, strip orphaned thinking, strip trailing thinking, ensure non-empty assistant | Per-turn engine loop (`engine_loop.go`) | **Safe** — immutable message boundaries |
-| `NormalizeMessagesAPI(msgs)` | Full normalization: all content fixes + `ensureToolResultPairing` + `mergeConsecutiveSameRole` | Compaction only (`compact.go:normalizeCompactedChain`) | **Breaks cache** — structural changes accepted (compaction already destroys cache continuity) |
+| Per-turn normalization | Content-level only: strip virtual/progress markers, strip orphaned thinking, strip trailing thinking, ensure non-empty assistant | Per-turn engine loop | **Safe** — immutable message boundaries |
+| Full normalization | All content fixes + tool result pairing + role merging | Compaction only | **Breaks cache** — structural changes accepted (compaction already destroys cache continuity) |
 
 Key design choice: `mergeConsecutiveSameRole` (the primary cache buster) is **never** called on the normal per-turn path. Previously-sent messages retain their exact byte content and boundaries across turns.
 
 ## NormalizeNewMessage (Per-Turn)
 
-Applied to every message before each API request at `engine_loop.go:303-308`:
+Applied to every message before each API request:
 
 1. Strip `IsVirtual` marker
 2. Strip `Type == "progress"` 
@@ -43,7 +43,7 @@ No message filtering, no tool_result pairing, no role merging — content-level 
 
 ## NormalizeMessagesAPI (Compaction)
 
-Used exclusively by `normalizeCompactedChain` after context compaction. Same 6-step pipeline as before. Full structural normalization is acceptable here because compaction already destroys cache continuity by changing the message array.
+Used exclusively after context compaction. Same 6-step pipeline as before. Full structural normalization is acceptable here because compaction already destroys cache continuity by changing the message array.
 
 ## Strip Internal Content
 
@@ -57,7 +57,7 @@ Drop from API send:
 
 ## Tool Result Pairing
 
-`ensureToolResultPairing()`:
+Tool result pairing:
 
 | Direction | Action |
 |-----------|--------|

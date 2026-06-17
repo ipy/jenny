@@ -102,15 +102,7 @@ Management interface for the Jenny ecosystem.
 
 ## Deployment
 
-The WebUI is built as a React Single Page Application (SPA) using Vite. The production build is embedded into the Go executable using `//go:embed`.
-
-```go
-// internal/portal/server.go
-//go:embed webui/dist/*
-var webuiDist embed.FS
-```
-
-This ensures `jenny` remains a single-binary distribution.
+The WebUI is built as a React Single Page Application (SPA) using Vite. The production build is embedded into the Go executable using Go's embed directive, ensuring `jenny` remains a single-binary distribution.
 
 ## Tester Validation
 

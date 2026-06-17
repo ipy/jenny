@@ -61,7 +61,7 @@ The `Flags` struct uses `koanf:"<key>"` tags for unmarshalling:
 
 - YAML support
 - System-wide/global configs (`~/.jenny/config.json`)
-- Removing existing `.env` loading in main.go
+- Removing existing `.env` loading
 - Changes to agent runtime logic
 
 ## Related

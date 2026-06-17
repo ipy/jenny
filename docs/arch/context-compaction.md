@@ -183,7 +183,7 @@ When the streaming API returns `stop_reason: "max_tokens"`, the engine emits a s
 
 ### Category Selection Rule
 
-The categorizer in `internal/api/client.go` applies this logic:
+The categorizer applies this logic:
 
 1. **output_cap_hit** — The streaming response completed successfully with `stop_reason: "max_tokens"` and `output_tokens >= modelMaxOutputTokens`. The model hit its per-response output cap mid-generation.
 

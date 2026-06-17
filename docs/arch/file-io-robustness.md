@@ -68,30 +68,25 @@ The Glob tool enforces both a maximum recursion depth (configurable, default 64)
 ## 🔴 Critical Standards (P0)
 
 ### 1. TOCTOU & Cache Consistency
-- **Rule:** `os.Stat` and mtime comparisons MUST be performed inside the same lock that protects the file cache.
+- **Rule:** File stat and mtime comparisons MUST be performed inside the same lock that protects the file cache.
 - **Reasoning:** Prevents race conditions where a stale mtime is cached between the check and the cache update.
-- **Implementation:** See `internal/tool/read.go` and `internal/tool/readfile.go`.
 
 ### 2. Session Transcript Concurrency
-- **Rule:** Access to session transcripts MUST be protected by a per-session `sync.RWMutex`.
-- **Reasoning:** Ensures that JSONL line-appending (`AppendEntry`) and full-file reading (`LoadTranscript`) do not collide.
-- **Implementation:** `internal/session/manager.go`.
+- **Rule:** Access to session transcripts MUST be protected by a per-session read-write mutex.
+- **Reasoning:** Ensures that JSONL line-appending and full-file reading do not collide.
 
 ### 3. Resource-Aware Reads (OOM Prevention)
-- **Rule:** Check file size via `os.Stat` BEFORE reading the entire file into memory.
+- **Rule:** Check file size before reading the entire file into memory.
 - **Threshold:** 1 GiB (hard limit).
-- **Implementation:** `internal/tool/read.go`.
 
 ## 🟠 High Priority Standards (P1)
 
 ### 4. Atomic File Operations
-- **Rule:** When modifying files, use a temporary file, `Sync()` it, and then rename it over the original.
+- **Rule:** When modifying files, use a temporary file, sync it, and then rename it over the original.
 - **Fallback:** Handle cross-device rename failures by falling back to copy+delete.
-- **Implementation:** `internal/tool/edit.go`.
 
 ### 5. Task Output Integrity
-- **Rule:** Use `os.O_APPEND` for task output writes to prevent corruption from multiple writers or partial flushes.
-- **Implementation:** `internal/tool/task_manager.go`.
+- **Rule:** Use append-only mode for task output writes to prevent corruption from multiple writers or partial flushes.
 
 ### 6. JSONL Integrity
 - **Rule:** Log warnings for malformed JSON lines instead of silently skipping them to aid in diagnosing corruption.
@@ -102,5 +97,4 @@ The Glob tool enforces both a maximum recursion depth (configurable, default 64)
 - **Rule:** Use `utf8.ValidString` or rune-aware slicing when truncating strings for display or memory-directory summaries.
 
 ### 8. Recursive Traversal Limits
-- **Rule:** Implement maximum depth and result count limits for recursive directory traversal (e.g., `GlobTool`).
-- **Implementation:** `internal/tool/glob.go`.
+- **Rule:** Implement maximum depth and result count limits for recursive directory traversal (e.g., Glob tool).
