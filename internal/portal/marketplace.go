@@ -296,6 +296,11 @@ func downloadAndExtract(url, destDir string) error {
 	}
 	defer gr.Close()
 
+	absDest, err := filepath.Abs(destDir)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path of destDir: %w", err)
+	}
+
 	tr := tar.NewReader(gr)
 	for {
 		h, err := tr.Next()
@@ -308,7 +313,6 @@ func downloadAndExtract(url, destDir string) error {
 
 		// Security: prevent path traversal by sanitizing the entry name.
 		cleanName := filepath.ToSlash(h.Name)
-		cleanName = strings.TrimPrefix(cleanName, "/")
 		if cleanName == "" || strings.HasPrefix(cleanName, "/") {
 			return fmt.Errorf("tar entry %q is not allowed: must be a safe relative path", h.Name)
 		}
@@ -319,6 +323,15 @@ func downloadAndExtract(url, destDir string) error {
 		}
 
 		target := filepath.Join(destDir, cleanName)
+
+		// Security: defense-in-depth check using filepath.Abs.
+		absTarget, err := filepath.Abs(target)
+		if err != nil {
+			return fmt.Errorf("failed to get absolute path of target: %w", err)
+		}
+		if !strings.HasPrefix(absTarget, absDest) {
+			return fmt.Errorf("tar entry %q attempted to escape destination directory", h.Name)
+		}
 
 		// Security: mask file permissions to safe values.
 		switch h.Typeflag {

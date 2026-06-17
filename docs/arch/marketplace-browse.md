@@ -2,12 +2,12 @@
 title: Marketplace Browsing
 slug: marketplace-browse
 priority: P1
-status: done
+status: in_progress
 spec: complete
 code: partial
 package: internal/portal
 gaps:
-  - Marketplace browse view component (React/TypeScript)
+  - frontend browse view component
 depends_on: []
 ---
 

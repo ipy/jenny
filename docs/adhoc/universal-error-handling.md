@@ -1,7 +1,7 @@
 ---
 title: Universal LLM API Error Handling
 slug: universal-error-handling
-status: research
+status: not_started
 date: 2025-07-10
 package: internal/api
 gaps:
