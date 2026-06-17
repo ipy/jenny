@@ -109,7 +109,7 @@ Extraction behavior:
 
 - Extract archive root `<id>/...` into `<home>/sessions/`.
 - After successful extraction, by default the archive `<id>.tar.gz` is **removed** (deterministic, single-disk-state contract).
-- Setting `JENNY_COMPACT_KEEP_ARCHIVE` to any non-empty value keeps the archive in place after extraction. Both behaviors are deterministic; this is documented in `--help` output and in this spec.
+- Setting `JENNY_COMPACT_KEEP_ARCHIVE` to any non-empty value (or passing `--compact-keep-archive`) keeps the archive in place after extraction. Both behaviors are deterministic; this is documented in `--help` output and in this spec.
 
 ### Acceptance
 
@@ -129,7 +129,7 @@ Extraction behavior:
 | `jenny compact` archive write + directory walk | Stream directory into tar.gz archive |
 | Resume-time archive extraction | Transparent extraction when resuming from archived session |
 | CLI subcommand routing | Detect `clean`/`compact` subcommands before main agent flow |
-| Env knob for archive retention after resume | `JENNY_COMPACT_KEEP_ARCHIVE` (any non-empty value = keep) |
+| Env knob for archive retention after resume | `JENNY_COMPACT_KEEP_ARCHIVE` (any non-empty value = keep) or `--compact-keep-archive` CLI flag (see [koanf-config.md](./koanf-config.md)) |
 
 ### Clean
 
@@ -188,7 +188,7 @@ Flags:
 
 Archive retention after resume:
   By default the archive is removed after a successful resume extraction.
-  Set JENNY_COMPACT_KEEP_ARCHIVE to a non-empty value to keep the archive.
+  Set JENNY_COMPACT_KEEP_ARCHIVE to a non-empty value (or pass --compact-keep-archive) to keep the archive.
 
 See also: jenny clean — remove every session directory without archiving.
 ```

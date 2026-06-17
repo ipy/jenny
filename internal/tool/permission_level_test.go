@@ -160,27 +160,27 @@ func TestResolvePermissionLevel(t *testing.T) {
 		wantWarnContains string // empty = no warning expected
 	}{
 		{
-			name: "neither set → default edit",
+			name:      "neither set → default edit",
 			skipPerms: false, permLevelStr: "",
 			wantLevel: PermissionEdit, wantWarnContains: "",
 		},
 		{
-			name: "only skip-perms → unrestricted (AC5)",
+			name:      "only skip-perms → unrestricted (AC5)",
 			skipPerms: true, permLevelStr: "",
 			wantLevel: PermissionUnrestricted, wantWarnContains: "",
 		},
 		{
-			name: "only permission-level → that level",
+			name:      "only permission-level → that level",
 			skipPerms: false, permLevelStr: "execute",
 			wantLevel: PermissionExecute, wantWarnContains: "",
 		},
 		{
-			name: "both specified → unrestricted + warning (AC6)",
+			name:      "both specified → unrestricted + warning (AC6)",
 			skipPerms: true, permLevelStr: "edit",
 			wantLevel: PermissionUnrestricted, wantWarnContains: "dangerously-skip-permissions",
 		},
 		{
-			name: "skip-perms + permission-level=unrestricted → unrestricted, no warning",
+			name:      "skip-perms + permission-level=unrestricted → unrestricted, no warning",
 			skipPerms: true, permLevelStr: "unrestricted",
 			wantLevel: PermissionUnrestricted, wantWarnContains: "",
 		},

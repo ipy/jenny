@@ -49,7 +49,13 @@ jenny -p "prompt text"
 | `--max-turns <n>` | Maximum number of turns (0 = unlimited) |
 | `--max-budget-usd <n>` | Budget limit in USD (0.0 = no limit) |
 | `--redact <mode>` | Secret redaction mode: `disabled`, `redact` (default), `recover`. See [secret-redaction.md](./secret-redaction.md). Overrides `JENNY_REDACT`. |
-| `-ff`, `--feature-flags <k=v>` | Set specific feature flags (e.g., `-ff other-flag=true`) |
+| `--transcript-dir <path>` | Override transcript directory. Overrides `JENNY_TRANSCRIPT_DIR`. |
+| `--max-tool-concurrency <n>` | Max parallel tool executions. Overrides `JENNY_MAX_TOOL_CONCURRENCY`. |
+| `--compact-keep-archive` | Keep `<id>.tar.gz` after resume extraction. Overrides `JENNY_COMPACT_KEEP_ARCHIVE`. |
+| `--disable-compact` | Disable all compaction. Overrides `JENNY_DISABLE_COMPACT`. |
+| `--disable-auto-compact` | Disable auto-compact only. Overrides `JENNY_DISABLE_AUTO_COMPACT`. |
+| `--enable-session-memory` | Enable session-memory compaction branch. Overrides `JENNY_ENABLE_SESSION_MEMORY`. |
+| `--disable-auto-memory` | Disable auto-memory directory. Overrides `JENNY_DISABLE_AUTO_MEMORY`. |
 
 ## Flag Rules
 
@@ -64,6 +70,7 @@ jenny -p "prompt text"
 | Both `--dangerously-skip-permissions` and `--permission-level` | `--dangerously-skip-permissions` wins (unrestricted); warning logged |
 | `--permission-level` without value | Exit non-zero with error "permission level required" |
 | Invalid `--permission-level` value | Exit non-zero with error listing valid levels |
+| Boolean flag negation | `--flag=false` is accepted and overrides a `true` set in `.jenny/config.json` or via `JENNY_*`. The absence of the flag is the only way to leave the value at its low-precedence default. `--no-<flag>` is **not** a registered form. |
 
 ## Exit Codes
 
@@ -92,12 +99,27 @@ Help (`-h`) exits 0. Version (`--version`) uses `constants.Version` for unified 
 | `JENNY_DEBUG` | Enable debug slog (`1` = DEBUG) |
 | `JENNY_PERMISSION_LEVEL` | Default permission level when `--permission-level` not specified. Values: `read`, `analyze`, `edit`, `execute`, `unrestricted`. Flag overrides env. |
 | `JENNY_REDACT` | Default secret redaction mode (`disabled`, `redact` (default), `recover`). `--redact` overrides this. |
-| `JENNY_TRANSCRIPT_DIR` | Override transcript directory (default: `~/.jenny/transcripts`) |
+| `JENNY_TRANSCRIPT_DIR` | Override transcript directory (default: `~/.jenny/transcripts`). `--transcript-dir` overrides this. |
+| `JENNY_MAX_TOOL_CONCURRENCY` | Default max parallel tool executions. `--max-tool-concurrency` overrides this. |
+| `JENNY_COMPACT_KEEP_ARCHIVE` | Keep `<id>.tar.gz` after resume extraction. `--compact-keep-archive` overrides this. |
+| `JENNY_DISABLE_COMPACT` | Disable all compaction. `--disable-compact` overrides this. |
+| `JENNY_DISABLE_AUTO_COMPACT` | Disable auto-compact only. `--disable-auto-compact` overrides this. |
+| `JENNY_ENABLE_SESSION_MEMORY` | Enable session-memory compaction branch. `--enable-session-memory` overrides this. |
+| `JENNY_DISABLE_AUTO_MEMORY` | Disable auto-memory directory. `--disable-auto-memory` overrides this. |
 | `NO_PROXY` | Comma-separated list of domains to bypass proxy for. |
 | `OPENAI_BASE_URL` | Base URL for OpenAI-compatible API (e.g., `https://api.openai.com/v1`). When set, selects the OpenAI provider instead of the default Anthropic provider. |
 | `OPENAI_API_KEY` | API key for OpenAI-compatible backend. Sent as `Authorization: Bearer <key>`. |
 | `OPENAI_DEFAULT_MODEL` | Default model name for OpenAI provider (e.g., `gpt-5.4-nano`). Takes precedence over `ANTHROPIC_MODEL` when OpenAI provider is active. |
 | `OPENAI_WIRE_API` | Wire protocol version for OpenAI API. Supported values: `chat` (default) or `responses` (Responses API). |
+
+## Configuration Precedence
+
+All Jenny-owned env vars and CLI flags listed above go through the unified [koanf-config.md](./koanf-config.md) layer. The full precedence is:
+
+1. CLI flag (highest)
+2. `JENNY_*` env var
+3. `.jenny/config.json` field
+4. Built-in default (lowest)
 
 ## Jenny Gaps vs Target Spec
 

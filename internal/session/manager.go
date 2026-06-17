@@ -632,15 +632,15 @@ func (m *Manager) ListSessions() ([]string, error) {
 //   - If <JENNY_HOME>/sessions/<id>/ already exists, this is a no-op.
 //   - If the directory is absent but <JENNY_HOME>/sessions/<id>.tar.gz is
 //     present, the archive is extracted into the sessions directory. After a
-//     successful extraction the archive is removed unless the env knob
-//     JENNY_COMPACT_KEEP_ARCHIVE is set to a non-empty value (deterministic
-//     retention control, documented in `jenny compact --help`).
+//     successful extraction the archive is removed unless keepArchive is
+//     true (sourced from JENNY_COMPACT_KEEP_ARCHIVE / --compact-keep-archive
+//     via the unified koanf config layer; see docs/arch/koanf-config.md).
 //   - If neither exists, the function returns nil — callers downstream will
 //     surface the usual "session not found" error.
 //
 // This is the entry point used by `jenny --resume <id>` to make archive
 // handling invisible to the rest of the resume flow.
-func MaybeExtractArchive(sessionID string) error {
+func MaybeExtractArchive(sessionID string, keepArchive bool) error {
 	if sessionID == "" {
 		return fmt.Errorf("session ID is required")
 	}
@@ -670,7 +670,6 @@ func MaybeExtractArchive(sessionID string) error {
 		return fmt.Errorf("checking archive %s: %w", archivePath, err)
 	}
 
-	keepArchive := os.Getenv("JENNY_COMPACT_KEEP_ARCHIVE") != ""
 	if err := compact.ExtractArchive(archivePath, sessionsDir, sessionID, keepArchive); err != nil {
 		return fmt.Errorf("extracting archive for session %s: %w", sessionID, err)
 	}

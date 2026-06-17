@@ -41,7 +41,7 @@ Read of auto-mem files: prefix `<system-reminder>` when mtime >1 day.
 
 ## Disable Chain
 
-- Env `DISABLE_AUTO_MEMORY`
+- Env `JENNY_DISABLE_AUTO_MEMORY` (or `--disable-auto-memory` CLI flag; see [koanf-config.md](../arch/koanf-config.md))
 - `--bare` mode
 - Remote without memory dir
 - Settings `autoMemoryEnabled: false`

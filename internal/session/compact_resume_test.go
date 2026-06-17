@@ -53,7 +53,7 @@ func TestMaybeExtractArchive_ExtractsAndRestoresTranscript(t *testing.T) {
 	}
 
 	// MaybeExtractArchive should rebuild the directory and consume the archive.
-	if err := MaybeExtractArchive("sess-1"); err != nil {
+	if err := MaybeExtractArchive("sess-1", false); err != nil {
 		t.Fatalf("MaybeExtractArchive: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(sessionsDir, "sess-1.tar.gz")); !os.IsNotExist(err) {
@@ -102,7 +102,7 @@ func TestMaybeExtractArchive_NoOpWhenDirectoryExists(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	if err := MaybeExtractArchive("sess-1"); err != nil {
+	if err := MaybeExtractArchive("sess-1", false); err != nil {
 		t.Fatalf("MaybeExtractArchive: %v", err)
 	}
 	if _, err := os.Stat(stale); err != nil {
@@ -110,15 +110,18 @@ func TestMaybeExtractArchive_NoOpWhenDirectoryExists(t *testing.T) {
 	}
 }
 
-// TestMaybeExtractArchive_KeepArchiveEnv: when JENNY_COMPACT_KEEP_ARCHIVE is
-// set to a non-empty value, MaybeExtractArchive must rebuild the session
-// directory and leave the archive on disk. This is the call site that
-// previously failed on Windows because the underlying compact.ExtractArchive
-// invoked os.Remove while the archive handle was still open; this test
-// exercises the keepArchive=true branch at the session layer to keep that
-// wiring covered alongside the AC5/AC8 keepArchive test in the compact
-// package.
-func TestMaybeExtractArchive_KeepArchiveEnv(t *testing.T) {
+// TestMaybeExtractArchive_KeepArchiveArg: when keepArchive is true,
+// MaybeExtractArchive must rebuild the session directory and leave the
+// archive on disk. This is the call site that previously failed on Windows
+// because the underlying compact.ExtractArchive invoked os.Remove while the
+// archive handle was still open; this test exercises the keepArchive=true
+// branch at the session layer to keep that wiring covered alongside the
+// AC5/AC8 keepArchive test in the compact package.
+//
+// The keepArchive flag is now sourced from JENNY_COMPACT_KEEP_ARCHIVE /
+// --compact-keep-archive via the unified koanf config layer; this test calls
+// the function with the bool directly.
+func TestMaybeExtractArchive_KeepArchiveArg(t *testing.T) {
 	home := t.TempDir()
 	withJennyHomeCompact(t, home)
 
@@ -138,25 +141,22 @@ func TestMaybeExtractArchive_KeepArchiveEnv(t *testing.T) {
 	}
 	archive := filepath.Join(sessionsDir, "sess-1.tar.gz")
 
-	t.Setenv("JENNY_COMPACT_KEEP_ARCHIVE", "1")
-	if err := MaybeExtractArchive("sess-1"); err != nil {
-		t.Fatalf("MaybeExtractArchive: %v", err)
+	// keepArchive=true preserves the archive
+	if err := MaybeExtractArchive("sess-1", true); err != nil {
+		t.Fatalf("MaybeExtractArchive (keep): %v", err)
 	}
 	if _, err := os.Stat(archive); err != nil {
-		t.Errorf("archive was removed despite JENNY_COMPACT_KEEP_ARCHIVE=1: %v", err)
+		t.Errorf("archive was removed despite keepArchive=true: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(sessDir, "transcript.jsonl")); err != nil {
 		t.Errorf("transcript.jsonl missing after extract: %v", err)
 	}
 
-	// And once the knob is cleared, the default behaviour re-asserts itself.
-	t.Setenv("JENNY_COMPACT_KEEP_ARCHIVE", "")
-	// Remove the previously extracted directory so MaybeExtractArchive will
-	// fall through to the archive-extract branch.
+	// And once keepArchive=false, the default behaviour re-asserts itself.
 	if err := os.RemoveAll(sessDir); err != nil {
 		t.Fatalf("RemoveAll: %v", err)
 	}
-	if err := MaybeExtractArchive("sess-1"); err != nil {
+	if err := MaybeExtractArchive("sess-1", false); err != nil {
 		t.Fatalf("MaybeExtractArchive (default): %v", err)
 	}
 	if _, err := os.Stat(archive); !os.IsNotExist(err) {
@@ -172,7 +172,7 @@ func TestMaybeExtractArchive_NoOpWhenNothingToExtract(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, "sessions"), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	if err := MaybeExtractArchive("sess-missing"); err != nil {
+	if err := MaybeExtractArchive("sess-missing", false); err != nil {
 		t.Errorf("MaybeExtractArchive should be a no-op for missing session, got: %v", err)
 	}
 }

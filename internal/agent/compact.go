@@ -174,15 +174,22 @@ func estimateStringTokens(s string) int {
 }
 
 // newCompactConfigForModel creates a CompactConfig using model-specific parameters
-// from api.ModelParams, with environment variable overrides.
-func newCompactConfigForModel(model string) CompactConfig {
+// from api.ModelParams, with overrides sourced from streamCfg (which is itself
+// populated by the koanf config layer — see docs/arch/koanf-config.md).
+//
+// streamCfg may be nil; in that case all override booleans default to false.
+// AUTO_COMPACT_WINDOW remains a raw os.Getenv read because it is not
+// JENNY_*-prefixed and therefore not in the koanf layer.
+func newCompactConfigForModel(model string, streamCfg *StreamConfig) CompactConfig {
 	params := api.ModelParams(model)
 	cfg := CompactConfig{
 		ModelContextWindow:   params.ContextWindow,
 		ModelMaxOutputTokens: params.MaxOutputTokens,
-		DisableCompact:       os.Getenv("DISABLE_COMPACT") != "",
-		DisableAutoCompact:   os.Getenv("DISABLE_AUTO_COMPACT") != "",
-		SessionMemoryEnabled: os.Getenv("ENABLE_SESSION_MEMORY") != "",
+	}
+	if streamCfg != nil {
+		cfg.DisableCompact = streamCfg.DisableCompact
+		cfg.DisableAutoCompact = streamCfg.DisableAutoCompact
+		cfg.SessionMemoryEnabled = streamCfg.EnableSessionMemory
 	}
 
 	if envWindow := readEnvInt("AUTO_COMPACT_WINDOW", 0); envWindow > 0 {

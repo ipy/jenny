@@ -36,6 +36,8 @@ All three fields must be non-empty on every line. The `session_id` and `cwd` val
 
 Each line is one JSON object. The session directory is created on first write.
 
+The transcript directory can be overridden via `JENNY_TRANSCRIPT_DIR` env var or `--transcript-dir` CLI flag — see [koanf-config.md](./koanf-config.md) for the full precedence rule.
+
 ## Chain Participants vs Non-Chain Entries
 
 Not every persisted line becomes an API message on reload.

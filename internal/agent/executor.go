@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -16,14 +14,15 @@ import (
 )
 
 // defaultMaxConcurrency is the default maximum parallel tool execution count.
-// Override with JENNY_MAX_TOOL_CONCURRENCY environment variable.
+// Override via JENNY_MAX_TOOL_CONCURRENCY env var or --max-tool-concurrency
+// CLI flag (both flow through StreamConfig.MaxToolConcurrency).
 const defaultMaxConcurrency = 10
 
-func maxToolConcurrency() int {
-	if v := os.Getenv("JENNY_MAX_TOOL_CONCURRENCY"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			return n
-		}
+// resolveMaxConcurrency returns the configured concurrency from streamCfg when
+// positive, otherwise the default. A nil streamCfg falls back to the default.
+func resolveMaxConcurrency(streamCfg *StreamConfig) int {
+	if streamCfg != nil && streamCfg.MaxToolConcurrency > 0 {
+		return streamCfg.MaxToolConcurrency
 	}
 	return defaultMaxConcurrency
 }
@@ -62,21 +61,23 @@ type ToolExecutor struct {
 	streamCfg *StreamConfig
 }
 
-// NewToolExecutor creates a new ToolExecutor.
+// NewToolExecutor creates a new ToolExecutor with default concurrency.
 func NewToolExecutor(tools []tool.Tool, cwd string) *ToolExecutor {
 	return &ToolExecutor{
 		tools:          tools,
 		cwd:            cwd,
-		maxConcurrency: maxToolConcurrency(),
+		maxConcurrency: defaultMaxConcurrency,
 	}
 }
 
-// NewToolExecutorWithStreamConfig creates a new ToolExecutor with cross-turn state support.
+// NewToolExecutorWithStreamConfig creates a new ToolExecutor with cross-turn
+// state support. Concurrency is read from streamCfg.MaxToolConcurrency when > 0,
+// otherwise falls back to defaultMaxConcurrency.
 func NewToolExecutorWithStreamConfig(tools []tool.Tool, cwd string, streamCfg *StreamConfig) *ToolExecutor {
 	return &ToolExecutor{
 		tools:          tools,
 		cwd:            cwd,
-		maxConcurrency: defaultMaxConcurrency,
+		maxConcurrency: resolveMaxConcurrency(streamCfg),
 		streamCfg:      streamCfg,
 	}
 }

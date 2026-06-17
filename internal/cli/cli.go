@@ -17,33 +17,39 @@ import (
 
 // Flags holds the parsed command-line flags.
 type Flags struct {
-	Prompt                 string            // prompt: joined from k.Strings("print") after unmarshal
-	Model                  string            `koanf:"model"`
-	OutputFormat           string            `koanf:"output-format"`
-	Verbose                bool              `koanf:"verbose"`
-	IncludePartialMessages bool              `koanf:"include-partial-messages"`
-	SkipPermissions        bool              `koanf:"dangerously-skip-permissions"`
-	PermissionLevel        string            `koanf:"permission-level"`
-	SessionResume          string            `koanf:"resume"`
-	NoSessionPersistence   bool              `koanf:"no-session-persistence"`
-	ForkSession            bool              `koanf:"fork-session"`
-	Continue               bool              `koanf:"continue"`
-	MCPConfig              []string          `koanf:"mcp-config"`
-	StrictMCP              bool              `koanf:"strict-mcp-config"`
-	DeniedTools            []string          `koanf:"deny-tool"`
-	Bare                   bool              `koanf:"bare"`
-	SwarmsEnabled          bool              `koanf:"swarm"`                // When true, enables named agent delegation (swarm mode)
-	Version                bool              `koanf:"version"`              // --version / -v: print version and exit
-	PrintSystemPrompt      bool              `koanf:"print-system-prompt"`  // --print-system-prompt: print the assembled system prompt and exit
-	CustomSystemPrompt     string            `koanf:"system-prompt"`        // --system-prompt: replaces default system prompt entirely
-	AppendSystemPrompt     string            `koanf:"append-system-prompt"` // --append-system-prompt: appended after assembled system prompt
-	MaxIterations          int               `koanf:"max-iterations"`       // --max-iterations: maximum loop iterations (0 = unlimited)
-	MaxTurns               int               `koanf:"max-turns"`            // --max-turns: maximum number of turns (0 = unlimited)
-	MaxBudgetUsd           float64           `koanf:"max-budget-usd"`       // --max-budget-usd: budget limit in USD (0.0 = no limit)
-	Effort                 string            `koanf:"effort"`               // --effort: reasoning effort level (low, medium, high)
-	ThinkingBudget         int               `koanf:"thinking-budget"`      // --thinking-budget: maximum thinking tokens for Anthropic (AC3)
-	RedactMode             string            `koanf:"redact"`               // --redact: JENNY_REDACT; one of disabled|redact|recover (empty = default)
-	FeatureFlags           map[string]string // feature flags: set from ffv.m after unmarshal
+	Prompt                 string   // prompt: joined from k.Strings("print") after unmarshal
+	Model                  string   `koanf:"model"`
+	OutputFormat           string   `koanf:"output-format"`
+	Verbose                bool     `koanf:"verbose"`
+	IncludePartialMessages bool     `koanf:"include-partial-messages"`
+	SkipPermissions        bool     `koanf:"dangerously-skip-permissions"`
+	PermissionLevel        string   `koanf:"permission-level"`
+	SessionResume          string   `koanf:"resume"`
+	NoSessionPersistence   bool     `koanf:"no-session-persistence"`
+	ForkSession            bool     `koanf:"fork-session"`
+	Continue               bool     `koanf:"continue"`
+	MCPConfig              []string `koanf:"mcp-config"`
+	StrictMCP              bool     `koanf:"strict-mcp-config"`
+	DeniedTools            []string `koanf:"deny-tool"`
+	Bare                   bool     `koanf:"bare"`
+	SwarmsEnabled          bool     `koanf:"swarm"`                 // When true, enables named agent delegation (swarm mode)
+	Version                bool     `koanf:"version"`               // --version / -v: print version and exit
+	PrintSystemPrompt      bool     `koanf:"print-system-prompt"`   // --print-system-prompt: print the assembled system prompt and exit
+	CustomSystemPrompt     string   `koanf:"system-prompt"`         // --system-prompt: replaces default system prompt entirely
+	AppendSystemPrompt     string   `koanf:"append-system-prompt"`  // --append-system-prompt: appended after assembled system prompt
+	MaxIterations          int      `koanf:"max-iterations"`        // --max-iterations: maximum loop iterations (0 = unlimited)
+	MaxTurns               int      `koanf:"max-turns"`             // --max-turns: maximum number of turns (0 = unlimited)
+	MaxBudgetUsd           float64  `koanf:"max-budget-usd"`        // --max-budget-usd: budget limit in USD (0.0 = no limit)
+	Effort                 string   `koanf:"effort"`                // --effort: reasoning effort level (low, medium, high)
+	ThinkingBudget         int      `koanf:"thinking-budget"`       // --thinking-budget: maximum thinking tokens for Anthropic (AC3)
+	RedactMode             string   `koanf:"redact"`                // --redact: JENNY_REDACT; one of disabled|redact|recover (empty = default)
+	TranscriptDir          string   `koanf:"transcript-dir"`        // --transcript-dir: JENNY_TRANSCRIPT_DIR
+	MaxToolConcurrency     int      `koanf:"max-tool-concurrency"`  // --max-tool-concurrency: JENNY_MAX_TOOL_CONCURRENCY (0 = default)
+	CompactKeepArchive     bool     `koanf:"compact-keep-archive"`  // --compact-keep-archive: JENNY_COMPACT_KEEP_ARCHIVE
+	DisableCompact         bool     `koanf:"disable-compact"`       // --disable-compact: JENNY_DISABLE_COMPACT
+	DisableAutoCompact     bool     `koanf:"disable-auto-compact"`  // --disable-auto-compact: JENNY_DISABLE_AUTO_COMPACT
+	EnableSessionMemory    bool     `koanf:"enable-session-memory"` // --enable-session-memory: JENNY_ENABLE_SESSION_MEMORY
+	DisableAutoMemory      bool     `koanf:"disable-auto-memory"`   // --disable-auto-memory: JENNY_DISABLE_AUTO_MEMORY
 }
 
 // envTransform transforms environment variable names from JENNY_* format to
@@ -100,6 +106,13 @@ func Parse() (*Flags, error) {
 	effortDefault := k.String("effort")
 	thinkingBudgetDefault := k.Int("thinking-budget")
 	redactModeDefault := k.String("redact")
+	transcriptDirDefault := k.String("transcript-dir")
+	maxToolConcurrencyDefault := k.Int("max-tool-concurrency")
+	compactKeepArchiveDefault := k.Bool("compact-keep-archive")
+	disableCompactDefault := k.Bool("disable-compact")
+	disableAutoCompactDefault := k.Bool("disable-auto-compact")
+	enableSessionMemoryDefault := k.Bool("enable-session-memory")
+	disableAutoMemoryDefault := k.Bool("disable-auto-memory")
 
 	// Define flags with defaults from koanf.
 	var pFlag []string
@@ -180,19 +193,26 @@ func Parse() (*Flags, error) {
 	var redactMode string
 	flags.StringVarP(&redactMode, "redact", "", redactModeDefault, "Secret redaction mode (disabled, redact, recover); JENNY_REDACT env var or .jenny/config.json is used when unset")
 
-	// Feature flags as key=value pairs. Seed from env/json layer.
-	featureFlags := make(map[string]string)
-	for k, v := range k.All() {
-		if strings.HasPrefix(k, "feature-flags.") {
-			ffKey := strings.TrimPrefix(k, "feature-flags.")
-			if sv, ok := v.(string); ok {
-				featureFlags[ffKey] = sv
-			}
-		}
-	}
-	ffv := newFeatureFlagValue(featureFlags)
-	flags.Var(ffv, "feature-flags", "Feature flags in key=value format (can be specified multiple times)")
-	flags.Var(ffv, "ff", "Feature flags in key=value format (alias for --feature-flags)")
+	var transcriptDir string
+	flags.StringVarP(&transcriptDir, "transcript-dir", "", transcriptDirDefault, "Override transcript directory; JENNY_TRANSCRIPT_DIR env var is used when unset")
+
+	var maxToolConcurrency int
+	flags.IntVarP(&maxToolConcurrency, "max-tool-concurrency", "", maxToolConcurrencyDefault, "Max parallel tool executions (0 = default 10); JENNY_MAX_TOOL_CONCURRENCY env var is used when unset")
+
+	var compactKeepArchive bool
+	flags.BoolVarP(&compactKeepArchive, "compact-keep-archive", "", compactKeepArchiveDefault, "Keep <id>.tar.gz after resume extraction; JENNY_COMPACT_KEEP_ARCHIVE env var is used when unset")
+
+	var disableCompact bool
+	flags.BoolVarP(&disableCompact, "disable-compact", "", disableCompactDefault, "Disable all compaction; JENNY_DISABLE_COMPACT env var is used when unset")
+
+	var disableAutoCompact bool
+	flags.BoolVarP(&disableAutoCompact, "disable-auto-compact", "", disableAutoCompactDefault, "Disable auto-compact only; JENNY_DISABLE_AUTO_COMPACT env var is used when unset")
+
+	var enableSessionMemory bool
+	flags.BoolVarP(&enableSessionMemory, "enable-session-memory", "", enableSessionMemoryDefault, "Enable session-memory compaction branch; JENNY_ENABLE_SESSION_MEMORY env var is used when unset")
+
+	var disableAutoMemory bool
+	flags.BoolVarP(&disableAutoMemory, "disable-auto-memory", "", disableAutoMemoryDefault, "Disable auto-memory directory; JENNY_DISABLE_AUTO_MEMORY env var is used when unset")
 
 	// Parse the flags.
 	if err := flags.Parse(os.Args[1:]); err != nil {
@@ -217,9 +237,7 @@ func Parse() (*Flags, error) {
 
 	// Handle special fields that can't be unmarshalled directly:
 	// - p: stored as []string in koanf, but struct expects string (join with newline).
-	// - feature-flags: stored as string in koanf (via Var.String()), but struct expects map.
 	parsed.Prompt = strings.Join(k.Strings("print"), "\n")
-	parsed.FeatureFlags = ffv.m
 
 	// --version / --print-system-prompt: caller will print and exit before any
 	// session or API initialisation, so a prompt is not required.
@@ -284,39 +302,6 @@ func Parse() (*Flags, error) {
 	}
 
 	return &parsed, nil
-}
-
-// featureFlagValue implements pflag.Value for key=value feature flags.
-type featureFlagValue struct {
-	m map[string]string
-}
-
-func newFeatureFlagValue(m map[string]string) *featureFlagValue {
-	return &featureFlagValue{m: m}
-}
-
-func (f *featureFlagValue) Set(val string) error {
-	parts := strings.SplitN(val, "=", 2)
-	if len(parts) != 2 {
-		return fmt.Errorf("invalid feature flag format %q; expected key=value", val)
-	}
-	f.m[parts[0]] = parts[1]
-	return nil
-}
-
-func (f *featureFlagValue) String() string {
-	if f.m == nil {
-		return ""
-	}
-	var pairs []string
-	for k, v := range f.m {
-		pairs = append(pairs, fmt.Sprintf("%s=%s", k, v))
-	}
-	return strings.Join(pairs, ",")
-}
-
-func (f *featureFlagValue) Type() string {
-	return "feature-flags"
 }
 
 // StreamMessage represents a message in the stream-json output.

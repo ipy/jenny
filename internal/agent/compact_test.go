@@ -451,7 +451,7 @@ func TestBuildCompactedChain(t *testing.T) {
 
 func TestAC6_ModelAwareCompactConfig(t *testing.T) {
 	// DeepSeek models have 1M context window and 8K max output
-	cfg := newCompactConfigForModel("deepseek-v4-flash")
+	cfg := newCompactConfigForModel("deepseek-v4-flash", nil)
 	if cfg.ModelContextWindow != 1_000_000 {
 		t.Errorf("deepseek-v4-flash context window = %d, want 1000000", cfg.ModelContextWindow)
 	}
@@ -460,7 +460,7 @@ func TestAC6_ModelAwareCompactConfig(t *testing.T) {
 	}
 
 	// Default model uses 200K/20K
-	cfgDefault := newCompactConfigForModel("claude-opus-4-5-20251101")
+	cfgDefault := newCompactConfigForModel("claude-opus-4-5-20251101", nil)
 	if cfgDefault.ModelContextWindow != 200_000 {
 		t.Errorf("default context window = %d, want 200000", cfgDefault.ModelContextWindow)
 	}
@@ -469,8 +469,34 @@ func TestAC6_ModelAwareCompactConfig(t *testing.T) {
 	}
 }
 
+// TestNewCompactConfigFromStreamConfig verifies that the C-group env-var
+// overrides flow through StreamConfig into the CompactConfig.
+// (No t.Setenv — values now come from StreamConfig, not os.Getenv.)
+func TestNewCompactConfigFromStreamConfig(t *testing.T) {
+	cfg := newCompactConfigForModel("claude-opus-4-5-20251101", &StreamConfig{
+		DisableCompact:      true,
+		DisableAutoCompact:  true,
+		EnableSessionMemory: true,
+	})
+	if !cfg.DisableCompact {
+		t.Error("expected DisableCompact from StreamConfig")
+	}
+	if !cfg.DisableAutoCompact {
+		t.Error("expected DisableAutoCompact from StreamConfig")
+	}
+	if !cfg.SessionMemoryEnabled {
+		t.Error("expected SessionMemoryEnabled from StreamConfig")
+	}
+
+	// nil StreamConfig yields the zero-value defaults (no auto-compact gating)
+	cfgZero := newCompactConfigForModel("claude-opus-4-5-20251101", nil)
+	if cfgZero.DisableCompact || cfgZero.DisableAutoCompact || cfgZero.SessionMemoryEnabled {
+		t.Errorf("nil StreamConfig should yield all-false flags, got %+v", cfgZero)
+	}
+}
+
 func TestAC6_DeepSeekThresholdMath(t *testing.T) {
-	cfg := newCompactConfigForModel("deepseek-v4-flash")
+	cfg := newCompactConfigForModel("deepseek-v4-flash", nil)
 
 	// effectiveContextWindow = 1M - 8192 = 991,808
 	effectiveWindow := cfg.effectiveContextWindow()

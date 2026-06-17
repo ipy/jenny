@@ -66,6 +66,7 @@ func (e *QueryEngine) SubmitMessage(ctx context.Context, prompt string) (string,
 			memdirCfg := memdir.Config{
 				ProjectRoot:       gitRoot,
 				AutoMemoryEnabled: true,
+				DisableAutoMemory: e.streamCfg.DisableAutoMemory,
 			}
 			if m, err := memdir.New(memdirCfg); err == nil {
 				_ = m.Create()

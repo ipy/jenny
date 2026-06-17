@@ -15,7 +15,6 @@ func TestMemdir_IsDisabled(t *testing.T) {
 	tests := []struct {
 		name       string
 		cfg        Config
-		envVar     string
 		wantClosed bool
 	}{
 		{
@@ -27,12 +26,14 @@ func TestMemdir_IsDisabled(t *testing.T) {
 			wantClosed: false,
 		},
 		{
-			name: "disabled by DISABLE_AUTO_MEMORY env",
+			// DisableAutoMemory is now a Config field, populated by koanf from
+			// JENNY_DISABLE_AUTO_MEMORY / --disable-auto-memory. See koanf-config.md.
+			name: "disabled by Config.DisableAutoMemory",
 			cfg: Config{
 				ProjectRoot:       tmpDir,
 				AutoMemoryEnabled: true,
+				DisableAutoMemory: true,
 			},
-			envVar:     "DISABLE_AUTO_MEMORY",
 			wantClosed: true,
 		},
 		{
@@ -76,12 +77,6 @@ func TestMemdir_IsDisabled(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set env var if specified
-			if tt.envVar != "" {
-				os.Setenv(tt.envVar, "1")
-				defer os.Unsetenv(tt.envVar)
-			}
-
 			m, err := New(tt.cfg)
 			if err != nil {
 				t.Fatalf("New() error = %v", err)
@@ -423,13 +418,11 @@ func TestMemdir_AC4_DisableChain(t *testing.T) {
 		}
 	})
 
-	t.Run("disabled when DISABLE_AUTO_MEMORY is set", func(t *testing.T) {
-		os.Setenv("DISABLE_AUTO_MEMORY", "1")
-		defer os.Unsetenv("DISABLE_AUTO_MEMORY")
-
+	t.Run("disabled when DisableAutoMemory Config field is set", func(t *testing.T) {
 		m, err := New(Config{
 			ProjectRoot:       tmpDir,
 			AutoMemoryEnabled: true,
+			DisableAutoMemory: true,
 		})
 		if err != nil {
 			t.Fatalf("New() error = %v", err)
@@ -438,7 +431,7 @@ func TestMemdir_AC4_DisableChain(t *testing.T) {
 		m.Create()
 
 		if m.Exists() {
-			t.Error("memory directory should not exist when DISABLE_AUTO_MEMORY is set")
+			t.Error("memory directory should not exist when DisableAutoMemory is set")
 		}
 	})
 

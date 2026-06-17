@@ -165,12 +165,9 @@ func run() error {
 		return nil
 	}
 
-	// Enable verbose/debug mode if JENNY_DEBUG env var is set
-	if os.Getenv("JENNY_DEBUG") != "" {
-		flags.Verbose = true
-	}
-
-	// Set verbose mode in the logger (re-runs resetLogger to enable debug level)
+	// Set verbose mode in the logger (re-runs resetLogger to enable debug level).
+	// The JENNY_DEBUG env var is read by internal/log/log.go's init() and is
+	// the canonical site; flags.Verbose here is the CLI-flag-driven override.
 	log.SetVerbose(flags.Verbose)
 
 	// Initialize the multi-provider router from ~/.jenny/routes.yaml (or env).
@@ -185,9 +182,10 @@ func run() error {
 		cwd = "/"
 	}
 
-	// Create session manager for transcript persistence
-	transcriptDir := os.Getenv("JENNY_TRANSCRIPT_DIR")
-	sessionManager, err := session.NewManager(transcriptDir, flags.NoSessionPersistence)
+	// Create session manager for transcript persistence.
+	// Transcript directory flows through the koanf config layer
+	// (--transcript-dir / JENNY_TRANSCRIPT_DIR / .jenny/config.json).
+	sessionManager, err := session.NewManager(flags.TranscriptDir, flags.NoSessionPersistence)
 	if err != nil {
 		return fmt.Errorf("creating session manager: %w", err)
 	}
@@ -232,8 +230,10 @@ func run() error {
 		// AC8: transparently rebuild the session directory from a sibling
 		// <id>.tar.gz archive produced by `jenny compact` before checking
 		// for existence. After this call the regular session lookup flow
-		// runs against the freshly extracted directory.
-		if err := session.MaybeExtractArchive(sessionID); err != nil {
+		// runs against the freshly extracted directory. The keepArchive flag
+		// flows through the koanf config layer
+		// (--compact-keep-archive / JENNY_COMPACT_KEEP_ARCHIVE).
+		if err := session.MaybeExtractArchive(sessionID, flags.CompactKeepArchive); err != nil {
 			return fmt.Errorf("extracting compact archive for session %s: %w", sessionID, err)
 		}
 
@@ -447,6 +447,10 @@ func run() error {
 	//   3. Default "redact" (one-way) when nothing is set, applied by ParseRedactMode.
 	redactMode := redact.ParseRedactMode(flags.RedactMode)
 
+	// Compact and auto-memory overrides flow from cli.Flags through StreamConfig
+	// into the engine, which builds the CompactConfig and memdir.Config from there.
+	// See docs/arch/koanf-config.md for the full env-var/CLI precedence rule.
+
 	// Compute memory path for init event
 	var memoryPaths map[string]string
 	if projectRoot, err := git.GetRoot(cwd); err == nil {
@@ -456,28 +460,33 @@ func run() error {
 	// Build stream config
 	// AC4: Create ReadFileCache and pass it through StreamConfig for engine-level wiring
 	streamCfg := agent.StreamConfig{
-		Enabled:            flags.OutputFormat == "stream-json",
-		Verbose:            flags.Verbose,
-		IncludePartial:     flags.IncludePartialMessages,
-		SessionID:          sessionID,
-		SessionManager:     sessionManager,
-		HistoryMessages:    historyMessages,
-		IsResume:           flags.SessionResume != "", // True when resuming an existing session via -r
-		MCPConfig:          mcpConfig,
-		ReadFileCache:      readFileCache,
-		Skills:             discoveredSkills,
-		CustomSystemPrompt: flags.CustomSystemPrompt,
-		AppendSystemPrompt: flags.AppendSystemPrompt,
-		MemoryContent:      agent.LoadInstructionFile(cwd),
-		MaxIterations:      flags.MaxIterations,
-		MaxTurns:           flags.MaxTurns,
-		MaxBudgetUSD:       flags.MaxBudgetUsd,
-		RedactMode:         redactMode,
-		Effort:             flags.Effort,
-		ThinkingBudget:     flags.ThinkingBudget,
-		Plugins:            pluginInfo,
-		MemoryPaths:        memoryPaths,
-		PermissionLevel:    permLevel,
+		Enabled:             flags.OutputFormat == "stream-json",
+		Verbose:             flags.Verbose,
+		IncludePartial:      flags.IncludePartialMessages,
+		SessionID:           sessionID,
+		SessionManager:      sessionManager,
+		HistoryMessages:     historyMessages,
+		IsResume:            flags.SessionResume != "", // True when resuming an existing session via -r
+		MCPConfig:           mcpConfig,
+		ReadFileCache:       readFileCache,
+		Skills:              discoveredSkills,
+		CustomSystemPrompt:  flags.CustomSystemPrompt,
+		AppendSystemPrompt:  flags.AppendSystemPrompt,
+		MemoryContent:       agent.LoadInstructionFile(cwd),
+		MaxIterations:       flags.MaxIterations,
+		MaxTurns:            flags.MaxTurns,
+		MaxBudgetUSD:        flags.MaxBudgetUsd,
+		RedactMode:          redactMode,
+		Effort:              flags.Effort,
+		ThinkingBudget:      flags.ThinkingBudget,
+		MaxToolConcurrency:  flags.MaxToolConcurrency,
+		DisableCompact:      flags.DisableCompact,
+		DisableAutoCompact:  flags.DisableAutoCompact,
+		EnableSessionMemory: flags.EnableSessionMemory,
+		DisableAutoMemory:   flags.DisableAutoMemory,
+		Plugins:             pluginInfo,
+		MemoryPaths:         memoryPaths,
+		PermissionLevel:     permLevel,
 	}
 
 	// AC3-streamconfig-inheritance: Set parent config on runner for named agent inheritance

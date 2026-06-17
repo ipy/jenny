@@ -41,13 +41,41 @@ The `Flags` struct uses `koanf:"<key>"` tags for unmarshalling:
 
 ## Environment Variable Mapping
 
-| Variable | Config Key | Example |
-|----------|-----------|---------|
-| `JENNY_MODEL` | `model` | `JENNY_MODEL=deepseek-v4-flash` |
-| `JENNY_OUTPUT_FORMAT` | `output-format` | `JENNY_OUTPUT_FORMAT=stream-json` |
-| `JENNY_VERBOSE` | `verbose` | `JENNY_VERBOSE=true` |
-| `JENNY_MCP_CONFIG` | `mcp-config` | JSON array or single path |
-| `JENNY_PERMISSION_LEVEL` | `permission-level` | `JENNY_PERMISSION_LEVEL=execute` |
+| Variable | Config Key | Type | Description |
+|----------|-----------|------|-------------|
+| `JENNY_MODEL` | `model` | string | Default model |
+| `JENNY_OUTPUT_FORMAT` | `output-format` | string | `text` or `stream-json` |
+| `JENNY_VERBOSE` | `verbose` | bool | Debug-level logging |
+| `JENNY_MCP_CONFIG` | `mcp-config` | []string | MCP config file paths |
+| `JENNY_PERMISSION_LEVEL` | `permission-level` | string | `read`/`analyze`/`edit`/`execute`/`unrestricted` |
+| `JENNY_REDACT` | `redact` | string | `disabled`/`redact` (default)/`recover` |
+| `JENNY_TRANSCRIPT_DIR` | `transcript-dir` | string | Override transcript directory |
+| `JENNY_MAX_TOOL_CONCURRENCY` | `max-tool-concurrency` | int | Max parallel tool executions (0 = default 10) |
+| `JENNY_COMPACT_KEEP_ARCHIVE` | `compact-keep-archive` | bool | Keep `<id>.tar.gz` after resume extraction |
+| `JENNY_DISABLE_COMPACT` | `disable-compact` | bool | Disable all compaction (manual + auto) |
+| `JENNY_DISABLE_AUTO_COMPACT` | `disable-auto-compact` | bool | Disable auto-compact only |
+| `JENNY_ENABLE_SESSION_MEMORY` | `enable-session-memory` | bool | Enable session-memory compaction branch |
+| `JENNY_DISABLE_AUTO_MEMORY` | `disable-auto-memory` | bool | Disable auto-memory directory entirely |
+
+### Precedence Summary
+
+For any given config key:
+
+1. CLI flag (highest) — e.g. `--redact-mode=disabled`
+2. `JENNY_*` env var — e.g. `JENNY_REDACT=disabled`
+3. `.jenny/config.json` field — e.g. `{"redact": "disabled"}`
+4. Built-in default (lowest) — e.g. `redact` (one-way mode)
+
+## Out of Koanf Layer
+
+A small number of environment variables are intentionally read directly via `os.Getenv` rather than going through the koanf layer, because their consumers run before `cli.Parse()` is reachable or they follow third-party SDK conventions:
+
+- `JENNY_DEBUG`, `JENNY_VERBOSE`, `DEBUG` — read in `internal/log/log.go:32` from `init()` (pre-`cli.Parse`); the canonical site is the log package.
+- `JENNY_HOME`, `JENNY_AGENTS_HOME` — read in `internal/constants/constants.go` from `init()`; controls the jenny home directory.
+- `ANTHROPIC_*`, `OPENAI_*`, `GENAI_*`, `GOOGLE_*`, `GEMINI_*` — third-party SDK / proxy conventions; not Jenny's to namespace.
+- `MCP_HTTP_REQUEST_TIMEOUT`, `MCP_MAX_OUTPUT_CHARS` — MCP-layer knobs; kept in-package.
+- `AUTO_COMPACT_WINDOW` — non-`JENNY_*` prefix; legacy override for `CompactConfig.ModelContextWindow`. Coexists with the migrated C-group vars inside `newCompactConfigForModel`.
+- `TEMP`, `TMP`, `LOCALAPPDATA`, `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, `API_TIMEOUT_MS` — OS / standard HTTP / library conventions.
 
 ## Acceptance Criteria
 

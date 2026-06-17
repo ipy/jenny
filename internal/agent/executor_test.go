@@ -729,3 +729,35 @@ func TestExecutor_TaskAliasFallback(t *testing.T) {
 		t.Errorf("Expected 'agent responded', got %q", results[0].Content)
 	}
 }
+
+// TestNewToolExecutorWithStreamConfig_RespectsMaxConcurrency is a regression
+// test for the bug where NewToolExecutorWithStreamConfig ignored
+// StreamConfig.MaxToolConcurrency and used the hardcoded default of 10.
+func TestNewToolExecutorWithStreamConfig_RespectsMaxConcurrency(t *testing.T) {
+	// StreamConfig with explicit MaxToolConcurrency
+	e := NewToolExecutorWithStreamConfig(nil, "/tmp", &StreamConfig{MaxToolConcurrency: 3})
+	if e.maxConcurrency != 3 {
+		t.Errorf("maxConcurrency = %d, want 3 from StreamConfig", e.maxConcurrency)
+	}
+
+	// Zero/empty StreamConfig falls back to default
+	e2 := NewToolExecutorWithStreamConfig(nil, "/tmp", &StreamConfig{MaxToolConcurrency: 0})
+	if e2.maxConcurrency != defaultMaxConcurrency {
+		t.Errorf("maxConcurrency = %d, want default %d when StreamConfig is 0", e2.maxConcurrency, defaultMaxConcurrency)
+	}
+
+	// Nil StreamConfig falls back to default
+	e3 := NewToolExecutorWithStreamConfig(nil, "/tmp", nil)
+	if e3.maxConcurrency != defaultMaxConcurrency {
+		t.Errorf("maxConcurrency = %d, want default %d when StreamConfig is nil", e3.maxConcurrency, defaultMaxConcurrency)
+	}
+}
+
+// TestNewToolExecutor_UsesDefault is a regression test confirming that
+// NewToolExecutor (no streamCfg) still falls back to defaultMaxConcurrency.
+func TestNewToolExecutor_UsesDefault(t *testing.T) {
+	e := NewToolExecutor(nil, "/tmp")
+	if e.maxConcurrency != defaultMaxConcurrency {
+		t.Errorf("maxConcurrency = %d, want default %d", e.maxConcurrency, defaultMaxConcurrency)
+	}
+}

@@ -46,6 +46,11 @@ type Config struct {
 	// AutoMemoryEnabled indicates whether auto-memory is enabled in settings.
 	AutoMemoryEnabled bool
 
+	// DisableAutoMemory forces memdir off. Sourced from
+	// JENNY_DISABLE_AUTO_MEMORY / --disable-auto-memory via the unified koanf
+	// config layer; see docs/arch/koanf-config.md.
+	DisableAutoMemory bool
+
 	// IsRemote indicates whether this is a remote session.
 	IsRemote bool
 
@@ -127,13 +132,13 @@ func sanitizeAsDirName(path string) string {
 }
 
 // IsDisabled returns true if memdir is disabled based on the disable chain:
-// - DISABLE_AUTO_MEMORY env var
+// - Config.DisableAutoMemory (sourced from JENNY_DISABLE_AUTO_MEMORY / --disable-auto-memory via koanf)
 // - --bare mode flag
 // - remote session without memory directory
 // - settings autoMemoryEnabled: false
 func (m *Memdir) IsDisabled() bool {
-	// Check DISABLE_AUTO_MEMORY env var first
-	if os.Getenv("DISABLE_AUTO_MEMORY") != "" {
+	// Check DisableAutoMemory (from koanf-driven Config field) first
+	if m.config.DisableAutoMemory {
 		return true
 	}
 

@@ -37,7 +37,7 @@ When tool class changes, the current batch is flushed and a new group starts.
 
 ## Concurrency Limit
 
-Default max parallel tools: **10**. Override with `JENNY_MAX_TOOL_CONCURRENCY` env var.
+Default max parallel tools: **10**. Override with `JENNY_MAX_TOOL_CONCURRENCY` env var or `--max-tool-concurrency` CLI flag (see [koanf-config.md](./koanf-config.md) for precedence).
 
 ## Bash Sibling Abort
 
@@ -71,7 +71,7 @@ Tools that return `NewCwd` update the executor's cwd. Updates from serial tools 
 
 | Case | Expected behavior |
 |------|-------------------|
-| 10+ parallel reads | Cap at `JENNY_MAX_TOOL_CONCURRENCY` |
+| 10+ parallel reads | Cap at `JENNY_MAX_TOOL_CONCURRENCY` (or `--max-tool-concurrency`) |
 | Bash + Read same turn | Separate groups; reads may complete while bash runs serially |
 | Interrupt mid-batch | Context cancellation marks pending tools interrupted |
 | Duplicate tool names same turn | Each tool_use ID independent |

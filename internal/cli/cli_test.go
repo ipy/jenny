@@ -380,36 +380,16 @@ func TestParseMCPConfigNoFlag(t *testing.T) {
 	}
 }
 
-func TestParseFeatureFlags(t *testing.T) {
+func TestParseFeatureFlagsRemoved(t *testing.T) {
+	// AC: --ff / --feature-flags no longer exist. Verify they are rejected.
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--ff", "redact=disabled", "--feature-flags", "other=true", "--print", "hello"}
-
-	flags, err := Parse()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if len(flags.FeatureFlags) != 2 {
-		t.Errorf("expected 2 feature flags, got %d", len(flags.FeatureFlags))
-	}
-	if flags.FeatureFlags["redact"] != "disabled" {
-		t.Errorf("expected redact=disabled, got %q", flags.FeatureFlags["redact"])
-	}
-	if flags.FeatureFlags["other"] != "true" {
-		t.Errorf("expected other=true, got %q", flags.FeatureFlags["other"])
-	}
-}
-
-func TestParseFeatureFlagsInvalid(t *testing.T) {
-	origArgs := os.Args
-	defer func() { os.Args = origArgs }()
-
-	os.Args = []string{"jenny", "--ff", "invalid", "--print", "hello"}
+	os.Args = []string{"jenny", "--ff", "redact=disabled", "--print", "hello"}
 
 	_, err := Parse()
 	if err == nil {
-		t.Error("expected error for invalid feature flag format")
+		t.Error("expected error for unknown --ff flag (feature flags were removed)")
 	}
 }
 
@@ -683,5 +663,305 @@ func TestParseRedactModeInvalid(t *testing.T) {
 	_, err := Parse()
 	if err == nil {
 		t.Error("expected error for invalid --redact value")
+	}
+}
+
+// TestParseTranscriptDirEnvVar verifies JENNY_TRANSCRIPT_DIR populates the field.
+func TestParseTranscriptDirEnvVar(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	t.Setenv("JENNY_TRANSCRIPT_DIR", "/tmp/jenny-transcripts")
+
+	os.Args = []string{"jenny", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if flags.TranscriptDir != "/tmp/jenny-transcripts" {
+		t.Errorf("expected transcript-dir from env, got %q", flags.TranscriptDir)
+	}
+}
+
+// TestParseTranscriptDirFlagOverridesEnv verifies --transcript-dir wins over JENNY_TRANSCRIPT_DIR.
+func TestParseTranscriptDirFlagOverridesEnv(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	t.Setenv("JENNY_TRANSCRIPT_DIR", "/tmp/from-env")
+
+	os.Args = []string{"jenny", "--transcript-dir", "/tmp/from-flag", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if flags.TranscriptDir != "/tmp/from-flag" {
+		t.Errorf("expected --transcript-dir to win over env, got %q", flags.TranscriptDir)
+	}
+}
+
+// TestParseMaxToolConcurrencyEnvVar verifies JENNY_MAX_TOOL_CONCURRENCY populates the field.
+func TestParseMaxToolConcurrencyEnvVar(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	t.Setenv("JENNY_MAX_TOOL_CONCURRENCY", "4")
+
+	os.Args = []string{"jenny", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if flags.MaxToolConcurrency != 4 {
+		t.Errorf("expected max-tool-concurrency=4 from env, got %d", flags.MaxToolConcurrency)
+	}
+}
+
+// TestParseMaxToolConcurrencyFlagOverridesEnv verifies --max-tool-concurrency wins over JENNY_MAX_TOOL_CONCURRENCY.
+func TestParseMaxToolConcurrencyFlagOverridesEnv(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	t.Setenv("JENNY_MAX_TOOL_CONCURRENCY", "4")
+
+	os.Args = []string{"jenny", "--max-tool-concurrency", "8", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if flags.MaxToolConcurrency != 8 {
+		t.Errorf("expected --max-tool-concurrency=8 to win over env, got %d", flags.MaxToolConcurrency)
+	}
+}
+
+// TestParseCompactKeepArchiveEnvVar verifies JENNY_COMPACT_KEEP_ARCHIVE populates the field.
+func TestParseCompactKeepArchiveEnvVar(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	t.Setenv("JENNY_COMPACT_KEEP_ARCHIVE", "1")
+
+	os.Args = []string{"jenny", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !flags.CompactKeepArchive {
+		t.Error("expected compact-keep-archive=true from env")
+	}
+}
+
+// TestParseCompactKeepArchiveFlagOverridesEnv verifies --compact-keep-archive wins.
+func TestParseCompactKeepArchiveFlagOverridesEnv(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Unsetenv("JENNY_COMPACT_KEEP_ARCHIVE")
+
+	os.Args = []string{"jenny", "--compact-keep-archive", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !flags.CompactKeepArchive {
+		t.Error("expected --compact-keep-archive to set the field to true")
+	}
+}
+
+// TestParseDisableCompactEnvVar verifies JENNY_DISABLE_COMPACT populates the field.
+func TestParseDisableCompactEnvVar(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	t.Setenv("JENNY_DISABLE_COMPACT", "1")
+
+	os.Args = []string{"jenny", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !flags.DisableCompact {
+		t.Error("expected disable-compact=true from env")
+	}
+}
+
+// TestParseDisableCompactFlagOverridesEnv verifies --disable-compact wins.
+func TestParseDisableCompactFlagOverridesEnv(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Unsetenv("JENNY_DISABLE_COMPACT")
+
+	os.Args = []string{"jenny", "--disable-compact", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !flags.DisableCompact {
+		t.Error("expected --disable-compact to set the field to true")
+	}
+}
+
+// TestParseDisableAutoCompactEnvVar verifies JENNY_DISABLE_AUTO_COMPACT populates the field.
+func TestParseDisableAutoCompactEnvVar(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	t.Setenv("JENNY_DISABLE_AUTO_COMPACT", "1")
+
+	os.Args = []string{"jenny", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !flags.DisableAutoCompact {
+		t.Error("expected disable-auto-compact=true from env")
+	}
+}
+
+// TestParseEnableSessionMemoryEnvVar verifies JENNY_ENABLE_SESSION_MEMORY populates the field.
+func TestParseEnableSessionMemoryEnvVar(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	t.Setenv("JENNY_ENABLE_SESSION_MEMORY", "1")
+
+	os.Args = []string{"jenny", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !flags.EnableSessionMemory {
+		t.Error("expected enable-session-memory=true from env")
+	}
+}
+
+// TestParseDisableAutoMemoryEnvVar verifies JENNY_DISABLE_AUTO_MEMORY populates the field.
+func TestParseDisableAutoMemoryEnvVar(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	t.Setenv("JENNY_DISABLE_AUTO_MEMORY", "1")
+
+	os.Args = []string{"jenny", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !flags.DisableAutoMemory {
+		t.Error("expected disable-auto-memory=true from env")
+	}
+}
+
+// TestParseDisableAutoMemoryFlagOverridesEnv verifies --disable-auto-memory wins.
+func TestParseDisableAutoMemoryFlagOverridesEnv(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Unsetenv("JENNY_DISABLE_AUTO_MEMORY")
+
+	os.Args = []string{"jenny", "--disable-auto-memory", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !flags.DisableAutoMemory {
+		t.Error("expected --disable-auto-memory to set the field to true")
+	}
+}
+
+// TestParseBoolFlagExplicitFalseOverridesConfig is a regression test for the
+// pflag + koanf chain. pflag's BoolVar accepts `--flag=false` as an explicit
+// negation, and posflag.Provider writes that value into koanf, which then
+// overrides the lower-precedence config.json. This test pins that behaviour
+// so a future refactor doesn't accidentally drop it.
+func TestParseBoolFlagExplicitFalseOverridesConfig(t *testing.T) {
+	origArgs := os.Args
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	defer func() {
+		os.Args = origArgs
+		os.Chdir(origDir)
+	}()
+
+	// Stage a project-local .jenny/config.json with the flag set to true.
+	tmpDir := t.TempDir()
+	jennyDir := tmpDir + "/.jenny"
+	if err := os.MkdirAll(jennyDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(jennyDir+"/config.json",
+		[]byte(`{"disable-compact": true, "disable-auto-memory": true}`),
+		0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+
+	// Pass --disable-compact=false and --disable-auto-memory=false explicitly.
+	// The CLI flag must win over the config.json values.
+	os.Args = []string{"jenny", "--disable-compact=false", "--disable-auto-memory=false", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if flags.DisableCompact {
+		t.Errorf("expected --disable-compact=false to override config.json true, got true")
+	}
+	if flags.DisableAutoMemory {
+		t.Errorf("expected --disable-auto-memory=false to override config.json true, got true")
+	}
+}
+
+// TestParseBoolFlagAbsentUsesConfig verifies that without an explicit CLI flag,
+// the value from .jenny/config.json flows through into the parsed Flags.
+func TestParseBoolFlagAbsentUsesConfig(t *testing.T) {
+	origArgs := os.Args
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	defer func() {
+		os.Args = origArgs
+		os.Chdir(origDir)
+	}()
+
+	tmpDir := t.TempDir()
+	jennyDir := tmpDir + "/.jenny"
+	if err := os.MkdirAll(jennyDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(jennyDir+"/config.json",
+		[]byte(`{"disable-compact": true}`), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+
+	os.Args = []string{"jenny", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !flags.DisableCompact {
+		t.Errorf("expected config.json disable-compact=true to flow through, got false")
 	}
 }

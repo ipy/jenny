@@ -222,14 +222,12 @@ When using `--output-format stream-json`, each output line is a JSON object:
 
 ## Configuration
 
-The agent reads configuration from environment variables:
+The agent reads configuration from the unified koanf layer — see [koanf-config.md](./koanf-config.md) for the full env-var / CLI-flag / JSON precedence rule. Jenny-owned env vars relevant to the agent loop:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `ANTHROPIC_BASE_URL` | API endpoint URL | (none, uses SDK default) |
-| `ANTHROPIC_AUTH_TOKEN` | API authentication token | (none, uses SDK default) |
-| `ANTHROPIC_MODEL` | Model to use for completions | `deepseek-v4-flash` |
-| `JENNY_DEBUG` | Enable debug-level structured logging to stderr | (none) |
+| `JENNY_MAX_TOOL_CONCURRENCY` | Max parallel tool executions | `10` |
+| `JENNY_DEBUG` | Enable debug-level structured logging to stderr (canonical read site: `internal/log/log.go`; pre-`cli.Parse`) | (none) |
 
 Example `.env` file:
 ```

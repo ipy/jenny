@@ -4,7 +4,6 @@ package agent
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -462,70 +461,4 @@ func TestAC5_CoalescingWindow(t *testing.T) {
 	if invoked {
 		t.Fatal("Forked agent should not be invoked for coalesced update")
 	}
-}
-
-// AC5: session-memory files accumulate. We evict the oldest entries on every
-// NewSessionMemory call so the directory stays bounded.
-func TestCleanupOldSessionMemories_EvictsOldest(t *testing.T) {
-	dir := t.TempDir()
-	keep := 3
-
-	// Seed 5 files with distinct mtimes (oldest -> newest)
-	now := time.Now()
-	for i := 0; i < 5; i++ {
-		path := filepath.Join(dir, sessionIDForIndex(i)+".md")
-		if err := os.WriteFile(path, []byte("# x"), 0600); err != nil {
-			t.Fatalf("seed: %v", err)
-		}
-		// Push mtime backwards for older indices
-		mtime := now.Add(time.Duration(i-5) * time.Hour)
-		if err := os.Chtimes(path, mtime, mtime); err != nil {
-			t.Fatalf("chtimes: %v", err)
-		}
-	}
-
-	cleanupOldSessionMemories(dir, keep)
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("readdir: %v", err)
-	}
-
-	// The 2 oldest should be gone; the 3 newest (indices 2, 3, 4) should remain.
-	if len(entries) != keep {
-		names := make([]string, 0, len(entries))
-		for _, e := range entries {
-			names = append(names, e.Name())
-		}
-		t.Errorf("expected %d files to remain, got %d: %v", keep, len(entries), names)
-	}
-	for i := 0; i < 2; i++ {
-		path := filepath.Join(dir, sessionIDForIndex(i)+".md")
-		if _, err := os.Stat(path); !os.IsNotExist(err) {
-			t.Errorf("expected oldest %s to be removed", path)
-		}
-	}
-}
-
-// AC5: JENNY_SESSION_MEMORY_RETENTION env var overrides the default.
-func TestSessionMemoryRetention_EnvOverride(t *testing.T) {
-	t.Setenv("JENNY_SESSION_MEMORY_RETENTION", "42")
-	if got := sessionMemoryRetention(); got != 42 {
-		t.Errorf("env override: got %d, want 42", got)
-	}
-
-	t.Setenv("JENNY_SESSION_MEMORY_RETENTION", "not-a-number")
-	if got := sessionMemoryRetention(); got != defaultSessionMemoryRetention {
-		t.Errorf("invalid env: got %d, want default %d", got, defaultSessionMemoryRetention)
-	}
-
-	t.Setenv("JENNY_SESSION_MEMORY_RETENTION", "0")
-	if got := sessionMemoryRetention(); got != defaultSessionMemoryRetention {
-		t.Errorf("zero env: got %d, want default %d", got, defaultSessionMemoryRetention)
-	}
-}
-
-// sessionIDForIndex returns a deterministic filename for a seed index.
-func sessionIDForIndex(i int) string {
-	return "sess_" + string(rune('A'+i)) + "_00000000"
 }

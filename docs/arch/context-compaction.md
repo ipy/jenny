@@ -28,7 +28,7 @@ Thresholds are derived from per-model parameters via `api.ModelParams(model)`:
 | `deepseek-v4-pro` | 1,000,000 | 8,192 |
 | Default (other models) | 200,000 | 20,000 |
 
-`newCompactConfigForModel(model)` looks up actual values; `AUTO_COMPACT_WINDOW` env overrides context window if set.
+`newCompactConfigForModel(model, streamCfg)` looks up actual values; `streamCfg` fields carry `DisableCompact`, `DisableAutoCompact`, and `EnableSessionMemory` (populated by koanf from `JENNY_DISABLE_*` / `JENNY_ENABLE_SESSION_MEMORY` env vars and matching CLI flags). `AUTO_COMPACT_WINDOW` env (non-`JENNY_*`) still overrides context window if set.
 
 ## Threshold Math
 
@@ -49,7 +49,7 @@ AUTOCOMPACT_BUFFER_TOKENS = max(modelMaxOutputTokens + 5_000, 13_000)
 
 Auto-compact when estimated tokens ≥ `autoCompactThreshold`.
 
-**Disabled when:** `DISABLE_COMPACT`, `DISABLE_AUTO_COMPACT`, user setting off, or `querySource` is `compact` / `session_memory`.
+**Disabled when:** `JENNY_DISABLE_COMPACT`, `JENNY_DISABLE_AUTO_COMPACT`, user setting off, or `querySource` is `compact` / `session_memory`. See [koanf-config.md](./koanf-config.md) for the full env-var/CLI-flag surface.
 
 ## Summary Reserve
 

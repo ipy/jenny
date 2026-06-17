@@ -242,7 +242,7 @@ func NewQueryEngine(cfg *StreamConfig, tools []tool.Tool, model string, opts ...
 			e.model = c.GetModel()
 		}
 	}
-	e.compactConfig = newCompactConfigForModel(e.model)
+	e.compactConfig = newCompactConfigForModel(e.model, e.streamCfg)
 
 	// Wire context into tools
 	e.WireTools()

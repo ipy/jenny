@@ -55,16 +55,21 @@ type StreamConfig struct {
 	// Non-compacted: survives context compaction.
 	PermissionDenials []string // Denied tool executions (toolName + inputKey pairs) for cross-turn caching
 	// Non-compacted: survives context compaction.
-	DiscoveredSkillNames []string          // Skill names discovered during execution for cross-turn persistence
-	IsForkChild          bool              // True when this session is a fork child (subagent spawned another agent)
-	StructuredSchema     map[string]any    // JSON schema for structured output (AC1, AC4: non-interactive only)
-	StructuredDenyRules  []string          // Tool names to deny; checked by engine to enforce AC1
-	IsNamedAgent         bool              // True when this session is a named swarm agent
-	MaxIterations        int               // Maximum loop iterations (0 = unlimited)
-	RedactMode           redact.RedactMode // Secret redaction mode
-	Effort               string            // Reasoning effort level (low, medium, high) for OpenAI/DeepSeek
-	ThinkingBudget       int               // Maximum thinking tokens for Anthropic (AC3)
-	ParentEngine         *QueryEngine      // Parent engine for subagent cost merge (set before RunStream)
+	DiscoveredSkillNames []string             // Skill names discovered during execution for cross-turn persistence
+	IsForkChild          bool                 // True when this session is a fork child (subagent spawned another agent)
+	StructuredSchema     map[string]any       // JSON schema for structured output (AC1, AC4: non-interactive only)
+	StructuredDenyRules  []string             // Tool names to deny; checked by engine to enforce AC1
+	IsNamedAgent         bool                 // True when this session is a named swarm agent
+	MaxIterations        int                  // Maximum loop iterations (0 = unlimited)
+	RedactMode           redact.RedactMode    // Secret redaction mode
+	Effort               string               // Reasoning effort level (low, medium, high) for OpenAI/DeepSeek
+	ThinkingBudget       int                  // Maximum thinking tokens for Anthropic (AC3)
+	MaxToolConcurrency   int                  // Max parallel tool executions (0 = default 10); overrides env via koanf
+	DisableCompact       bool                 // When true, all compaction is disabled
+	DisableAutoCompact   bool                 // When true, only auto-compact is disabled
+	EnableSessionMemory  bool                 // When true, session-memory compaction branch is enabled
+	DisableAutoMemory    bool                 // When true, the auto-memory directory is suppressed entirely
+	ParentEngine         *QueryEngine         // Parent engine for subagent cost merge (set before RunStream)
 	PermissionLevel      tool.PermissionLevel // AC7: Parent's permission level for subagent inheritance
 }
 

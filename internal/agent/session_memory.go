@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -16,26 +14,6 @@ import (
 	"github.com/ipy/jenny/internal/log"
 	"github.com/ipy/jenny/internal/tool"
 )
-
-// defaultSessionMemoryRetention is the default maximum number of session
-// memory files kept in ~/.jenny/session-memory/. Override with the
-// JENNY_SESSION_MEMORY_RETENTION environment variable.
-const defaultSessionMemoryRetention = 200
-
-// sessionMemoryRetention reads the JENNY_SESSION_MEMORY_RETENTION env var
-// and returns the parsed positive integer, falling back to the default on
-// missing/invalid input.
-func sessionMemoryRetention() int {
-	raw := os.Getenv("JENNY_SESSION_MEMORY_RETENTION")
-	if raw == "" {
-		return defaultSessionMemoryRetention
-	}
-	n, err := strconv.Atoi(raw)
-	if err != nil || n <= 0 {
-		return defaultSessionMemoryRetention
-	}
-	return n
-}
 
 // APIClient defines the interface for an LLM API client used for extraction.
 type APIClient interface {
@@ -76,53 +54,6 @@ func NewSessionMemory(sessionID string, client APIClient, compactCfg CompactConf
 		memoryFilePath:   memoryFilePath,
 		client:           client,
 		readCache:        tool.NewReadFileCache(),
-	}
-}
-
-// cleanupOldSessionMemories removes the oldest *.md files in dir beyond
-// the `keep` most recent (by mtime, newest first). Files that fail to stat
-// or remove are skipped. A non-existent dir is fine — cleanup is a no-op.
-func cleanupOldSessionMemories(dir string, keep int) {
-	if keep <= 0 {
-		return
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return // dir doesn't exist or is unreadable; nothing to do
-	}
-
-	type fileWithMtime struct {
-		path  string
-		mtime time.Time
-	}
-	files := make([]fileWithMtime, 0, len(entries))
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
-			continue
-		}
-		info, err := e.Info()
-		if err != nil {
-			continue
-		}
-		files = append(files, fileWithMtime{
-			path:  filepath.Join(dir, e.Name()),
-			mtime: info.ModTime(),
-		})
-	}
-
-	if len(files) <= keep {
-		return
-	}
-
-	// Newest first
-	sort.Slice(files, func(i, j int) bool {
-		return files[i].mtime.After(files[j].mtime)
-	})
-
-	for _, f := range files[keep:] {
-		if err := os.Remove(f.path); err == nil {
-			log.Debug("Evicted old session memory file", "path", f.path)
-		}
 	}
 }
 

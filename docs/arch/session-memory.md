@@ -57,4 +57,3 @@ Token counting matches autocompact: input + output + cache tokens.
 - **AC3:** 15s extraction timeout.
 - **AC4:** Forked agent Edit-only on memory file.
 - **AC5:** Disabled when auto-compact off.
-- **AC6:** Retain at most 200 most-recent memory files (configurable via `JENNY_SESSION_MEMORY_RETENTION`).
