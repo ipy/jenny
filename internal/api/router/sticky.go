@@ -20,17 +20,21 @@ type StickyClient struct {
 	endpoint    *ActiveEndpoint
 	client      api.Requester
 	maxRetries  int
-	backoffType string
-	mu          sync.Mutex
+	backoffType   string
+	randFn        func() float64
+	clientFactory func(model string) (api.Requester, error)
+	mu            sync.Mutex
 }
 
 // NewStickyClient creates a new StickyClient wrapping the router.
 func NewStickyClient(sessionID string, router *Router) *StickyClient {
 	return &StickyClient{
-		router:      router,
-		sessionID:   sessionID,
-		maxRetries:  5,
-		backoffType: "exponential",
+		router:        router,
+		sessionID:     sessionID,
+		maxRetries:    5,
+		backoffType:   "exponential",
+		randFn:        rand.Float64,
+		clientFactory: func(model string) (api.Requester, error) { return api.NewClientWithModel(model) },
 	}
 }
 
@@ -42,12 +46,12 @@ func (s *StickyClient) SendMessage(ctx context.Context, messages []api.Message, 
 		return nil, fmt.Errorf("failed to select endpoint: %w", err)
 	}
 
-	if err := s.ensureClient(); err != nil {
-		return nil, fmt.Errorf("failed to create client: %w", err)
-	}
-
 	// L1: Retry with backoff on same key+model
 	for attempt := 0; attempt <= s.maxRetries; attempt++ {
+		if err := s.ensureClient(); err != nil {
+			return nil, fmt.Errorf("failed to create client: %w", err)
+		}
+
 		resp, err := s.client.SendMessage(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix)
 		if err == nil {
 			s.router.healthRegistry.RecordSuccess(
@@ -59,32 +63,74 @@ func (s *StickyClient) SendMessage(ctx context.Context, messages []api.Message, 
 			return resp, nil
 		}
 
-		// Check error type
-		var retryableErr *api.RetryableHTTPError
-		if errors.As(err, &retryableErr) {
-			if retryableErr.IsPermanent {
-				return nil, err
-			}
-			if attempt < s.maxRetries {
-				delay := s.computeBackoff(attempt, retryableErr.RetryAfter)
-				select {
-				case <-ctx.Done():
-					return nil, ctx.Err()
-				case <-time.After(delay):
-				}
-				continue
-			}
-		}
-
 		var httpErr *api.HTTPError
 		if errors.As(err, &httpErr) {
-			code := httpErr.StatusCode
-			if code >= 400 && code < 500 && code != 429 && code != 408 && code != 409 {
+			cat := httpErr.ErrorCategory
+			switch cat {
+			case api.CategoryContextExhausted:
+				return nil, err // caller/engine handles compaction
+			case api.CategoryQuotaExhausted, api.CategoryPaymentRequired:
+				s.recordFailure()
+				if next := s.tryNextKey(); next != nil {
+					s.endpoint = next
+					s.client = nil
+					continue
+				}
 				return nil, err
-			}
-			if code == http.StatusTooManyRequests || (code >= 500 && code < 600) {
+			case api.CategoryContentFilter, api.CategoryAuth, api.CategoryPermission:
+				return nil, err // fail fast
+			case api.CategoryRateLimitRPM, api.CategoryRateLimitTPM,
+				api.CategoryRateLimitConcurrency, api.CategoryRateLimitGeneric,
+				api.CategoryServerOverload, api.CategoryServerError, api.CategoryTimeout:
 				if attempt < s.maxRetries {
-					delay := s.computeBackoff(attempt, nil)
+					var retryAfter *time.Duration
+					if re, ok := err.(*api.RetryableHTTPError); ok {
+						retryAfter = re.RetryAfter
+					}
+					delay := s.computeCategoryBackoff(cat, attempt, retryAfter)
+					select {
+					case <-ctx.Done():
+						return nil, ctx.Err()
+					case <-time.After(delay):
+					}
+					continue
+				}
+				return nil, err
+			case api.CategoryModelNotFound:
+				s.recordFailure()
+				if next := s.tryNextTarget(); next != nil {
+					s.endpoint = next
+					s.client = nil
+					continue
+				}
+				return nil, err
+			default:
+				// fallback: original status code logic for unknown categories
+				code := httpErr.StatusCode
+				if code >= 400 && code < 500 && code != 429 && code != 408 && code != 409 {
+					return nil, err
+				}
+				if code == http.StatusTooManyRequests || (code >= 500 && code < 600) {
+					if attempt < s.maxRetries {
+						delay := s.computeBackoff(attempt, nil)
+						select {
+						case <-ctx.Done():
+							return nil, ctx.Err()
+						case <-time.After(delay):
+						}
+						continue
+					}
+				}
+			}
+		} else {
+			// Check for RetryableHTTPError if it's not an HTTPError
+			var retryableErr *api.RetryableHTTPError
+			if errors.As(err, &retryableErr) {
+				if retryableErr.IsPermanent {
+					return nil, err
+				}
+				if attempt < s.maxRetries {
+					delay := s.computeBackoff(attempt, retryableErr.RetryAfter)
 					select {
 					case <-ctx.Done():
 						return nil, ctx.Err()
@@ -95,46 +141,8 @@ func (s *StickyClient) SendMessage(ctx context.Context, messages []api.Message, 
 			}
 		}
 
-		s.router.healthRegistry.RecordFailure(
-			s.endpoint.Provider,
-			s.endpoint.Account,
-			s.endpoint.Model,
-			s.endpoint.APIKey,
-		)
+		s.recordFailure()
 	}
-
-	// L2: Key failover
-	if nextKey := s.tryNextKey(); nextKey != nil {
-		s.endpoint = nextKey
-		if err := s.ensureClient(); err == nil {
-			resp, err := s.client.SendMessage(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix)
-			if err == nil {
-				s.router.BindSticky(s.sessionID, nextKey)
-				return resp, nil
-			}
-		}
-	}
-
-	// L3: Model fallback
-	// L3: Model fallback
-	if nextTarget := s.tryNextTarget(); nextTarget != nil {
-		s.endpoint = nextTarget
-		if err := s.ensureClient(); err == nil {
-			resp, err := s.client.SendMessage(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix)
-			if err == nil {
-				s.router.BindSticky(s.sessionID, nextTarget)
-				return resp, nil
-			}
-		}
-	}
-
-	// L3 exhausted: record failure so HealthRegistry is aware before returning
-	s.router.healthRegistry.RecordFailure(
-		s.endpoint.Provider,
-		s.endpoint.Account,
-		s.endpoint.Model,
-		s.endpoint.APIKey,
-	)
 
 	return nil, fmt.Errorf("all routing layers exhausted")
 }
@@ -214,12 +222,48 @@ func (s *StickyClient) ensureClient() error {
 		return nil
 	}
 
-	client, err := api.NewClientWithModel(s.endpoint.Model)
+	client, err := s.clientFactory(s.endpoint.Model)
 	if err != nil {
 		return err
 	}
 	s.client = client
 	return nil
+}
+
+func (s *StickyClient) computeCategoryBackoff(category api.ErrorCategory, attempt int, retryAfter *time.Duration) time.Duration {
+	baseDelay, maxDelay := s.categoryBackoffParams(category)
+	delay := baseDelay * time.Duration(1<<uint(attempt))
+	delay = min(delay, maxDelay)
+
+	jitter := time.Duration(s.randFn() * float64(delay) * 0.25)
+	delay = delay + jitter
+
+	if retryAfter != nil && *retryAfter > delay {
+		delay = *retryAfter
+	}
+
+	return delay
+}
+
+func (s *StickyClient) categoryBackoffParams(category api.ErrorCategory) (base, max time.Duration) {
+	switch category {
+	case api.CategoryRateLimitRPM:
+		return 2 * time.Second, 15 * time.Second
+	case api.CategoryRateLimitTPM:
+		return 5 * time.Second, 30 * time.Second
+	case api.CategoryRateLimitConcurrency:
+		return 10 * time.Second, 60 * time.Second
+	case api.CategoryRateLimitGeneric:
+		return 1 * time.Second, 32 * time.Second
+	case api.CategoryServerOverload:
+		return 15 * time.Second, 120 * time.Second
+	case api.CategoryServerError:
+		return 500 * time.Millisecond, 32 * time.Second
+	case api.CategoryTimeout:
+		return 2 * time.Second, 30 * time.Second
+	default:
+		return 500 * time.Millisecond, 32 * time.Second
+	}
 }
 
 func (s *StickyClient) computeBackoff(attempt int, retryAfter *time.Duration) time.Duration {
@@ -229,7 +273,7 @@ func (s *StickyClient) computeBackoff(attempt int, retryAfter *time.Duration) ti
 	delay := baseDelay * time.Duration(1<<uint(attempt))
 	delay = min(delay, maxDelay)
 
-	jitter := time.Duration(rand.Float64() * float64(delay) * 0.25)
+	jitter := time.Duration(s.randFn() * float64(delay) * 0.25)
 	delay = delay + jitter
 
 	if retryAfter != nil && *retryAfter > delay {
@@ -237,6 +281,18 @@ func (s *StickyClient) computeBackoff(attempt int, retryAfter *time.Duration) ti
 	}
 
 	return delay
+}
+
+func (s *StickyClient) recordFailure() {
+	if s.endpoint == nil {
+		return
+	}
+	s.router.healthRegistry.RecordFailure(
+		s.endpoint.Provider,
+		s.endpoint.Account,
+		s.endpoint.Model,
+		s.endpoint.APIKey,
+	)
 }
 
 func (s *StickyClient) tryNextKey() *ActiveEndpoint {
@@ -260,15 +316,27 @@ func (s *StickyClient) tryNextTarget() *ActiveEndpoint {
 		return nil
 	}
 
-	// Call nextTargetLocked directly (not NextEndpoint) so we don't
-	// advance TargetIndex again. NextEndpoint already advanced it when
-	// tryNextKey returned nil (L2 exhausted). We just need to read the
-	// result that was stored in state.Endpoint.
-	state := s.router.GetStickyEndpoint(s.sessionID)
-	if state == nil {
+	s.router.mu.Lock()
+	defer s.router.mu.Unlock()
+
+	state, ok := s.router.sessions[s.sessionID]
+	if !ok {
 		return nil
 	}
-	// After L2 exhaustion, NextEndpoint stored the next target in
-	// state.Endpoint. Return it directly.
-	return state
+
+	profile, ok := s.router.config.Profiles[s.router.profileName]
+	if !ok {
+		return nil
+	}
+
+	if profile.AllowFallback != nil && *profile.AllowFallback {
+		nextTarget := s.router.nextTargetLocked(state, s.endpoint)
+		if nextTarget != nil {
+			state.Endpoint = nextTarget
+			state.TargetIndex++
+			state.KeyIndex = 0
+			return nextTarget
+		}
+	}
+	return nil
 }

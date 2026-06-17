@@ -13,7 +13,8 @@ import (
 // directHandler is an api.Requester that forwards directly to an http.Handler,
 // completely bypassing api.Client so the test controls retry behavior.
 type directHandler struct {
-	h http.Handler
+	h   http.Handler
+	cat api.ErrorCategory
 }
 
 func (d *directHandler) SendMessage(ctx context.Context, _ []api.Message, _ []api.ToolParam, _ []api.ToolResult, _ []string, _ string) (*api.Response, error) {
@@ -22,7 +23,10 @@ func (d *directHandler) SendMessage(ctx context.Context, _ []api.Message, _ []ap
 	w := httptest.NewRecorder()
 	d.h.ServeHTTP(w, req)
 	if w.Code >= 400 {
-		return &api.Response{}, &api.HTTPError{StatusCode: w.Code}
+		return &api.Response{}, &api.HTTPError{
+			StatusCode:    w.Code,
+			ErrorCategory: d.cat,
+		}
 	}
 	return &api.Response{
 		Content:    []api.ContentBlock{{Type: "text", Text: "ok"}},

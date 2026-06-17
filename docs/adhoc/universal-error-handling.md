@@ -1,8 +1,8 @@
 ---
 title: Universal LLM API Error Handling
 slug: universal-error-handling
-status: phase3
-Phase 2: done
+status: phase4
+Phase 3: done
 date: 2025-07-10
 package: internal/api
 gaps:
