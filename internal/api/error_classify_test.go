@@ -60,7 +60,6 @@ func TestClassifyErrorCommon(t *testing.T) {
 		{"499 cancelled", 499, "", CategoryCancelled},
 		{"404 model not found", 404, "", CategoryModelNotFound},
 
-
 		// 9. 400 default
 		{"400 invalid request", 400, "invalid parameter", CategoryInvalidRequest},
 

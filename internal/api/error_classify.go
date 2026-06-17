@@ -150,4 +150,3 @@ func classifyErrorCommon(statusCode int, body string) ErrorCategory {
 
 	return CategoryUnknown
 }
-

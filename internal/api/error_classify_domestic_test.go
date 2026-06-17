@@ -39,13 +39,13 @@ func TestClassifyErrorDomestic(t *testing.T) {
 		{"zhipu", 200, `{"error_code": 9999}`, CategoryUnknown},
 
 		// MiniMax
-		{"mini"+"max", 200, `{"base_resp": {"status_code": 1039}}`, CategoryContextExhausted},
-		{"mini"+"max", 200, `{"base_resp": {"status_code": 1026}}`, CategoryContentFilter},
-		{"mini"+"max", 200, `{"base_resp": {"status_code": 1008}}`, CategoryQuotaExhausted},
-		{"mini"+"max", 200, `{"base_resp": {"status_code": 1002}}`, CategoryRateLimitGeneric},
-		{"mini"+"max", 200, `{"base_resp": {"status_code": 1041}}`, CategoryRateLimitConcurrency},
-		{"mini"+"max", 200, `{"base_resp": {"status_code": 1004}}`, CategoryAuth},
-		{"mini"+"max", 200, `{"base_resp": {"status_code": 9999}}`, CategoryUnknown},
+		{"mini" + "max", 200, `{"base_resp": {"status_code": 1039}}`, CategoryContextExhausted},
+		{"mini" + "max", 200, `{"base_resp": {"status_code": 1026}}`, CategoryContentFilter},
+		{"mini" + "max", 200, `{"base_resp": {"status_code": 1008}}`, CategoryQuotaExhausted},
+		{"mini" + "max", 200, `{"base_resp": {"status_code": 1002}}`, CategoryRateLimitGeneric},
+		{"mini" + "max", 200, `{"base_resp": {"status_code": 1041}}`, CategoryRateLimitConcurrency},
+		{"mini" + "max", 200, `{"base_resp": {"status_code": 1004}}`, CategoryAuth},
+		{"mini" + "max", 200, `{"base_resp": {"status_code": 9999}}`, CategoryUnknown},
 
 		// Bailian
 		{"bailian", 400, `{"code": "Arrearage"}`, CategoryQuotaExhausted},

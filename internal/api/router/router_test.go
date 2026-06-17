@@ -418,7 +418,7 @@ func TestLoadConfigFromKoanf(t *testing.T) {
 			},
 		},
 		{
-			name: "nil koanf returns empty config with profiles",
+			name:  "nil koanf returns empty config with profiles",
 			setup: nil, // passes nil k to LoadConfigFromKoanf in loop
 			verify: func(t *testing.T, cfg *Config, err error) {
 				if err != nil {

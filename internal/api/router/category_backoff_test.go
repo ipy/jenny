@@ -130,30 +130,30 @@ func TestSticky_ComputeCategoryBackoff(t *testing.T) {
 		expectRange [2]time.Duration // [min, max] without jitter
 	}{
 		{
-			cat:     api.CategoryRateLimitRPM,
-			attempt: 0,
+			cat:         api.CategoryRateLimitRPM,
+			attempt:     0,
 			expectRange: [2]time.Duration{2 * time.Second, 2 * time.Second},
 		},
 		{
-			cat:     api.CategoryRateLimitTPM,
-			attempt: 1,
+			cat:         api.CategoryRateLimitTPM,
+			attempt:     1,
 			expectRange: [2]time.Duration{10 * time.Second, 10 * time.Second},
 		},
 		{
-			cat:     api.CategoryServerOverload,
-			attempt: 0,
+			cat:         api.CategoryServerOverload,
+			attempt:     0,
 			expectRange: [2]time.Duration{15 * time.Second, 15 * time.Second},
 		},
 	}
 
 	for _, tt := range tests {
 		delay := sc.computeCategoryBackoff(tt.cat, tt.attempt, tt.retryAfter)
-		
+
 		base, _ := sc.categoryBackoffParams(tt.cat)
 		expectedBase := base * time.Duration(1<<uint(tt.attempt))
 		// with jitter 0.5 * 0.25 * expectedBase = 0.125 * expectedBase
-		expectedDelay := expectedBase + time.Duration(0.125 * float64(expectedBase))
-		
+		expectedDelay := expectedBase + time.Duration(0.125*float64(expectedBase))
+
 		if delay != expectedDelay {
 			t.Errorf("category %s attempt %d: expected %v, got %v", tt.cat, tt.attempt, expectedDelay, delay)
 		}
@@ -164,13 +164,13 @@ func TestSticky_RespectRetryAfter(t *testing.T) {
 	sc := &StickyClient{
 		randFn: func() float64 { return 0 },
 	}
-	
+
 	ra := 10 * time.Second
 	delay := sc.computeCategoryBackoff(api.CategoryRateLimitRPM, 0, &ra)
 	if delay != 10*time.Second {
 		t.Errorf("expected to respect Retry-After 10s, got %v", delay)
 	}
-	
+
 	ra2 := 1 * time.Second
 	delay2 := sc.computeCategoryBackoff(api.CategoryRateLimitRPM, 0, &ra2)
 	if delay2 != 2*time.Second {

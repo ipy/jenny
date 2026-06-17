@@ -15,11 +15,11 @@ import (
 
 // StickyClient implements api.Requester and wraps routing logic with sticky sessions.
 type StickyClient struct {
-	router      *Router
-	sessionID   string
-	endpoint    *ActiveEndpoint
-	client      api.Requester
-	maxRetries  int
+	router        *Router
+	sessionID     string
+	endpoint      *ActiveEndpoint
+	client        api.Requester
+	maxRetries    int
 	backoffType   string
 	randFn        func() float64
 	clientFactory func(model string) (api.Requester, error)

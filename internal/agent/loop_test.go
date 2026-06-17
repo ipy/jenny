@@ -846,8 +846,9 @@ func TestAC1_RecursiveForkBlocked_NoFalsePositive(t *testing.T) {
 		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
 	}
 
-	// Create context WITHOUT fork child marker
-	ctx := context.Background()
+	// Create context WITHOUT fork child marker, with timeout to prevent hanging
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
