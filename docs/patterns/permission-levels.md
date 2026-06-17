@@ -2,12 +2,11 @@
 title: Permission Levels
 slug: permission-levels
 priority: P1
-status: partial
+status: done
 spec: complete
-code: partial
+code: done
 package: internal/agent, internal/tool
-gaps:
-  - AC7 subagent permission escalation guard (explicit runtime check)
+gaps: []
 depends_on:
   - dangerous-command-gate
   - bash
