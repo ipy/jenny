@@ -226,6 +226,7 @@ func (s *StickyClient) ensureClient() error {
 	if err != nil {
 		return err
 	}
+	client.SetProviderName(s.endpoint.Provider)
 	s.client = client
 	return nil
 }

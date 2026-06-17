@@ -15,11 +15,12 @@ import (
 
 // openAIResponsesProvider implements the Provider interface using the OpenAI Responses API.
 type openAIResponsesProvider struct {
-	client      *HTTPClient
-	model       string
-	maxTokens   int
-	retryConfig RetryConfig
-	effort      string
+	client       *HTTPClient
+	model        string
+	maxTokens    int
+	retryConfig  RetryConfig
+	effort       string
+	providerName string
 }
 
 // newOpenAIResponsesProvider creates a new OpenAI Responses API provider.
@@ -84,6 +85,11 @@ func (p *openAIResponsesProvider) SetThinkingConfig(cfg ThinkingConfig) {
 	if cfg.Effort != "" {
 		p.effort = cfg.Effort
 	}
+}
+
+// SetProviderName sets the provider name.
+func (p *openAIResponsesProvider) SetProviderName(name string) {
+	p.providerName = name
 }
 
 // SendMessage sends a non-streaming message.
@@ -213,6 +219,12 @@ func (p *openAIResponsesProvider) doSendMessage(ctx context.Context, messages []
 
 	var resp OpenAIResponsesResponse
 	if err := p.client.Request(ctx, "POST", url, headers, reqBody, &resp); err != nil {
+		if hErr, ok := err.(*HTTPError); ok {
+			hErr.ErrorCategory = classifyErrorDomestic(p.providerName, hErr.StatusCode, hErr.Message)
+			if hErr.ErrorCategory == CategoryUnknown {
+				hErr.ErrorCategory = classifyErrorCommon(hErr.StatusCode, hErr.Message)
+			}
+		}
 		return nil, err
 	}
 
@@ -478,6 +490,10 @@ func (p *openAIResponsesProvider) SendMessageStream(ctx context.Context, message
 		if err != nil {
 			var httpErr *HTTPError
 			if errors.As(err, &httpErr) {
+				httpErr.ErrorCategory = classifyErrorDomestic(p.providerName, httpErr.StatusCode, httpErr.Message)
+				if httpErr.ErrorCategory == CategoryUnknown {
+					httpErr.ErrorCategory = classifyErrorCommon(httpErr.StatusCode, httpErr.Message)
+				}
 				result.ErrorCategory = httpErr.ErrorCategory
 				result.IsPermanent = httpErr.StatusCode >= 400 && httpErr.StatusCode < 500 &&
 					httpErr.StatusCode != 429 && httpErr.StatusCode != 408 && httpErr.StatusCode != 409

@@ -29,6 +29,9 @@ type Provider interface {
 
 	// Kind returns the provider kind for debugging/logging.
 	Kind() ProviderKind
+
+	// SetProviderName sets the provider name (e.g. "讯飞", "智谱").
+	SetProviderName(name string)
 }
 
 // ProviderWithRetryConfig allows providers to receive retry configuration.

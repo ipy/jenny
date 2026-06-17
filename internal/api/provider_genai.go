@@ -18,11 +18,13 @@ const ProviderGenAI ProviderKind = "genai"
 
 // genaiProvider implements the Provider interface using a lightweight HTTP client.
 type genaiProvider struct {
-	client      *HTTPClient
-	model       string
-	maxTokens   int
-	retryConfig RetryConfig
+	client       *HTTPClient
+	model        string
+	maxTokens    int
+	retryConfig  RetryConfig
+	providerName string
 }
+
 
 // newGenAIProvider creates a new GenAI provider.
 func newGenAIProvider(model string) (*genaiProvider, error) {
@@ -71,7 +73,13 @@ func (p *genaiProvider) SetRetryConfig(cfg RetryConfig) {
 	p.retryConfig = cfg
 }
 
+// SetProviderName sets the provider name.
+func (p *genaiProvider) SetProviderName(name string) {
+	p.providerName = name
+}
+
 // SendMessage sends a non-streaming message.
+
 func (p *genaiProvider) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string) (*Response, error) {
 	return p.sendWithRetry(ctx, func(ctx context.Context) (*Response, error) {
 		return p.doSendMessage(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix)
@@ -208,6 +216,12 @@ func (p *genaiProvider) doSendMessage(ctx context.Context, messages []Message, t
 
 	var genAIResp GenAIResponse
 	if err := p.client.Request(ctx, "POST", url, headers, reqBody, &genAIResp); err != nil {
+		if hErr, ok := err.(*HTTPError); ok {
+			hErr.ErrorCategory = classifyErrorDomestic(p.providerName, hErr.StatusCode, hErr.Message)
+			if hErr.ErrorCategory == CategoryUnknown {
+				hErr.ErrorCategory = classifyErrorCommon(hErr.StatusCode, hErr.Message)
+			}
+		}
 		return nil, err
 	}
 
@@ -279,6 +293,10 @@ func (p *genaiProvider) SendMessageStream(ctx context.Context, messages []Messag
 		if err != nil {
 			var httpErr *HTTPError
 			if errors.As(err, &httpErr) {
+				httpErr.ErrorCategory = classifyErrorDomestic(p.providerName, httpErr.StatusCode, httpErr.Message)
+				if httpErr.ErrorCategory == CategoryUnknown {
+					httpErr.ErrorCategory = classifyErrorCommon(httpErr.StatusCode, httpErr.Message)
+				}
 				result.ErrorCategory = httpErr.ErrorCategory
 				result.IsPermanent = httpErr.StatusCode >= 400 && httpErr.StatusCode < 500 &&
 					httpErr.StatusCode != 429 && httpErr.StatusCode != 408 && httpErr.StatusCode != 409

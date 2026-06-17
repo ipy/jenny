@@ -32,6 +32,7 @@ type Requester interface {
 	SetRetryConfig(cfg RetryConfig)
 	SetBackground(isBackground bool)
 	SetThinkingConfig(cfg ThinkingConfig)
+	SetProviderName(name string)
 }
 
 // Client wraps an API provider.
@@ -39,6 +40,7 @@ type Client struct {
 	provider          Provider
 	maxTokensOverride int
 	retryConfig       RetryConfig
+	providerName      string
 }
 
 // defaultModel is the default model used when ANTHROPIC_MODEL is not set.
@@ -197,6 +199,12 @@ func (c *Client) SetThinkingConfig(cfg ThinkingConfig) {
 	if setter, ok := c.provider.(interface{ SetThinkingConfig(ThinkingConfig) }); ok {
 		setter.SetThinkingConfig(cfg)
 	}
+}
+
+// SetProviderName sets the provider name for the client.
+func (c *Client) SetProviderName(name string) {
+	c.providerName = name
+	c.provider.SetProviderName(name)
 }
 
 // SendMessage sends a message to the API and returns the response.

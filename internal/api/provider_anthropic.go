@@ -22,6 +22,7 @@ type anthropicProvider struct {
 	thinkingConfig ThinkingConfig
 	retryConfig    RetryConfig
 	isBackground   bool
+	providerName   string
 }
 
 // newAnthropicProvider creates a new Anthropic provider.
@@ -78,6 +79,11 @@ func (p *anthropicProvider) SetRetryConfig(cfg RetryConfig) {
 // SetThinkingConfig sets the thinking configuration.
 func (p *anthropicProvider) SetThinkingConfig(cfg ThinkingConfig) {
 	p.thinkingConfig = cfg
+}
+
+// SetProviderName sets the provider name.
+func (p *anthropicProvider) SetProviderName(name string) {
+	p.providerName = name
 }
 
 // SendMessage sends a non-streaming message.
@@ -221,6 +227,12 @@ func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Messag
 
 	var anthropicResp AnthropicResponse
 	if err := p.client.Request(ctx, "POST", url, headers, reqBody, &anthropicResp); err != nil {
+		if hErr, ok := err.(*HTTPError); ok {
+			hErr.ErrorCategory = classifyErrorDomestic(p.providerName, hErr.StatusCode, hErr.Message)
+			if hErr.ErrorCategory == CategoryUnknown {
+				hErr.ErrorCategory = classifyErrorCommon(hErr.StatusCode, hErr.Message)
+			}
+		}
 		return nil, err
 	}
 
@@ -470,6 +482,10 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 		if err != nil {
 			var httpErr *HTTPError
 			if errors.As(err, &httpErr) {
+				httpErr.ErrorCategory = classifyErrorDomestic(p.providerName, httpErr.StatusCode, httpErr.Message)
+				if httpErr.ErrorCategory == CategoryUnknown {
+					httpErr.ErrorCategory = classifyErrorCommon(httpErr.StatusCode, httpErr.Message)
+				}
 				result.ErrorCategory = httpErr.ErrorCategory
 				result.IsPermanent = httpErr.StatusCode >= 400 && httpErr.StatusCode < 500 &&
 					httpErr.StatusCode != 429 && httpErr.StatusCode != 408 && httpErr.StatusCode != 409
