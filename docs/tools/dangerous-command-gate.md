@@ -7,7 +7,7 @@ spec: complete
 code: done
 package: internal/tool
 gaps:
-  - Pipeline segment validation skip path at execute level
+  []
 depends_on:
   - tool-registry
 ---
