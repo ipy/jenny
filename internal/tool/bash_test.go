@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ipy/jenny/internal/constants"
 )
@@ -667,5 +668,58 @@ func TestBashTool_ScratchpadAccess(t *testing.T) {
 	}
 	if !result.IsError {
 		t.Error("expected file outside scratchpad to be blocked without unrestricted level")
+	}
+}
+
+// TestBashTool_Execute_Concurrent verifies that multiple goroutines calling Execute
+// on the same BashTool instance do not deadlock and complete within 10 seconds.
+func TestBashTool_Execute_Concurrent(t *testing.T) {
+	tool := NewBashTool(PermissionEdit)
+	cwd := t.TempDir()
+
+	const numGoroutines = 5
+	done := make(chan struct{}, numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			defer func() { done <- struct{}{} }()
+			_, err := tool.Execute(context.Background(), map[string]any{
+				"command": "echo hello",
+			}, cwd)
+			if err != nil {
+				t.Errorf("goroutine %d: unexpected error: %v", id, err)
+			}
+		}(i)
+	}
+
+	// Wait for all goroutines with a timeout
+	timeout := time.After(10 * time.Second)
+	for i := 0; i < numGoroutines; i++ {
+		select {
+		case <-done:
+			// ok
+		case <-timeout:
+			t.Fatal("concurrent Execute calls timed out after 10s — possible deadlock")
+		}
+	}
+}
+
+// TestBashTool_CheckPath_Timeout verifies that WindowsCommandGate.CheckPath
+// returns within 2 seconds even with a slow/unreachable temp path.
+func TestBashTool_CheckPath_Timeout(t *testing.T) {
+	gate := NewWindowsCommandGate(PermissionEdit)
+
+	done := make(chan struct{}, 1)
+	go func() {
+		// CheckPath should complete quickly — it only does string comparisons and env lookups.
+		_ = gate.CheckPath(`C:\Users\TestUser\AppData\Local\Temp\testdir`)
+		done <- struct{}{}
+	}()
+
+	select {
+	case <-done:
+		// Pass: CheckPath completed within timeout
+	case <-time.After(2 * time.Second):
+		t.Fatal("CheckPath timed out after 2s")
 	}
 }

@@ -9,10 +9,9 @@ import (
 	"strings"
 )
 
-// resetCwdIfOutsideProject checks if command changed directory outside project and resets
+// resetCwdIfOutsideProject checks if command changed directory outside project and resets.
+// Caller must hold t.mu.
 func (t *BashTool) resetCwdIfOutsideProject(command string) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	newCwd := parseCdTarget(command, t.commandCwd)
 	if newCwd == "" {
 		return

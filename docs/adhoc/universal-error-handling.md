@@ -29,7 +29,7 @@ The current error handling in Jenny's API layer relies on HTTP status codes plus
 - **Domestic providers** (讯飞, 智谱, MiniMax, 阿里百炼) use business codes inside JSON response bodies that map to completely different semantics than the HTTP status code alone suggests.
 - **Gemini** may return 500 INTERNAL for context-too-long errors rather than 400.
 
-Research data: 19 providers' error codes documented in `.joycode/llm-api-error-codes-research.md`.
+Research data: 19 providers' error codes documented in `.jenny/llm-api-error-codes-research.md`.
 
 ## Current Code Baseline
 
@@ -365,8 +365,8 @@ Honor `Retry-After` header (OpenRouter, Claude provide this).
 
 ## Research Data
 
-Full 19-provider error code table with unified 9-category mapping: `.joycode/llm-api-error-codes-research.md`
-Current code analysis: `.joycode/current-error-handling-analysis.md`
+Full 19-provider error code table with unified 9-category mapping: `.jenny/llm-api-error-codes-research.md`
+Current code analysis: `.jenny/current-error-handling-analysis.md`
 
 ## Consolidation Plan
 

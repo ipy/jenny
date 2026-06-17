@@ -49,24 +49,32 @@ func (t *BashTool) effectiveLevel() PermissionLevel {
 
 // WithSessionID sets the session ID for the BashTool.
 func (t *BashTool) WithSessionID(id string) *BashTool {
+	t.mu.Lock()
 	t.sessionID = id
+	t.mu.Unlock()
 	return t
 }
 
 // WithSandbox sets the sandbox manager for the BashTool.
 func (t *BashTool) WithSandbox(sb sandbox.SandboxManager) *BashTool {
+	t.mu.Lock()
 	t.sandbox = sb
+	t.mu.Unlock()
 	return t
 }
 
 // WithTaskManager sets the task manager for background task tracking.
 func (t *BashTool) WithTaskManager(tm *TaskManager) *BashTool {
+	t.mu.Lock()
 	t.taskManager = tm
+	t.mu.Unlock()
 	return t
 }
 
 // GetTaskManager returns the task manager for sharing with other tools.
 func (t *BashTool) GetTaskManager() *TaskManager {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	return t.taskManager
 }
 
@@ -130,10 +138,27 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 	// Universal Windows Security (AC4)
 	if runtime.GOOS == "windows" {
 		winGate := NewWindowsCommandGate(t.effectiveLevel())
-		if err := winGate.CheckPath(t.commandCwd); err != nil {
+		// CheckPath with timeout to prevent hanging on slow filesystem/network paths
+		checkCtx, checkCancel := context.WithTimeout(context.Background(), 1*time.Second)
+		checkErr := make(chan error, 1)
+		go func() {
+			checkErr <- winGate.CheckPath(t.commandCwd)
+		}()
+		select {
+		case err := <-checkErr:
+			checkCancel()
+			if err != nil {
+				t.mu.Unlock()
+				return &ToolResult{
+					Content: fmt.Sprintf("Security error: %v", err),
+					IsError: true,
+				}, nil
+			}
+		case <-checkCtx.Done():
+			checkCancel()
 			t.mu.Unlock()
 			return &ToolResult{
-				Content: fmt.Sprintf("Security error: %v", err),
+				Content: "Security error: Windows path check timed out",
 				IsError: true,
 			}, nil
 		}
@@ -271,7 +296,9 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 	}
 
 	// Handle cwd reset (AC4) - check if command changed directory outside project
+	t.mu.Lock()
 	t.resetCwdIfOutsideProject(command)
+	t.mu.Unlock()
 
 	if cmdCtx.Err() == context.DeadlineExceeded {
 		return &ToolResult{
@@ -391,12 +418,18 @@ func isBackgroundExecution(input map[string]any) bool {
 	return false
 }
 
-// executeBackground runs command as background task
+// executeBackground runs command as background task.
+// Caller must hold t.mu.
 func (t *BashTool) executeBackground(command string, cwd string, input map[string]any) (*ToolResult, error) {
 	timeout := 30
 	if timeoutVal, ok := input["timeout"].(float64); ok {
 		timeout = int(timeoutVal)
 	}
+
+	// Snapshot shared fields under lock before spawning goroutines.
+	sessionID := t.sessionID
+	tm := t.taskManager
+	projRoot := t.projectRoot
 
 	// Create a background context (NOT for timeout - we handle timeout manually for AC5)
 	ctx := context.Background()
@@ -408,18 +441,19 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 	taskID := fmt.Sprintf("task_%d", time.Now().UnixNano())
 
 	// Initialize task manager if nil
-	if t.taskManager == nil {
-		t.taskManager = NewTaskManager()
+	if tm == nil {
+		tm = NewTaskManager()
+		t.taskManager = tm
 	}
 
 	// Set project root on task manager for project-relative paths
-	if t.projectRoot != "" {
-		t.taskManager.WithProjectRoot(t.projectRoot)
+	if projRoot != "" {
+		tm.WithProjectRoot(projRoot)
 	}
 
 	// Get output file path
 	outputFile := ""
-	if tm := t.taskManager; tm != nil {
+	if tm != nil {
 		path, err := tm.TaskOutputPath(taskID)
 		if err == nil {
 			outputFile = path
@@ -456,7 +490,7 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 		cmd.Dir = cwd
 
 		// Inject JENNY_SCRATCHPAD env var so agent can reference scratchpad in shell
-		cmd.Env = append(os.Environ(), "JENNY_SCRATCHPAD="+constants.ScratchpadDir(t.sessionID))
+		cmd.Env = append(os.Environ(), "JENNY_SCRATCHPAD="+constants.ScratchpadDir(sessionID))
 
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout = &stdout
@@ -476,8 +510,8 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 			}
 
 			// Store process reference for TaskStop (AC5)
-			if t.taskManager != nil && cmd.Process != nil {
-				t.taskManager.UpdateProcess(taskID, cmd.Process)
+			if tm != nil && cmd.Process != nil {
+				tm.UpdateProcess(taskID, cmd.Process)
 			}
 
 			// Wait for command completion
@@ -513,17 +547,17 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 			outputMu.Unlock()
 
 			// Write final result to output file (AC1)
-			if t.taskManager != nil {
-				_ = t.taskManager.WriteTaskResult(taskID, outputSnapshot, exitCode, duration)
+			if tm != nil {
+				_ = tm.WriteTaskResult(taskID, outputSnapshot, exitCode, duration)
 
 				// Cancel any pending SIGKILL timer since task completed gracefully
-				t.taskManager.CancelKillTimer(taskID)
+				tm.CancelKillTimer(taskID)
 
 				// Update task state
-				t.taskManager.UpdateState(taskID, TaskStateCompleted)
+				tm.UpdateState(taskID, TaskStateCompleted)
 
 				// Queue completion notification (AC3)
-				t.taskManager.EnqueueCompletion(TaskCompletion{
+				tm.EnqueueCompletion(TaskCompletion{
 					TaskID:          taskID,
 					DurationSeconds: duration,
 					ExitCode:        exitCode,
@@ -591,7 +625,7 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 				outputMu.Lock()
 				outputSnapshot := output.String()
 				outputMu.Unlock()
-				if t.taskManager != nil {
+				if tm != nil {
 					EmitTaskProgress(taskID, 2.0, outputSnapshot)
 				}
 				// Continue waiting - don't re-arm timer, progress is one-shot
@@ -601,9 +635,9 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 				outputMu.Lock()
 				outputSnapshot := output.String()
 				outputMu.Unlock()
-				if t.taskManager != nil {
+				if tm != nil {
 					duration := time.Since(startTime).Seconds()
-					_ = t.taskManager.FlushPartialOutput(taskID, outputSnapshot, duration)
+					_ = tm.FlushPartialOutput(taskID, outputSnapshot, duration)
 				}
 			case <-done:
 				// Command completed before either timer fired - no progress event
@@ -639,8 +673,8 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 		t.backgroundTasks.Delete(taskID)
 
 		// Clean up task from manager
-		if t.taskManager != nil {
-			t.taskManager.Delete(taskID)
+		if tm != nil {
+			tm.Delete(taskID)
 		}
 	}()
 
