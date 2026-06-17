@@ -47,7 +47,7 @@ func TestEditTool_AC1_NoPriorRead(t *testing.T) {
 func TestEditTool_AC1_ReadThenEditWorks(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	editTool := NewEditTool(readCache)
 
 	// Create and read a file
@@ -92,7 +92,7 @@ func TestEditTool_AC1_ReadThenEditWorks(t *testing.T) {
 func TestEditTool_AC1_PartialReadRejected(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	editTool := NewEditTool(readCache)
 
 	// Create a test file with multiple lines
@@ -133,7 +133,7 @@ func TestEditTool_AC1_PartialReadRejected(t *testing.T) {
 func TestEditTool_AC2_StaleMtime(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	editTool := NewEditTool(readCache)
 
 	// Create a test file
@@ -179,7 +179,7 @@ func TestEditTool_AC2_StaleMtime(t *testing.T) {
 func TestEditTool_AC3_OldEqualsNew(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	editTool := NewEditTool(readCache)
 
 	// Create and read a file
@@ -218,7 +218,7 @@ func TestEditTool_AC3_OldEqualsNew(t *testing.T) {
 func TestEditTool_AC4_MultipleMatches(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	editTool := NewEditTool(readCache)
 
 	// Create a file with the same string appearing 3 times
@@ -281,7 +281,7 @@ func TestEditTool_AC4_MultipleMatches(t *testing.T) {
 func TestEditTool_AC5_IpynbRedirect(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	editTool := NewEditTool(readCache)
 
 	// Create a .ipynb file
@@ -348,7 +348,7 @@ func TestEditTool_AC5_IpynbRedirect(t *testing.T) {
 func TestEditTool_ZeroMatches(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	editTool := NewEditTool(readCache)
 
 	// Create and read a file
@@ -390,7 +390,7 @@ func TestEditTool_ZeroMatches(t *testing.T) {
 func TestEditTool_AC4_SingleMatchNoReplaceAll(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	editTool := NewEditTool(readCache)
 
 	// Create a file with unique string
@@ -435,7 +435,7 @@ func TestEditTool_AC4_SingleMatchNoReplaceAll(t *testing.T) {
 func TestEditTool_DiffOutput(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	editTool := NewEditTool(readCache)
 
 	// Create and read a file
@@ -481,7 +481,7 @@ func TestEditTool_DiffOutput(t *testing.T) {
 func TestEditTool_CacheUpdated(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	editTool := NewEditTool(readCache)
 
 	// Create and read a file
@@ -538,7 +538,7 @@ func TestEditTool_CacheUpdated(t *testing.T) {
 func TestEditTool_LineEndingNormalization(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	editTool := NewEditTool(readCache)
 
 	// Create a file with CRLF line endings
@@ -586,7 +586,7 @@ func TestEditTool_LineEndingNormalization(t *testing.T) {
 func TestEditTool_OverlappingMatches(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	editTool := NewEditTool(readCache)
 
 	// Create a file with overlapping pattern
@@ -631,7 +631,7 @@ func TestEditTool_OverlappingMatches(t *testing.T) {
 }
 
 // TestEditTool_ScratchpadAllowedWithoutPermissions tests that EditTool can edit
-// a file under scratchpad directory even with skipPermissions=false.
+// a file under scratchpad directory even with edit level.
 func TestEditTool_ScratchpadAllowedWithoutPermissions(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldHome := constants.JennyHomeDirFunc
@@ -650,7 +650,7 @@ func TestEditTool_ScratchpadAllowedWithoutPermissions(t *testing.T) {
 	readCache := NewReadFileCache()
 
 	// Read first to satisfy read-before-write contract
-	rt := NewReadTool(false, readCache)
+	rt := NewReadTool(PermissionEdit, readCache)
 	_, err := rt.Execute(context.Background(), map[string]any{"file_path": testFile}, tmpDir)
 	if err != nil {
 		t.Fatalf("read of scratchpad file should succeed: %v", err)
@@ -683,7 +683,7 @@ func TestEditTool_ScratchpadAllowedWithoutPermissions(t *testing.T) {
 func TestEditTool_ScopedEditAfterPartialRead(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	editTool := NewEditTool(readCache)
 
 	// Create a multi-line test file
@@ -735,7 +735,7 @@ func TestEditTool_ScopedEditAfterPartialRead(t *testing.T) {
 func TestEditTool_ScopedEditOutsideReadRange(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	editTool := NewEditTool(readCache)
 
 	// Create a multi-line test file
@@ -780,7 +780,7 @@ func TestEditTool_ScopedEditOutsideReadRange(t *testing.T) {
 func TestEditTool_ScopedEditNoStartEnd(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	editTool := NewEditTool(readCache)
 
 	testFile := filepath.Join(tmpDir, "test.txt")
@@ -822,7 +822,7 @@ func TestEditTool_ScopedEditNoStartEnd(t *testing.T) {
 func TestEditTool_ScopedEditAfterFullRead(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	editTool := NewEditTool(readCache)
 
 	testFile := filepath.Join(tmpDir, "test.txt")
@@ -871,7 +871,7 @@ func TestEditTool_ScopedEditAfterFullRead(t *testing.T) {
 func TestEditTool_NumExpectedGlobal(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	editTool := NewEditTool(readCache)
 
 	testFile := filepath.Join(tmpDir, "test.txt")
@@ -912,7 +912,7 @@ func TestEditTool_NumExpectedGlobal(t *testing.T) {
 func TestEditTool_NumExpectedScoped(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	editTool := NewEditTool(readCache)
 
 	testFile := filepath.Join(tmpDir, "test.txt")
@@ -988,7 +988,7 @@ func TestEditTool_EndLineBeforeStartLine(t *testing.T) {
 func TestEditTool_ScopedEditDiffOutput(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	editTool := NewEditTool(readCache)
 
 	testFile := filepath.Join(tmpDir, "scoped_diff.txt")
@@ -1035,7 +1035,7 @@ func TestEditTool_ScopedEditDiffOutput(t *testing.T) {
 func TestEditTool_ScopedEditLargeAfterSection(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	editTool := NewEditTool(readCache)
 
 	var content strings.Builder

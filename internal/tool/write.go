@@ -15,15 +15,27 @@ import (
 
 // WriteTool writes content to files with read-before-write validation.
 type WriteTool struct {
-	readCache    *ReadFileCache
-	allowedPaths []string // If set, writes are restricted to these paths only
-	activator    SkillActivator
-	sessionID    string
+	readCache       *ReadFileCache
+	permissionLevel PermissionLevel
+	allowedPaths    []string // If set, writes are restricted to these paths only
+	activator       SkillActivator
+	sessionID       string
 }
 
 // NewWriteTool creates a new WriteTool.
 func NewWriteTool(readCache *ReadFileCache) *WriteTool {
-	return &WriteTool{readCache: readCache}
+	return &WriteTool{readCache: readCache, permissionLevel: DefaultPermissionLevel}
+}
+
+// WithPermissionLevel sets the permission level for the WriteTool.
+func (t *WriteTool) WithPermissionLevel(level PermissionLevel) *WriteTool {
+	t.permissionLevel = level
+	return t
+}
+
+// effectiveLevel returns the effective PermissionLevel.
+func (t *WriteTool) effectiveLevel() PermissionLevel {
+	return t.permissionLevel
 }
 
 // WithSessionID sets the session ID for the WriteTool.
@@ -105,9 +117,17 @@ func (t *WriteTool) Execute(ctx context.Context, input map[string]any, cwd strin
 	// Clean the path
 	filePath = filepath.Clean(filePath)
 
+	// Permission check: block Write at read/analyze levels
+	if !t.effectiveLevel().WriteAllowed() {
+		return &ToolResult{
+			Content: fmt.Sprintf("Error: Write is not allowed at %s permission level. Use --permission-level edit or higher.", t.effectiveLevel()),
+			IsError: true,
+		}, nil
+	}
+
 	// Universal Windows Security (AC4)
 	if runtime.GOOS == "windows" {
-		winGate := NewWindowsCommandGate(false) // Write tool doesn't have skipPermissions field
+		winGate := NewWindowsCommandGate(t.effectiveLevel())
 		if err := winGate.CheckPath(filePath); err != nil {
 			return &ToolResult{
 				Content: fmt.Sprintf("Security error: %v", err),
@@ -139,13 +159,16 @@ func (t *WriteTool) Execute(ctx context.Context, input map[string]any, cwd strin
 		}
 	} else {
 		// No allowedPaths restriction - apply cwd gate with scratchpad exception
-		var pathErr error
-		filePath, pathErr = PathInWorkingDir(filePath, cwd, constants.ScratchpadDir(t.sessionID))
-		if pathErr != nil {
-			return &ToolResult{
-				Content: pathErr.Error(),
-				IsError: true,
-			}, nil
+		// Skip path constraint at unrestricted level
+		if t.effectiveLevel().PathConstrained() {
+			var pathErr error
+			filePath, pathErr = PathInWorkingDir(filePath, cwd, constants.ScratchpadDir(t.sessionID))
+			if pathErr != nil {
+				return &ToolResult{
+					Content: pathErr.Error(),
+					IsError: true,
+				}, nil
+			}
 		}
 	}
 
@@ -155,32 +178,37 @@ func (t *WriteTool) Execute(ctx context.Context, input map[string]any, cwd strin
 	}
 
 	// AC1: Check readFileState cache for the path
-	entry, exists := t.readCache.GetRead(filePath)
-	if !exists {
-		return &ToolResult{
-			Content: "Cannot write without reading first. Use Read tool on this path before Write.",
-			IsError: true,
-		}, nil
-	}
-
-	// AC2: Check staleness
-	info, err := os.Stat(filePath)
-	if err == nil {
-		// File exists, check mtime
-		if info.ModTime().After(entry.Mtime) {
+	// AC9: At unrestricted level, skip read-before-write check
+	var entry *ReadFileEntry
+	if t.effectiveLevel().ReadBeforeWrite() {
+		var exists bool
+		entry, exists = t.readCache.GetRead(filePath)
+		if !exists {
 			return &ToolResult{
-				Content: "File has changed since it was read. Re-read the file before writing.",
+				Content: "Cannot write without reading first. Use Read tool on this path before Write.",
 				IsError: true,
 			}, nil
 		}
-	}
 
-	// AC1 continued: Check if entry was a partial read
-	if !entry.IsFullRead {
-		return &ToolResult{
-			Content: "Cannot write after partial read. Use Read tool without offset/limit to get the full file first.",
-			IsError: true,
-		}, nil
+		// AC2: Check staleness
+		info, err := os.Stat(filePath)
+		if err == nil {
+			// File exists, check mtime
+			if info.ModTime().After(entry.Mtime) {
+				return &ToolResult{
+					Content: "File has changed since it was read. Re-read the file before writing.",
+					IsError: true,
+				}, nil
+			}
+		}
+
+		// AC1 continued: Check if entry was a partial read
+		if !entry.IsFullRead {
+			return &ToolResult{
+				Content: "Cannot write after partial read. Use Read tool without offset/limit to get the full file first.",
+				IsError: true,
+			}, nil
+		}
 	}
 
 	// Create parent directories (AC3)
@@ -258,13 +286,16 @@ func (t *WriteTool) Execute(ctx context.Context, input map[string]any, cwd strin
 
 	// Get new mtime after write
 	newInfo, _ := os.Stat(filePath)
-	var newMtime = entry.Mtime
+	var newMtime time.Time
 	if newInfo != nil {
 		newMtime = newInfo.ModTime()
 	}
 
 	// Generate patch diff (AC4)
-	oldContent := entry.Content
+	var oldContent string
+	if entry != nil {
+		oldContent = entry.Content
+	}
 	diff := GenerateUnifiedDiff(oldContent, content, filePath)
 
 	// Update readFileCache after successful write (AC5)

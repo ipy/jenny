@@ -189,7 +189,7 @@ func (t *GlobTool) Execute(ctx context.Context, input map[string]any, cwd string
 
 	// Universal Windows Security (AC4)
 	if runtime.GOOS == "windows" {
-		winGate := NewWindowsCommandGate(false)
+		winGate := NewWindowsCommandGate(PermissionEdit)
 		if err := winGate.CheckPath(searchRoot); err != nil {
 			return &ToolResult{
 				Content: fmt.Sprintf("Security error: %v", err),

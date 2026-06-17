@@ -46,7 +46,7 @@ func TestParsePFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--p", "hello from -p"}
+	os.Args = []string{"jenny", "--print", "hello from -p"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -62,7 +62,7 @@ func TestParseMultiplePFlags(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--p", "first", "--p", "second", "--p", "third"}
+	os.Args = []string{"jenny", "--print", "first", "--print", "second", "--print", "third"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -78,7 +78,7 @@ func TestParseModelFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--model", "deepseek-v4-flash", "--p", "hello"}
+	os.Args = []string{"jenny", "--model", "deepseek-v4-flash", "--print", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -94,7 +94,7 @@ func TestParseOutputFormatFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--output-format", "stream-json", "--p", "hello"}
+	os.Args = []string{"jenny", "--output-format", "stream-json", "--print", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -109,7 +109,7 @@ func TestParseMaxIterationsFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--max-iterations", "50", "--p", "hello"}
+	os.Args = []string{"jenny", "--max-iterations", "50", "--print", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -124,7 +124,7 @@ func TestParseMaxIterationsDefault(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--p", "hello"}
+	os.Args = []string{"jenny", "--print", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -140,7 +140,7 @@ func TestParseVerboseFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--verbose", "--p", "hello"}
+	os.Args = []string{"jenny", "--verbose", "--print", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -156,7 +156,7 @@ func TestParseIncludePartialMessagesFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--include-partial-messages", "--p", "hello"}
+	os.Args = []string{"jenny", "--include-partial-messages", "--print", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -172,7 +172,7 @@ func TestParseSkipPermissionsFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--dangerously-skip-permissions", "--p", "hello"}
+	os.Args = []string{"jenny", "--dangerously-skip-permissions", "--print", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -188,7 +188,7 @@ func TestParseSessionResumeFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "-r", "sess_12345", "--p", "hello"}
+	os.Args = []string{"jenny", "-r", "sess_12345", "--print", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -204,7 +204,7 @@ func TestParseMultipleFlags(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--model", "gpt-4", "--output-format", "stream-json", "--verbose", "--p", "hello"}
+	os.Args = []string{"jenny", "--model", "gpt-4", "--output-format", "stream-json", "--verbose", "--print", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -230,7 +230,7 @@ func TestParsePositionalWithPFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--p", "from -p", "from positional"}
+	os.Args = []string{"jenny", "--print", "from -p", "from positional"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -261,7 +261,7 @@ func TestParseContinueFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--continue", "--p", "hello"}
+	os.Args = []string{"jenny", "--continue", "--print", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -276,7 +276,7 @@ func TestParseContinueMutuallyExclusiveWithResume(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--continue", "-r", "sess_12345", "--p", "hello"}
+	os.Args = []string{"jenny", "--continue", "-r", "sess_12345", "--print", "hello"}
 
 	_, err := Parse()
 	if err == nil {
@@ -288,7 +288,7 @@ func TestParseContinueMutuallyExclusiveWithNoSessionPersistence(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--continue", "--no-session-persistence", "--p", "hello"}
+	os.Args = []string{"jenny", "--continue", "--no-session-persistence", "--print", "hello"}
 
 	_, err := Parse()
 	if err == nil {
@@ -300,7 +300,7 @@ func TestParseForkSessionRequiresResume(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--fork-session", "--p", "hello"}
+	os.Args = []string{"jenny", "--fork-session", "--print", "hello"}
 
 	_, err := Parse()
 	if err == nil {
@@ -312,7 +312,7 @@ func TestParseForkSessionWithResume(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--fork-session", "-r", "sess_12345", "--p", "hello"}
+	os.Args = []string{"jenny", "--fork-session", "-r", "sess_12345", "--print", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -330,7 +330,7 @@ func TestParseMCPConfigSingleFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--mcp-config", "/path/to/config.json", "--p", "hello"}
+	os.Args = []string{"jenny", "--mcp-config", "/path/to/config.json", "--print", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -348,7 +348,7 @@ func TestParseMCPConfigMultipleFlags(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--mcp-config", "/path/a.json", "--mcp-config", "/path/b.json", "--p", "hello"}
+	os.Args = []string{"jenny", "--mcp-config", "/path/a.json", "--mcp-config", "/path/b.json", "--print", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -369,7 +369,7 @@ func TestParseMCPConfigNoFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--p", "hello"}
+	os.Args = []string{"jenny", "--print", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -384,7 +384,7 @@ func TestParseFeatureFlags(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--ff", "redact=disabled", "--feature-flags", "other=true", "--p", "hello"}
+	os.Args = []string{"jenny", "--ff", "redact=disabled", "--feature-flags", "other=true", "--print", "hello"}
 
 	flags, err := Parse()
 	if err != nil {
@@ -405,7 +405,7 @@ func TestParseFeatureFlagsInvalid(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--ff", "invalid", "--p", "hello"}
+	os.Args = []string{"jenny", "--ff", "invalid", "--print", "hello"}
 
 	_, err := Parse()
 	if err == nil {
@@ -516,5 +516,105 @@ func TestHelpPrintedOnce(t *testing.T) {
 	count := strings.Count(stderr.String(), "Usage:")
 	if count != 1 {
 		t.Errorf("expected 'Usage:' line to appear exactly once in --help output, got %d.\nstderr:\n%s", count, stderr.String())
+	}
+}
+
+func TestParsePermissionLevelFlag(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "--permission-level", "read", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if flags.PermissionLevel != "read" {
+		t.Errorf("expected permission-level 'read', got %q", flags.PermissionLevel)
+	}
+}
+
+func TestParsePermissionLevelFlagAllValues(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	for _, level := range []string{"read", "analyze", "edit", "execute", "unrestricted"} {
+		os.Args = []string{"jenny", "--permission-level", level, "--print", "hello"}
+
+		flags, err := Parse()
+		if err != nil {
+			t.Errorf("unexpected error for level %q: %v", level, err)
+		}
+		if flags.PermissionLevel != level {
+			t.Errorf("expected permission-level %q, got %q", level, flags.PermissionLevel)
+		}
+	}
+}
+
+func TestParsePermissionLevelInvalid(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "--permission-level", "invalid", "--print", "hello"}
+
+	_, err := Parse()
+	if err == nil {
+		t.Error("expected error for invalid permission level, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid --permission-level") {
+		t.Errorf("expected invalid permission level error, got %v", err)
+	}
+}
+
+func TestParsePermissionLevelEmpty(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	// No --permission-level flag: should be empty string (default)
+	os.Args = []string{"jenny", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if flags.PermissionLevel != "" {
+		t.Errorf("expected empty permission-level, got %q", flags.PermissionLevel)
+	}
+}
+
+func TestParsePermissionLevelWithSkipPermissions(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	// Both flags set: Parse should succeed; resolution happens in main.go
+	os.Args = []string{"jenny", "--dangerously-skip-permissions", "--permission-level", "read", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !flags.SkipPermissions {
+		t.Error("expected skip-permissions to be true")
+	}
+	if flags.PermissionLevel != "read" {
+		t.Errorf("expected permission-level 'read', got %q", flags.PermissionLevel)
+	}
+}
+
+func TestParsePermissionLevelEnvVar(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Setenv("JENNY_PERMISSION_LEVEL", "analyze")
+	defer os.Unsetenv("JENNY_PERMISSION_LEVEL")
+
+	os.Args = []string{"jenny", "--print", "hello"}
+
+	flags, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if flags.PermissionLevel != "analyze" {
+		t.Errorf("expected permission-level 'analyze' from env, got %q", flags.PermissionLevel)
 	}
 }

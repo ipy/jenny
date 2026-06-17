@@ -13,7 +13,7 @@ import (
 )
 
 func TestBashTool_Execute(t *testing.T) {
-	tool := NewBashTool(false)
+	tool := NewBashTool(PermissionEdit)
 	cwd := t.TempDir()
 
 	tests := []struct {
@@ -112,7 +112,7 @@ func TestBashTool_Execute(t *testing.T) {
 }
 
 func TestBashTool_ReadOnlyEnforcement(t *testing.T) {
-	tool := NewBashTool(false)
+	tool := NewBashTool(PermissionEdit)
 	cwd := t.TempDir()
 	testFile := filepath.Join(cwd, "test.txt")
 	os.WriteFile(testFile, []byte("test"), 0644)
@@ -180,7 +180,7 @@ func TestBashTool_ReadOnlyEnforcement(t *testing.T) {
 }
 
 func TestBashTool_Timeout(t *testing.T) {
-	tool := NewBashTool(false)
+	tool := NewBashTool(PermissionEdit)
 	cwd := t.TempDir()
 
 	// Use sleep 1 with timeout 0.5 seconds to ensure context deadline fires
@@ -205,7 +205,7 @@ func TestBashTool_Timeout(t *testing.T) {
 }
 
 func TestBashTool_NameAndDescription(t *testing.T) {
-	tool := NewBashTool(false)
+	tool := NewBashTool(PermissionEdit)
 
 	if tool.Name() != "Bash" {
 		t.Errorf("expected name 'Bash', got %q", tool.Name())
@@ -260,7 +260,7 @@ func TestIsReadOnlyCommand(t *testing.T) {
 
 // AC1: Read-only pipelines validated per segment
 func TestBashTool_AC1_ReadOnlyPipeline(t *testing.T) {
-	tool := NewBashTool(false)
+	tool := NewBashTool(PermissionEdit)
 	cwd := t.TempDir()
 
 	// Test: all read-only pipeline should succeed
@@ -302,7 +302,7 @@ func TestBashTool_AC1_ReadOnlyPipeline(t *testing.T) {
 
 // AC2: Output >30K chars spilled to disk
 func TestBashTool_AC2_OutputSpill(t *testing.T) {
-	tool := NewBashTool(true) // skipPermissions=true since this test is about output spill, not security
+	tool := NewBashTool(PermissionUnrestricted) // unrestricted level since this test is about output spill, not security
 	cwd := t.TempDir()
 
 	// Test: large output should spill to disk
@@ -346,7 +346,7 @@ func TestBashTool_AC3_SleepBlocked(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("sleep command is Unix-specific")
 	}
-	tool := NewBashTool(false)
+	tool := NewBashTool(PermissionEdit)
 	cwd := t.TempDir()
 
 	// Test: sleep >=2 in foreground should be blocked
@@ -395,7 +395,7 @@ func TestBashTool_AC4_CwdReset(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping /tmp path test on Windows")
 	}
-	tool := NewBashTool(false)
+	tool := NewBashTool(PermissionEdit)
 	projectRoot := t.TempDir()
 
 	// Create a subdirectory inside project
@@ -444,7 +444,7 @@ func TestBashTool_AC4_CwdReset(t *testing.T) {
 
 // AC5: Sed simulation invisible in schema
 func TestBashTool_AC5_SchemaHygiene(t *testing.T) {
-	tool := NewBashTool(false)
+	tool := NewBashTool(PermissionEdit)
 
 	schema := tool.InputSchema()
 
@@ -484,7 +484,7 @@ func TestBashTool_AC5_SchemaHygiene(t *testing.T) {
 
 // Test sed simulation
 func TestBashTool_SedSimulation(t *testing.T) {
-	tool := NewBashTool(false)
+	tool := NewBashTool(PermissionEdit)
 	cwd := t.TempDir()
 
 	// Create a test file
@@ -519,7 +519,7 @@ func TestBashTool_DevicePathBlocked(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping Unix path test on Windows")
 	}
-	tool := NewBashTool(false)
+	tool := NewBashTool(PermissionEdit)
 	cwd := t.TempDir()
 
 	cases := []struct {
@@ -552,7 +552,7 @@ func TestBashTool_BackgroundGateSecurity(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping Unix path test on Windows")
 	}
-	tool := NewBashTool(false)
+	tool := NewBashTool(PermissionEdit)
 	cwd := t.TempDir()
 
 	// Process substitution must be blocked in background mode
@@ -583,15 +583,15 @@ func TestBashTool_BackgroundGateSecurity(t *testing.T) {
 	}
 }
 
-// TestBashTool_SkipPermissions tests AC2: cwd bypass with skipPermissions flag
+// TestBashTool_SkipPermissions tests AC2: cwd bypass with unrestricted level flag
 func TestBashTool_SkipPermissions(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping Unix path test on Windows")
 	}
-	tool := NewBashTool(false)
+	tool := NewBashTool(PermissionEdit)
 	cwd := "/tmp"
 
-	// Test that path outside cwd is blocked without skipPermissions
+	// Test that path outside cwd is blocked without unrestricted level
 	result, err := tool.Execute(context.Background(), map[string]any{
 		"command": "cat ../../etc/passwd",
 	}, cwd)
@@ -599,26 +599,26 @@ func TestBashTool_SkipPermissions(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !result.IsError {
-		t.Error("expected traversal error without skipPermissions")
+		t.Error("expected traversal error without unrestricted level")
 	}
 
-	// Test that access is allowed WITH skipPermissions
-	toolWithSkip := NewBashTool(true)
+	// Test that access is allowed WITH unrestricted level
+	toolWithSkip := NewBashTool(PermissionUnrestricted)
 	result, err = toolWithSkip.Execute(context.Background(), map[string]any{
 		"command": "cat ../../etc/passwd",
 	}, cwd)
 	if err != nil {
-		t.Fatalf("unexpected error with skipPermissions: %v", err)
+		t.Fatalf("unexpected error with unrestricted level: %v", err)
 	}
 	if result.IsError {
-		t.Errorf("expected success with skipPermissions, got error: %s", result.Content)
+		t.Errorf("expected success with unrestricted level, got error: %s", result.Content)
 	}
 }
 
 // TestBashTool_ScratchpadAccess tests AC6: scratchpad is always accessible
 func TestBashTool_ScratchpadAccess(t *testing.T) {
 	tmpDir := t.TempDir()
-	tool := NewBashTool(false)
+	tool := NewBashTool(PermissionEdit)
 
 	// Override JennyHomeDir to use tmpDir
 	originalFunc := constants.JennyHomeDirFunc
@@ -638,7 +638,7 @@ func TestBashTool_ScratchpadAccess(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	// Test that scratchpad file is accessible WITHOUT skipPermissions.
+	// Test that scratchpad file is accessible WITHOUT unrestricted level.
 	// On Windows, sh needs forward slashes for paths.
 	testFileCmd := filepath.ToSlash(testFile)
 	result, err := tool.Execute(context.Background(), map[string]any{
@@ -666,6 +666,6 @@ func TestBashTool_ScratchpadAccess(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !result.IsError {
-		t.Error("expected file outside scratchpad to be blocked without skipPermissions")
+		t.Error("expected file outside scratchpad to be blocked without unrestricted level")
 	}
 }

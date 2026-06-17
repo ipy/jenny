@@ -39,7 +39,7 @@ func TestWriteTool_AC1_NoPriorRead(t *testing.T) {
 func TestWriteTool_AC1_ReadThenWriteWorks(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	writeTool := NewWriteTool(readCache)
 
 	// Create a new file first
@@ -77,7 +77,7 @@ func TestWriteTool_AC1_ReadThenWriteWorks(t *testing.T) {
 func TestWriteTool_AC2_StaleMtime(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	writeTool := NewWriteTool(readCache)
 
 	// Create a test file
@@ -122,7 +122,7 @@ func TestWriteTool_AC2_StaleMtime(t *testing.T) {
 func TestWriteTool_AC3_ParentDirs(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	writeTool := NewWriteTool(readCache)
 
 	// Define a deep path where NO parent directories exist
@@ -184,7 +184,7 @@ func TestWriteTool_AC3_ParentDirs(t *testing.T) {
 func TestWriteTool_AC4_PatchDiff(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	writeTool := NewWriteTool(readCache)
 
 	// Create and read a file
@@ -229,7 +229,7 @@ func TestWriteTool_AC4_PatchDiff(t *testing.T) {
 func TestWriteTool_AC5_CacheUpdated(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	writeTool := NewWriteTool(readCache)
 
 	// Create and read a file
@@ -284,7 +284,7 @@ func TestWriteTool_AC5_CacheUpdated(t *testing.T) {
 func TestReadWriteTool_ReadBeforeWrite(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	writeTool := NewWriteTool(readCache)
 
 	// Create initial file
@@ -339,7 +339,7 @@ func TestReadWriteTool_ReadBeforeWrite(t *testing.T) {
 func TestWriteTool_PartialReadFails(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	writeTool := NewWriteTool(readCache)
 
 	// Create a test file with multiple lines
@@ -379,7 +379,7 @@ func TestWriteTool_PartialReadFails(t *testing.T) {
 func TestWriteTool_UnchangedContent(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	writeTool := NewWriteTool(readCache)
 
 	// Create and read a file
@@ -416,7 +416,7 @@ func TestWriteTool_UnchangedContent(t *testing.T) {
 }
 
 // TestWriteTool_ScratchpadAllowedWithoutPermissions tests that WriteTool can write
-// to scratchpad directory even with skipPermissions=false.
+// to scratchpad directory even with edit level.
 func TestWriteTool_ScratchpadAllowedWithoutPermissions(t *testing.T) {
 	// Override JennyHomeDirFunc for test isolation
 	tmpDir := t.TempDir()
@@ -437,7 +437,7 @@ func TestWriteTool_ScratchpadAllowedWithoutPermissions(t *testing.T) {
 	wt := NewWriteTool(readCache)
 
 	// Read the scratchpad file first (required by WriteTool contract)
-	rt := NewReadTool(false, readCache)
+	rt := NewReadTool(PermissionEdit, readCache)
 	_, err := rt.Execute(context.Background(), map[string]any{"file_path": testFile}, tmpDir)
 	if err != nil {
 		t.Fatalf("read of scratchpad file should succeed: %v", err)

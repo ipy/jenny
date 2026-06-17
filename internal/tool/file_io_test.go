@@ -109,7 +109,7 @@ func TestAtomicWrite(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
-	readTool := NewReadTool(false, cache)
+	readTool := NewReadTool(PermissionEdit, cache)
 	writeTool := NewWriteTool(cache)
 
 	// Create a file.
@@ -141,7 +141,7 @@ func TestAtomicWrite(t *testing.T) {
 
 	// Verify content via ReadTool (fresh read, not cache).
 	cache2 := NewReadFileCache()
-	readTool2 := NewReadTool(false, cache2)
+	readTool2 := NewReadTool(PermissionEdit, cache2)
 	result, err = readTool2.Execute(context.Background(), map[string]any{"file_path": filePath}, tmpDir)
 	if err != nil {
 		t.Fatalf("Verify read error: %v", err)
@@ -168,7 +168,7 @@ func TestAtomicWrite_CreatesNewFile(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
-	readTool := NewReadTool(false, cache)
+	readTool := NewReadTool(PermissionEdit, cache)
 	writeTool := NewWriteTool(cache)
 
 	newFile := filepath.Join(tmpDir, "new_file.txt")
@@ -193,7 +193,7 @@ func TestAtomicWrite_CreatesNewFile(t *testing.T) {
 
 	// Verify via ReadTool.
 	cache2 := NewReadFileCache()
-	readTool2 := NewReadTool(false, cache2)
+	readTool2 := NewReadTool(PermissionEdit, cache2)
 	result, err = readTool2.Execute(context.Background(), map[string]any{"file_path": newFile}, tmpDir)
 	if err != nil {
 		t.Fatalf("Verify read error: %v", err)
@@ -388,7 +388,7 @@ func TestReadTool_1GiBRejection(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
-	readTool := NewReadTool(false, cache)
+	readTool := NewReadTool(PermissionEdit, cache)
 
 	// Create a sparse file >1 GiB.
 	testFile := filepath.Join(tmpDir, "huge.bin")

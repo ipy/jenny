@@ -7,17 +7,17 @@ import (
 
 // WindowsCommandGate provides security validation for PowerShell and read commands on Windows.
 type WindowsCommandGate struct {
-	skipPermissions bool
+	permissionLevel PermissionLevel
 }
 
 // NewWindowsCommandGate creates a new WindowsCommandGate.
-func NewWindowsCommandGate(skipPermissions bool) *WindowsCommandGate {
-	return &WindowsCommandGate{skipPermissions: skipPermissions}
+func NewWindowsCommandGate(level PermissionLevel) *WindowsCommandGate {
+	return &WindowsCommandGate{permissionLevel: level}
 }
 
 // CheckCommand validates a command against blocked patterns on Windows.
 func (g *WindowsCommandGate) CheckCommand(command string) error {
-	if g.skipPermissions {
+	if g.permissionLevel == PermissionUnrestricted {
 		return nil
 	}
 
@@ -58,7 +58,7 @@ func (g *WindowsCommandGate) CheckCommand(command string) error {
 // CheckPath validates that a path is not a restricted Windows path.
 // This implementation is platform-agnostic to support testing on Unix.
 func (g *WindowsCommandGate) CheckPath(path string) error {
-	if g.skipPermissions {
+	if g.permissionLevel == PermissionUnrestricted {
 		return nil
 	}
 

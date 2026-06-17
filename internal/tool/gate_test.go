@@ -7,7 +7,7 @@ import (
 )
 
 func TestCommandGate_CheckCommand(t *testing.T) {
-	gate := NewCommandGate(false)
+	gate := NewCommandGate(PermissionEdit)
 
 	tests := []struct {
 		name    string
@@ -142,10 +142,10 @@ func TestCommandGate_CheckCommand(t *testing.T) {
 	}
 }
 
-func TestCommandGate_CheckCommand_WithSkipPermissions(t *testing.T) {
-	gate := NewCommandGate(true) // skipPermissions = true
+func TestCommandGate_CheckCommand_WithPermissionLevel(t *testing.T) {
+	gate := NewCommandGate(PermissionUnrestricted) // unrestricted level
 
-	// All dangerous commands should be allowed when skipPermissions is true
+	// All dangerous commands should be allowed when unrestricted level
 	dangerousCommands := []string{
 		"$(cat /etc/passwd)",
 		"${HOME}",
@@ -158,14 +158,14 @@ func TestCommandGate_CheckCommand_WithSkipPermissions(t *testing.T) {
 		t.Run(cmd, func(t *testing.T) {
 			err := gate.CheckCommand(cmd)
 			if err != nil {
-				t.Errorf("expected no error with skipPermissions=true, got: %v", err)
+				t.Errorf("expected no error with unrestricted level, got: %v", err)
 			}
 		})
 	}
 }
 
 func TestCommandGate_CheckPipelineSegments(t *testing.T) {
-	gate := NewCommandGate(false)
+	gate := NewCommandGate(PermissionEdit)
 
 	tests := []struct {
 		name    string
@@ -234,10 +234,10 @@ func TestCommandGate_CheckPipelineSegments(t *testing.T) {
 	}
 }
 
-func TestCommandGate_CheckPipelineSegments_WithSkipPermissions(t *testing.T) {
-	gate := NewCommandGate(true)
+func TestCommandGate_CheckPipelineSegments_WithPermissionLevel(t *testing.T) {
+	gate := NewCommandGate(PermissionUnrestricted)
 
-	// All pipelines should be allowed when skipPermissions is true
+	// All pipelines should be allowed when unrestricted level
 	pipelines := []string{
 		"echo ok | rm -rf /",
 		"cat file > /tmp/out",
@@ -247,7 +247,7 @@ func TestCommandGate_CheckPipelineSegments_WithSkipPermissions(t *testing.T) {
 		t.Run(cmd, func(t *testing.T) {
 			err := gate.CheckPipelineSegments(cmd)
 			if err != nil {
-				t.Errorf("expected no error with skipPermissions=true, got: %v", err)
+				t.Errorf("expected no error with unrestricted level, got: %v", err)
 			}
 		})
 	}
@@ -257,7 +257,7 @@ func TestCommandGate_CheckDevicePath(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("/dev and /proc device paths don't exist on Windows")
 	}
-	gate := NewCommandGate(false)
+	gate := NewCommandGate(PermissionEdit)
 
 	tests := []struct {
 		name    string
@@ -364,10 +364,10 @@ func TestCommandGate_CheckDevicePath(t *testing.T) {
 	}
 }
 
-func TestCommandGate_CheckDevicePath_WithSkipPermissions(t *testing.T) {
-	gate := NewCommandGate(true)
+func TestCommandGate_CheckDevicePath_WithPermissionLevel(t *testing.T) {
+	gate := NewCommandGate(PermissionUnrestricted)
 
-	// All device paths should be allowed when skipPermissions is true
+	// All device paths should be allowed when unrestricted level
 	paths := []string{
 		"/dev/urandom",
 		"/dev/zero",
@@ -378,7 +378,7 @@ func TestCommandGate_CheckDevicePath_WithSkipPermissions(t *testing.T) {
 		t.Run(path, func(t *testing.T) {
 			err := gate.CheckDevicePath(path)
 			if err != nil {
-				t.Errorf("expected no error with skipPermissions=true, got: %v", err)
+				t.Errorf("expected no error with unrestricted level, got: %v", err)
 			}
 		})
 	}
@@ -420,7 +420,7 @@ func TestIsSegmentReadOnly(t *testing.T) {
 // TestAC5_SecurityGateErrorMessages verifies error messages use "for security reasons"
 // instead of "in read-only mode".
 func TestAC5_SecurityGateErrorMessages(t *testing.T) {
-	gate := NewCommandGate(false)
+	gate := NewCommandGate(PermissionEdit)
 
 	// Redirection should say "for security reasons"
 	err := gate.CheckPipelineSegments("cat file > /tmp/out")
@@ -444,5 +444,82 @@ func TestAC5_SecurityGateErrorMessages(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "for security reasons") {
 		t.Errorf("error should mention 'for security reasons', got: %s", err.Error())
+	}
+}
+
+// Tests for CommandGate with PermissionLevel (Phase 1: no behavior change).
+// These verify that NewCommandGate produces equivalent behavior
+// to the PermissionLevel-based NewCommandGate constructor.
+
+func TestCommandGate_WithPermissionLevel_CheckCommand(t *testing.T) {
+	// At unrestricted, CheckCommand should be skipped (same as unrestricted level)
+	gate := NewCommandGate(PermissionUnrestricted)
+	dangerousCommands := []string{
+		"$(cat /etc/passwd)",
+		"${HOME}",
+		"`ls`",
+		"git -c core.gitProxy=evil log",
+	}
+	for _, cmd := range dangerousCommands {
+		t.Run("unrestricted/"+cmd, func(t *testing.T) {
+			if err := gate.CheckCommand(cmd); err != nil {
+				t.Errorf("expected no error at unrestricted, got: %v", err)
+			}
+		})
+	}
+
+	// At edit level, CheckCommand should be enforced (same as edit level)
+	gateEdit := NewCommandGate(PermissionEdit)
+	if err := gateEdit.CheckCommand("$(cat /etc/passwd)"); err == nil {
+		t.Error("expected error at edit level for command substitution")
+	}
+}
+
+func TestCommandGate_WithPermissionLevel_CheckPipelineSegments(t *testing.T) {
+	// At unrestricted, CheckPipelineSegments should be skipped
+	gate := NewCommandGate(PermissionUnrestricted)
+	if err := gate.CheckPipelineSegments("echo ok | rm -rf /"); err != nil {
+		t.Errorf("expected no error at unrestricted, got: %v", err)
+	}
+
+	// At edit level, CheckPipelineSegments should be enforced (allowlist)
+	gateEdit := NewCommandGate(PermissionEdit)
+	if err := gateEdit.CheckPipelineSegments("echo ok | rm -rf /"); err == nil {
+		t.Error("expected error at edit level for mutating pipeline")
+	}
+
+	// At execute level, CheckPipelineSegments should be skipped (pipeline strategy = skip)
+	gateExec := NewCommandGate(PermissionExecute)
+	if err := gateExec.CheckPipelineSegments("echo ok | rm -rf /"); err != nil {
+		t.Errorf("expected no error at execute level (pipeline skip), got: %v", err)
+	}
+
+	// At analyze level, CheckPipelineSegments should be enforced (allowlist)
+	gateAnalyze := NewCommandGate(PermissionAnalyze)
+	if err := gateAnalyze.CheckPipelineSegments("echo ok | rm -rf /"); err == nil {
+		t.Error("expected error at analyze level for mutating pipeline")
+	}
+}
+
+func TestCommandGate_WithPermissionLevel_CheckDevicePath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("/dev and /proc device paths don't exist on Windows")
+	}
+
+	// At unrestricted, device path checks should be skipped
+	gate := NewCommandGate(PermissionUnrestricted)
+	paths := []string{"/dev/urandom", "/proc/1/environ"}
+	for _, path := range paths {
+		t.Run("unrestricted/"+path, func(t *testing.T) {
+			if err := gate.CheckDevicePath(path); err != nil {
+				t.Errorf("expected no error at unrestricted, got: %v", err)
+			}
+		})
+	}
+
+	// At edit level, device path checks should be enforced
+	gateEdit := NewCommandGate(PermissionEdit)
+	if err := gateEdit.CheckDevicePath("/dev/urandom"); err == nil {
+		t.Error("expected error at edit level for device path")
 	}
 }

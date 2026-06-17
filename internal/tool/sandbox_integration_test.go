@@ -22,7 +22,7 @@ import (
 
 func TestBashTool_AC1_NoSandboxConfigured(t *testing.T) {
 	// When sandbox is nil, command executes normally without wrapping
-	bash := NewBashTool(true)
+	bash := NewBashTool(PermissionUnrestricted)
 	result, err := bash.Execute(context.Background(), map[string]any{
 		"command": "echo ac1_no_sb",
 	}, os.TempDir())
@@ -45,7 +45,7 @@ func TestBashTool_AC1_ActiveSandboxWrapsCommand(t *testing.T) {
 		t.Fatalf("init failed: %v", err)
 	}
 
-	bash := NewBashTool(true).WithSandbox(sb)
+	bash := NewBashTool(PermissionUnrestricted).WithSandbox(sb)
 	result, err := bash.Execute(context.Background(), map[string]any{
 		"command": "echo ac1_wrapped",
 	}, os.TempDir())
@@ -75,7 +75,7 @@ func TestBashTool_AC1_ExcludedCommandBypassesSandbox(t *testing.T) {
 		t.Fatalf("init failed: %v", err)
 	}
 
-	bash := NewBashTool(true).WithSandbox(sb)
+	bash := NewBashTool(PermissionUnrestricted).WithSandbox(sb)
 	_, err := bash.Execute(context.Background(), map[string]any{
 		"command": "echo ac1_excluded",
 	}, os.TempDir())
@@ -100,7 +100,7 @@ func TestBashTool_AC1_DangerouslyDisableSandboxBypasses(t *testing.T) {
 		t.Fatalf("init failed: %v", err)
 	}
 
-	bash := NewBashTool(true).WithSandbox(sb)
+	bash := NewBashTool(PermissionUnrestricted).WithSandbox(sb)
 	result, err := bash.Execute(context.Background(), map[string]any{
 		"command":                   "echo ac1_optout",
 		"dangerouslyDisableSandbox": true,
@@ -130,7 +130,7 @@ func TestBashTool_AC1_InactiveSandboxDoesNotWrap(t *testing.T) {
 		t.Fatalf("init failed: %v", err)
 	}
 
-	bash := NewBashTool(true).WithSandbox(sb)
+	bash := NewBashTool(PermissionUnrestricted).WithSandbox(sb)
 	result, err := bash.Execute(context.Background(), map[string]any{
 		"command": "echo ac1_inactive",
 	}, os.TempDir())
@@ -632,7 +632,7 @@ func TestBashTool_AC1_Unhappy_SandboxWrapError(t *testing.T) {
 
 	sb.SetWrapError(fmt.Errorf("sandbox policy violation"))
 
-	bash := NewBashTool(true).WithSandbox(sb)
+	bash := NewBashTool(PermissionUnrestricted).WithSandbox(sb)
 	result, err := bash.Execute(context.Background(), map[string]any{
 		"command": "echo blocked_by_sandbox",
 	}, os.TempDir())
@@ -652,7 +652,7 @@ func TestBashTool_AC1_Unhappy_SandboxWrapError(t *testing.T) {
 
 func TestBashTool_AC1_Unhappy_NilSandboxInactive(t *testing.T) {
 	// Proves nil sandbox doesn't cause issues — command runs normally
-	bash := NewBashTool(true)
+	bash := NewBashTool(PermissionUnrestricted)
 	result, err := bash.Execute(context.Background(), map[string]any{
 		"command": "echo no_sandbox_ok",
 	}, os.TempDir())

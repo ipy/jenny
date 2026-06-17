@@ -51,7 +51,7 @@ func TestAC1_ReadTool_ActivatesSkillOnPathAccess(t *testing.T) {
 
 	// Create activator and ReadTool
 	activator := skills.NewPathSkillActivator(discovered)
-	readTool := NewReadTool(true, nil)
+	readTool := NewReadTool(PermissionUnrestricted, nil)
 	readTool.WithSkillActivator(activator)
 
 	// Capture stdout while reading a file inside the skill directory
@@ -238,7 +238,7 @@ Helps with Markdown files.
 
 	// Create activator and ReadTool
 	activator := skills.NewPathSkillActivator(discovered)
-	readTool := NewReadTool(true, nil)
+	readTool := NewReadTool(PermissionUnrestricted, nil)
 	readTool.WithSkillActivator(activator)
 
 	stdout := captureStdout(t, func() {
@@ -297,7 +297,7 @@ activation_glob: "**/*.md"
 	}
 
 	activator := skills.NewPathSkillActivator(discovered)
-	readTool := NewReadTool(true, nil)
+	readTool := NewReadTool(PermissionUnrestricted, nil)
 	readTool.WithSkillActivator(activator)
 
 	stdout := captureStdout(t, func() {
@@ -348,7 +348,7 @@ func TestAC2_SkillWithoutGlob_OnlyActivatesWithinRoot(t *testing.T) {
 	}
 
 	activator := skills.NewPathSkillActivator(discovered)
-	readTool := NewReadTool(true, nil)
+	readTool := NewReadTool(PermissionUnrestricted, nil)
 	readTool.WithSkillActivator(activator)
 
 	stdout := captureStdout(t, func() {

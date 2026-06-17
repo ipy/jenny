@@ -26,15 +26,20 @@ const (
 )
 
 type ReadTool struct {
-	skipPermissions bool
+	permissionLevel PermissionLevel
 	readCache       *ReadFileCache
 	activator       SkillActivator
 	sessionID       string
 }
 
-// NewReadTool creates a new ReadTool.
-func NewReadTool(skipPermissions bool, readCache *ReadFileCache) *ReadTool {
-	return &ReadTool{skipPermissions: skipPermissions, readCache: readCache}
+// NewReadTool creates a new ReadTool with the given PermissionLevel.
+func NewReadTool(level PermissionLevel, readCache *ReadFileCache) *ReadTool {
+	return &ReadTool{permissionLevel: level, readCache: readCache}
+}
+
+// effectiveLevel returns the effective PermissionLevel.
+func (t *ReadTool) effectiveLevel() PermissionLevel {
+	return t.permissionLevel
 }
 
 // WithSessionID sets the session ID for the ReadTool.
@@ -116,7 +121,7 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 	}
 
 	// Create command gate for device path validation
-	gate := NewCommandGate(t.skipPermissions)
+	gate := NewCommandGate(t.effectiveLevel())
 
 	// Check device path before access
 	if err := gate.CheckDevicePath(filePath); err != nil {
@@ -141,7 +146,7 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 
 	// Universal Windows Security (AC4)
 	if runtime.GOOS == "windows" {
-		winGate := NewWindowsCommandGate(t.skipPermissions)
+		winGate := NewWindowsCommandGate(t.effectiveLevel())
 		if err := winGate.CheckPath(absFilePathClean); err != nil {
 			return &ToolResult{
 				Content: fmt.Sprintf("Security error: %v", err),
@@ -156,7 +161,7 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 	// The file path must be within or equal to cwd, or scratchpad
 	// Use proper path boundary check with separator
 	sep := string(filepath.Separator)
-	if !t.skipPermissions && !strings.HasPrefix(absFilePathClean+sep, constants.ScratchpadDir(t.sessionID)+sep) {
+	if t.effectiveLevel().PathConstrained() && !strings.HasPrefix(absFilePathClean+sep, constants.ScratchpadDir(t.sessionID)+sep) {
 		if !strings.HasPrefix(absFilePathClean+sep, absCwdClean+sep) && absFilePathClean != absCwdClean {
 			return &ToolResult{
 				Content: fmt.Sprintf("Error: Access to '%s' is not allowed. File path would traverse outside working directory.", filePath),

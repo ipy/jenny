@@ -181,7 +181,7 @@ func TestAC3_NamedAgentHasAccessToParentTools(t *testing.T) {
 	// The tool.NamedAgentKey context value should propagate
 
 	// Use LocalSubagentRunner to verify StreamConfig capture
-	readTool := tool.NewReadTool(false, nil)
+	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	runner := agent.NewLocalSubagentRunner([]tool.Tool{readTool}, nil, fastClient())
 
 	// Set parent config with non-zero values before Execute

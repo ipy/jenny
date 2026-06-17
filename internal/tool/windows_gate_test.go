@@ -6,7 +6,7 @@ import (
 
 // TestWindowsCommandGate_CheckPath tests path validation for Windows.
 func TestWindowsCommandGate_CheckPath(t *testing.T) {
-	gate := NewWindowsCommandGate(false)
+	gate := NewWindowsCommandGate(PermissionEdit)
 
 	// Test blocked paths
 	blockedPaths := []string{
@@ -49,7 +49,7 @@ func TestWindowsCommandGate_CheckPath(t *testing.T) {
 
 // TestWindowsCommandGate_CheckCommand tests command validation for Windows.
 func TestWindowsCommandGate_CheckCommand(t *testing.T) {
-	gate := NewWindowsCommandGate(false)
+	gate := NewWindowsCommandGate(PermissionEdit)
 
 	// Test blocked commands
 	blockedCommands := []string{
@@ -88,18 +88,18 @@ func TestWindowsCommandGate_CheckCommand(t *testing.T) {
 	t.Log("AC3 PASS: WindowsCommandGate blocks restricted commands")
 }
 
-// TestWindowsCommandGate_SkipPermissions tests that skipPermissions bypasses checks.
+// TestWindowsCommandGate_SkipPermissions tests that unrestricted level bypasses checks.
 func TestWindowsCommandGate_SkipPermissions(t *testing.T) {
-	gate := NewWindowsCommandGate(true) // skipPermissions = true
+	gate := NewWindowsCommandGate(PermissionUnrestricted) // unrestricted level = true
 
 	// All paths and commands should be allowed
 	err := gate.CheckPath("C:\\Windows\\System32")
 	if err != nil {
-		t.Errorf("expected no error when skipPermissions is true, got: %v", err)
+		t.Errorf("expected no error when unrestricted level is true, got: %v", err)
 	}
 
 	err = gate.CheckCommand("Set-ExecutionPolicy RemoteSigned")
 	if err != nil {
-		t.Errorf("expected no error when skipPermissions is true, got: %v", err)
+		t.Errorf("expected no error when unrestricted level is true, got: %v", err)
 	}
 }

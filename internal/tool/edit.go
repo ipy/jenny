@@ -20,15 +20,27 @@ import (
 
 // EditTool performs exact string replacement in files.
 type EditTool struct {
-	readCache    *ReadFileCache
-	allowedPaths []string // If set, edits are restricted to these paths only
-	activator    SkillActivator
-	sessionID    string
+	readCache       *ReadFileCache
+	permissionLevel PermissionLevel
+	allowedPaths    []string // If set, edits are restricted to these paths only
+	activator       SkillActivator
+	sessionID       string
 }
 
 // NewEditTool creates a new EditTool.
 func NewEditTool(readCache *ReadFileCache) *EditTool {
-	return &EditTool{readCache: readCache}
+	return &EditTool{readCache: readCache, permissionLevel: DefaultPermissionLevel}
+}
+
+// WithPermissionLevel sets the permission level for the EditTool.
+func (t *EditTool) WithPermissionLevel(level PermissionLevel) *EditTool {
+	t.permissionLevel = level
+	return t
+}
+
+// effectiveLevel returns the effective PermissionLevel.
+func (t *EditTool) effectiveLevel() PermissionLevel {
+	return t.permissionLevel
 }
 
 // WithSessionID sets the session ID for the EditTool.
@@ -161,9 +173,17 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 	}
 	resolvedPath = filepath.Clean(resolvedPath)
 
+	// Permission check: block Edit at read/analyze levels
+	if !t.effectiveLevel().WriteAllowed() {
+		return &ToolResult{
+			Content: fmt.Sprintf("Error: Edit is not allowed at %s permission level. Use --permission-level edit or higher.", t.effectiveLevel()),
+			IsError: true,
+		}, nil
+	}
+
 	// Universal Windows Security (AC4)
 	if runtime.GOOS == "windows" {
-		winGate := NewWindowsCommandGate(false) // Edit tool doesn't have skipPermissions field
+		winGate := NewWindowsCommandGate(t.effectiveLevel())
 		if err := winGate.CheckPath(resolvedPath); err != nil {
 			return &ToolResult{
 				Content: fmt.Sprintf("Security error: %v", err),
@@ -198,13 +218,16 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}
 	} else {
 		// No allowedPaths restriction - apply cwd gate with scratchpad exception
-		var pathErr error
-		filePath, pathErr = PathInWorkingDir(resolvedPath, cwd, constants.ScratchpadDir(t.sessionID))
-		if pathErr != nil {
-			return &ToolResult{
-				Content: pathErr.Error(),
-				IsError: true,
-			}, nil
+		// Skip path constraint at unrestricted level
+		if t.effectiveLevel().PathConstrained() {
+			var pathErr error
+			filePath, pathErr = PathInWorkingDir(resolvedPath, cwd, constants.ScratchpadDir(t.sessionID))
+			if pathErr != nil {
+				return &ToolResult{
+					Content: pathErr.Error(),
+					IsError: true,
+				}, nil
+			}
 		}
 	}
 
@@ -222,45 +245,50 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 	}
 
 	// AC1: Check readFileState cache for the path
-	entry, exists := t.readCache.GetRead(filePath)
-	if !exists {
-		return &ToolResult{
-			Content: "Cannot edit without reading first. Use Read tool on this path before Edit.",
-			IsError: true,
-		}, nil
-	}
-
-	// AC2: Check staleness
-	info, err := os.Stat(filePath)
-	if err == nil {
-		// File exists, check mtime
-		if info.ModTime().After(entry.Mtime) {
+	// AC9: At unrestricted level, skip read-before-write check
+	var entry *ReadFileEntry
+	if t.effectiveLevel().ReadBeforeWrite() {
+		var exists bool
+		entry, exists = t.readCache.GetRead(filePath)
+		if !exists {
 			return &ToolResult{
-				Content: "File has changed since it was read. Re-read the file before editing.",
+				Content: "Cannot edit without reading first. Use Read tool on this path before Edit.",
 				IsError: true,
 			}, nil
 		}
-	}
 
-	// AC1 continued: For partial reads, require scoped range contained within read range
-	if !entry.IsFullRead {
-		if !isScoped {
-			return &ToolResult{
-				Content: "Cannot edit after partial read without start_line and end_line. " +
-					"Read the full file first, or provide start_line/end_line within the read range.",
-				IsError: true,
-			}, nil
+		// AC2: Check staleness
+		info, err := os.Stat(filePath)
+		if err == nil {
+			// File exists, check mtime
+			if info.ModTime().After(entry.Mtime) {
+				return &ToolResult{
+					Content: "File has changed since it was read. Re-read the file before editing.",
+					IsError: true,
+				}, nil
+			}
 		}
-		// Validate that the scoped range is contained within the read range
-		// Read range is [offset, offset+limit-1] (1-indexed, inclusive)
-		readStart := entry.Offset
-		readEnd := entry.Offset + entry.Limit - 1
-		if startLine < readStart || endLine > readEnd {
-			return &ToolResult{
-				Content: fmt.Sprintf("Scoped range [%d, %d] is outside read range [%d, %d]. "+
-					"Read the full file first, or adjust start_line/end_line.", startLine, endLine, readStart, readEnd),
-				IsError: true,
-			}, nil
+
+		// AC1 continued: For partial reads, require scoped range contained within read range
+		if !entry.IsFullRead {
+			if !isScoped {
+				return &ToolResult{
+					Content: "Cannot edit after partial read without start_line and end_line. " +
+						"Read the full file first, or provide start_line/end_line within the read range.",
+					IsError: true,
+				}, nil
+			}
+			// Validate that the scoped range is contained within the read range
+			// Read range is [offset, offset+limit-1] (1-indexed, inclusive)
+			readStart := entry.Offset
+			readEnd := entry.Offset + entry.Limit - 1
+			if startLine < readStart || endLine > readEnd {
+				return &ToolResult{
+					Content: fmt.Sprintf("Scoped range [%d, %d] is outside read range [%d, %d]. "+
+						"Read the full file first, or adjust start_line/end_line.", startLine, endLine, readStart, readEnd),
+					IsError: true,
+				}, nil
+			}
 		}
 	}
 
@@ -276,15 +304,13 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 	if isScoped {
 		return t.executeScoped(filePath, oldString, newString, replaceAll, startLine, endLine, numExpected, entry)
 	}
-	return t.executeGlobal(filePath, oldString, newString, replaceAll, numExpected, entry, info)
+	return t.executeGlobal(filePath, oldString, newString, replaceAll, numExpected, entry)
 }
 
 // executeGlobal performs the original in-memory replacement (full file read).
-func (t *EditTool) executeGlobal(filePath, oldString, newString string, replaceAll bool, numExpected int, entry *ReadFileEntry, info os.FileInfo) (*ToolResult, error) {
-	// AC4: 1 GiB size guard must run before os.ReadFile. The `info` parameter
-	// is non-nil for existing files (see call site at line 254). Without
-	// this guard, a >1GiB file would be loaded into memory before the size
-	// check rejected it, causing an OOM.
+func (t *EditTool) executeGlobal(filePath, oldString, newString string, replaceAll bool, numExpected int, entry *ReadFileEntry) (*ToolResult, error) {
+	// AC4: 1 GiB size guard — stat the file before reading
+	info, _ := os.Stat(filePath)
 	if info != nil && info.Size() > 1<<30 {
 		return &ToolResult{
 			Content: "File exceeds maximum size of 1 GiB",

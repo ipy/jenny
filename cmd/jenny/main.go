@@ -346,7 +346,7 @@ func run() error {
 		defer mcp.ShutdownAll()
 	}
 
-	// Build tool registry with skipPermissions flag
+	// Build tool registry
 	// AC4: ReadFileCache is wired through StreamConfig -> QueryEngine -> tools
 	// But Registry.Build() also needs it to create Write/Edit/NotebookEdit tools
 	readFileCache := tool.NewReadFileCache()
@@ -406,6 +406,11 @@ func run() error {
 	}
 
 	var tools []tool.Tool
+	// Resolve permission level from --dangerously-skip-permissions and --permission-level flags.
+	permLevel, permWarning := tool.ResolvePermissionLevel(flags.SkipPermissions, flags.PermissionLevel)
+	if permWarning != "" {
+		log.Warn(permWarning)
+	}
 	registry := tool.NewRegistry().
 		WithBaseTools().
 		WithWebFetchEnabled(true).
@@ -414,7 +419,7 @@ func run() error {
 		WithReadFileCache(readFileCache).
 		WithMCPTools(mcpTools).
 		WithDenyRules(flags.DeniedTools).
-		WithSkipPermissions(flags.SkipPermissions).
+		WithPermissionLevel(permLevel).
 		WithStrictMCP(flags.StrictMCP).
 		WithSkillsFrameworkEnabled(!flags.Bare, discoveredSkills)
 	tools = registry.Build()
@@ -511,13 +516,15 @@ func run() error {
 // buildPrintTools returns the default set of tools for system prompt printing.
 // It skips MCP tool discovery and full skill discovery to remain offline.
 func buildPrintTools(flags *cli.Flags) []tool.Tool {
+	// Resolve permission level from --dangerously-skip-permissions and --permission-level flags.
+	permLevel, _ := tool.ResolvePermissionLevel(flags.SkipPermissions, flags.PermissionLevel)
 	registry := tool.NewRegistry().
 		WithBaseTools().
 		WithWebFetchEnabled(true).
 		WithWebSearchEnabled(true).
 		WithModel(flags.Model).
 		WithDenyRules(flags.DeniedTools).
-		WithSkipPermissions(flags.SkipPermissions).
+		WithPermissionLevel(permLevel).
 		WithStrictMCP(flags.StrictMCP).
 		WithSkillsFrameworkEnabled(!flags.Bare, nil)
 	tools := registry.Build()

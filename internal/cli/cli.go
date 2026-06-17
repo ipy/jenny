@@ -17,12 +17,13 @@ import (
 
 // Flags holds the parsed command-line flags.
 type Flags struct {
-	Prompt                 string            // prompt: joined from k.Strings("p") after unmarshal
+	Prompt                 string            // prompt: joined from k.Strings("print") after unmarshal
 	Model                  string            `koanf:"model"`
 	OutputFormat           string            `koanf:"output-format"`
 	Verbose                bool              `koanf:"verbose"`
 	IncludePartialMessages bool              `koanf:"include-partial-messages"`
 	SkipPermissions        bool              `koanf:"dangerously-skip-permissions"`
+	PermissionLevel        string            `koanf:"permission-level"`
 	SessionResume          string            `koanf:"resume"`
 	NoSessionPersistence   bool              `koanf:"no-session-persistence"`
 	ForkSession            bool              `koanf:"fork-session"`
@@ -78,6 +79,7 @@ func Parse() (*Flags, error) {
 	verboseDefault := k.Bool("verbose")
 	includePartialDefault := k.Bool("include-partial-messages")
 	skipPermsDefault := k.Bool("dangerously-skip-permissions")
+	permLevelDefault := k.String("permission-level")
 	resumeDefault := k.String("resume")
 	noSessionPersistenceDefault := k.Bool("no-session-persistence")
 	forkSessionDefault := k.Bool("fork-session")
@@ -99,7 +101,7 @@ func Parse() (*Flags, error) {
 
 	// Define flags with defaults from koanf.
 	var pFlag []string
-	flags.StringSliceVarP(&pFlag, "p", "", nil, "Prompt to send (can be specified multiple times; values are joined with newlines)")
+	flags.StringSliceVarP(&pFlag, "print", "p", nil, "Prompt to send (can be specified multiple times; values are joined with newlines)")
 
 	var model string
 	flags.StringVarP(&model, "model", "", modelDefault, "Model to use")
@@ -115,6 +117,9 @@ func Parse() (*Flags, error) {
 
 	var skipPerms bool
 	flags.BoolVarP(&skipPerms, "dangerously-skip-permissions", "", skipPermsDefault, "Skip permissions")
+
+	var permLevel string
+	flags.StringVarP(&permLevel, "permission-level", "", permLevelDefault, "Permission level (read, analyze, edit, execute, unrestricted)")
 
 	var resume string
 	flags.StringVarP(&resume, "resume", "r", resumeDefault, "Session ID to resume")
@@ -208,7 +213,7 @@ func Parse() (*Flags, error) {
 	// Handle special fields that can't be unmarshalled directly:
 	// - p: stored as []string in koanf, but struct expects string (join with newline).
 	// - feature-flags: stored as string in koanf (via Var.String()), but struct expects map.
-	parsed.Prompt = strings.Join(k.Strings("p"), "\n")
+	parsed.Prompt = strings.Join(k.Strings("print"), "\n")
 	parsed.FeatureFlags = ffv.m
 
 	// --version / --print-system-prompt: caller will print and exit before any
@@ -241,6 +246,21 @@ func Parse() (*Flags, error) {
 	// Validate: --continue requires session persistence.
 	if parsed.Continue && parsed.NoSessionPersistence {
 		return nil, fmt.Errorf("--continue requires session persistence")
+	}
+
+	// Validate: --permission-level must be a valid value if provided.
+	if parsed.PermissionLevel != "" {
+		validLevels := []string{"read", "analyze", "edit", "execute", "unrestricted"}
+		found := false
+		for _, l := range validLevels {
+			if l == parsed.PermissionLevel {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("invalid --permission-level %q; valid values: %s", parsed.PermissionLevel, strings.Join(validLevels, ", "))
+		}
 	}
 
 	return &parsed, nil

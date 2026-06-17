@@ -25,7 +25,7 @@ func TestReadTool_Execute(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	tool := NewReadTool(false, nil)
+	tool := NewReadTool(PermissionEdit, nil)
 
 	tests := []struct {
 		name    string
@@ -146,7 +146,7 @@ func TestReadTool_PathTraversal(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	tool := NewReadTool(false, nil)
+	tool := NewReadTool(PermissionEdit, nil)
 
 	tests := []struct {
 		name    string
@@ -197,7 +197,7 @@ func TestReadTool_PathTraversal(t *testing.T) {
 }
 
 func TestReadTool_NameAndDescription(t *testing.T) {
-	tool := NewReadTool(false, nil)
+	tool := NewReadTool(PermissionEdit, nil)
 
 	if tool.Name() != "Read" {
 		t.Errorf("expected name 'Read', got %q", tool.Name())
@@ -216,7 +216,7 @@ func TestReadTool_NameAndDescription(t *testing.T) {
 
 func TestReadTool_SizeLimits(t *testing.T) {
 	tmpDir := t.TempDir()
-	tool := NewReadTool(false, nil)
+	tool := NewReadTool(PermissionEdit, nil)
 
 	// Create a small file (under all limits)
 	smallFile := filepath.Join(tmpDir, "small.txt")
@@ -362,7 +362,7 @@ func TestReadTool_SizeLimits(t *testing.T) {
 func TestReadTool_Dedup(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
-	tool := NewReadTool(false, cache)
+	tool := NewReadTool(PermissionEdit, cache)
 
 	// Create test file
 	testFile := filepath.Join(tmpDir, "dedup.txt")
@@ -453,7 +453,7 @@ func TestReadTool_BlockDeviceGuard(t *testing.T) {
 		t.Skip("/dev/null device path doesn't exist on Windows")
 	}
 	tmpDir := t.TempDir()
-	tool := NewReadTool(false, nil)
+	tool := NewReadTool(PermissionEdit, nil)
 
 	// AC4: Test deny list for /dev paths
 	devPaths := []string{
@@ -500,15 +500,15 @@ func TestReadTool_BlockDeviceGuard(t *testing.T) {
 	}
 }
 
-// TestReadTool_SkipPermissions tests AC1: cwd bypass with skipPermissions flag
+// TestReadTool_SkipPermissions tests AC1: cwd bypass with unrestricted level flag
 func TestReadTool_SkipPermissions(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping hardcoded absolute Unix path test on Windows")
 	}
 	tmpDir := t.TempDir()
-	tool := NewReadTool(false, nil)
+	tool := NewReadTool(PermissionEdit, nil)
 
-	// Test that /etc/passwd is blocked without skipPermissions
+	// Test that /etc/passwd is blocked without unrestricted level
 	result, err := tool.Execute(context.Background(), map[string]any{
 		"file_path": "/etc/passwd",
 	}, tmpDir)
@@ -516,19 +516,19 @@ func TestReadTool_SkipPermissions(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !result.IsError {
-		t.Error("expected traversal error without skipPermissions")
+		t.Error("expected traversal error without unrestricted level")
 	}
 
-	// Test that access is allowed WITH skipPermissions
-	toolWithSkip := NewReadTool(true, nil)
+	// Test that access is allowed WITH unrestricted level
+	toolWithSkip := NewReadTool(PermissionUnrestricted, nil)
 	result, err = toolWithSkip.Execute(context.Background(), map[string]any{
 		"file_path": "/etc/passwd",
 	}, tmpDir)
 	if err != nil {
-		t.Fatalf("unexpected error with skipPermissions: %v", err)
+		t.Fatalf("unexpected error with unrestricted level: %v", err)
 	}
 	if result.IsError {
-		t.Errorf("expected success with skipPermissions, got error: %s", result.Content)
+		t.Errorf("expected success with unrestricted level, got error: %s", result.Content)
 	}
 }
 
@@ -538,7 +538,7 @@ func TestReadTool_ScratchpadAccess(t *testing.T) {
 		t.Skip("/etc/passwd doesn't exist on Windows")
 	}
 	tmpDir := t.TempDir()
-	tool := NewReadTool(false, nil)
+	tool := NewReadTool(PermissionEdit, nil)
 
 	// Override JennyHomeDir to use tmpDir
 	originalFunc := constants.JennyHomeDirFunc
@@ -558,7 +558,7 @@ func TestReadTool_ScratchpadAccess(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	// Test that scratchpad file is accessible WITHOUT skipPermissions
+	// Test that scratchpad file is accessible WITHOUT unrestricted level
 	result, err := tool.Execute(context.Background(), map[string]any{
 		"file_path": testFile,
 	}, tmpDir)
@@ -572,7 +572,7 @@ func TestReadTool_ScratchpadAccess(t *testing.T) {
 		t.Errorf("expected scratchpad content, got: %s", result.Content)
 	}
 
-	// Test that /etc/passwd still fails without skipPermissions
+	// Test that /etc/passwd still fails without unrestricted level
 	result, err = tool.Execute(context.Background(), map[string]any{
 		"file_path": "/etc/passwd",
 	}, tmpDir)
@@ -580,7 +580,7 @@ func TestReadTool_ScratchpadAccess(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !result.IsError {
-		t.Error("expected /etc/passwd to be blocked without skipPermissions")
+		t.Error("expected /etc/passwd to be blocked without unrestricted level")
 	}
 }
 
@@ -589,7 +589,7 @@ func TestReadTool_ScratchpadAccess(t *testing.T) {
 func TestReadTool_CacheHitStructuredResponse(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	tool := NewReadTool(true, readCache)
+	tool := NewReadTool(PermissionUnrestricted, readCache)
 
 	testFile := filepath.Join(tmpDir, "cache_test.txt")
 	err := os.WriteFile(testFile, []byte("cached content\n"), 0644)
@@ -639,7 +639,7 @@ func TestReadTool_TOCTOU(t *testing.T) {
 	}
 
 	cache := NewReadFileCache()
-	tool := NewReadTool(false, cache)
+	tool := NewReadTool(PermissionEdit, cache)
 
 	const writers = 4
 	const iterations = 30
@@ -722,7 +722,7 @@ func TestReadTool_TOCTOU(t *testing.T) {
 
 func TestReadTool_UTF16(t *testing.T) {
 	tmpDir := t.TempDir()
-	tool := NewReadTool(true, nil)
+	tool := NewReadTool(PermissionUnrestricted, nil)
 
 	// Test UTF-16 LE
 	lePath := filepath.Join(tmpDir, "utf16le.txt")
@@ -775,7 +775,7 @@ func TestReadTool_ImageFile(t *testing.T) {
 		t.Fatalf("failed to create PNG: %v", err)
 	}
 
-	tool := NewReadTool(true, nil)
+	tool := NewReadTool(PermissionUnrestricted, nil)
 	result, err := tool.Execute(context.Background(), map[string]any{
 		"file_path": imgFile,
 	}, tmpDir)
@@ -802,7 +802,7 @@ func TestReadTool_ImageFileTooLarge(t *testing.T) {
 	f.Truncate(11 * 1024 * 1024) // 11 MB
 	f.Close()
 
-	tool := NewReadTool(true, nil)
+	tool := NewReadTool(PermissionUnrestricted, nil)
 	result, err := tool.Execute(context.Background(), map[string]any{
 		"file_path": imgFile,
 	}, tmpDir)

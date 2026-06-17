@@ -304,8 +304,9 @@ func (me *MemoryExtractor) extract(ctx context.Context, turnCtx TurnContext) err
 
 // buildExtractionTools creates the restricted tool set for extraction.
 func (me *MemoryExtractor) buildExtractionTools() []tool.Tool {
-	// Read tool - unrestricted
-	readTool := tool.NewReadTool(true, me.readCache)
+	// Read tool — unrestricted because the memory extractor runs in a trusted
+	// internal context and needs full filesystem access to read memory files.
+	readTool := tool.NewReadTool(tool.PermissionUnrestricted, me.readCache)
 
 	// Grep tool - unrestricted
 	grepTool := tool.NewGrepTool()

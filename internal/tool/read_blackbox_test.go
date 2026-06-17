@@ -20,7 +20,7 @@ func TestAC3_ReadToolFixedWidthLineNumbers(t *testing.T) {
 		t.Fatalf("WriteFile error: %v", err)
 	}
 
-	tool := NewReadTool(false, nil)
+	tool := NewReadTool(PermissionEdit, nil)
 	result, err := tool.Execute(context.Background(), map[string]any{"file_path": filePath}, tmpDir)
 	if err != nil {
 		t.Fatalf("ReadTool.Execute error: %v", err)
@@ -57,7 +57,7 @@ func TestAC3_ReadToolEmptyFile(t *testing.T) {
 		t.Fatalf("WriteFile error: %v", err)
 	}
 
-	tool := NewReadTool(false, nil)
+	tool := NewReadTool(PermissionEdit, nil)
 	result, err := tool.Execute(context.Background(), map[string]any{"file_path": filePath}, tmpDir)
 	if err != nil {
 		t.Fatalf("ReadTool.Execute error: %v", err)
@@ -79,7 +79,7 @@ func TestAC3_ReadToolPastEOF(t *testing.T) {
 		t.Fatalf("WriteFile error: %v", err)
 	}
 
-	tool := NewReadTool(false, nil)
+	tool := NewReadTool(PermissionEdit, nil)
 	// offset=999 is past EOF for a 1-line file
 	result, err := tool.Execute(context.Background(), map[string]any{"file_path": filePath, "offset": float64(999)}, tmpDir)
 	if err != nil {
@@ -102,7 +102,7 @@ func TestAC3_ReadToolOffsetZero(t *testing.T) {
 		t.Fatalf("WriteFile error: %v", err)
 	}
 
-	tool := NewReadTool(false, nil)
+	tool := NewReadTool(PermissionEdit, nil)
 	// offset=0 should default to starting at line 1 (clamped by max(offsetVal, 1))
 	result, err := tool.Execute(context.Background(), map[string]any{"file_path": filePath, "offset": float64(0)}, tmpDir)
 	if err != nil {

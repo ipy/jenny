@@ -23,7 +23,7 @@ func TestAC1_BackgroundBash_WritesOutputFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	tm := NewTaskManager().WithProjectRoot(tmpDir)
 
-	bt := NewBashTool(true)
+	bt := NewBashTool(PermissionUnrestricted)
 	bt.WithTaskManager(tm)
 
 	result, err := bt.Execute(context.Background(), map[string]any{
@@ -103,7 +103,7 @@ func TestAC1_OutputFile_PathIsProjectRelative(t *testing.T) {
 	tmpDir := t.TempDir()
 	tm := NewTaskManager().WithProjectRoot(tmpDir)
 
-	bt := NewBashTool(true)
+	bt := NewBashTool(PermissionUnrestricted)
 	bt.WithTaskManager(tm)
 
 	result, err := bt.Execute(context.Background(), map[string]any{
@@ -171,7 +171,7 @@ func TestAC2_ProgressEvent_EmittedAfter2s(t *testing.T) {
 	tmpDir := t.TempDir()
 	tm := NewTaskManager().WithProjectRoot(tmpDir)
 
-	bt := NewBashTool(true)
+	bt := NewBashTool(PermissionUnrestricted)
 	bt.WithTaskManager(tm)
 
 	// Capture stdout
@@ -219,7 +219,7 @@ func TestAC2_ProgressEvent_NotEmittedForShortTasks(t *testing.T) {
 	tmpDir := t.TempDir()
 	tm := NewTaskManager().WithProjectRoot(tmpDir)
 
-	bt := NewBashTool(true)
+	bt := NewBashTool(PermissionUnrestricted)
 	bt.WithTaskManager(tm)
 
 	// Capture stdout
@@ -263,7 +263,7 @@ func TestAC2_ProgressEvent_Format(t *testing.T) {
 	tmpDir := t.TempDir()
 	tm := NewTaskManager().WithProjectRoot(tmpDir)
 
-	bt := NewBashTool(true)
+	bt := NewBashTool(PermissionUnrestricted)
 	bt.WithTaskManager(tm)
 
 	// Capture stdout
@@ -345,7 +345,7 @@ func TestAC3_CompletionNotification_Queued(t *testing.T) {
 	tmpDir := t.TempDir()
 	tm := NewTaskManager().WithProjectRoot(tmpDir)
 
-	bt := NewBashTool(true)
+	bt := NewBashTool(PermissionUnrestricted)
 	bt.WithTaskManager(tm)
 
 	result, err := bt.Execute(context.Background(), map[string]any{
@@ -390,7 +390,7 @@ func TestAC3_CompletionNotification_Format(t *testing.T) {
 	tmpDir := t.TempDir()
 	tm := NewTaskManager().WithProjectRoot(tmpDir)
 
-	bt := NewBashTool(true)
+	bt := NewBashTool(PermissionUnrestricted)
 	bt.WithTaskManager(tm)
 
 	result, err := bt.Execute(context.Background(), map[string]any{
@@ -438,7 +438,7 @@ func TestAC4_SleepBlockedInForeground(t *testing.T) {
 	// sleep >=2 in foreground should return an error with specific message.
 	// This already exists in codebase — TestBashTool_AC3_SleepBlocked covers it.
 
-	bt := NewBashTool(false)
+	bt := NewBashTool(PermissionEdit)
 	cwd := t.TempDir()
 
 	// sleep 3 should be blocked
@@ -477,7 +477,7 @@ func TestAC4_AutoBackgroundHint(t *testing.T) {
 
 	// Since we can't easily run a 120s command, we verify the existence
 	// of the code path by checking that the duration check works.
-	bt := NewBashTool(false)
+	bt := NewBashTool(PermissionEdit)
 	cwd := t.TempDir()
 
 	// Run a quick command — should NOT have the hint
@@ -509,7 +509,7 @@ func TestAC5_TaskStop_StopsRunningTask(t *testing.T) {
 	tmpDir := t.TempDir()
 	tm := NewTaskManager().WithProjectRoot(tmpDir)
 
-	bt := NewBashTool(true)
+	bt := NewBashTool(PermissionUnrestricted)
 	bt.WithTaskManager(tm)
 
 	// Use a long-running command

@@ -35,8 +35,8 @@ func TestToolUseBlockCollection(t *testing.T) {
 	// This is a unit test for the message building logic
 
 	// Create mock tools
-	bashTool := tool.NewBashTool(false)
-	readTool := tool.NewReadTool(false, nil)
+	bashTool := tool.NewBashTool(tool.PermissionEdit)
+	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 
 	// Verify tools have correct names
 	if bashTool.Name() != "Bash" {
@@ -48,8 +48,8 @@ func TestToolUseBlockCollection(t *testing.T) {
 }
 
 func TestFindTool(t *testing.T) {
-	bashTool := tool.NewBashTool(false)
-	readTool := tool.NewReadTool(false, nil)
+	bashTool := tool.NewBashTool(tool.PermissionEdit)
+	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 
 	tools := []tool.Tool{bashTool, readTool}
 
@@ -152,7 +152,7 @@ func TestToolResultStructure(t *testing.T) {
 
 func TestToolInputValidation(t *testing.T) {
 	// Test that tools validate their inputs correctly
-	bashTool := tool.NewBashTool(false)
+	bashTool := tool.NewBashTool(tool.PermissionEdit)
 
 	// Test missing command
 	result, err := bashTool.Execute(context.Background(), map[string]any{}, "/tmp")
@@ -180,7 +180,7 @@ func TestToolInputValidation(t *testing.T) {
 
 func TestReadToolInputValidation(t *testing.T) {
 	// Test that read tool validates inputs correctly
-	readTool := tool.NewReadTool(false, nil)
+	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 
 	// Test missing file_path
 	result, err := readTool.Execute(context.Background(), map[string]any{}, "/tmp")
@@ -810,7 +810,7 @@ func TestAC1_RecursiveForkBlocked_ViaContext(t *testing.T) {
 	ctx := context.WithValue(context.Background(), tool.ForkChildKey, true)
 
 	// Create AgentTool with a runner that should never be reached
-	readTool := tool.NewReadTool(false, nil)
+	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
 	runner := NewLocalSubagentRunner(tools, nil, fastClient())
 
@@ -849,7 +849,7 @@ func TestAC1_RecursiveForkBlocked_NoFalsePositive(t *testing.T) {
 	// Create context WITHOUT fork child marker
 	ctx := context.Background()
 
-	readTool := tool.NewReadTool(false, nil)
+	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
 	runner := NewLocalSubagentRunner(tools, nil, fastClient())
 
@@ -955,7 +955,7 @@ func TestAC2_WorktreeIsolation_MutuallyExclusiveWithCWD(t *testing.T) {
 		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
 	}
 
-	readTool := tool.NewReadTool(false, nil)
+	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
 	runner := NewLocalSubagentRunner(tools, nil, fastClient())
 
@@ -989,7 +989,7 @@ func TestAC2_WorktreeIsolation_AloneWithoutCWD_Validates(t *testing.T) {
 	// Change to a non-git temp directory so git.GetRoot("") fails
 	t.Chdir(t.TempDir())
 
-	readTool := tool.NewReadTool(false, nil)
+	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
 	runner := NewLocalSubagentRunner(tools, nil, fastClient())
 
@@ -1020,7 +1020,7 @@ func TestAC2_NoCWD_NoIsolation_Passes(t *testing.T) {
 		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
 	}
 
-	readTool := tool.NewReadTool(false, nil)
+	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
 	runner := NewLocalSubagentRunner(tools, nil, fastClient())
 
@@ -1053,7 +1053,7 @@ func TestAC3_AsyncSubagentOutputFile_ReturnsPath(t *testing.T) {
 		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
 	}
 
-	readTool := tool.NewReadTool(false, nil)
+	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
 	runner := NewAsyncSubagentRunner(tools, nil, fastClient())
 
@@ -1088,7 +1088,7 @@ func TestAC3_AsyncSubagentCompletes(t *testing.T) {
 		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
 	}
 
-	readTool := tool.NewReadTool(false, nil)
+	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
 	runner := NewAsyncSubagentRunner(tools, nil, fastClient())
 
@@ -1120,7 +1120,7 @@ func TestAC3_AsyncSubagentErrorContent(t *testing.T) {
 		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
 	}
 
-	readTool := tool.NewReadTool(false, nil)
+	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
 	runner := NewAsyncSubagentRunner(tools, nil, fastClient())
 
@@ -1159,7 +1159,7 @@ func TestAC4_InterruptCancelledContext_ReturnsOutputPlusError(t *testing.T) {
 		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
 	}
 
-	readTool := tool.NewReadTool(false, nil)
+	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
 	runner := NewLocalSubagentRunner(tools, nil, fastClient())
 
@@ -1202,7 +1202,7 @@ func TestAC4_InterruptTimeoutContext_ReturnsOutputPlusError(t *testing.T) {
 		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
 	}
 
-	readTool := tool.NewReadTool(false, nil)
+	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
 	runner := NewLocalSubagentRunner(tools, nil, fastClient())
 
@@ -1244,7 +1244,7 @@ func TestAC4_InterruptNormalContext_ReturnsNoCancelError(t *testing.T) {
 		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
 	}
 
-	readTool := tool.NewReadTool(false, nil)
+	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
 	runner := NewLocalSubagentRunner(tools, nil, fastClient())
 

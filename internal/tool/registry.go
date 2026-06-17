@@ -16,7 +16,7 @@ type Registry struct {
 	mcpTools               []Tool
 	denyRules              map[string]bool
 	enabled                map[string]bool
-	skipPermissions        bool
+	permissionLevel        PermissionLevel
 	hasBaseTools           bool
 	strictMCP              bool // AC3: when true, suppress all built-in tools
 	readCache              *ReadFileCache
@@ -43,8 +43,9 @@ type Registry struct {
 // NewRegistry creates a new Registry.
 func NewRegistry() *Registry {
 	return &Registry{
-		denyRules: make(map[string]bool),
-		enabled:   make(map[string]bool),
+		denyRules:       make(map[string]bool),
+		enabled:         make(map[string]bool),
+		permissionLevel: DefaultPermissionLevel,
 	}
 }
 
@@ -91,9 +92,9 @@ func (r *Registry) WithEnabled(name string, enabled bool) *Registry {
 	return r
 }
 
-// WithSkipPermissions sets the skipPermissions flag for all tools.
-func (r *Registry) WithSkipPermissions(skip bool) *Registry {
-	r.skipPermissions = skip
+// WithPermissionLevel sets the permission level for all tools.
+func (r *Registry) WithPermissionLevel(level PermissionLevel) *Registry {
+	r.permissionLevel = level
 	return r
 }
 
@@ -235,23 +236,22 @@ func (r *Registry) Build() []Tool {
 		return result
 	}
 
-	// Create base tools with skipPermissions if hasBaseTools is set
+	// Create base tools if hasBaseTools is set
 	if r.hasBaseTools {
 		r.baseTools = []Tool{
-			NewReadTool(r.skipPermissions, r.readCache).WithSessionID(r.sessionID),
+			NewReadTool(r.permissionLevel, r.readCache).WithSessionID(r.sessionID),
 		}
 
 		// On Windows, register PowerShellTool; on Unix, register BashTool
 		if runtime.GOOS == "windows" {
-			// Register PowerShellTool on Windows
-			r.baseTools = append(r.baseTools, NewPowerShellTool(r.skipPermissions).WithSessionID(r.sessionID))
+			r.baseTools = append(r.baseTools, NewPowerShellTool(r.permissionLevel).WithSessionID(r.sessionID))
 			// Only register BashTool if bash.exe is found in PATH
 			if _, err := exec.LookPath("bash.exe"); err == nil {
-				r.baseTools = append(r.baseTools, NewBashTool(r.skipPermissions).WithSessionID(r.sessionID))
+				r.baseTools = append(r.baseTools, NewBashTool(r.permissionLevel).WithSessionID(r.sessionID))
 			}
 		} else {
 			// On Unix, always register BashTool
-			r.baseTools = append(r.baseTools, NewBashTool(r.skipPermissions).WithSessionID(r.sessionID))
+			r.baseTools = append(r.baseTools, NewBashTool(r.permissionLevel).WithSessionID(r.sessionID))
 		}
 
 		r.baseTools = append(r.baseTools, NewGlobTool(), NewGrepTool())
@@ -259,7 +259,11 @@ func (r *Registry) Build() []Tool {
 		r.baseTools = append(r.baseTools, NewReadMcpResourceTool().WithSessionID(r.sessionID), NewMcpPromptTool())
 		// Add WriteTool and EditTool if readCache is configured
 		if r.readCache != nil {
-			r.baseTools = append(r.baseTools, NewWriteTool(r.readCache).WithSessionID(r.sessionID), NewEditTool(r.readCache).WithSessionID(r.sessionID), NewNotebookEditTool(r.readCache).WithSessionID(r.sessionID))
+			r.baseTools = append(r.baseTools,
+				NewWriteTool(r.readCache).WithPermissionLevel(r.permissionLevel).WithSessionID(r.sessionID),
+				NewEditTool(r.readCache).WithPermissionLevel(r.permissionLevel).WithSessionID(r.sessionID),
+				NewNotebookEditTool(r.readCache).WithSessionID(r.sessionID),
+			)
 		}
 
 		// Wire sandbox to BashTool and GrepTool if configured

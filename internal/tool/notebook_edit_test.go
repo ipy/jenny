@@ -25,7 +25,7 @@ func TestNotebookEditTool_AC1_NonIpynbRejected(t *testing.T) {
 	}
 
 	// Read the file first
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	_, err = readTool.Execute(context.Background(), map[string]any{
 		"file_path": testFile,
 	}, tmpDir)
@@ -89,7 +89,7 @@ func TestNotebookEditTool_AC1_NoPriorRead(t *testing.T) {
 func TestNotebookEditTool_AC1_PartialReadRejected(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	notebookTool := NewNotebookEditTool(readCache)
 
 	// Create an .ipynb file
@@ -133,7 +133,7 @@ func TestNotebookEditTool_AC1_PartialReadRejected(t *testing.T) {
 func TestNotebookEditTool_AC2_InsertRequiresCellType(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	notebookTool := NewNotebookEditTool(readCache)
 
 	// Create an .ipynb file
@@ -174,7 +174,7 @@ func TestNotebookEditTool_AC2_InsertRequiresCellType(t *testing.T) {
 func TestNotebookEditTool_AC2_InsertValidCellType(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	notebookTool := NewNotebookEditTool(readCache)
 
 	// Create an .ipynb file
@@ -222,7 +222,7 @@ func TestNotebookEditTool_AC2_InsertValidCellType(t *testing.T) {
 func TestNotebookEditTool_AC3_StalenessEnforced(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	notebookTool := NewNotebookEditTool(readCache)
 
 	// Create an .ipynb file
@@ -271,7 +271,7 @@ func TestNotebookEditTool_AC3_StalenessEnforced(t *testing.T) {
 func TestNotebookEditTool_AC4_ValidJSONAfterEdit(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	notebookTool := NewNotebookEditTool(readCache)
 
 	// Create an .ipynb file
@@ -326,7 +326,7 @@ func TestNotebookEditTool_AC4_ValidJSONAfterEdit(t *testing.T) {
 func TestNotebookEditTool_AC5_PostEditReadReturnsNewContent(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	notebookTool := NewNotebookEditTool(readCache)
 
 	// Create an .ipynb file
@@ -374,7 +374,7 @@ func TestNotebookEditTool_AC5_PostEditReadReturnsNewContent(t *testing.T) {
 func TestNotebookEditTool_ReplaceMode(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	notebookTool := NewNotebookEditTool(readCache)
 
 	// Create an .ipynb file with multiple cells
@@ -426,7 +426,7 @@ func TestNotebookEditTool_ReplaceMode(t *testing.T) {
 func TestNotebookEditTool_DeleteMode(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	notebookTool := NewNotebookEditTool(readCache)
 
 	// Create an .ipynb file with multiple cells
@@ -479,7 +479,7 @@ func TestNotebookEditTool_DeleteMode(t *testing.T) {
 func TestNotebookEditTool_InsertMode(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	notebookTool := NewNotebookEditTool(readCache)
 
 	// Create an .ipynb file with one cell
@@ -534,7 +534,7 @@ func TestNotebookEditTool_InsertMode(t *testing.T) {
 func TestNotebookEditTool_CellNumericAlias(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	notebookTool := NewNotebookEditTool(readCache)
 
 	// Create an .ipynb file with multiple cells
@@ -582,7 +582,7 @@ func TestNotebookEditTool_CellNumericAlias(t *testing.T) {
 func TestNotebookEditTool_InvalidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	notebookTool := NewNotebookEditTool(readCache)
 
 	// Create an .ipynb file with invalid JSON
@@ -623,7 +623,7 @@ func TestNotebookEditTool_InvalidJSON(t *testing.T) {
 func TestNotebookEditTool_MissingCell(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	notebookTool := NewNotebookEditTool(readCache)
 
 	// Create an .ipynb file
@@ -665,7 +665,7 @@ func TestNotebookEditTool_MissingCell(t *testing.T) {
 func TestNotebookEditTool_CodeCellResetsOutputs(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 	notebookTool := NewNotebookEditTool(readCache)
 
 	// Create an .ipynb file with a code cell that has outputs

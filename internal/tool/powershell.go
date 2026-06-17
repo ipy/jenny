@@ -14,7 +14,7 @@ import (
 
 // PowerShellTool executes PowerShell commands.
 type PowerShellTool struct {
-	skipPermissions bool
+	permissionLevel PermissionLevel
 	mu              sync.Mutex
 	commandCwd      string
 	projectRoot     string
@@ -23,11 +23,16 @@ type PowerShellTool struct {
 	sessionID       string
 }
 
-// NewPowerShellTool creates a new PowerShellTool.
-func NewPowerShellTool(skipPermissions bool) *PowerShellTool {
+// NewPowerShellTool creates a new PowerShellTool with the given PermissionLevel.
+func NewPowerShellTool(level PermissionLevel) *PowerShellTool {
 	return &PowerShellTool{
-		skipPermissions: skipPermissions,
+		permissionLevel: level,
 	}
+}
+
+// effectiveLevel returns the effective PermissionLevel.
+func (t *PowerShellTool) effectiveLevel() PermissionLevel {
+	return t.permissionLevel
 }
 
 // WithTaskManager sets the task manager for background task tracking.
@@ -96,7 +101,7 @@ func (t *PowerShellTool) Execute(ctx context.Context, input map[string]any, cwd 
 
 	// Windows Command Gate
 	if runtime.GOOS == "windows" {
-		gate := NewWindowsCommandGate(t.skipPermissions)
+		gate := NewWindowsCommandGate(t.effectiveLevel())
 		if err := gate.CheckCommand(command); err != nil {
 			return &ToolResult{
 				Content: fmt.Sprintf("Security error: %v", err),

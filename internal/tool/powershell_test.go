@@ -12,7 +12,7 @@ import (
 func TestPowerShellToolExecute(t *testing.T) {
 	// On non-Windows, we can only test the struct creation
 	if runtime.GOOS != "windows" {
-		tool := NewPowerShellTool(false)
+		tool := NewPowerShellTool(PermissionEdit)
 		if tool == nil {
 			t.Fatal("NewPowerShellTool should not return nil")
 		}
@@ -31,7 +31,7 @@ func TestPowerShellToolExecute(t *testing.T) {
 	}
 
 	// On Windows, test actual execution
-	tool := NewPowerShellTool(false)
+	tool := NewPowerShellTool(PermissionEdit)
 	ctx := context.Background()
 
 	// Test simple echo command
@@ -61,7 +61,7 @@ func TestPowerShellToolBackground(t *testing.T) {
 		t.Skip("background test requires Windows")
 	}
 
-	tool := NewPowerShellTool(false)
+	tool := NewPowerShellTool(PermissionEdit)
 	ctx := context.Background()
 
 	input := map[string]any{

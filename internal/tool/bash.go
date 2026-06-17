@@ -25,7 +25,7 @@ const (
 
 // BashTool executes shell commands.
 type BashTool struct {
-	skipPermissions bool
+	permissionLevel PermissionLevel
 	sandbox         sandbox.SandboxManager
 	mu              sync.Mutex
 	commandCwd      string
@@ -35,11 +35,16 @@ type BashTool struct {
 	taskManager     *TaskManager
 }
 
-// NewBashTool creates a new BashTool.
-func NewBashTool(skipPermissions bool) *BashTool {
+// NewBashTool creates a new BashTool with the given PermissionLevel.
+func NewBashTool(level PermissionLevel) *BashTool {
 	return &BashTool{
-		skipPermissions: skipPermissions,
+		permissionLevel: level,
 	}
+}
+
+// effectiveLevel returns the effective PermissionLevel.
+func (t *BashTool) effectiveLevel() PermissionLevel {
+	return t.permissionLevel
 }
 
 // WithSessionID sets the session ID for the BashTool.
@@ -124,7 +129,7 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 
 	// Universal Windows Security (AC4)
 	if runtime.GOOS == "windows" {
-		winGate := NewWindowsCommandGate(t.skipPermissions)
+		winGate := NewWindowsCommandGate(t.effectiveLevel())
 		if err := winGate.CheckPath(t.commandCwd); err != nil {
 			return &ToolResult{
 				Content: fmt.Sprintf("Security error: %v", err),
@@ -135,10 +140,18 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 
 	t.mu.Unlock()
 
+	// AC1: Block all Bash execution at read level
+	if t.effectiveLevel() == PermissionRead {
+		return &ToolResult{
+			Content: "Error: Bash execution is not allowed at read permission level. Use --permission-level analyze or higher.",
+			IsError: true,
+		}, nil
+	}
+
 	// Handle sed simulation (AC5) - after security checks but before timeout/background
 	if isSedInPlace(command) {
 		// Validate path in sed command is within working directory
-		gate := NewCommandGate(t.skipPermissions)
+		gate := NewCommandGate(t.effectiveLevel())
 		if err := gate.CheckCommand(command); err != nil {
 			return &ToolResult{
 				Content: fmt.Sprintf("Security error: %v", err),
@@ -161,7 +174,7 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 	// Handle background execution (AC3)
 	if isBackgroundExecution(input) {
 		// Security: validate command even for background execution
-		gate := NewCommandGate(t.skipPermissions)
+		gate := NewCommandGate(t.effectiveLevel())
 		if err := gate.CheckCommand(command); err != nil {
 			return &ToolResult{
 				Content: fmt.Sprintf("Security error: %v", err),
@@ -172,7 +185,7 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 	}
 
 	// Create command gate for security validation
-	gate := NewCommandGate(t.skipPermissions)
+	gate := NewCommandGate(t.effectiveLevel())
 
 	// Check command against blocked patterns
 	if err := gate.CheckCommand(command); err != nil {
@@ -200,8 +213,8 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 
 	// Check if all paths in the command are within the working directory or scratchpad
 	// Skip validation for cd commands since they change directory state, not file content
-	// Also skip if skipPermissions is true (dangerous bypass)
-	if !t.skipPermissions && !isCdCommand(command) && !validateCommandPaths(command, t.commandCwd, constants.ScratchpadDir()) {
+	// Also skip if permission level is unrestricted (dangerous bypass)
+	if t.effectiveLevel().PathConstrained() && !isCdCommand(command) && !validateCommandPaths(command, t.commandCwd, constants.ScratchpadDir()) {
 		return &ToolResult{
 			Content: fmt.Sprintf("Error: Command '%s' is not allowed. Access outside working directory is prohibited.", command),
 			IsError: true,

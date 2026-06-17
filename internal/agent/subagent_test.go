@@ -309,7 +309,7 @@ func TestLocalSubagentRunner_AC1_InvalidTypeError(t *testing.T) {
 		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
 	}
 
-	readTool := tool.NewReadTool(false, nil)
+	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
 
 	runner := NewLocalSubagentRunner(tools, nil, fastClient())
@@ -351,7 +351,7 @@ func TestLocalSubagentRunner_AC3_ParameterPassthrough(t *testing.T) {
 		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
 	}
 
-	readTool := tool.NewReadTool(false, nil)
+	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
 
 	runner := NewLocalSubagentRunner(tools, nil, fastClient())
@@ -377,7 +377,7 @@ func TestLocalSubagentRunner_AC4_SubagentLifecycle(t *testing.T) {
 		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
 	}
 
-	readTool := tool.NewReadTool(false, nil)
+	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
 
 	runner := NewLocalSubagentRunner(tools, nil, fastClient())
@@ -406,7 +406,7 @@ func TestAsyncSubagentRunner_AC2_AsyncLaunch(t *testing.T) {
 		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
 	}
 
-	readTool := tool.NewReadTool(false, nil)
+	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
 
 	runner := NewAsyncSubagentRunner(tools, nil, fastClient())
@@ -441,7 +441,7 @@ func TestLocalSubagentRunner_AC4_StreamConfigPropagation(t *testing.T) {
 		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
 	}
 
-	readTool := tool.NewReadTool(false, nil)
+	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	runner := NewLocalSubagentRunner([]tool.Tool{readTool}, nil, fastClient())
 
 	// Set up parent config with all inherited fields

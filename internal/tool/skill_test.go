@@ -422,7 +422,7 @@ func TestRegistry_BareMode_NoSkills(t *testing.T) {
 // TestReadTool_WithSkillActivator tests that ReadTool properly uses the activator
 func TestReadTool_WithSkillActivator(t *testing.T) {
 	readCache := NewReadFileCache()
-	readTool := NewReadTool(false, readCache)
+	readTool := NewReadTool(PermissionEdit, readCache)
 
 	// Create a mock activator
 	mockActivator := &mockSkillActivator{skills: []skills.Skill{}}

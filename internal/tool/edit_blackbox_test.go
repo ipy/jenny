@@ -63,7 +63,7 @@ func TestEditTool_AC1_NoPriorRead_BlackBox(t *testing.T) {
 func TestEditTool_AC1_ReadThenEdit_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
-	rt := NewReadTool(false, cache)
+	rt := NewReadTool(PermissionEdit, cache)
 	et := NewEditTool(cache)
 
 	f := filepath.Join(tmpDir, "success.txt")
@@ -102,7 +102,7 @@ func TestEditTool_AC1_ReadThenEdit_BlackBox(t *testing.T) {
 func TestEditTool_AC1_PartialRead_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
-	rt := NewReadTool(false, cache)
+	rt := NewReadTool(PermissionEdit, cache)
 	et := NewEditTool(cache)
 
 	f := filepath.Join(tmpDir, "partial.txt")
@@ -168,7 +168,7 @@ func TestEditTool_AC2_StaleMtime_BlackBox(t *testing.T) {
 
 	t.Run("external write changes mtime", func(t *testing.T) {
 		cache := NewReadFileCache()
-		rt := NewReadTool(false, cache)
+		rt := NewReadTool(PermissionEdit, cache)
 		et := NewEditTool(cache)
 
 		f := filepath.Join(tmpDir, "stale_edit.txt")
@@ -213,7 +213,7 @@ func TestEditTool_AC2_StaleMtime_BlackBox(t *testing.T) {
 
 	t.Run("touch changes mtime", func(t *testing.T) {
 		cache := NewReadFileCache()
-		rt := NewReadTool(false, cache)
+		rt := NewReadTool(PermissionEdit, cache)
 		et := NewEditTool(cache)
 
 		f := filepath.Join(tmpDir, "stale_edit2.txt")
@@ -251,7 +251,7 @@ func TestEditTool_AC2_StaleMtime_BlackBox(t *testing.T) {
 func TestEditTool_AC3_OldEqualsNew_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
-	rt := NewReadTool(false, cache)
+	rt := NewReadTool(PermissionEdit, cache)
 	et := NewEditTool(cache)
 
 	f := filepath.Join(tmpDir, "noop.txt")
@@ -299,7 +299,7 @@ func TestEditTool_AC3_OldEqualsNew_BlackBox(t *testing.T) {
 func TestEditTool_AC4_MultipleMatches_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
-	rt := NewReadTool(false, cache)
+	rt := NewReadTool(PermissionEdit, cache)
 	et := NewEditTool(cache)
 
 	f := filepath.Join(tmpDir, "multi_match.txt")
@@ -377,7 +377,7 @@ func TestEditTool_AC4_MultipleMatches_BlackBox(t *testing.T) {
 func TestEditTool_AC5_IpynbRedirect_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
-	rt := NewReadTool(false, cache)
+	rt := NewReadTool(PermissionEdit, cache)
 	et := NewEditTool(cache)
 
 	// .ipynb file should be redirected
@@ -440,7 +440,7 @@ func TestEditTool_AC5_IpynbRedirect_BlackBox(t *testing.T) {
 func TestEditTool_ZeroMatches_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
-	rt := NewReadTool(false, cache)
+	rt := NewReadTool(PermissionEdit, cache)
 	et := NewEditTool(cache)
 
 	f := filepath.Join(tmpDir, "nomatch.txt")
@@ -482,7 +482,7 @@ func TestEditTool_ZeroMatches_BlackBox(t *testing.T) {
 func TestEditTool_CacheUpdated_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
-	rt := NewReadTool(false, cache)
+	rt := NewReadTool(PermissionEdit, cache)
 	et := NewEditTool(cache)
 
 	f := filepath.Join(tmpDir, "cascade.txt")
@@ -532,7 +532,7 @@ func TestEditTool_CacheUpdated_BlackBox(t *testing.T) {
 func TestEditTool_DiffOutput_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
-	rt := NewReadTool(false, cache)
+	rt := NewReadTool(PermissionEdit, cache)
 	et := NewEditTool(cache)
 
 	f := filepath.Join(tmpDir, "diff_check.txt")
@@ -604,7 +604,7 @@ func TestEditTool_PathTraversal_BlackBox(t *testing.T) {
 func TestEditTool_FileDeletedAfterRead(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
-	rt := NewReadTool(false, cache)
+	rt := NewReadTool(PermissionEdit, cache)
 	et := NewEditTool(cache)
 
 	f := filepath.Join(tmpDir, "deleted_then_create.txt")
@@ -647,7 +647,7 @@ func TestEditTool_FileDeletedAfterRead(t *testing.T) {
 func TestEditTool_BinaryContent_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
-	rt := NewReadTool(false, cache)
+	rt := NewReadTool(PermissionEdit, cache)
 	et := NewEditTool(cache)
 
 	f := filepath.Join(tmpDir, "binary.bin")
@@ -681,7 +681,7 @@ func TestEditTool_BinaryContent_BlackBox(t *testing.T) {
 func TestEditTool_LineEndingNormalization_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
-	rt := NewReadTool(false, cache)
+	rt := NewReadTool(PermissionEdit, cache)
 	et := NewEditTool(cache)
 
 	f := filepath.Join(tmpDir, "crlf.txt")
@@ -719,7 +719,7 @@ func TestEditTool_LineEndingNormalization_BlackBox(t *testing.T) {
 func TestEditTool_OldStringEmptyOnExistingFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
-	rt := NewReadTool(false, cache)
+	rt := NewReadTool(PermissionEdit, cache)
 	et := NewEditTool(cache)
 
 	f := filepath.Join(tmpDir, "empty_old.txt")

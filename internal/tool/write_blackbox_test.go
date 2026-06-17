@@ -62,7 +62,7 @@ func TestWriteTool_AC2_StaleMtime_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Run("external write changes mtime", func(t *testing.T) {
 		cache := NewReadFileCache()
-		rt := NewReadTool(false, cache)
+		rt := NewReadTool(PermissionEdit, cache)
 		wt := NewWriteTool(cache)
 
 		f := filepath.Join(tmpDir, "stale.txt")
@@ -106,7 +106,7 @@ func TestWriteTool_AC2_StaleMtime_BlackBox(t *testing.T) {
 
 	t.Run("touch changes mtime", func(t *testing.T) {
 		cache := NewReadFileCache()
-		rt := NewReadTool(false, cache)
+		rt := NewReadTool(PermissionEdit, cache)
 		wt := NewWriteTool(cache)
 
 		f := filepath.Join(tmpDir, "stale2.txt")
@@ -144,7 +144,7 @@ func TestWriteTool_AC2_StaleMtime_BlackBox(t *testing.T) {
 func TestWriteTool_AC3_ParentDirs_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
-	rt := NewReadTool(false, cache)
+	rt := NewReadTool(PermissionEdit, cache)
 	wt := NewWriteTool(cache)
 
 	// Setup: create a deep file, read it, then remove both file and parents
@@ -199,7 +199,7 @@ func TestWriteTool_AC4_PatchDiff_BlackBox(t *testing.T) {
 	t.Run("modified file produces unified diff", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		cache := NewReadFileCache()
-		rt := NewReadTool(false, cache)
+		rt := NewReadTool(PermissionEdit, cache)
 		wt := NewWriteTool(cache)
 
 		f := filepath.Join(tmpDir, "diff_test.txt")
@@ -248,7 +248,7 @@ func TestWriteTool_AC4_PatchDiff_BlackBox(t *testing.T) {
 	t.Run("new file (empty old content) shows all lines as additions", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		cache := NewReadFileCache()
-		rt := NewReadTool(false, cache)
+		rt := NewReadTool(PermissionEdit, cache)
 		wt := NewWriteTool(cache)
 
 		f := filepath.Join(tmpDir, "new_diff_test.txt")
@@ -291,7 +291,7 @@ func TestWriteTool_AC4_PatchDiff_BlackBox(t *testing.T) {
 func TestWriteTool_AC5_CacheUpdated_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
-	rt := NewReadTool(false, cache)
+	rt := NewReadTool(PermissionEdit, cache)
 	wt := NewWriteTool(cache)
 
 	f := filepath.Join(tmpDir, "ac5_test.txt")
@@ -371,7 +371,7 @@ func TestWriteTool_PathTraversal_BlackBox(t *testing.T) {
 func TestWriteTool_FileDeletedAfterRead(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
-	rt := NewReadTool(false, cache)
+	rt := NewReadTool(PermissionEdit, cache)
 	wt := NewWriteTool(cache)
 
 	f := filepath.Join(tmpDir, "deleted.txt")
@@ -414,7 +414,7 @@ func TestWriteTool_FileDeletedAfterRead(t *testing.T) {
 func TestWriteTool_EmptyContent(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
-	rt := NewReadTool(false, cache)
+	rt := NewReadTool(PermissionEdit, cache)
 	wt := NewWriteTool(cache)
 
 	f := filepath.Join(tmpDir, "empty.txt")

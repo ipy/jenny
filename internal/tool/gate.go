@@ -10,24 +10,34 @@ import (
 
 // CommandGate provides security validation for bash and read commands.
 type CommandGate struct {
-	skipPermissions bool
+	permissionLevel PermissionLevel
 }
 
-// NewCommandGate creates a new CommandGate.
-func NewCommandGate(skipPermissions bool) *CommandGate {
-	return &CommandGate{skipPermissions: skipPermissions}
+// NewCommandGate creates a new CommandGate with the given PermissionLevel.
+func NewCommandGate(level PermissionLevel) *CommandGate {
+	return &CommandGate{permissionLevel: level}
+}
+
+// shouldSkipAll returns true when all gate checks should be bypassed.
+func (g *CommandGate) shouldSkipAll() bool {
+	return g.permissionLevel == PermissionUnrestricted
+}
+
+// shouldSkipPipeline returns true when pipeline segment checks should be skipped.
+func (g *CommandGate) shouldSkipPipeline() bool {
+	return !g.permissionLevel.PipelineEnforced()
 }
 
 // CheckCommand validates a command against blocked patterns.
 // Returns an error with a security message if the command is blocked.
 func (g *CommandGate) CheckCommand(command string) error {
-	if g.skipPermissions {
+	if g.shouldSkipAll() {
 		return nil
 	}
 
 	// Universal Windows Security (AC4)
 	if runtime.GOOS == "windows" {
-		winGate := NewWindowsCommandGate(g.skipPermissions)
+		winGate := NewWindowsCommandGate(g.permissionLevel)
 		if err := winGate.CheckCommand(command); err != nil {
 			return err
 		}
@@ -189,7 +199,7 @@ func (g *CommandGate) checkGitInjection(command string) error {
 // Handles pipes (|), logical OR (||), logical AND (&&), and semicolons (;).
 // Returns an error if any segment is mutating.
 func (g *CommandGate) CheckPipelineSegments(command string) error {
-	if g.skipPermissions {
+	if g.shouldSkipPipeline() {
 		return nil
 	}
 
@@ -313,7 +323,7 @@ func isSegmentReadOnly(segment string) bool {
 // CheckDevicePathsInCommand scans all tokens in a command for device paths.
 // Returns an error if any token references a blocked device path.
 func (g *CommandGate) CheckDevicePathsInCommand(command string) error {
-	if g.skipPermissions {
+	if g.shouldSkipAll() {
 		return nil
 	}
 	for _, token := range strings.Fields(command) {
@@ -332,13 +342,13 @@ func (g *CommandGate) CheckDevicePathsInCommand(command string) error {
 // CheckDevicePath validates that a path is not a device or proc path.
 // Returns an error if the path is blocked.
 func (g *CommandGate) CheckDevicePath(path string) error {
-	if g.skipPermissions {
+	if g.shouldSkipAll() {
 		return nil
 	}
 
 	// Universal Windows Security (AC4)
 	if runtime.GOOS == "windows" {
-		winGate := NewWindowsCommandGate(g.skipPermissions)
+		winGate := NewWindowsCommandGate(g.permissionLevel)
 		if err := winGate.CheckPath(path); err != nil {
 			return err
 		}
