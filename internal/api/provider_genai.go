@@ -25,7 +25,6 @@ type genaiProvider struct {
 	providerName string
 }
 
-
 // newGenAIProvider creates a new GenAI provider.
 func newGenAIProvider(model string) (*genaiProvider, error) {
 	if model == "" {
@@ -219,6 +218,9 @@ func (p *genaiProvider) doSendMessage(ctx context.Context, messages []Message, t
 		if hErr, ok := err.(*HTTPError); ok {
 			hErr.ErrorCategory = classifyErrorDomestic(p.providerName, hErr.StatusCode, hErr.Message)
 			if hErr.ErrorCategory == CategoryUnknown {
+				hErr.ErrorCategory = classifyErrorInternational(p.providerName, hErr.StatusCode, hErr.Message)
+			}
+			if hErr.ErrorCategory == CategoryUnknown {
 				hErr.ErrorCategory = classifyErrorCommon(hErr.StatusCode, hErr.Message)
 			}
 		}
@@ -294,6 +296,9 @@ func (p *genaiProvider) SendMessageStream(ctx context.Context, messages []Messag
 			var httpErr *HTTPError
 			if errors.As(err, &httpErr) {
 				httpErr.ErrorCategory = classifyErrorDomestic(p.providerName, httpErr.StatusCode, httpErr.Message)
+				if httpErr.ErrorCategory == CategoryUnknown {
+					httpErr.ErrorCategory = classifyErrorInternational(p.providerName, httpErr.StatusCode, httpErr.Message)
+				}
 				if httpErr.ErrorCategory == CategoryUnknown {
 					httpErr.ErrorCategory = classifyErrorCommon(httpErr.StatusCode, httpErr.Message)
 				}

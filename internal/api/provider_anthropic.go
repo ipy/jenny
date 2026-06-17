@@ -230,6 +230,9 @@ func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Messag
 		if hErr, ok := err.(*HTTPError); ok {
 			hErr.ErrorCategory = classifyErrorDomestic(p.providerName, hErr.StatusCode, hErr.Message)
 			if hErr.ErrorCategory == CategoryUnknown {
+				hErr.ErrorCategory = classifyErrorInternational(p.providerName, hErr.StatusCode, hErr.Message)
+			}
+			if hErr.ErrorCategory == CategoryUnknown {
 				hErr.ErrorCategory = classifyErrorCommon(hErr.StatusCode, hErr.Message)
 			}
 		}
@@ -483,6 +486,9 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 			var httpErr *HTTPError
 			if errors.As(err, &httpErr) {
 				httpErr.ErrorCategory = classifyErrorDomestic(p.providerName, httpErr.StatusCode, httpErr.Message)
+				if httpErr.ErrorCategory == CategoryUnknown {
+					httpErr.ErrorCategory = classifyErrorInternational(p.providerName, httpErr.StatusCode, httpErr.Message)
+				}
 				if httpErr.ErrorCategory == CategoryUnknown {
 					httpErr.ErrorCategory = classifyErrorCommon(httpErr.StatusCode, httpErr.Message)
 				}
