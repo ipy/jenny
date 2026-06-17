@@ -389,22 +389,10 @@ const (
 	StopReasonStopSeq   StopReason = "stop_sequence"
 )
 
-// MaxTokensCategory represents the category of a max_tokens stop reason.
-type MaxTokensCategory string
-
-const (
-	// CategoryOutputCapHit means the model hit its per-response output token limit.
-	// This occurs when output_tokens >= modelMaxOutputTokens.
-	CategoryOutputCapHit MaxTokensCategory = "output_cap_hit"
-	// CategoryContextExhausted means the request was rejected due to context length.
-	// This occurs when the provider returns a prompt_too_long class error.
-	CategoryContextExhausted MaxTokensCategory = "context_exhausted"
-)
-
 // MaxTokensError is returned when the streaming API returns stop_reason: "max_tokens".
 // It distinguishes between output cap hits and context exhaustion for structured error reporting.
 type MaxTokensError struct {
-	Category        MaxTokensCategory
+	Category        ErrorCategory
 	Model           string
 	OutputTokens    int
 	MaxOutputTokens int

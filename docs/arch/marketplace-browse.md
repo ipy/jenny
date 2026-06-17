@@ -2,12 +2,11 @@
 title: Marketplace Browsing
 slug: marketplace-browse
 priority: P1
-status: in_progress
+status: done
 spec: complete
-code: partial
+code: done
 package: internal/portal
-gaps:
-  - frontend browse view component
+gaps: []
 depends_on: []
 ---
 

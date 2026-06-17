@@ -155,7 +155,8 @@ type StreamResult struct {
 	StopReason      StopReason
 	Usage           Usage
 	Error           string
-	IsPermanent     bool // True for errors that should not be retried (e.g., 4xx except 429)
+	ErrorCategory   ErrorCategory // Normalized error category
+	IsPermanent     bool          // True for errors that should not be retried (e.g., 4xx except 429)
 	Model           string
 	MaxTokensErr    *MaxTokensError // Set when stop_reason is "max_tokens"
 	ContextRejected bool            // True when HTTP 400 / prompt_too_long was received

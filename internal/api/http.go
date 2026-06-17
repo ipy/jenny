@@ -59,9 +59,10 @@ func (c *HTTPClient) Request(ctx context.Context, method, url string, headers ht
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)
 		return &HTTPError{
-			StatusCode:  resp.StatusCode,
-			Message:     string(respBody),
-			ShouldRetry: parseShouldRetry(resp.Header),
+			StatusCode:    resp.StatusCode,
+			Message:       string(respBody),
+			ShouldRetry:   parseShouldRetry(resp.Header),
+			ErrorCategory: classifyErrorCommon(resp.StatusCode, string(respBody)),
 		}
 	}
 
@@ -107,9 +108,10 @@ func (c *HTTPClient) StreamRequest(ctx context.Context, method, url string, head
 		respBody, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		return nil, &HTTPError{
-			StatusCode:  resp.StatusCode,
-			Message:     string(respBody),
-			ShouldRetry: parseShouldRetry(resp.Header),
+			StatusCode:    resp.StatusCode,
+			Message:       string(respBody),
+			ShouldRetry:   parseShouldRetry(resp.Header),
+			ErrorCategory: classifyErrorCommon(resp.StatusCode, string(respBody)),
 		}
 	}
 
@@ -129,9 +131,10 @@ func parseShouldRetry(h http.Header) *bool {
 
 // HTTPError represents an HTTP error response.
 type HTTPError struct {
-	StatusCode  int
-	Message     string
-	ShouldRetry *bool // from x-should-retry header; nil if not present
+	StatusCode    int
+	Message       string
+	ShouldRetry   *bool         // from x-should-retry header; nil if not present
+	ErrorCategory ErrorCategory // Normalized error category
 }
 
 func (e *HTTPError) Error() string {

@@ -87,10 +87,22 @@ func isRetryable(statusCode int, err error) bool {
 			return false
 		}
 
-		// Check x-should-retry header if the error carries it
+		// Check HTTPError for ErrorCategory and ShouldRetry
 		var httpErr *HTTPError
-		if errors.As(err, &httpErr) && httpErr.ShouldRetry != nil {
-			return *httpErr.ShouldRetry
+		if errors.As(err, &httpErr) {
+			if httpErr.ShouldRetry != nil {
+				return *httpErr.ShouldRetry
+			}
+			// Use category mapping if category is set
+			if httpErr.ErrorCategory != "" && httpErr.ErrorCategory != CategoryUnknown {
+				switch httpErr.ErrorCategory {
+				case CategoryRateLimitRPM, CategoryRateLimitTPM, CategoryRateLimitConcurrency, CategoryRateLimitGeneric,
+					CategoryServerOverload, CategoryServerError, CategoryTimeout:
+					return true
+				default:
+					return false
+				}
+			}
 		}
 
 		// Transient network errors are retryable.
@@ -113,6 +125,8 @@ func isRetryable(statusCode int, err error) bool {
 	case http.StatusGatewayTimeout: // 504
 		return true
 	case StatusProxyError: // 529 (Overloaded)
+		return true
+	case 498: // Server Overload (Groq)
 		return true
 	case http.StatusRequestTimeout: // 408
 		return true

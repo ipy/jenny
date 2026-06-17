@@ -50,6 +50,7 @@ type Flags struct {
 	DisableAutoCompact     bool     `koanf:"disable-auto-compact"`  // --disable-auto-compact: JENNY_DISABLE_AUTO_COMPACT
 	EnableSessionMemory    bool     `koanf:"enable-session-memory"` // --enable-session-memory: JENNY_ENABLE_SESSION_MEMORY
 	DisableAutoMemory      bool     `koanf:"disable-auto-memory"`   // --disable-auto-memory: JENNY_DISABLE_AUTO_MEMORY
+	RoutesProfile          string   `koanf:"routes-profile"`        // --routes-profile: JENNY_ROUTES_PROFILE: select active routing profile
 }
 
 // envTransform transforms environment variable names from JENNY_* format to

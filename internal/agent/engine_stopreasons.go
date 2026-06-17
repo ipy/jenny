@@ -183,7 +183,7 @@ func (e *QueryEngine) handleStopMaxTokens(resp *api.Response, streamResult api.S
 		data, _ := json.Marshal(msg)
 		fmt.Fprintln(os.Stdout, string(data))
 	}
-	category := api.MaxTokensCategory("unknown")
+	category := api.CategoryUnknown
 	if streamResult.MaxTokensErr != nil {
 		category = streamResult.MaxTokensErr.Category
 	}
