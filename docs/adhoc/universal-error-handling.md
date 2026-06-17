@@ -1,7 +1,8 @@
 ---
 title: Universal LLM API Error Handling
 slug: universal-error-handling
-status: in_progress
+status: phase3
+Phase 2: done
 date: 2025-07-10
 package: internal/api
 gaps:
@@ -329,7 +330,7 @@ Honor `Retry-After` header (OpenRouter, Claude provide this).
 - [x] Add `ErrorCategory` field to `HTTPError` and `StreamResult`
 - [x] Implement `classifyErrorCommon` in new `error_classify.go`
 - [x] Replace `isPromptTooLong*` calls with `classifyError`
-- Update `isRetryable` with category priority + 498
+- [x] Update isRetryable with category priority + 498
 
 ### Phase 3: Sticky Router category-aware decisions
 

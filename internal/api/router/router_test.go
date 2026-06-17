@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/knadh/koanf/v2"
 )
 
 // TestConfigParsing tests parsing of a valid YAML config.
@@ -383,5 +385,159 @@ func TestHealthRegistry_RecordSuccess(t *testing.T) {
 
 	if registry.GetFailureCount("provider", "account", "model", "key1") != 0 {
 		t.Error("expected failure count to be 0 after success")
+	}
+}
+
+// TestLoadConfigFromKoanf tests the unified config loading path.
+func TestLoadConfigFromKoanf(t *testing.T) {
+	tests := []struct {
+		name       string
+		setup      func(k *koanf.Koanf)
+		envSetup   func()
+		verify     func(t *testing.T, cfg *Config, err error)
+		cleanupEnv func()
+	}{
+		{
+			name: "no routes key returns empty config with profiles",
+			setup: func(k *koanf.Koanf) {
+				// empty
+			},
+			verify: func(t *testing.T, cfg *Config, err error) {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if cfg == nil {
+					t.Fatal("expected non-nil config")
+				}
+				if cfg.Profiles == nil {
+					t.Error("expected Profiles map to be initialized")
+				}
+				if len(cfg.Providers) != 0 {
+					t.Errorf("expected 0 providers, got %d", len(cfg.Providers))
+				}
+			},
+		},
+		{
+			name: "valid routes unmarshal",
+			setup: func(k *koanf.Koanf) {
+				k.Set("routes.providers", []map[string]any{
+					{
+						"name": "p1",
+						"type": "openai",
+					},
+				})
+				k.Set("routes.profiles", map[string]any{
+					"default": map[string]any{
+						"routing-mode": "balanced",
+					},
+				})
+			},
+			verify: func(t *testing.T, cfg *Config, err error) {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if len(cfg.Providers) != 1 || cfg.Providers[0].Name != "p1" {
+					t.Errorf("unexpected providers: %+v", cfg.Providers)
+				}
+				if cfg.Profiles["default"].RoutingMode != "balanced" {
+					t.Errorf("unexpected routing-mode: %s", cfg.Profiles["default"].RoutingMode)
+				}
+			},
+		},
+		{
+			name: "type mismatch error",
+			setup: func(k *koanf.Koanf) {
+				k.Set("routes.providers", "not a slice")
+			},
+			verify: func(t *testing.T, cfg *Config, err error) {
+				if err == nil {
+					t.Error("expected error for type mismatch, got nil")
+				}
+			},
+		},
+		{
+			name: "env provider merge and dedup",
+			envSetup: func() {
+				t.Setenv("ANTHROPIC_API_KEY", "env-key")
+				t.Setenv("ANTHROPIC_MODEL", "env-model")
+			},
+			setup: func(k *koanf.Koanf) {
+				k.Set("routes.providers", []map[string]any{
+					{
+						"name": "anthropic", // same name as env synthesizer uses
+						"type": "anthropic",
+						"accounts": []map[string]any{
+							{"name": "file-account", "keys": []string{"file-key"}},
+						},
+					},
+				})
+			},
+			verify: func(t *testing.T, cfg *Config, err error) {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				// Should have only 1 anthropic provider (from file, since it dedups)
+				count := 0
+				var p *Provider
+				for i := range cfg.Providers {
+					if cfg.Providers[i].Name == "anthropic" {
+						count++
+						p = &cfg.Providers[i]
+					}
+				}
+				if count != 1 {
+					t.Errorf("expected 1 anthropic provider, got %d", count)
+				}
+				if p.Accounts[0].Name != "file-account" {
+					t.Errorf("expected file-account to take precedence, got %s", p.Accounts[0].Name)
+				}
+			},
+		},
+		{
+			name: "defaults applied",
+			setup: func(k *koanf.Koanf) {
+				k.Set("routes.profiles", map[string]any{
+					"p1": map[string]any{},
+				})
+				k.Set("routes.providers", []map[string]any{
+					{
+						"name": "p1",
+						"accounts": []map[string]any{
+							{"name": "a1"},
+						},
+					},
+				})
+			},
+			verify: func(t *testing.T, cfg *Config, err error) {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				prof := cfg.Profiles["p1"]
+				if prof.RoutingMode != "sticky" {
+					t.Errorf("expected default routing-mode sticky, got %q", prof.RoutingMode)
+				}
+				if prof.RetryPolicy.MaxRetries != 5 {
+					t.Errorf("expected default max-retries 5, got %d", prof.RetryPolicy.MaxRetries)
+				}
+				if cfg.Providers[0].Accounts[0].Priority != 1 {
+					t.Errorf("expected default account priority 1, got %d", cfg.Providers[0].Accounts[0].Priority)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			k := koanf.New(".")
+			if tt.envSetup != nil {
+				tt.envSetup()
+			}
+			if tt.setup != nil {
+				tt.setup(k)
+			}
+
+			cfg, err := LoadConfigFromKoanf(k)
+			tt.verify(t, cfg, err)
+		})
 	}
 }
