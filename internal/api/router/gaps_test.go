@@ -3,11 +3,13 @@ package router
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	koanfjson "github.com/knadh/koanf/parsers/json"
+	"github.com/knadh/koanf/providers/rawbytes"
+	"github.com/knadh/koanf/v2"
 )
 
 // makeTwoKeyProvider returns a config with a single provider/account containing
@@ -82,35 +84,43 @@ func TestBalanced_ReevaluatesPerTurn(t *testing.T) {
 	}
 }
 
-// TestLoadConfig_EnvMergeWithYAML asserts that when a YAML config exists, env
+// TestLoadConfig_EnvMergeWithJSON asserts that when a JSON config exists, env
 // variables do NOT silently replace it. Instead, providers synthesized from env
-// are appended to the YAML's providers list (per spec: "Router may still allow
-// merging environment-based keys into a temporary legacy provider for debugging").
-func TestLoadConfig_EnvMergeWithYAML(t *testing.T) {
-	yamlContent := `
-providers:
-  - name: "yaml-provider"
-    type: "openai"
-    base-url: "https://api.example.com"
-    accounts:
-      - name: "default"
-        keys: ["yaml-key"]
-    models:
-      - name: "yaml-model"
-profiles:
-  default:
-    targets:
-      - match: { models: ["yaml-model"] }
-`
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "routes.yaml")
-	if err := os.WriteFile(cfgPath, []byte(yamlContent), 0644); err != nil {
-		t.Fatalf("write yaml: %v", err)
-	}
+// are appended to the JSON's providers list.
+func TestLoadConfig_EnvMergeWithJSON(t *testing.T) {
+	jsonContent := `{
+  "routes": {
+    "providers": [
+      {
+        "name": "json-provider",
+        "type": "openai",
+        "base-url": "https://api.example.com",
+        "accounts": [
+          { "name": "default", "keys": ["json-key"] }
+        ],
+        "models": [
+          { "name": "json-model" }
+        ]
+      }
+    ],
+    "profiles": {
+      "default": {
+        "targets": [
+          { "match": { "models": ["json-model"] } }
+        ]
+      }
+    }
+  }
+}`
 	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-merge")
 	t.Setenv("ANTHROPIC_MODEL", "claude-opus-4-5-20251101")
 
-	cfg, err := LoadConfig(cfgPath)
+	k := koanf.New(".")
+	if err := k.Load(rawbytes.Provider([]byte(jsonContent)), koanfjson.Parser()); err != nil {
+		t.Fatalf("load json: %v", err)
+	}
+
+	cfg, err := LoadConfigFromKoanf(k)
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -118,21 +128,22 @@ profiles:
 		t.Fatal("expected non-nil config")
 	}
 
-	hasYAML := false
-	hasLegacy := false
+	hasJSON := false
+	hasEnv := false
 	for _, p := range cfg.Providers {
-		if p.Name == "yaml-provider" {
-			hasYAML = true
+		if p.Name == "json-provider" {
+			hasJSON = true
 		}
-		if p.Name == "legacy-anthropic" {
-			hasLegacy = true
+		if p.Name == "anthropic" {
+			hasEnv = true
 		}
 	}
-	if !hasYAML {
-		t.Error("yaml-provider missing after merge")
+
+	if !hasJSON {
+		t.Error("missing json-provider")
 	}
-	if !hasLegacy {
-		t.Error("legacy-anthropic provider not merged from env")
+	if !hasEnv {
+		t.Error("missing legacy-anthropic (env-derived) provider")
 	}
 }
 
@@ -172,10 +183,11 @@ func TestSticky_401DoesNotRetry(t *testing.T) {
 				Targets:       []Target{{Match: MatchClause{Models: []string{"m"}}}},
 				RoutingMode:   "sticky",
 				RetryPolicy:   RetryPolicy{MaxRetries: 3, Backoff: "exponential"},
-				AllowFallback: new(true),
+				AllowFallback: new(bool),
 			},
 		},
 	}
+	*cfg.Profiles["default"].AllowFallback = true
 	r := NewRouter(cfg)
 	sc := NewStickyClient("s1", r)
 	// SendMessage should NOT loop 3 times on the same key for 401.

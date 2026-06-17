@@ -26,7 +26,7 @@ func SynthesizeConfigFromEnv() *Config {
 			baseURL = "https://api.openai.com/v1"
 		}
 		cfg.Providers = append(cfg.Providers, Provider{
-			Name:    "legacy-openai",
+			Name:    "openai",
 			Type:    "openai",
 			BaseURL: baseURL,
 			Accounts: []Account{{
@@ -71,7 +71,7 @@ func SynthesizeConfigFromEnv() *Config {
 
 		if len(apiKeys) > 0 {
 			cfg.Providers = append(cfg.Providers, Provider{
-				Name:    "legacy-genai",
+				Name:    "genai",
 				Type:    "gemini",
 				BaseURL: baseURL,
 				Accounts: []Account{{
@@ -102,7 +102,7 @@ func SynthesizeConfigFromEnv() *Config {
 		}
 
 		cfg.Providers = append(cfg.Providers, Provider{
-			Name:    "legacy-anthropic",
+			Name:    "anthropic",
 			Type:    "anthropic",
 			BaseURL: baseURL,
 			Accounts: []Account{{

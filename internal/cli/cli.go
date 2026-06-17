@@ -62,7 +62,7 @@ func envTransform(s string) string {
 // Parse parses command-line flags using koanf with layered configuration.
 // Configuration precedence (highest to lowest): CLI flags > env vars > JSON config.
 // Returns an error if parsing fails or if no prompt is provided.
-func Parse() (*Flags, error) {
+func Parse() (*Flags, *koanf.Koanf, error) {
 	// Create koanf instance with "." delimiter.
 	k := koanf.New(".")
 
@@ -221,7 +221,7 @@ func Parse() (*Flags, error) {
 			// pflag already invoked flags.Usage() before returning ErrHelp.
 			os.Exit(0)
 		}
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Load CLI flags into koanf (highest precedence).
@@ -233,7 +233,7 @@ func Parse() (*Flags, error) {
 	// Unmarshal into Flags struct.
 	var parsed Flags
 	if err := k.Unmarshal("", &parsed); err != nil {
-		return nil, fmt.Errorf("unmarshalling flags: %w", err)
+		return nil, nil, fmt.Errorf("unmarshalling flags: %w", err)
 	}
 
 	// Handle special fields that can't be unmarshalled directly:
@@ -243,7 +243,7 @@ func Parse() (*Flags, error) {
 	// --version / --print-system-prompt: caller will print and exit before any
 	// session or API initialisation, so a prompt is not required.
 	if parsed.Version || parsed.PrintSystemPrompt {
-		return &parsed, nil
+		return &parsed, k, nil
 	}
 
 	// Fallback: if -p is empty but there are positional args, use them as the prompt.
@@ -254,22 +254,22 @@ func Parse() (*Flags, error) {
 	// Validate: require a prompt.
 	if parsed.Prompt == "" {
 		flags.Usage()
-		return nil, fmt.Errorf("no prompt provided")
+		return nil, nil, fmt.Errorf("no prompt provided")
 	}
 
 	// Validate: --fork-session requires -r/--resume.
 	if parsed.ForkSession && parsed.SessionResume == "" {
-		return nil, fmt.Errorf("--fork-session requires -r/--resume")
+		return nil, nil, fmt.Errorf("--fork-session requires -r/--resume")
 	}
 
 	// Validate: --continue is mutually exclusive with -r/--resume.
 	if parsed.Continue && parsed.SessionResume != "" {
-		return nil, fmt.Errorf("--continue is mutually exclusive with -r/--resume")
+		return nil, nil, fmt.Errorf("--continue is mutually exclusive with -r/--resume")
 	}
 
 	// Validate: --continue requires session persistence.
 	if parsed.Continue && parsed.NoSessionPersistence {
-		return nil, fmt.Errorf("--continue requires session persistence")
+		return nil, nil, fmt.Errorf("--continue requires session persistence")
 	}
 
 	// Validate: --permission-level must be a valid value if provided.
@@ -283,7 +283,7 @@ func Parse() (*Flags, error) {
 			}
 		}
 		if !found {
-			return nil, fmt.Errorf("invalid --permission-level %q; valid values: %s", parsed.PermissionLevel, strings.Join(validLevels, ", "))
+			return nil, nil, fmt.Errorf("invalid --permission-level %q; valid values: %s", parsed.PermissionLevel, strings.Join(validLevels, ", "))
 		}
 	}
 
@@ -298,11 +298,11 @@ func Parse() (*Flags, error) {
 			}
 		}
 		if !found {
-			return nil, fmt.Errorf("invalid --redact %q; valid values: %s", parsed.RedactMode, strings.Join(validModes, ", "))
+			return nil, nil, fmt.Errorf("invalid --redact %q; valid values: %s", parsed.RedactMode, strings.Join(validModes, ", "))
 		}
 	}
 
-	return &parsed, nil
+	return &parsed, k, nil
 }
 
 // StreamMessage represents a message in the stream-json output.

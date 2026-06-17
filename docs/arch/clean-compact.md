@@ -18,7 +18,7 @@ Two housekeeping subcommands for `~/.jenny/sessions/` data. They give the user e
 
 | Subcommand | What it removes | What it preserves |
 |------------|-----------------|-------------------|
-| `jenny clean` | Every `sessions/<id>/` directory under `$JENNY_HOME` | All top-level config files: `.env`, `routes.yaml`, `skills/`, `.jennyignore`, top-level `scratchpad/`, top-level `spills/` |
+| `jenny clean` | Every `sessions/<id>/` directory under `$JENNY_HOME` | All top-level config files: `.env`, `config.json`, `skills/`, `.jennyignore`, top-level `scratchpad/`, top-level `spills/` |
 | `jenny compact` | The on-disk session directory (replaced with `<id>.tar.gz` archive) | All bytes inside the session, packaged under `<id>/` in the archive |
 
 `clean` is destructive — it deletes the entire `sessions/` tree. `compact` is lossless — it archives then deletes, with resume transparently re-extracting on demand.

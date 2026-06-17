@@ -1,52 +1,65 @@
 package router
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
+	koanfjson "github.com/knadh/koanf/parsers/json"
+	"github.com/knadh/koanf/providers/rawbytes"
 	"github.com/knadh/koanf/v2"
 )
 
-// TestConfigParsing tests parsing of a valid YAML config.
+// TestConfigParsing tests parsing of a valid JSON config via koanf.
 func TestConfigParsing(t *testing.T) {
-	yamlContent := `
-providers:
-  - name: "deepseek"
-    type: "openai"
-    base-url: "https://api.deepseek.com"
-    accounts:
-      - name: "personal"
-        keys: ["sk-ds-1", "sk-ds-2"]
-        priority: 1
-    models:
-      - name: "deepseek-chat"
-        tags: ["cheap", "text"]
-        priority: 1
-        context-window: 64000
-        max-output: 4000
+	jsonContent := `{
+  "routes": {
+    "providers": [
+      {
+        "name": "deepseek",
+        "type": "openai",
+        "base-url": "https://api.deepseek.com",
+        "accounts": [
+          {
+            "name": "personal",
+            "keys": ["sk-ds-1", "sk-ds-2"],
+            "priority": 1
+          }
+        ],
+        "models": [
+          {
+            "name": "deepseek-chat",
+            "tags": ["cheap", "text"],
+            "priority": 1,
+            "context-window": 64000,
+            "max-output": 4000
+          }
+        ]
+      }
+    ],
+    "profiles": {
+      "default": {
+        "targets": [
+          { "match": { "models": ["deepseek:deepseek-chat"] } },
+          { "match": { "tags": ["cheap"] } }
+        ],
+        "routing-mode": "sticky",
+        "selection-policy": "round_robin",
+        "retry-policy": {
+          "max-retries": 3,
+          "backoff": "exponential"
+        },
+        "allow-fallback": true
+      }
+    }
+  }
+}`
 
-profiles:
-  default:
-    targets:
-      - match: { models: ["deepseek:deepseek-chat"] }
-      - match: { tags: ["cheap"] }
-    routing-mode: "sticky"
-    selection-policy: "round_robin"
-    retry-policy:
-      max-retries: 3
-      backoff: "exponential"
-    allow-fallback: true
-`
-
-	tmpDir := t.TempDir()
-	cfgPath := filepath.Join(tmpDir, "routes.yaml")
-	if err := os.WriteFile(cfgPath, []byte(yamlContent), 0644); err != nil {
-		t.Fatalf("failed to write test config: %v", err)
+	k := koanf.New(".")
+	if err := k.Load(rawbytes.Provider([]byte(jsonContent)), koanfjson.Parser()); err != nil {
+		t.Fatalf("failed to load test config: %v", err)
 	}
 
-	cfg, err := LoadConfig(cfgPath)
+	cfg, err := LoadConfigFromKoanf(k)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -101,46 +114,34 @@ profiles:
 	}
 }
 
-// TestConfigParsing_Invalid tests that invalid YAML returns an error.
+// TestConfigParsing_Invalid tests that invalid JSON returns an error.
 func TestConfigParsing_Invalid(t *testing.T) {
-	invalidYAML := `
-providers:
-  - name: "test"
-    type: "openai"
-    base_url: "https://api.example.com"
-    accounts:
-      - name: "test"
-        keys: ["key1"]
-    models:
-      - name: "model"
-        tags: [invalid yaml here
-`
+	invalidJSON := `{ "routes": { "providers": [ { "name": "test", "tags": [invalid json here] } ] } }`
 
-	tmpDir := t.TempDir()
-	cfgPath := filepath.Join(tmpDir, "routes.yaml")
-	if err := os.WriteFile(cfgPath, []byte(invalidYAML), 0644); err != nil {
-		t.Fatalf("failed to write test config: %v", err)
-	}
-
-	_, err := LoadConfig(cfgPath)
+	k := koanf.New(".")
+	// Note: k.Load will fail if JSON is invalid
+	err := k.Load(rawbytes.Provider([]byte(invalidJSON)), koanfjson.Parser())
 	if err == nil {
-		t.Fatal("expected error for invalid YAML")
+		t.Fatal("expected error for invalid JSON load")
 	}
 }
 
-// TestConfigParsing_NotFound tests that missing config returns nil, nil.
+// TestConfigParsing_NotFound tests that empty koanf returns a default config.
 func TestConfigParsing_NotFound(t *testing.T) {
-	cfg, err := LoadConfig("/nonexistent/path/routes.yaml")
+	cfg, err := LoadConfigFromKoanf(nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg != nil {
-		t.Error("expected nil config for missing file")
+	if cfg == nil {
+		t.Fatal("expected non-nil config")
+	}
+	if len(cfg.Profiles) != 0 {
+		t.Error("expected empty profiles for missing config")
 	}
 }
 
-// TestLegacyEnvSync tests that environment variables are synthesized into config.
-func TestLegacyEnvSync(t *testing.T) {
+// TestZeroConfigEnvSync tests that environment variables are synthesized into config.
+func TestZeroConfigEnvSync(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
 	t.Setenv("ANTHROPIC_MODEL", "claude-opus-4-5-20251101")
 	t.Setenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")

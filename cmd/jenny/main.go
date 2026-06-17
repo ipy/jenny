@@ -136,7 +136,7 @@ func run() error {
 	}
 
 	// Parse command-line flags
-	flags, err := cli.Parse()
+	flags, k, err := cli.Parse()
 	if err != nil {
 		return err
 	}
@@ -172,7 +172,7 @@ func run() error {
 
 	// Initialize the multi-provider router from config.json via koanf (or env).
 	// Idempotent: subsequent calls are no-ops.
-	routerCfg, err := router.LoadConfigFromKoanf(nil)
+	routerCfg, err := router.LoadConfigFromKoanf(k)
 	if err != nil {
 		log.Warn("router config load failed", "err", err)
 	}

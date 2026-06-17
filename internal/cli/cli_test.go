@@ -16,7 +16,7 @@ func TestParseNoArgs(t *testing.T) {
 
 	os.Args = []string{"jenny"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err == nil {
 		t.Error("expected error for no prompt")
 	}
@@ -32,7 +32,7 @@ func TestParsePositionalArg(t *testing.T) {
 
 	os.Args = []string{"jenny", "hello world"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestParsePFlag(t *testing.T) {
 
 	os.Args = []string{"jenny", "--print", "hello from -p"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestParseMultiplePFlags(t *testing.T) {
 
 	os.Args = []string{"jenny", "--print", "first", "--print", "second", "--print", "third"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestParseModelFlag(t *testing.T) {
 
 	os.Args = []string{"jenny", "--model", "deepseek-v4-flash", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestParseOutputFormatFlag(t *testing.T) {
 
 	os.Args = []string{"jenny", "--output-format", "stream-json", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestParseMaxIterationsFlag(t *testing.T) {
 
 	os.Args = []string{"jenny", "--max-iterations", "50", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestParseMaxIterationsDefault(t *testing.T) {
 
 	os.Args = []string{"jenny", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestParseVerboseFlag(t *testing.T) {
 
 	os.Args = []string{"jenny", "--verbose", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestParseIncludePartialMessagesFlag(t *testing.T) {
 
 	os.Args = []string{"jenny", "--include-partial-messages", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestParseSkipPermissionsFlag(t *testing.T) {
 
 	os.Args = []string{"jenny", "--dangerously-skip-permissions", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestParseSessionResumeFlag(t *testing.T) {
 
 	os.Args = []string{"jenny", "-r", "sess_12345", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -206,7 +206,7 @@ func TestParseMultipleFlags(t *testing.T) {
 
 	os.Args = []string{"jenny", "--model", "gpt-4", "--output-format", "stream-json", "--verbose", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestParsePositionalWithPFlag(t *testing.T) {
 
 	os.Args = []string{"jenny", "--print", "from -p", "from positional"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -248,7 +248,7 @@ func TestParseDoubleDash(t *testing.T) {
 
 	os.Args = []string{"jenny", "--", "hello world"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -263,7 +263,7 @@ func TestParseContinueFlag(t *testing.T) {
 
 	os.Args = []string{"jenny", "--continue", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -278,7 +278,7 @@ func TestParseContinueMutuallyExclusiveWithResume(t *testing.T) {
 
 	os.Args = []string{"jenny", "--continue", "-r", "sess_12345", "--print", "hello"}
 
-	_, err := Parse()
+	_, _, err := Parse()
 	if err == nil {
 		t.Error("expected error for --continue with -r")
 	}
@@ -290,7 +290,7 @@ func TestParseContinueMutuallyExclusiveWithNoSessionPersistence(t *testing.T) {
 
 	os.Args = []string{"jenny", "--continue", "--no-session-persistence", "--print", "hello"}
 
-	_, err := Parse()
+	_, _, err := Parse()
 	if err == nil {
 		t.Error("expected error for --continue with --no-session-persistence")
 	}
@@ -302,7 +302,7 @@ func TestParseForkSessionRequiresResume(t *testing.T) {
 
 	os.Args = []string{"jenny", "--fork-session", "--print", "hello"}
 
-	_, err := Parse()
+	_, _, err := Parse()
 	if err == nil {
 		t.Error("expected error for --fork-session without -r")
 	}
@@ -314,7 +314,7 @@ func TestParseForkSessionWithResume(t *testing.T) {
 
 	os.Args = []string{"jenny", "--fork-session", "-r", "sess_12345", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -332,7 +332,7 @@ func TestParseMCPConfigSingleFlag(t *testing.T) {
 
 	os.Args = []string{"jenny", "--mcp-config", "/path/to/config.json", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -350,7 +350,7 @@ func TestParseMCPConfigMultipleFlags(t *testing.T) {
 
 	os.Args = []string{"jenny", "--mcp-config", "/path/a.json", "--mcp-config", "/path/b.json", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -371,7 +371,7 @@ func TestParseMCPConfigNoFlag(t *testing.T) {
 
 	os.Args = []string{"jenny", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -387,7 +387,7 @@ func TestParseFeatureFlagsRemoved(t *testing.T) {
 
 	os.Args = []string{"jenny", "--ff", "redact=disabled", "--print", "hello"}
 
-	_, err := Parse()
+	_, _, err := Parse()
 	if err == nil {
 		t.Error("expected error for unknown --ff flag (feature flags were removed)")
 	}
@@ -475,7 +475,7 @@ func TestHelpPrintedOnce(t *testing.T) {
 	if os.Getenv("JENNY_HELP_CHILD") == "1" {
 		// Child: run cli.Parse with -h; it will os.Exit(0) after printing usage.
 		os.Args = []string{"jenny", "-h"}
-		_, _ = Parse()
+		_, _, _ = Parse()
 		return
 	}
 
@@ -505,7 +505,7 @@ func TestParsePermissionLevelFlag(t *testing.T) {
 
 	os.Args = []string{"jenny", "--permission-level", "read", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -521,7 +521,7 @@ func TestParsePermissionLevelFlagAllValues(t *testing.T) {
 	for _, level := range []string{"read", "analyze", "edit", "execute", "unrestricted"} {
 		os.Args = []string{"jenny", "--permission-level", level, "--print", "hello"}
 
-		flags, err := Parse()
+		flags, _, err := Parse()
 		if err != nil {
 			t.Errorf("unexpected error for level %q: %v", level, err)
 		}
@@ -537,7 +537,7 @@ func TestParsePermissionLevelInvalid(t *testing.T) {
 
 	os.Args = []string{"jenny", "--permission-level", "invalid", "--print", "hello"}
 
-	_, err := Parse()
+	_, _, err := Parse()
 	if err == nil {
 		t.Error("expected error for invalid permission level, got nil")
 	}
@@ -553,7 +553,7 @@ func TestParsePermissionLevelEmpty(t *testing.T) {
 	// No --permission-level flag: should be empty string (default)
 	os.Args = []string{"jenny", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -569,7 +569,7 @@ func TestParsePermissionLevelWithSkipPermissions(t *testing.T) {
 	// Both flags set: Parse should succeed; resolution happens in main.go
 	os.Args = []string{"jenny", "--dangerously-skip-permissions", "--permission-level", "read", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -590,7 +590,7 @@ func TestParsePermissionLevelEnvVar(t *testing.T) {
 
 	os.Args = []string{"jenny", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -608,7 +608,7 @@ func TestParseRedactModeDefault(t *testing.T) {
 	os.Unsetenv("JENNY_REDACT")
 	os.Args = []string{"jenny", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -626,7 +626,7 @@ func TestParseRedactModeEnvVar(t *testing.T) {
 
 	os.Args = []string{"jenny", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -644,7 +644,7 @@ func TestParseRedactModeFlagOverridesEnv(t *testing.T) {
 
 	os.Args = []string{"jenny", "--redact", "disabled", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -660,7 +660,7 @@ func TestParseRedactModeInvalid(t *testing.T) {
 
 	os.Args = []string{"jenny", "--redact", "banana", "--print", "hello"}
 
-	_, err := Parse()
+	_, _, err := Parse()
 	if err == nil {
 		t.Error("expected error for invalid --redact value")
 	}
@@ -675,7 +675,7 @@ func TestParseTranscriptDirEnvVar(t *testing.T) {
 
 	os.Args = []string{"jenny", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -693,7 +693,7 @@ func TestParseTranscriptDirFlagOverridesEnv(t *testing.T) {
 
 	os.Args = []string{"jenny", "--transcript-dir", "/tmp/from-flag", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -711,7 +711,7 @@ func TestParseMaxToolConcurrencyEnvVar(t *testing.T) {
 
 	os.Args = []string{"jenny", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -729,7 +729,7 @@ func TestParseMaxToolConcurrencyFlagOverridesEnv(t *testing.T) {
 
 	os.Args = []string{"jenny", "--max-tool-concurrency", "8", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -747,7 +747,7 @@ func TestParseCompactKeepArchiveEnvVar(t *testing.T) {
 
 	os.Args = []string{"jenny", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -765,7 +765,7 @@ func TestParseCompactKeepArchiveFlagOverridesEnv(t *testing.T) {
 
 	os.Args = []string{"jenny", "--compact-keep-archive", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -783,7 +783,7 @@ func TestParseDisableCompactEnvVar(t *testing.T) {
 
 	os.Args = []string{"jenny", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -801,7 +801,7 @@ func TestParseDisableCompactFlagOverridesEnv(t *testing.T) {
 
 	os.Args = []string{"jenny", "--disable-compact", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -819,7 +819,7 @@ func TestParseDisableAutoCompactEnvVar(t *testing.T) {
 
 	os.Args = []string{"jenny", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -837,7 +837,7 @@ func TestParseEnableSessionMemoryEnvVar(t *testing.T) {
 
 	os.Args = []string{"jenny", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -855,7 +855,7 @@ func TestParseDisableAutoMemoryEnvVar(t *testing.T) {
 
 	os.Args = []string{"jenny", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -873,7 +873,7 @@ func TestParseDisableAutoMemoryFlagOverridesEnv(t *testing.T) {
 
 	os.Args = []string{"jenny", "--disable-auto-memory", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -917,7 +917,7 @@ func TestParseBoolFlagExplicitFalseOverridesConfig(t *testing.T) {
 	// The CLI flag must win over the config.json values.
 	os.Args = []string{"jenny", "--disable-compact=false", "--disable-auto-memory=false", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -957,7 +957,7 @@ func TestParseBoolFlagAbsentUsesConfig(t *testing.T) {
 
 	os.Args = []string{"jenny", "--print", "hello"}
 
-	flags, err := Parse()
+	flags, _, err := Parse()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
