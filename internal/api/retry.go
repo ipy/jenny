@@ -97,9 +97,10 @@ func isRetryable(statusCode int, err error) bool {
 			if httpErr.ErrorCategory != "" && httpErr.ErrorCategory != CategoryUnknown {
 				switch httpErr.ErrorCategory {
 				case CategoryRateLimitRPM, CategoryRateLimitTPM, CategoryRateLimitConcurrency, CategoryRateLimitGeneric,
-					CategoryServerOverload, CategoryServerError, CategoryTimeout:
+					CategoryServerOverload, CategoryServerError, CategoryTimeout, CategoryContextExhausted:
 					return true
-				default:
+				case CategoryQuotaExhausted, CategoryPaymentRequired, CategoryContentFilter,
+					CategoryAuth, CategoryPermission, CategoryModelNotFound:
 					return false
 				}
 			}
@@ -112,7 +113,7 @@ func isRetryable(statusCode int, err error) bool {
 		}
 	}
 
-	// Retryable status codes
+	// Fallback to status codes if no category was found
 	switch statusCode {
 	case http.StatusTooManyRequests: // 429
 		return true
@@ -127,6 +128,8 @@ func isRetryable(statusCode int, err error) bool {
 	case StatusProxyError: // 529 (Overloaded)
 		return true
 	case 498: // Server Overload (Groq)
+		return true
+	case 413: // Context Exhausted
 		return true
 	case http.StatusRequestTimeout: // 408
 		return true

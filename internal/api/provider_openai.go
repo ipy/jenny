@@ -140,7 +140,7 @@ func (p *openAIProvider) sendWithRetry(ctx context.Context, fn func(context.Cont
 					IsPermanent: isPermanent,
 				}
 
-				if retryableErr.IsPermanent || !isRetryable(statusCode, nil) {
+				if retryableErr.IsPermanent || !isRetryable(statusCode, err) {
 					return nil, retryableErr
 				}
 
@@ -389,15 +389,6 @@ func (p *openAIProvider) parseResponse(resp *OpenAIResponse) (*Response, error) 
 	return response, nil
 }
 
-// isPromptTooLongOpenAI returns true if the error indicates prompt too long.
-func isPromptTooLongOpenAI(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "prompt_too_long") || strings.Contains(msg, "context window exceeds limit")
-}
-
 // SendMessageStream sends a streaming message.
 func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string, idleTimeout time.Duration) (<-chan StreamContentBlock, *StreamResult) {
 	blocksChan := make(chan StreamContentBlock, 10)
@@ -453,11 +444,12 @@ func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Messa
 		if err != nil {
 			var httpErr *HTTPError
 			if errors.As(err, &httpErr) {
+				result.ErrorCategory = httpErr.ErrorCategory
 				result.IsPermanent = httpErr.StatusCode >= 400 && httpErr.StatusCode < 500 &&
 					httpErr.StatusCode != 429 && httpErr.StatusCode != 408 && httpErr.StatusCode != 409
 			}
 			result.Error = err.Error()
-			if isPromptTooLongOpenAI(err) {
+			if result.ErrorCategory == CategoryContextExhausted {
 				result.ContextRejected = true
 				result.MaxTokensErr = &MaxTokensError{
 					Category:     CategoryContextExhausted,
@@ -532,7 +524,7 @@ func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Messa
 			result.Error = scanner.Err().Error()
 		}
 
-		if isPromptTooLongOpenAI(errors.New(result.Error)) {
+		if classifyErrorCommon(400, result.Error) == CategoryContextExhausted {
 			result.ContextRejected = true
 		}
 

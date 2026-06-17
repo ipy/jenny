@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/ipy/jenny/internal/log"
@@ -139,7 +138,7 @@ func (p *openAIResponsesProvider) sendWithRetry(ctx context.Context, fn func(con
 					IsPermanent: isPermanent,
 				}
 
-				if retryableErr.IsPermanent || !isRetryable(statusCode, nil) {
+				if retryableErr.IsPermanent || !isRetryable(statusCode, err) {
 					return nil, retryableErr
 				}
 
@@ -423,15 +422,6 @@ func (p *openAIResponsesProvider) parseResponse(resp *OpenAIResponsesResponse) (
 	return response, nil
 }
 
-// isPromptTooLongOpenAIResponses returns true if the error indicates prompt too long.
-func isPromptTooLongOpenAIResponses(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "prompt_too_long") || strings.Contains(msg, "context window exceeds limit")
-}
-
 // SendMessageStream sends a streaming message using the OpenAI Responses API.
 // Emits Anthropic-compatible stream events for consistency with Claude Code output format.
 func (p *openAIResponsesProvider) SendMessageStream(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string, idleTimeout time.Duration) (<-chan StreamContentBlock, *StreamResult) {
@@ -488,11 +478,12 @@ func (p *openAIResponsesProvider) SendMessageStream(ctx context.Context, message
 		if err != nil {
 			var httpErr *HTTPError
 			if errors.As(err, &httpErr) {
+				result.ErrorCategory = httpErr.ErrorCategory
 				result.IsPermanent = httpErr.StatusCode >= 400 && httpErr.StatusCode < 500 &&
 					httpErr.StatusCode != 429 && httpErr.StatusCode != 408 && httpErr.StatusCode != 409
 			}
 			result.Error = err.Error()
-			if isPromptTooLongOpenAIResponses(err) {
+			if result.ErrorCategory == CategoryContextExhausted {
 				result.ContextRejected = true
 				result.MaxTokensErr = &MaxTokensError{
 					Category: CategoryContextExhausted,
@@ -566,7 +557,7 @@ func (p *openAIResponsesProvider) SendMessageStream(ctx context.Context, message
 			result.Error = scanner.Err().Error()
 		}
 
-		if isPromptTooLongOpenAIResponses(errors.New(result.Error)) {
+		if classifyErrorCommon(400, result.Error) == CategoryContextExhausted {
 			result.ContextRejected = true
 		}
 

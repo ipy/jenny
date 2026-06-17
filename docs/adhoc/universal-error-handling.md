@@ -323,12 +323,12 @@ Honor `Retry-After` header (OpenRouter, Claude provide this).
 - Add `statusCode == 413` check to `isPromptTooLong*`
 - Files: `provider_anthropic.go`, `provider_openai.go`, `provider_genai.go`, `provider_openai_responses.go`
 
-### Phase 2: ErrorCategory enum + classifyErrorCommon
+### Phase 2: ErrorCategory enum + classifyErrorCommon [done]
 
-- Define `ErrorCategory` in `client.go`
-- Add `ErrorCategory` field to `HTTPError` and `StreamResult`
-- Implement `classifyErrorCommon` in new `error_classify.go`
-- Replace `isPromptTooLong*` calls with `classifyError`
+- [x] Define `ErrorCategory` in `client.go`
+- [x] Add `ErrorCategory` field to `HTTPError` and `StreamResult`
+- [x] Implement `classifyErrorCommon` in new `error_classify.go`
+- [x] Replace `isPromptTooLong*` calls with `classifyError`
 - Update `isRetryable` with category priority + 498
 
 ### Phase 3: Sticky Router category-aware decisions
