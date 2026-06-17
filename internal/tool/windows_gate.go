@@ -2,6 +2,7 @@ package tool
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -77,8 +78,15 @@ func (g *WindowsCommandGate) CheckPath(path string) error {
 		}
 	}
 
-	// Block AppData
+	// Block AppData (but allow system temp directory which lives under AppData\Local\Temp)
 	if strings.Contains(normPath, `\appdata\`) || strings.HasSuffix(normPath, `\appdata`) {
+		// Allow paths under the system temporary directory (e.g. C:\Users\<user>\AppData\Local\Temp)
+		if tempDir := getWindowsTempDir(); tempDir != "" {
+			normTemp := strings.ReplaceAll(strings.ToLower(tempDir), "/", `\`)
+			if strings.HasPrefix(normPath, normTemp) {
+				return nil
+			}
+		}
 		return fmt.Errorf("access to AppData is blocked on Windows")
 	}
 
@@ -88,4 +96,24 @@ func (g *WindowsCommandGate) CheckPath(path string) error {
 	}
 
 	return nil
+}
+
+// getWindowsTempDir returns the Windows temporary directory path.
+// It checks TEMP, TMP, and LOCALAPPDATA environment variables to find
+// the temp directory, which is typically under AppData\Local\Temp.
+// Returns empty string if not found (non-Windows or unusual setup).
+func getWindowsTempDir() string {
+	// Check TEMP first (most common on Windows)
+	if temp := os.Getenv("TEMP"); temp != "" {
+		return temp
+	}
+	// Check TMP as fallback
+	if temp := os.Getenv("TMP"); temp != "" {
+		return temp
+	}
+	// Check LOCALAPPDATA\Temp
+	if localAppData := os.Getenv("LOCALAPPDATA"); localAppData != "" {
+		return localAppData + `\Temp`
+	}
+	return ""
 }

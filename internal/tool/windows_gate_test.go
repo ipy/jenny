@@ -103,3 +103,31 @@ func TestWindowsCommandGate_SkipPermissions(t *testing.T) {
 		t.Errorf("expected no error when unrestricted level is true, got: %v", err)
 	}
 }
+
+// TestWindowsCommandGate_TempDirAllowed verifies that paths under the Windows
+// temporary directory (which lives under AppData\Local\Temp) are allowed.
+func TestWindowsCommandGate_TempDirAllowed(t *testing.T) {
+	gate := NewWindowsCommandGate(PermissionEdit)
+
+	// Simulate a Windows temp directory environment
+	tempDir := `C:\Users\RUNNER~1\AppData\Local\Temp`
+	t.Setenv("TEMP", tempDir)
+
+	// Path under the temp directory should be allowed
+	err := gate.CheckPath(tempDir + `\testdir\file.txt`)
+	if err != nil {
+		t.Errorf("expected temp dir path to be allowed, got: %v", err)
+	}
+
+	// Non-temp AppData paths should still be blocked
+	blockedPaths := []string{
+		`C:\Users\RUNNER~1\AppData\Local\someconfig`,
+		`C:\Users\RUNNER~1\AppData\Roaming\app`,
+	}
+	for _, path := range blockedPaths {
+		err := gate.CheckPath(path)
+		if err == nil {
+			t.Errorf("expected error for non-temp AppData path %q", path)
+		}
+	}
+}
