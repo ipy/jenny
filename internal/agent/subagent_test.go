@@ -522,82 +522,52 @@ func TestLocalSubagentRunner_AC4_StreamConfigPropagation(t *testing.T) {
 // AC7: Subagent Permission Level Inheritance Tests
 // ============================================================================
 
-func TestLocalSubagentRunner_AC7_SubagentInheritsParentLevel(t *testing.T) {
-	// AC1: Subagent inherits parent level. When a parent agent at PermissionLevel=read
-	// spawns a named subagent, the subagent's StreamConfig.PermissionLevel is read.
+func TestLocalSubagentRunner_AC7_InheritanceAntiEscalation(t *testing.T) {
+	// AC1+AC2 merged: Subagent inherits parent's PermissionLevel across all levels.
+	// Anti-escalation guarantee: SubagentParams has no PermissionLevel field, so
+	// inheritance is the only mechanism. This table-driven test proves the
+	// anti-escalation property for all levels in one pass.
 	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
 	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
 	if !hasURL || !hasToken {
 		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
 	}
 
-	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
-	runner := NewLocalSubagentRunner([]tool.Tool{readTool}, nil, fastClient())
-
-	// Set up parent config with PermissionLevel=read
-	parentCfg := StreamConfig{
-		PermissionLevel: tool.PermissionRead,
-	}
-	runner.SetParentConfig(&parentCfg)
-
-	// Call RunSubagent with Name="worker1" (named agent triggers inheritance)
-	params := tool.SubagentParams{
-		Prompt:       "test prompt",
-		SubagentType: "explore",
-		Name:         "worker1",
-	}
-	_, _ = runner.RunSubagent(context.Background(), params)
-
-	// Get the captured stream config
-	capturedCfg := runner.GetCapturedStreamConfig()
-
-	// Verify PermissionLevel is inherited as read
-	if capturedCfg.PermissionLevel != tool.PermissionRead {
-		t.Errorf("AC1 FAIL: PermissionLevel not inherited correctly, got %v want %v",
-			capturedCfg.PermissionLevel, tool.PermissionRead)
-	} else {
-		t.Logf("AC1 PASS: Subagent inherited PermissionLevel=read from parent")
-	}
-}
-
-func TestLocalSubagentRunner_AC7_SubagentCannotEscalate(t *testing.T) {
-	// AC2: Subagent cannot escalate. Parent at PermissionLevel=read, subagent
-	// attempts to run (but has no way to override PermissionLevel), so captured
-	// level is read (parent's level, not execute).
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
+	levels := []tool.PermissionLevel{
+		tool.PermissionRead,
+		tool.PermissionEdit,
+		tool.PermissionExecute,
+		tool.PermissionUnrestricted,
 	}
 
-	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
-	runner := NewLocalSubagentRunner([]tool.Tool{readTool}, nil, fastClient())
+	for _, parentLevel := range levels {
+		t.Run(parentLevel.String(), func(t *testing.T) {
+			readTool := tool.NewReadTool(tool.PermissionEdit, nil)
+			runner := NewLocalSubagentRunner([]tool.Tool{readTool}, nil, fastClient())
 
-	// Parent config has PermissionLevel=read
-	parentCfg := StreamConfig{
-		PermissionLevel: tool.PermissionRead,
-	}
-	runner.SetParentConfig(&parentCfg)
+			parentCfg := StreamConfig{
+				PermissionLevel: parentLevel,
+			}
+			runner.SetParentConfig(&parentCfg)
 
-	// Run a named subagent (would inherit parent level)
-	params := tool.SubagentParams{
-		Prompt:       "test prompt",
-		SubagentType: "explore",
-		Name:         "worker1",
-	}
-	_, _ = runner.RunSubagent(context.Background(), params)
+			params := tool.SubagentParams{
+				Prompt:       "test prompt",
+				SubagentType: "explore",
+				Name:         "worker1",
+			}
+			_, _ = runner.RunSubagent(context.Background(), params)
 
-	// Get the captured stream config
-	capturedCfg := runner.GetCapturedStreamConfig()
+			capturedCfg := runner.GetCapturedStreamConfig()
+			if capturedCfg == nil {
+				t.Fatal("GetCapturedStreamConfig returned nil")
+			}
 
-	// Verify the captured level is still read (parent's level)
-	// The subagent cannot escalate because there's no PermissionLevel field
-	// in SubagentParams - the inheritance is forced from parent's StreamConfig.
-	if capturedCfg.PermissionLevel != tool.PermissionRead {
-		t.Errorf("AC2 FAIL: Subagent escalated from read to %v; expected read",
-			capturedCfg.PermissionLevel)
-	} else {
-		t.Logf("AC2 PASS: Subagent cannot escalate beyond parent's PermissionLevel=read")
+			if capturedCfg.PermissionLevel != parentLevel {
+				t.Errorf("got %v, want %v", capturedCfg.PermissionLevel, parentLevel)
+			} else {
+				t.Logf("PASS: Subagent inherited PermissionLevel=%s from parent", parentLevel)
+			}
+		})
 	}
 }
 
@@ -629,6 +599,9 @@ func TestLocalSubagentRunner_AC7_UnrestrictedParentInheritsCorrectly(t *testing.
 
 	// Get the captured stream config
 	capturedCfg := runner.GetCapturedStreamConfig()
+	if capturedCfg == nil {
+		t.Fatal("GetCapturedStreamConfig returned nil")
+	}
 
 	// Verify PermissionLevel is inherited as unrestricted
 	if capturedCfg.PermissionLevel != tool.PermissionUnrestricted {
@@ -736,6 +709,9 @@ func TestLocalSubagentRunner_AC7_UnnamedSubagentNoInheritance(t *testing.T) {
 
 	// Get the captured stream config
 	capturedCfg := runner.GetCapturedStreamConfig()
+	if capturedCfg == nil {
+		t.Fatal("GetCapturedStreamConfig returned nil")
+	}
 
 	// For unnamed subagents, PermissionLevel should be zero (not inherited)
 	// This verifies that the inheritance code path only activates for named agents
