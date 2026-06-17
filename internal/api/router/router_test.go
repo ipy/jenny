@@ -13,7 +13,7 @@ func TestConfigParsing(t *testing.T) {
 providers:
   - name: "deepseek"
     type: "openai"
-    base_url: "https://api.deepseek.com"
+    base-url: "https://api.deepseek.com"
     accounts:
       - name: "personal"
         keys: ["sk-ds-1", "sk-ds-2"]
@@ -22,20 +22,20 @@ providers:
       - name: "deepseek-chat"
         tags: ["cheap", "text"]
         priority: 1
-        context_window: 64000
-        max_output: 4000
+        context-window: 64000
+        max-output: 4000
 
 profiles:
   default:
     targets:
       - match: { models: ["deepseek:deepseek-chat"] }
       - match: { tags: ["cheap"] }
-    routing_mode: "sticky"
-    selection_policy: "round_robin"
-    retry_policy:
-      max_retries: 3
+    routing-mode: "sticky"
+    selection-policy: "round_robin"
+    retry-policy:
+      max-retries: 3
       backoff: "exponential"
-    allow_fallback: true
+    allow-fallback: true
 `
 
 	tmpDir := t.TempDir()

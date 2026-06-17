@@ -91,7 +91,7 @@ func TestLoadConfig_EnvMergeWithYAML(t *testing.T) {
 providers:
   - name: "yaml-provider"
     type: "openai"
-    base_url: "https://api.example.com"
+    base-url: "https://api.example.com"
     accounts:
       - name: "default"
         keys: ["yaml-key"]

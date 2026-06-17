@@ -172,7 +172,8 @@ func run() error {
 
 	// Initialize the multi-provider router from ~/.jenny/routes.yaml (or env).
 	// Idempotent: subsequent calls are no-ops.
-	if err := router.Init(""); err != nil && err != router.ErrNoProviders {
+	routerCfg, _ := router.LoadConfig("")
+	if err := router.Init(routerCfg); err != nil && err != router.ErrNoProviders {
 		log.Warn("router initialization skipped", "err", err)
 	}
 

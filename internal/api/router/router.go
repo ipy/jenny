@@ -5,8 +5,6 @@ package router
 import (
 	"fmt"
 	"hash/fnv"
-	"os"
-	"path/filepath"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -55,55 +53,36 @@ var (
 	routerErr    error
 )
 
-// Init initializes the global router from a YAML config file.
-// Falls back to environment variables if no config file exists.
+// Init initializes the global router from a pre-loaded Config.
+// Environment-synthesized providers are merged into the config.
+// Keys are resolved (env: prefix) and defaults are applied.
 // This function is idempotent - subsequent calls are no-ops.
-func Init(cfgPath string) error {
+func Init(cfg *Config) error {
 	routerOnce.Do(func() {
-		path := cfgPath
-		if path == "" {
-			home, err := os.UserHomeDir()
-			if err != nil {
-				routerErr = fmt.Errorf("failed to get home directory: %w", err)
-				return
-			}
-			path = filepath.Join(home, ".jenny", "routes.yaml")
-		}
-
-		cfg, err := LoadConfig(path)
-		if err != nil {
-			routerErr = fmt.Errorf("failed to load config: %w", err)
-			return
-		}
-
-		// Fall back to environment variables if no config
 		if cfg == nil {
-			log.Debug("No router config found, synthesizing from environment variables")
-			cfg = SynthesizeConfigFromEnv()
+			cfg = &Config{Profiles: make(map[string]Profile)}
 		}
 
-		if cfg != nil && len(cfg.Providers) == 0 {
-			cfg = SynthesizeConfigFromEnv()
+		// Merge environment-synthesized providers.
+		// File-based providers take precedence (same-name env provider is skipped).
+		envProviders := SynthesizeConfigFromEnv()
+		if envProviders != nil {
+			mergeEnvProviders(cfg, envProviders.Providers)
 		}
 
-		if cfg == nil || len(cfg.Providers) == 0 {
+		if len(cfg.Providers) == 0 {
 			routerErr = ErrNoProviders
 			return
 		}
 
-		// Ensure default profile exists
-		if _, ok := cfg.Profiles["default"]; !ok {
-			defaultAllow := true
-			cfg.Profiles["default"] = Profile{
-				RoutingMode:     "sticky",
-				SelectionPolicy: "round_robin",
-				RetryPolicy: RetryPolicy{
-					MaxRetries: 3,
-					Backoff:    "exponential",
-				},
-				AllowFallback: &defaultAllow,
-			}
+		// Resolve secret references (env:NAME → actual keys).
+		if err := cfg.ResolveKeys(); err != nil {
+			routerErr = fmt.Errorf("resolving keys: %w", err)
+			return
 		}
+
+		// Apply defaults.
+		applyDefaults(cfg)
 
 		globalRouter = &Router{
 			config:         cfg,

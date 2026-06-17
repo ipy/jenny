@@ -4,13 +4,71 @@ package router
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/knadh/koanf/parsers/yaml"
+	"github.com/knadh/koanf/providers/file"
+	"github.com/knadh/koanf/v2"
 )
 
 // Config represents the top-level routing configuration.
 type Config struct {
 	Providers []Provider         `koanf:"providers"`
 	Profiles  map[string]Profile `koanf:"profiles"`
+}
+
+// LoadConfig loads the router configuration from a YAML file.
+// If path is empty, it defaults to ~/.jenny/routes.yaml.
+// If an explicit path is provided and it does not exist, returns (nil, nil).
+// Environment-synthesized providers are merged into the config, and defaults are applied.
+func LoadConfig(path string) (*Config, error) {
+	var cfg *Config
+	isDefaultPath := false
+
+	if path == "" {
+		isDefaultPath = true
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get home directory: %w", err)
+		}
+		path = filepath.Join(home, ".jenny", "routes.yaml")
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(path); err == nil {
+		k := koanf.New(".")
+		if err := k.Load(file.Provider(path), yaml.Parser()); err != nil {
+			return nil, fmt.Errorf("failed to load router config from %q: %w", path, err)
+		}
+
+		cfg = &Config{}
+		if err := k.Unmarshal("", cfg); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal router config: %w", err)
+		}
+	} else if os.IsNotExist(err) {
+		if !isDefaultPath {
+			return nil, nil // Test expects nil for explicit missing path
+		}
+	} else {
+		return nil, fmt.Errorf("failed to stat router config: %w", err)
+	}
+
+	// Fall back to empty config if file doesn't exist (so we can merge from env)
+	if cfg == nil {
+		cfg = &Config{Profiles: make(map[string]Profile)}
+	}
+
+	// Merge environment-synthesized providers.
+	envProviders := SynthesizeConfigFromEnv()
+	if envProviders != nil {
+		mergeEnvProviders(cfg, envProviders.Providers)
+	}
+
+	// Apply defaults.
+	applyDefaults(cfg)
+
+	return cfg, nil
 }
 
 // Provider defines a backend provider with credentials and models.
