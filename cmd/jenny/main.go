@@ -482,6 +482,7 @@ func run() error {
 		ThinkingBudget:     flags.ThinkingBudget,
 		Plugins:            pluginInfo,
 		MemoryPaths:        memoryPaths,
+		PermissionLevel:    permLevel,
 	}
 
 	// AC3-streamconfig-inheritance: Set parent config on runner for named agent inheritance

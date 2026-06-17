@@ -2,14 +2,11 @@
 title: CLI
 slug: cli
 priority: P0
-status: partial
+status: done
 spec: complete
-code: partial
+code: done
 package: internal/cli
-gaps:
-  - --permission-level flag not yet implemented
-  - --permission-level validation (missing value, invalid value) not yet implemented
-  - --dangerously-skip-permissions + --permission-level interaction not yet implemented
+gaps: []
 defer_to: P3
 depends_on:
   []

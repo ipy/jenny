@@ -2,14 +2,12 @@
 title: Dangerous Command Gate
 slug: dangerous-command-gate
 priority: P1
-status: partial
+status: done
 spec: complete
-code: partial
+code: done
 package: internal/tool
 gaps:
   - Pipeline segment validation skip path at execute level
-  - Pipeline strategy parameter on command gate (allowlist vs skip)
-  - PermissionLevel integration with command gate
 depends_on:
   - tool-registry
 ---

@@ -2,12 +2,12 @@
 title: Permission Levels
 slug: permission-levels
 priority: P1
-status: not_started
+status: partial
 spec: complete
-code: not_started
+code: partial
 package: internal/agent, internal/tool
 gaps:
-  - Implementation not started (see Migration Path)
+  - AC7 subagent permission escalation guard (explicit runtime check)
 depends_on:
   - dangerous-command-gate
   - bash
@@ -50,7 +50,7 @@ The current `--dangerously-skip-permissions` flag is all-or-nothing:
 
 #### `read` — Structured Read-Only
 
-Agent can only use structured tools that read state: `Read`, `Grep`, `Glob`, `ListFiles`, `ReadMCPResource`, `WebFetch`, `WebSearch`. No Bash execution at all. No file modification through any tool. Note: `Read`/`Glob`/`Grep` are restricted to cwd + scratchpad paths (inherited from existing tool guards when `skipPermissions=false`).
+Agent can only use structured tools that read state: `Read`, `Grep`, `Glob`, `ListFiles`, `ReadMCPResource`, `WebFetch`, `WebSearch`. No Bash execution at all. No file modification through any tool. Note: `Read`/`Glob`/`Grep` are restricted to cwd + scratchpad paths (inherited from existing tool guards Agent can only use structured tools that read state: `Read`, `Grep`, `Glob`, `ListFiles`, `ReadMCPResource`, `WebFetch`, `WebSearch`. No Bash execution at all. No file modification through any tool. Note: `Read`/`Glob`/`Grep` are restricted to cwd + scratchpad paths (inherited from existing tool guards at constrained permission levels).).
 
 Use case: Audit agents, documentation generators, CI lint reviewers that only need to analyze code without executing anything.
 

@@ -263,6 +263,7 @@ func (r *LocalSubagentRunner) GetCapturedStreamConfigInfo() map[string]any {
 		"OverrideSystemPrompt": cfg.OverrideSystemPrompt,
 		"StructuredSchema":     cfg.StructuredSchema,
 		"StructuredDenyRules":  cfg.StructuredDenyRules,
+		"PermissionLevel":      cfg.PermissionLevel.String(),
 	}
 }
 
@@ -378,6 +379,11 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 		streamCfg.OverrideSystemPrompt = r.parentConfig.OverrideSystemPrompt
 		streamCfg.StructuredSchema = r.parentConfig.StructuredSchema
 		streamCfg.StructuredDenyRules = r.parentConfig.StructuredDenyRules
+		// AC7: Subagent inherits parent's PermissionLevel and cannot escalate.
+		// The subagent's tool instances are shared from the parent, so the
+		// permission level is enforced at the tool level regardless. This field
+		// ensures that nested subagent spawns also inherit the correct level.
+		streamCfg.PermissionLevel = r.parentConfig.PermissionLevel
 	}
 
 	// Subagent integration: use parent's session ID so transcript/cost land in parent's directory

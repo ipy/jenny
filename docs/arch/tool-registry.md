@@ -23,7 +23,7 @@ tools := tool.NewRegistry().
     WithBaseTools().
     WithReadFileCache(readFileCache).
     WithDenyRules(deniedTools).
-    WithSkipPermissions(skipPermissions).
+    WithPermissionLevel(permLevel).
     WithStrictMCP(strictMCP).
     WithMCPTools(mcpTools).
     WithWebFetchEnabled(true).

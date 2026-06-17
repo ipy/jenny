@@ -192,7 +192,8 @@ jenny --output-format stream-json -p "what is 2+2?"
 | `--max-iterations <n>` | Maximum loop iterations (0 = unlimited) |
 | `--verbose` | Enable verbose/debug output to stderr |
 | `--include-partial-messages` | Include partial messages in stream-json output |
-| `--dangerously-skip-permissions` | Skip permission prompts (always allowed in jenny) |
+| `--dangerously-skip-permissions` | Bypass permission gates (maps to `--permission-level unrestricted`) |
+| `--permission-level <level>` | Set permission level: `read`, `analyze`, `edit`, `execute`, `unrestricted` |
 | `-r <session_id>` | Resume an existing session |
 | `--mcp-config <path>` | MCP configuration file path (can be specified multiple times) |
 

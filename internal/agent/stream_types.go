@@ -65,6 +65,7 @@ type StreamConfig struct {
 	Effort               string            // Reasoning effort level (low, medium, high) for OpenAI/DeepSeek
 	ThinkingBudget       int               // Maximum thinking tokens for Anthropic (AC3)
 	ParentEngine         *QueryEngine      // Parent engine for subagent cost merge (set before RunStream)
+	PermissionLevel      tool.PermissionLevel // AC7: Parent's permission level for subagent inheritance
 }
 
 // SetActiveSkills sets the active skills list for the system prompt.
