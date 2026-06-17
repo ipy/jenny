@@ -22,6 +22,10 @@ type Config struct {
 // If path is empty, it defaults to ~/.jenny/routes.yaml.
 // If an explicit path is provided and it does not exist, returns (nil, nil).
 // Environment-synthesized providers are merged into the config, and defaults are applied.
+//
+// Deprecated: LoadConfig reads YAML and exists only for backward compatibility during
+// migration. New code should use LoadConfigFromKoanf which reads the unified
+// config.json via the koanf config layer.
 func LoadConfig(path string) (*Config, error) {
 	var cfg *Config
 	isDefaultPath := false
@@ -149,6 +153,31 @@ func (cfg *Config) ResolveKeys() error {
 		}
 	}
 	return nil
+}
+
+// LoadConfigFromKoanf unmarshals the routes configuration from a koanf instance.
+// If no "routes" key is present, returns an empty config with an empty Profiles map.
+// After unmarshalling, merges env-synthesized providers and applies defaults before returning.
+func LoadConfigFromKoanf(k *koanf.Koanf) (*Config, error) {
+	cfg := &Config{Profiles: make(map[string]Profile)}
+
+	// Try to unmarshal the routes key; if it doesn't exist, proceed with empty config
+	if k != nil && k.Exists("routes") {
+		if err := k.Unmarshal("routes", cfg); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal router config: %w", err)
+		}
+	}
+
+	// Merge environment-synthesized providers (file-based providers take precedence).
+	envProviders := SynthesizeConfigFromEnv()
+	if envProviders != nil {
+		mergeEnvProviders(cfg, envProviders.Providers)
+	}
+
+	// Apply defaults.
+	applyDefaults(cfg)
+
+	return cfg, nil
 }
 
 // mergeEnvProviders appends env-derived providers to the config unless a

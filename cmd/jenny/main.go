@@ -170,9 +170,12 @@ func run() error {
 	// the canonical site; flags.Verbose here is the CLI-flag-driven override.
 	log.SetVerbose(flags.Verbose)
 
-	// Initialize the multi-provider router from ~/.jenny/routes.yaml (or env).
+	// Initialize the multi-provider router from config.json via koanf (or env).
 	// Idempotent: subsequent calls are no-ops.
-	routerCfg, _ := router.LoadConfig("")
+	routerCfg, err := router.LoadConfigFromKoanf(nil)
+	if err != nil {
+		log.Warn("router config load failed", "err", err)
+	}
 	if err := router.Init(routerCfg); err != nil && err != router.ErrNoProviders {
 		log.Warn("router initialization skipped", "err", err)
 	}

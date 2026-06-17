@@ -169,6 +169,10 @@ Both per-invocation overrides and persistent router setup live in `~/.jenny/conf
 
 No change to the `SetProfile(name)` API. `Flags.RoutesProfile` will be added to the CLI layer to allow per-invocation profile selection via CLI flags or `JENNY_ROUTES_PROFILE` env vars.
 
+### Q5 — `LoadConfigFromKoanf` function signature
+
+`LoadConfigFromKoanf(k *koanf.Koanf) (*Config, error)` unmarshals the `routes` key from the provided koanf instance into a `*Config`. If no `routes` key is present, returns `&Config{Profiles: make(map[string]Profile)}` (never nil, so callers can call `applyDefaults` and `mergeEnvProviders` unconditionally). After unmarshalling, merges env-synthesized providers and applies defaults before returning.
+
 ## Implementation Plan
 
 1.  **Refactor Router Config**: Update `internal/api/router/config.go` with `koanf` tags (kebab-case). Implement the `ResolveKeys()` method.

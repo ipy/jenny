@@ -418,6 +418,21 @@ func TestLoadConfigFromKoanf(t *testing.T) {
 			},
 		},
 		{
+			name: "nil koanf returns empty config with profiles",
+			setup: nil, // passes nil k to LoadConfigFromKoanf in loop
+			verify: func(t *testing.T, cfg *Config, err error) {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if cfg == nil {
+					t.Fatal("expected non-nil config")
+				}
+				if cfg.Profiles == nil {
+					t.Error("expected Profiles map to be initialized")
+				}
+			},
+		},
+		{
 			name: "valid routes unmarshal",
 			setup: func(k *koanf.Koanf) {
 				k.Set("routes.providers", []map[string]any{
@@ -528,12 +543,13 @@ func TestLoadConfigFromKoanf(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			k := koanf.New(".")
+			var k *koanf.Koanf
+			if tt.setup != nil {
+				k = koanf.New(".")
+				tt.setup(k)
+			}
 			if tt.envSetup != nil {
 				tt.envSetup()
-			}
-			if tt.setup != nil {
-				tt.setup(k)
 			}
 
 			cfg, err := LoadConfigFromKoanf(k)

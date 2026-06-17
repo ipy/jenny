@@ -6,8 +6,9 @@ import (
 	"sort"
 )
 
-// SynthesizeConfigFromEnv creates a Config from legacy environment variables,
-// sorted by priority (OpenAI > GenAI > Anthropic).
+// SynthesizeConfigFromEnv creates a Config from standard environment variables,
+// sorted by priority (OpenAI > GenAI > Anthropic). This is the Zero-Config path
+// and supplements any file-based providers in the config.
 func SynthesizeConfigFromEnv() *Config {
 	cfg := &Config{
 		Providers: []Provider{},
