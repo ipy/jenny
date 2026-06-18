@@ -56,7 +56,7 @@ Real run: silent on success.
 ### Acceptance
 
 - **AC1.** `--dry-run` is a no-op (no files removed) and prints one `would remove:` line per session directory. Files outside `sessions/` are never reported.
-- **AC2.** Without flags, every session directory under `sessions/` is recursively removed. Top-level files outside `sessions/` (e.g. `.env`, `routes.yaml`, `skills/`) are byte-identical pre/post.
+- **AC2.** Without flags, every session directory under `sessions/` is recursively removed. Top-level files outside `sessions/` (e.g. `.env`, `config.json`, `skills/`) are byte-identical pre/post.
 - **AC3.** Empty/missing `sessions/` prints `nothing to clean`, exits 0, no mutation. `--help` exits 0 and lists both subcommands and `--dry-run`.
 - **AC4.** When `JENNY_HOME=/tmp/alt-jenny`, only `/tmp/alt-jenny/sessions/` is touched; the real `~/.jenny/sessions/` is left intact.
 
@@ -165,7 +165,7 @@ The CLI parser detects `clean` and `compact` subcommands via dedicated helper fu
 Usage: jenny clean [--dry-run]
 
 Remove every session directory under $JENNY_HOME/sessions/.
-Config files at the top of $JENNY_HOME (.env, routes.yaml, skills/) are preserved.
+Config files at the top of $JENNY_HOME (.env, config.json, skills/) are preserved.
 
 Flags:
   --dry-run   Print "would remove:" lines and exit without deleting anything.
