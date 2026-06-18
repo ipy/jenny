@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -155,6 +156,72 @@ func TestCannotRetryError(t *testing.T) {
 
 	if err.Error() != "Test error message" {
 		t.Errorf("expected error message 'Test error message', got %q", err.Error())
+	}
+}
+
+// mockTimeoutNetError implements net.Error for testing timeout-based retry.
+type mockTimeoutNetError struct {
+	msg     string
+	timeout bool
+}
+
+func (e *mockTimeoutNetError) Error() string   { return e.msg }
+func (e *mockTimeoutNetError) Timeout() bool   { return e.timeout }
+func (e *mockTimeoutNetError) Temporary() bool { return e.timeout }
+
+// TestIsRetryable_ConnectionErrors verifies that only transient connection errors
+// are retried: timeouts and DNS temporary failures are retryable; connection refused
+// and host unreachable are NOT retryable.
+func TestIsRetryable_ConnectionErrors(t *testing.T) {
+	testCases := []struct {
+		name      string
+		err       error
+		retryable bool
+	}{
+		{
+			name:      "timeout error is retryable",
+			err:       &mockTimeoutNetError{msg: "i/o timeout", timeout: true},
+			retryable: true,
+		},
+		{
+			name:      "non-timeout net error is NOT retryable",
+			err:       &mockTimeoutNetError{msg: "connect: connection refused", timeout: false},
+			retryable: false,
+		},
+		{
+			name:      "DNS temporary failure is retryable",
+			err:       &net.DNSError{Err: "temporary failure in name resolution", IsTemporary: true},
+			retryable: true,
+		},
+		{
+			name:      "DNS timeout is retryable",
+			err:       &net.DNSError{Err: "i/o timeout", IsTimeout: true},
+			retryable: true,
+		},
+		{
+			name:      "DNS permanent failure is NOT retryable",
+			err:       &net.DNSError{Err: "no such host"},
+			retryable: false,
+		},
+		{
+			name:      "non-net error is not retryable (nil err, no status code)",
+			err:       nil,
+			retryable: false,
+		},
+		{
+			name:      "non-net error (plain error) is not retryable",
+			err:       fmt.Errorf("some random error"),
+			retryable: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := isRetryable(0, tc.err)
+			if result != tc.retryable {
+				t.Errorf("expected retryable=%v, got %v", tc.retryable, result)
+			}
+		})
 	}
 }
 

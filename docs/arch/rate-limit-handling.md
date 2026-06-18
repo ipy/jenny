@@ -25,7 +25,7 @@ API client retries transient failures with exponential backoff. Foreground agent
 | HTTP 529 / overloaded_error | Yes (foreground, capped) |
 | HTTP 408, 409 | Yes |
 | HTTP 5xx | Yes |
-| Connection errors | Yes |
+| Connection errors | Yes (transient only: timeouts, temporary DNS failures; NOT connection refused, host unreachable) |
 | Mock rate limits | No |
 | Non-retryable 4xx | No |
 | Subscriber 429 with x-should-retry: false | No |

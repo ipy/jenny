@@ -106,9 +106,14 @@ func isRetryable(statusCode int, err error) bool {
 			}
 		}
 
-		// Transient network errors are retryable.
-		var netErr net.Error
-		if errors.As(err, &netErr) {
+		// Timeout is the primary transient signal for network errors.
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			return true
+		}
+		// DNS temporary failures are retryable (deprecated net.Error.Temporary()
+		// is avoided in favor of explicit field checks on *net.DNSError).
+		var dnsErr *net.DNSError
+		if errors.As(err, &dnsErr) && (dnsErr.IsTemporary || dnsErr.IsTimeout) {
 			return true
 		}
 	}

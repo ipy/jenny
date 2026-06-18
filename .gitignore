@@ -46,6 +46,8 @@ dist/
 .claude-plugin
 .codex-plugin
 
+.claude
+
 **/fake-mcp-server
 
 references/
