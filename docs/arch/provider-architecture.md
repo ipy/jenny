@@ -19,6 +19,8 @@ type Provider interface {
     SendMessage(ctx, messages, tools, toolResults, systemPrompt) (*Response, error)
     SendMessageStream(ctx, messages, tools, toolResults, systemPrompt, idleTimeout) (<-chan StreamContentBlock, *StreamResult)
     Kind() ProviderKind
+    SetProviderName(name string)
+    SupportsNativeSearch() bool
 }
 ```
 
@@ -65,6 +67,8 @@ Jenny now implements a **Surgical HTTP Client** approach:
 - Both methods must set `StreamResult.StreamComplete = true` only when a terminal stop reason is received
 - `StreamResult.Error` should be a plain string (not wrapped error type) for downstream compatibility
 - Providers should implement `ProviderWithRetryConfig` to receive shared retry configuration
+- `SupportsNativeSearch()` must return `true` for providers with native web search capability (Anthropic, OpenAI, OpenAI Responses, GenAI); other providers return `false`
+- `SetProviderName(name)` sets a human-readable provider name for logging and display
 
 ### Stream Event Normalization
 
