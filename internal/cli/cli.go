@@ -224,6 +224,11 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 		return nil, nil, err
 	}
 
+	// Capture which flags were explicitly set on the command line.
+	// Needed for validation where "set to empty" differs from "not set".
+	permLevelChanged := flags.Changed("permission-level")
+	includePartialChanged := flags.Changed("include-partial-messages")
+
 	// Load CLI flags into koanf (highest precedence).
 	_ = k.Load(posflag.Provider(flags, ".", k), nil)
 
@@ -272,8 +277,13 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 		return nil, nil, fmt.Errorf("--continue requires session persistence")
 	}
 
+	// Validate: --include-partial-messages requires --output-format stream-json.
+	if includePartialChanged && parsed.OutputFormat != "stream-json" {
+		return nil, nil, fmt.Errorf("--include-partial-messages requires --output-format stream-json")
+	}
+
 	// Validate: --permission-level must be a valid value if provided.
-	if parsed.PermissionLevel != "" {
+	if permLevelChanged {
 		validLevels := []string{"read", "analyze", "edit", "execute", "unrestricted"}
 		found := false
 		for _, l := range validLevels {

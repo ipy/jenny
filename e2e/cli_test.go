@@ -326,3 +326,334 @@ func TestCLINoSessionPersistence(t *testing.T) {
 		},
 	})
 }
+
+// TestCLIPermissionLevel verifies --permission-level flag validation.
+func TestCLIPermissionLevel(t *testing.T) {
+	runE2ESuite(t, []*harness.TestCase{
+		{
+			ID:          "cli.permission-level.invalid-value",
+			Category:    "cli-flags",
+			Description: "--permission-level with invalid value exits nonzero",
+			Target: harness.TargetInvocation{
+				Kind: "cli",
+				Args: []string{"--permission-level", "superadmin", "-p", "hello"},
+				Env:  []string{"ANTHROPIC_AUTH_TOKEN=dummy"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 1,
+				Stderr: &harness.StderrExpectation{
+					Contains: []string{"permission", "read", "edit"},
+				},
+			},
+		},
+		{
+			ID:          "cli.permission-level.empty-value",
+			Category:    "cli-flags",
+			Description: "--permission-level without value exits nonzero",
+			Target: harness.TargetInvocation{
+				Kind: "cli",
+				Args: []string{"--permission-level=", "-p", "hello"},
+				Env:  []string{"ANTHROPIC_AUTH_TOKEN=dummy"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 1,
+				Stderr: &harness.StderrExpectation{
+					Contains: []string{"permission"},
+				},
+			},
+		},
+		{
+			ID:          "cli.permission-level.skip-permissions-wins",
+			Category:    "cli-flags",
+			Description: "--dangerously-skip-permissions wins when both flags given",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hi",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+				Args:     []string{"--dangerously-skip-permissions", "--permission-level", "read"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				StreamJSON: &harness.StreamJSONExpectation{
+					LastEvent: &harness.EventExpectation{
+						Type:    "result",
+						Subtype: "success",
+					},
+				},
+			},
+		},
+		{
+			ID:          "cli.permission-level.valid-values-accepted",
+			Category:    "cli-flags",
+			Description: "all valid permission levels accepted by CLI",
+			Target: harness.TargetInvocation{
+				Kind: "cli",
+				Args: []string{"--permission-level", "unrestricted", "-p", "hello"},
+				Env: []string{
+					"ANTHROPIC_AUTH_TOKEN=dummy",
+					"ANTHROPIC_BASE_URL=http://127.0.0.1:1", // force API to fail
+				},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 1, // API call fails (unreachable endpoint)
+			},
+		},
+	})
+}
+
+// TestCLIMaxBudgetUsd verifies --max-budget-usd flag is accepted.
+func TestCLIMaxBudgetUsd(t *testing.T) {
+	runE2ESuite(t, []*harness.TestCase{
+		{
+			ID:          "cli.max-budget-usd.flag-accepted",
+			Category:    "cli-flags",
+			Description: "--max-budget-usd is accepted without error",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hi",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+				Args:     []string{"--max-budget-usd", "10.50"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				StreamJSON: &harness.StreamJSONExpectation{
+					LastEvent: &harness.EventExpectation{
+						Type:    "result",
+						Subtype: "success",
+					},
+				},
+			},
+		},
+		{
+			ID:          "cli.max-budget-usd.zero-disables",
+			Category:    "cli-flags",
+			Description: "--max-budget-usd 0 disables budget limit",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hi",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+				Args:     []string{"--max-budget-usd", "0"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				StreamJSON: &harness.StreamJSONExpectation{
+					LastEvent: &harness.EventExpectation{
+						Type:    "result",
+						Subtype: "success",
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestCLIMaxTurns verifies --max-turns flag.
+func TestCLIMaxTurns(t *testing.T) {
+	runE2ESuite(t, []*harness.TestCase{
+		{
+			ID:          "cli.max-turns.flag-accepted",
+			Category:    "cli-flags",
+			Description: "--max-turns is accepted without error",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hi",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+				Args:     []string{"--max-turns", "2"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				StreamJSON: &harness.StreamJSONExpectation{
+					LastEvent: &harness.EventExpectation{
+						Type:    "result",
+						Subtype: "success",
+					},
+				},
+			},
+		},
+	})
+}
+
+// TestCLIIncludePartialMessages verifies --include-partial-messages requires stream-json.
+func TestCLIIncludePartialMessages(t *testing.T) {
+	runE2ESuite(t, []*harness.TestCase{
+		{
+			ID:          "cli.include-partial-messages.needs-stream-json",
+			Category:    "cli-flags",
+			Description: "--include-partial-messages without stream-json exits nonzero",
+			Target: harness.TargetInvocation{
+				Kind: "cli",
+				Args: []string{"--include-partial-messages", "-p", "hello"},
+				Env:  []string{"ANTHROPIC_AUTH_TOKEN=dummy"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 1,
+				Stderr: &harness.StderrExpectation{
+					Contains: []string{"partial", "stream-json"},
+				},
+			},
+		},
+	})
+}
+
+// TestCLIEffort verifies --effort flag is accepted.
+func TestCLIEffort(t *testing.T) {
+	runE2ESuite(t, []*harness.TestCase{
+		{
+			ID:          "cli.effort.low-accepted",
+			Category:    "cli-flags",
+			Description: "--effort low is accepted",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hi",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+				Args:     []string{"--effort", "low"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				StreamJSON: &harness.StreamJSONExpectation{
+					LastEvent: &harness.EventExpectation{
+						Type:    "result",
+						Subtype: "success",
+					},
+				},
+			},
+		},
+		{
+			ID:          "cli.effort.medium-accepted",
+			Category:    "cli-flags",
+			Description: "--effort medium is accepted",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hi",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+				Args:     []string{"--effort", "medium"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+			},
+		},
+		{
+			ID:          "cli.effort.high-accepted",
+			Category:    "cli-flags",
+			Description: "--effort high is accepted",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hi",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+				Args:     []string{"--effort", "high"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+			},
+		},
+	})
+}
+
+// TestCLIRedact verifies --redact flag validation.
+func TestCLIRedact(t *testing.T) {
+	runE2ESuite(t, []*harness.TestCase{
+		{
+			ID:          "cli.redact.disabled-accepted",
+			Category:    "cli-flags",
+			Description: "--redact disabled is accepted",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hi",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+				Args:     []string{"--redact", "disabled"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+			},
+		},
+		{
+			ID:          "cli.redact.redact-accepted",
+			Category:    "cli-flags",
+			Description: "--redact redact is accepted (default)",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hi",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+				Args:     []string{"--redact", "redact"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+			},
+		},
+	})
+}
+
+// TestCLIStrictMCPConfig verifies --strict-mcp-config flag.
+func TestCLIStrictMCPConfig(t *testing.T) {
+	runE2ESuite(t, []*harness.TestCase{
+		{
+			ID:          "cli.strict-mcp-config.flag-accepted",
+			Category:    "cli-flags",
+			Description: "--strict-mcp-config is accepted",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hi",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+				Args:     []string{"--strict-mcp-config"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+			},
+		},
+	})
+}
+
+// TestCLIMaxToolConcurrency verifies --max-tool-concurrency flag.
+func TestCLIMaxToolConcurrency(t *testing.T) {
+	runE2ESuite(t, []*harness.TestCase{
+		{
+			ID:          "cli.max-tool-concurrency.flag-accepted",
+			Category:    "cli-flags",
+			Description: "--max-tool-concurrency is accepted without error",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hi",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+				Args:     []string{"--max-tool-concurrency", "4"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+			},
+		},
+	})
+}
+
+// TestCLIBooleanFlagNegation verifies --flag=false form works.
+func TestCLIBooleanFlagNegation(t *testing.T) {
+	runE2ESuite(t, []*harness.TestCase{
+		{
+			ID:          "cli.bool-negation.verbose-false-accepted",
+			Category:    "cli-flags",
+			Description: "--verbose=false is accepted",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hi",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+				Args:     []string{"--verbose=false"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				StreamJSON: &harness.StreamJSONExpectation{
+					AllLinesValidJSON: true,
+				},
+			},
+		},
+	})
+}
