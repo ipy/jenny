@@ -16,12 +16,12 @@ import (
 
 // openAIProvider implements the Provider interface using a lightweight HTTP client.
 type openAIProvider struct {
-	client         *HTTPClient
-	model          string
-	maxTokens      int
-	retryConfig    RetryConfig
-	thinkingEffort string
-	providerName   string
+	client            *HTTPClient
+	model             string
+	maxTokensOverride int
+	retryConfig       RetryConfig
+	thinkingEffort    string
+	providerName      string
 }
 
 // newOpenAIProvider creates a new OpenAI provider.
@@ -51,7 +51,6 @@ func newOpenAIProvider(model string) (*openAIProvider, error) {
 	return &openAIProvider{
 		client:      NewHTTPClient(timeout),
 		model:       model,
-		maxTokens:   64000,
 		retryConfig: DefaultRetryConfig(),
 	}, nil
 }
@@ -71,11 +70,6 @@ func (p *openAIProvider) GetModel() string {
 	return p.model
 }
 
-// SetMaxTokensOverride sets the max_tokens override.
-func (p *openAIProvider) SetMaxTokensOverride(maxTokens int) {
-	p.maxTokens = maxTokens
-}
-
 // SetRetryConfig sets the retry configuration.
 func (p *openAIProvider) SetRetryConfig(cfg RetryConfig) {
 	p.retryConfig = cfg
@@ -87,6 +81,11 @@ func (p *openAIProvider) SetThinkingConfig(cfg ThinkingConfig) {
 	if cfg.Effort != "" {
 		p.thinkingEffort = cfg.Effort
 	}
+}
+
+// setMaxTokensOverride sets the max_tokens override for the provider.
+func (p *openAIProvider) setMaxTokensOverride(maxTokens int) {
+	p.maxTokensOverride = maxTokens
 }
 
 // SetProviderName sets the provider name.
@@ -191,10 +190,7 @@ func (p *openAIProvider) doSendMessage(ctx context.Context, messages []Message, 
 		sdkTools = p.buildTools(tools)
 	}
 
-	maxTokens := int64(p.maxTokens)
-	if maxTokens == 0 {
-		maxTokens = 64000
-	}
+	maxTokens := int64(ResolveMaxTokens(p.model, p.maxTokensOverride))
 
 	reqBody := OpenAIRequest{
 		Model:               p.model,
@@ -423,10 +419,7 @@ func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Messa
 			sdkTools = p.buildTools(tools)
 		}
 
-		maxTokens := int64(p.maxTokens)
-		if maxTokens == 0 {
-			maxTokens = 64000
-		}
+		maxTokens := int64(ResolveMaxTokens(p.model, p.maxTokensOverride))
 
 		reqBody := OpenAIRequest{
 			Model:               p.model,

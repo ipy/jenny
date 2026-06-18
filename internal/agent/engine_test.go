@@ -2308,7 +2308,7 @@ func TestEngine_ContextExhausted_EmitsStructuredError(t *testing.T) {
 
 // TestEngine_AutoCompactFiresAboveThreshold verifies that auto-compact triggers
 // when estimated tokens exceed the auto-compact threshold (regression test).
-// For deepseek-v4-flash: effectiveWindow = 128K - 8K = 120K, threshold = 120K - 13K = 107K
+// For deepseek-v4-flash: effectiveWindow = 1M - 384K = 616K, threshold = 616K - 389K = 227K
 func TestEngine_AutoCompactFiresAboveThreshold(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
@@ -2392,11 +2392,11 @@ func TestEngine_AutoCompactFiresAboveThreshold(t *testing.T) {
 	engine := mustNewQueryEngine(&cfg, nil, "deepseek-v4-flash", WithClient(fastClient()))
 
 	// Verify the engine's compact config has correct threshold
-	// deepseek-v4-flash: effectiveWindow = 1M - 8192 = 991808
-	// autoCompactBuffer = max(8192+5000, 13000) = 13192
-	// threshold = 991808 - 13192 = 978616
+	// deepseek-v4-flash: effectiveWindow = 1M - 384000 = 616000
+	// autoCompactBuffer = max(384000+5000, 50000) = 389000
+	// threshold = 616000 - 389000 = 227000
 	threshold := engine.compactConfig.autoCompactThreshold()
-	expectedThreshold := 978616
+	expectedThreshold := 227000
 	if threshold != expectedThreshold {
 		t.Errorf("expected threshold %d, got %d", expectedThreshold, threshold)
 	} else {

@@ -166,15 +166,6 @@ func (s *StickyClient) SendMessageStream(ctx context.Context, messages []api.Mes
 	return s.client.SendMessageStream(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix, idleTimeout, fallbackTimeout, onStreamingFallback)
 }
 
-// SetMaxTokensOverride implements api.Requester.
-func (s *StickyClient) SetMaxTokensOverride(maxTokens int) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.client != nil {
-		s.client.SetMaxTokensOverride(maxTokens)
-	}
-}
-
 // SetRetryConfig implements api.Requester.
 func (s *StickyClient) SetRetryConfig(cfg api.RetryConfig) {
 	s.mu.Lock()

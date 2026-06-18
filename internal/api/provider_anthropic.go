@@ -16,13 +16,13 @@ import (
 
 // anthropicProvider implements the Provider interface using a lightweight HTTP client.
 type anthropicProvider struct {
-	client         *HTTPClient
-	model          string
-	maxTokens      int
-	thinkingConfig ThinkingConfig
-	retryConfig    RetryConfig
-	isBackground   bool
-	providerName   string
+	client            *HTTPClient
+	model             string
+	maxTokensOverride int
+	thinkingConfig    ThinkingConfig
+	retryConfig       RetryConfig
+	isBackground      bool
+	providerName      string
 }
 
 // newAnthropicProvider creates a new Anthropic provider.
@@ -66,9 +66,9 @@ func (p *anthropicProvider) SetBackground(isBackground bool) {
 	p.isBackground = isBackground
 }
 
-// SetMaxTokensOverride sets the max_tokens override.
-func (p *anthropicProvider) SetMaxTokensOverride(maxTokens int) {
-	p.maxTokens = maxTokens
+// setMaxTokensOverride sets the max_tokens override for the provider.
+func (p *anthropicProvider) setMaxTokensOverride(maxTokens int) {
+	p.maxTokensOverride = maxTokens
 }
 
 // SetRetryConfig sets the retry configuration.
@@ -184,10 +184,7 @@ func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Messag
 	sdkMessages := p.buildMessages(messages, toolResults)
 	sdkTools := p.buildTools(tools)
 
-	maxTokens := p.maxTokens
-	if maxTokens == 0 {
-		maxTokens = 32000
-	}
+	maxTokens := ResolveMaxTokens(p.model, p.maxTokensOverride)
 
 	reqBody := AnthropicRequest{
 		Model:     p.model,
@@ -435,10 +432,7 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 		sdkMessages := p.buildMessages(messages, toolResults)
 		sdkTools := p.buildTools(tools)
 
-		maxTokens := p.maxTokens
-		if maxTokens == 0 {
-			maxTokens = 32000
-		}
+		maxTokens := ResolveMaxTokens(p.model, p.maxTokensOverride)
 
 		reqBody := AnthropicRequest{
 			Model:     p.model,
@@ -672,19 +666,10 @@ func toolToSDK(t ToolParam, isLast bool) AnthropicTool {
 	return tool
 }
 
-// modelMaxOutputTokens returns the max output tokens for a given model.
-func modelMaxOutputTokens(model string) int {
-	switch model {
-	case "deepseek-v4-flash", "deepseek-v4-pro":
-		return 8192
-	default:
-		return 20000
-	}
-}
-
 // categorizeMaxTokensError creates a MaxTokensError from streaming results.
+// Uses the centralized capability table for accurate MaxOutputTokens.
 func categorizeMaxTokensError(model string, outputTokens int, contextRejected bool) *MaxTokensError {
-	maxOutputTokens := modelMaxOutputTokens(model)
+	maxOutputTokens := modelMaxOutputCap(model)
 	if contextRejected {
 		return &MaxTokensError{Category: CategoryContextExhausted, Model: model, OutputTokens: outputTokens}
 	}

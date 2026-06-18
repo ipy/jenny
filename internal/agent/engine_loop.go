@@ -329,7 +329,6 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 
 		// Create fallback function for streaming failures (AC3)
 		fallbackFn := func(fallbackCtx context.Context) (*api.Response, error) {
-			e.client.SetMaxTokensOverride(64000)
 			return e.client.SendMessage(fallbackCtx, messages, e.toolParams, nil, systemPrompt, "")
 		}
 

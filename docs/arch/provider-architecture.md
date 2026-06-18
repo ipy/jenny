@@ -147,3 +147,30 @@ Behavior:
 - Tool results are fed back as `*genai.FunctionResponse` parts on a `RoleUser` content turn, paired with the model's prior `*genai.FunctionCall` turn (the SDK requires both to be present in the conversation history).
 - Errors are mapped to `*RetryableHTTPError` (or returned unwrapped) based on `genai.APIError.Code` so the existing retry/streaming-fallback machinery works without changes.
 - Usage tokens: `PromptTokenCount → InputTokens`, `ResponseTokenCount → OutputTokens`, `CachedContentTokenCount → CacheReadInputTokens`, `ThoughtsTokenCount` is folded into `OutputTokens` (matching the Anthropic behavior where thinking tokens are part of the output budget).
+
+## Max Tokens Resolution
+
+Every API request carries a `max_tokens` value that is guaranteed not to exceed the active model's actual output capability. Resolution is centralized in a single function, `ResolveMaxTokens(model, override)`, which consults a bundled per-model capability table.
+
+### Invariant
+
+All three request sites (streaming, non-streaming, and the streaming-fallback path) call `ResolveMaxTokens` at request-build time. No code path hard-codes a `max_tokens` value or consults a provider-local default.
+
+### Resolution Rules
+
+1. If `override > 0` and within the model's capability, return `override` unchanged.
+2. If `override > 0` and exceeds the model's capability, return the capability value and emit a WARN log with reason `override_exceeds_capability`.
+3. If `override <= 0`, return the model's full capability as the default (a negative override is treated as 0 and logged with reason `negative_override`).
+4. For unknown models, return the conservative fallback of 16384 and emit a WARN log with reason `unknown_model_capability_default`.
+
+### Capability Table
+
+The bundled table (in `internal/api/model_caps.go`) maps model name prefixes to maximum output tokens. It is the single source of truth — providers do not maintain their own defaults. The table covers all known model families (Claude, GPT, Gemini, DeepSeek, o-series) with current values verified as of June 2026. Unknown models receive the conservative fallback of 16384 tokens.
+
+### Warning Channel
+
+Clamp events emit structured WARN log lines via the existing logger. The log contains `model`, `override`, `resolved`, and `reason` fields. In streaming mode, the warning is also surfaced as a `system` event in the stream-json protocol.
+
+### Relationship to MaxTokensError
+
+The `categorizeMaxTokensError` function populates `MaxOutputTokens` from the same capability table, making the field trustworthy for callers receiving a `CategoryOutputCapHit` error. Since pre-request clamping prevents configuration overshoot from reaching the API, a `MaxTokensError` represents a legitimate output-cap hit — the caller configured correctly, and the model simply filled its budget.

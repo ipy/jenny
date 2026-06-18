@@ -40,7 +40,6 @@ func (d *directHandler) SendMessageStream(_ context.Context, _ []api.Message, _ 
 	return ch, &api.StreamResult{}
 }
 
-func (d *directHandler) SetMaxTokensOverride(int)             {}
 func (d *directHandler) SetRetryConfig(api.RetryConfig)       {}
 func (d *directHandler) SetBackground(bool)                   {}
 func (d *directHandler) SetThinkingConfig(api.ThinkingConfig) {}

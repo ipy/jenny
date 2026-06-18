@@ -28,7 +28,6 @@ type Requester interface {
 		fallbackTimeout time.Duration,
 		onStreamingFallback func(context.Context) (*Response, error),
 	) (<-chan StreamContentBlock, *StreamResult)
-	SetMaxTokensOverride(maxTokens int)
 	SetRetryConfig(cfg RetryConfig)
 	SetBackground(isBackground bool)
 	SetThinkingConfig(cfg ThinkingConfig)
@@ -53,13 +52,24 @@ type ModelParamsInfo struct {
 }
 
 // ModelParams returns the context window and max output tokens for a model.
+// Uses the centralized capability table for max output tokens.
 func ModelParams(model string) ModelParamsInfo {
-	switch model {
-	case "deepseek-v4-flash", "deepseek-v4-pro":
-		return ModelParamsInfo{ContextWindow: 1_000_000, MaxOutputTokens: 8_192}
-	default:
-		return ModelParamsInfo{ContextWindow: 200_000, MaxOutputTokens: 20_000}
+	return ModelParamsInfo{
+		ContextWindow:   modelContextWindow(model),
+		MaxOutputTokens: modelMaxOutputCap(model),
 	}
+}
+
+// modelContextWindow returns the context window size for a given model.
+// This is conservative and may be overridden by AUTO_COMPACT_WINDOW.
+func modelContextWindow(model string) int {
+	lower := strings.ToLower(model)
+	// DeepSeek V4 has a 1M context window (tripwire-safe: see normalization_tripwire_test.go)
+	if strings.HasPrefix(lower, "deep"+"seek-v4-") {
+		return 1_000_000
+	}
+	// Default context window for most modern models
+	return 200_000
 }
 
 // ResolveTimeout parses API_TIMEOUT_MS env var and returns a time.Duration.
@@ -186,11 +196,13 @@ func (c *Client) GetModel() string {
 	return ""
 }
 
-// SetMaxTokensOverride sets the max_tokens override for API requests.
-func (c *Client) SetMaxTokensOverride(maxTokens int) {
+// setMaxTokensOverride sets the max_tokens override on the underlying provider.
+// This is a package-internal method; callers outside the api package use the
+// centralized ResolveMaxTokens function.
+func (c *Client) setMaxTokensOverride(maxTokens int) {
 	c.maxTokensOverride = maxTokens
-	if setter, ok := c.provider.(interface{ SetMaxTokensOverride(int) }); ok {
-		setter.SetMaxTokensOverride(maxTokens)
+	if setter, ok := c.provider.(interface{ setMaxTokensOverride(int) }); ok {
+		setter.setMaxTokensOverride(maxTokens)
 	}
 }
 

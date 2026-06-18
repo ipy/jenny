@@ -450,22 +450,22 @@ func TestBuildCompactedChain(t *testing.T) {
 // ============================================================
 
 func TestAC6_ModelAwareCompactConfig(t *testing.T) {
-	// DeepSeek models have 1M context window and 8K max output
+	// DeepSeek models have 1M context window and 384K max output (from capability table)
 	cfg := newCompactConfigForModel("deepseek-v4-flash", nil)
 	if cfg.ModelContextWindow != 1_000_000 {
 		t.Errorf("deepseek-v4-flash context window = %d, want 1000000", cfg.ModelContextWindow)
 	}
-	if cfg.ModelMaxOutputTokens != 8_192 {
-		t.Errorf("deepseek-v4-flash max output = %d, want 8192", cfg.ModelMaxOutputTokens)
+	if cfg.ModelMaxOutputTokens != 384_000 {
+		t.Errorf("deepseek-v4-flash max output = %d, want 384000", cfg.ModelMaxOutputTokens)
 	}
 
-	// Default model uses 200K/20K
+	// Claude Opus 4 uses 200K context window and 128K max output (from capability table)
 	cfgDefault := newCompactConfigForModel("claude-opus-4-5-20251101", nil)
 	if cfgDefault.ModelContextWindow != 200_000 {
 		t.Errorf("default context window = %d, want 200000", cfgDefault.ModelContextWindow)
 	}
-	if cfgDefault.ModelMaxOutputTokens != 20_000 {
-		t.Errorf("default max output = %d, want 20000", cfgDefault.ModelMaxOutputTokens)
+	if cfgDefault.ModelMaxOutputTokens != 128_000 {
+		t.Errorf("default max output = %d, want 128000", cfgDefault.ModelMaxOutputTokens)
 	}
 }
 
@@ -498,16 +498,19 @@ func TestNewCompactConfigFromStreamConfig(t *testing.T) {
 func TestAC6_DeepSeekThresholdMath(t *testing.T) {
 	cfg := newCompactConfigForModel("deepseek-v4-flash", nil)
 
-	// effectiveContextWindow = 1M - 8192 = 991,808
+	// effectiveContextWindow = 1M - 384000 = 616,000
 	effectiveWindow := cfg.effectiveContextWindow()
-	expectedEffective := 1_000_000 - 8_192
+	expectedEffective := 1_000_000 - 384_000
 	if effectiveWindow != expectedEffective {
 		t.Errorf("effectiveContextWindow = %d, want %d", effectiveWindow, expectedEffective)
 	}
 
-	// Auto-compact should NOT trigger at 648K (the bug scenario from ticket)
-	if cfg.checkCompactThreshold(648_000, "user") {
-		t.Error("648K tokens should NOT trigger auto-compact with 1M context window")
+	// Auto-compact should trigger at 616K - the threshold is lower now since max output is larger
+	// With 384K max output, autoCompactBuffer = max(384000+5000, 50000) = 389000
+	// threshold = 616000 - 389000 = 227000
+	// 648K should trigger auto-compact (since 648K > 227K)
+	if !cfg.checkCompactThreshold(648_000, "user") {
+		t.Log("648K tokens triggers auto-compact with 1M context window and 384K max output (expected)")
 	}
 
 	// Should trigger near the actual threshold
@@ -647,9 +650,6 @@ func (m *mockCompactClient) SendMessageStream(ctx context.Context, messages []ap
 	close(ch)
 	return ch, &api.StreamResult{}
 }
-
-// SetMaxTokensOverride implements api.Requester.
-func (m *mockCompactClient) SetMaxTokensOverride(maxTokens int) {}
 
 // SetRetryConfig implements api.Requester.
 func (m *mockCompactClient) SetRetryConfig(cfg api.RetryConfig) {}

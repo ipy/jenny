@@ -388,8 +388,8 @@ func TestCLIPermissionLevel(t *testing.T) {
 			Category:    "cli-flags",
 			Description: "all valid permission levels accepted by CLI",
 			Target: harness.TargetInvocation{
-				Kind:     "cli",
-				Args:     []string{"--permission-level", "unrestricted", "-p", "hello"},
+				Kind: "cli",
+				Args: []string{"--permission-level", "unrestricted", "-p", "hello"},
 				Env: []string{
 					"ANTHROPIC_AUTH_TOKEN=dummy",
 					"ANTHROPIC_BASE_URL=http://127.0.0.1:1", // force API to fail fast

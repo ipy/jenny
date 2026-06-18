@@ -15,12 +15,12 @@ import (
 
 // openAIResponsesProvider implements the Provider interface using the OpenAI Responses API.
 type openAIResponsesProvider struct {
-	client       *HTTPClient
-	model        string
-	maxTokens    int
-	retryConfig  RetryConfig
-	effort       string
-	providerName string
+	client            *HTTPClient
+	model             string
+	maxTokensOverride int
+	retryConfig       RetryConfig
+	effort            string
+	providerName      string
 }
 
 // newOpenAIResponsesProvider creates a new OpenAI Responses API provider.
@@ -50,7 +50,6 @@ func newOpenAIResponsesProvider(model string) (*openAIResponsesProvider, error) 
 	return &openAIResponsesProvider{
 		client:      NewHTTPClient(timeout),
 		model:       model,
-		maxTokens:   64000,
 		retryConfig: DefaultRetryConfig(),
 	}, nil
 }
@@ -70,11 +69,6 @@ func (p *openAIResponsesProvider) GetModel() string {
 	return p.model
 }
 
-// SetMaxTokensOverride sets the max_tokens override.
-func (p *openAIResponsesProvider) SetMaxTokensOverride(maxTokens int) {
-	p.maxTokens = maxTokens
-}
-
 // SetRetryConfig sets the retry configuration.
 func (p *openAIResponsesProvider) SetRetryConfig(cfg RetryConfig) {
 	p.retryConfig = cfg
@@ -85,6 +79,11 @@ func (p *openAIResponsesProvider) SetThinkingConfig(cfg ThinkingConfig) {
 	if cfg.Effort != "" {
 		p.effort = cfg.Effort
 	}
+}
+
+// setMaxTokensOverride sets the max_tokens override for the provider.
+func (p *openAIResponsesProvider) setMaxTokensOverride(maxTokens int) {
+	p.maxTokensOverride = maxTokens
 }
 
 // SetProviderName sets the provider name.
@@ -189,10 +188,7 @@ func (p *openAIResponsesProvider) doSendMessage(ctx context.Context, messages []
 		sdkTools = p.buildTools(tools)
 	}
 
-	maxTokens := int64(p.maxTokens)
-	if maxTokens == 0 {
-		maxTokens = 64000
-	}
+	maxTokens := int64(ResolveMaxTokens(p.model, p.maxTokensOverride))
 
 	reqBody := OpenAIResponsesRequest{
 		Model:           p.model,
@@ -457,10 +453,7 @@ func (p *openAIResponsesProvider) SendMessageStream(ctx context.Context, message
 			sdkTools = p.buildTools(tools)
 		}
 
-		maxTokens := int64(p.maxTokens)
-		if maxTokens == 0 {
-			maxTokens = 64000
-		}
+		maxTokens := int64(ResolveMaxTokens(p.model, p.maxTokensOverride))
 
 		reqBody := OpenAIResponsesRequest{
 			Model:           p.model,

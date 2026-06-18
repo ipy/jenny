@@ -60,7 +60,6 @@ func TestDeepSeekToolResultFormat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
-	provider.SetMaxTokensOverride(1000)
 
 	// Message history with tool results
 	messages := []Message{
@@ -170,7 +169,6 @@ func TestToolResultContentFlattenScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
-	provider.SetMaxTokensOverride(1000)
 
 	messages := []Message{
 		{

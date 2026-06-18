@@ -21,9 +21,9 @@ type TargetInvocation struct {
 	Kind string
 
 	// For Kind="prompt":
-	Prompt   string   // user prompt passed via -p flag
-	Format   string   // --output-format value (e.g. "stream-json", "text")
-	Cassette string   // cassette file name without extension (e.g. "echo-hello")
+	Prompt   string // user prompt passed via -p flag
+	Format   string // --output-format value (e.g. "stream-json", "text")
+	Cassette string // cassette file name without extension (e.g. "echo-hello")
 
 	// For multi-turn (tool use): list of cassette IDs in order.
 	// When set, the mock server serves cassettes[0] for the first request,
@@ -196,10 +196,10 @@ type EventExpectation struct {
 // IndexedEventExpectation runs assertions on the event at a specific index.
 // Index -1 means the last event matching TypeFilter.
 type IndexedEventExpectation struct {
-	Index        int    // event index; -1 means last matching event
-	TypeFilter   string // only consider events with this type; "" means all types
+	Index         int    // event index; -1 means last matching event
+	TypeFilter    string // only consider events with this type; "" means all types
 	SubtypeFilter string
-	Expect       EventExpectation
+	Expect        EventExpectation
 }
 
 // APIRequestExpectation describes assertions on a single captured HTTP request.
@@ -314,14 +314,14 @@ type RecordedRequest struct {
 
 // TestResult describes the outcome of a test case execution.
 type TestResult struct {
-	ID          string
-	Category    string
-	Status      string // "pass", "fail", "error", "skip"
-	Message     string
-	Duration    int64  // milliseconds
-	SkipReason  string
-	Diff        []DiffDetail
-	Actual      *CapturedOutput
+	ID            string
+	Category      string
+	Status        string // "pass", "fail", "error", "skip"
+	Message       string
+	Duration      int64 // milliseconds
+	SkipReason    string
+	Diff          []DiffDetail
+	Actual        *CapturedOutput
 	ReferenceDiff []string // differences vs reference binary (informational)
 }
 

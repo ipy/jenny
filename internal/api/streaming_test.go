@@ -370,7 +370,6 @@ func TestAC1_NonStreamingCacheTokensExtracted(t *testing.T) {
 	setTestEnv(t, ms.URL())
 
 	client, _ := NewClientWithModel("m")
-	client.SetMaxTokensOverride(8192)
 	resp, err := client.SendMessage(context.Background(), nil, nil, nil, []string{}, "")
 	if err != nil {
 		t.Fatalf("AC1 FAIL: SendMessage error = %v", err)
@@ -643,13 +642,11 @@ func TestStreamingMultipleContentBlocks(t *testing.T) {
 	}
 }
 
-// TestFallback_NonStreamingMaxTokens64000 is the AC1 conformance test for
-// the non-streaming fallback path: with SetMaxTokensOverride(64000), the
-// non-streaming /v1/messages request must carry max_tokens == 64000
-// (matching engine_loop.go:341). The 20000 clamp that previously lived in
-// doSendMessage is gone; the SDK's 10-minute guard is bypassed at the
-// client level via option.WithRequestTimeout(1*time.Hour).
-func TestFallback_NonStreamingMaxTokens64000(t *testing.T) {
+// TestFallback_NonStreamingMaxTokensConformance is the AC1 conformance test for
+// the non-streaming fallback path: the non-streaming /v1/messages request must
+// carry max_tokens resolved from the centralized capability table. Unknown models
+// receive the conservative fallback (16384).
+func TestFallback_NonStreamingMaxTokensConformance(t *testing.T) {
 	var capturedBody []byte
 	ms := mockapi.NewMockServer()
 	ms.SetPathHandler("POST /v1/messages", func(w http.ResponseWriter, r *http.Request) {
@@ -664,7 +661,6 @@ func TestFallback_NonStreamingMaxTokens64000(t *testing.T) {
 	setTestEnv(t, ms.URL())
 
 	client, _ := NewClientWithModel("m")
-	client.SetMaxTokensOverride(64000)
 	if _, err := client.SendMessage(context.Background(), nil, nil, nil, []string{}, ""); err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
@@ -681,7 +677,7 @@ func TestFallback_NonStreamingMaxTokens64000(t *testing.T) {
 	if !ok {
 		t.Fatalf("max_tokens is not a number; got %T (%v)", raw, raw)
 	}
-	if int(num) != 64000 {
-		t.Errorf("AC1 FAIL: non-streaming max_tokens = %d; want 64000", int(num))
+	if int(num) != 16384 {
+		t.Errorf("AC1 FAIL: non-streaming max_tokens = %d; want 16384 (conservative fallback for unknown model)", int(num))
 	}
 }

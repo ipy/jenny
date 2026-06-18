@@ -18,11 +18,11 @@ const ProviderGenAI ProviderKind = "genai"
 
 // genaiProvider implements the Provider interface using a lightweight HTTP client.
 type genaiProvider struct {
-	client       *HTTPClient
-	model        string
-	maxTokens    int
-	retryConfig  RetryConfig
-	providerName string
+	client            *HTTPClient
+	model             string
+	maxTokensOverride int
+	retryConfig       RetryConfig
+	providerName      string
 }
 
 // newGenAIProvider creates a new GenAI provider.
@@ -42,7 +42,6 @@ func newGenAIProvider(model string) (*genaiProvider, error) {
 	return &genaiProvider{
 		client:      NewHTTPClient(timeout),
 		model:       model,
-		maxTokens:   64000,
 		retryConfig: DefaultRetryConfig(),
 	}, nil
 }
@@ -62,11 +61,6 @@ func (p *genaiProvider) GetModel() string {
 	return p.model
 }
 
-// SetMaxTokensOverride sets the max output tokens override.
-func (p *genaiProvider) SetMaxTokensOverride(maxTokens int) {
-	p.maxTokens = maxTokens
-}
-
 // SetRetryConfig sets the retry configuration.
 func (p *genaiProvider) SetRetryConfig(cfg RetryConfig) {
 	p.retryConfig = cfg
@@ -75,6 +69,11 @@ func (p *genaiProvider) SetRetryConfig(cfg RetryConfig) {
 // SetProviderName sets the provider name.
 func (p *genaiProvider) SetProviderName(name string) {
 	p.providerName = name
+}
+
+// setMaxTokensOverride sets the max_tokens override for the provider.
+func (p *genaiProvider) setMaxTokensOverride(maxTokens int) {
+	p.maxTokensOverride = maxTokens
 }
 
 // SendMessage sends a non-streaming message.
@@ -171,10 +170,11 @@ func (p *genaiProvider) doSendMessage(ctx context.Context, messages []Message, t
 
 	messages, tools, _ = NormalizeMessages(messages, tools, Capabilities{SupportsPromptCaching: false})
 
+	mt := ResolveMaxTokens(p.model, p.maxTokensOverride)
 	reqBody := GenAIRequest{
 		Contents: p.buildContents(messages, toolResults),
 		GenerationConfig: &GenAIGenerationConfig{
-			MaxOutputTokens: &p.maxTokens,
+			MaxOutputTokens: &mt,
 		},
 	}
 
@@ -245,10 +245,11 @@ func (p *genaiProvider) SendMessageStream(ctx context.Context, messages []Messag
 
 		messages, tools, _ = NormalizeMessages(messages, tools, Capabilities{SupportsPromptCaching: false})
 
+		mt := ResolveMaxTokens(p.model, p.maxTokensOverride)
 		reqBody := GenAIRequest{
 			Contents: p.buildContents(messages, toolResults),
 			GenerationConfig: &GenAIGenerationConfig{
-				MaxOutputTokens: &p.maxTokens,
+				MaxOutputTokens: &mt,
 			},
 		}
 

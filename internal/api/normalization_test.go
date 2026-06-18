@@ -32,7 +32,6 @@ func TestNormalization_ToolResultFlattening_EdgeCases(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create provider: %v", err)
 		}
-		provider.SetMaxTokensOverride(1000)
 		return provider, baseURL
 	}
 

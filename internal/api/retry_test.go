@@ -726,13 +726,12 @@ func TestRetry_AC5_PreservesParams(t *testing.T) {
 	t.Setenv("ANTHROPIC_BASE_URL", ms.URL())
 	t.Setenv("ANTHROPIC_API_KEY", "test-key")
 
-	// Create client with specific model and maxTokensOverride
+	// Create client with specific model
 	client, err := NewClientWithModel("my-test-model")
 	if err != nil {
 		t.Fatalf("NewClientWithModel failed: %v", err)
 	}
 	client.SetRetryConfig(RetryConfig{MaxRetries: 5, Max529Retries: 3, BaseDelay: 10 * time.Millisecond})
-	client.SetMaxTokensOverride(4096)
 
 	// Send message - this should retry and preserve model/max_tokens
 	resp, err := client.SendMessage(context.Background(), nil, nil, nil, []string{}, "")
@@ -752,14 +751,15 @@ func TestRetry_AC5_PreservesParams(t *testing.T) {
 	}
 
 	// Verify all requests had the same model and max_tokens
+	// Unknown model "my-test-model" gets the conservative fallback (16384)
 	for i, req := range requests {
 		model, ok := req["model"].(string)
 		if !ok || model != "my-test-model" {
 			t.Errorf("request %d: expected model 'my-test-model', got %v", i, req["model"])
 		}
 		maxTokens, ok := req["max_tokens"].(float64)
-		if !ok || int(maxTokens) != 4096 {
-			t.Errorf("request %d: expected max_tokens 4096, got %v", i, req["max_tokens"])
+		if !ok || int(maxTokens) != 16384 {
+			t.Errorf("request %d: expected max_tokens 16384 (conservative fallback), got %v", i, req["max_tokens"])
 		}
 	}
 }

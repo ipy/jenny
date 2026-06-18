@@ -31,7 +31,6 @@ func (m *mockRequester) SendMessageStream(ctx context.Context, messages []api.Me
 	return ch, &api.StreamResult{}
 }
 
-func (m *mockRequester) SetMaxTokensOverride(maxTokens int)       {}
 func (m *mockRequester) SetRetryConfig(cfg api.RetryConfig)       {}
 func (m *mockRequester) SetBackground(isBackground bool)          {}
 func (m *mockRequester) SetThinkingConfig(cfg api.ThinkingConfig) {}
