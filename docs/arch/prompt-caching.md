@@ -2,7 +2,7 @@
 title: Prompt Caching
 slug: prompt-caching
 priority: P0
-status: complete
+status: done
 spec: complete
 code: complete
 package: internal/api, internal/agent

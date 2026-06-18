@@ -2,7 +2,7 @@
 title: WebUI Portal
 slug: webui-portal
 priority: P1
-status: complete
+status: done
 spec: complete
 code: complete
 version: "0.4.0"

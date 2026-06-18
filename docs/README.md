@@ -158,8 +158,8 @@ CLI → API → loop → persistence → resume → SSE → stream-json → cost
 | 6 | SSE streaming | [sse-streaming.md](./arch/sse-streaming.md) | done |
 | 7 | Stream-json | [stream-json.md](./arch/stream-json.md) | done |
 | 8 | Cost tracking | [cost-tracking.md](./arch/cost-tracking.md) | done |
-| 9 | MCP config | [mcp-config.md](./arch/mcp-config.md) | partial |
-| 10 | MCP client | [mcp-client.md](./arch/mcp-client.md) | partial |
+| 9 | MCP config | [mcp-config.md](./arch/mcp-config.md) | done |
+| 10 | MCP client | [mcp-client.md](./arch/mcp-client.md) | done |
 
 ### P1 — Autonomous coding
 
