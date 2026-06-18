@@ -156,7 +156,7 @@ func TestParseIncludePartialMessagesFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"jenny", "--include-partial-messages", "--print", "hello"}
+	os.Args = []string{"jenny", "--include-partial-messages", "--output-format", "stream-json", "--print", "hello"}
 
 	flags, _, err := Parse()
 	if err != nil {

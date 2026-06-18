@@ -31,15 +31,15 @@ func (m *mockRequester) SendMessageStream(ctx context.Context, messages []api.Me
 	return ch, &api.StreamResult{}
 }
 
-func (m *mockRequester) SetMaxTokensOverride(maxTokens int) {}
-func (m *mockRequester) SetRetryConfig(cfg api.RetryConfig) {}
-func (m *mockRequester) SetBackground(isBackground bool)   {}
+func (m *mockRequester) SetMaxTokensOverride(maxTokens int)       {}
+func (m *mockRequester) SetRetryConfig(cfg api.RetryConfig)       {}
+func (m *mockRequester) SetBackground(isBackground bool)          {}
 func (m *mockRequester) SetThinkingConfig(cfg api.ThinkingConfig) {}
-func (m *mockRequester) SetProviderName(name string)       {}
+func (m *mockRequester) SetProviderName(name string)              {}
 
 func TestErrorRecovery_ModelNotFound(t *testing.T) {
 	mock := &mockRequester{}
-	
+
 	// First call: streaming ModelNotFound
 	mock.sendMessageStreamFunc = func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string, idleTimeout time.Duration, fallbackTimeout time.Duration, onStreamingFallback func(context.Context) (*api.Response, error)) (<-chan api.StreamContentBlock, *api.StreamResult) {
 		ch := make(chan api.StreamContentBlock)
@@ -76,7 +76,7 @@ func TestErrorRecovery_ModelNotFound(t *testing.T) {
 
 func TestErrorRecovery_ModelNotFound_Exhausted(t *testing.T) {
 	mock := &mockRequester{}
-	
+
 	mock.sendMessageStreamFunc = func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string, idleTimeout time.Duration, fallbackTimeout time.Duration, onStreamingFallback func(context.Context) (*api.Response, error)) (<-chan api.StreamContentBlock, *api.StreamResult) {
 		ch := make(chan api.StreamContentBlock)
 		close(ch)
@@ -100,7 +100,7 @@ func TestErrorRecovery_ModelNotFound_Exhausted(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
-	
+
 	var mnfe *ModelNotFoundError
 	if !errors.As(err, &mnfe) {
 		t.Fatalf("Expected ModelNotFoundError, got %T: %v", err, err)
@@ -112,7 +112,7 @@ func TestErrorRecovery_ModelNotFound_Exhausted(t *testing.T) {
 
 func TestErrorRecovery_QuotaExhausted(t *testing.T) {
 	mock := &mockRequester{}
-	
+
 	mock.sendMessageStreamFunc = func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string, idleTimeout time.Duration, fallbackTimeout time.Duration, onStreamingFallback func(context.Context) (*api.Response, error)) (<-chan api.StreamContentBlock, *api.StreamResult) {
 		ch := make(chan api.StreamContentBlock)
 		close(ch)
@@ -136,7 +136,7 @@ func TestErrorRecovery_QuotaExhausted(t *testing.T) {
 
 func TestErrorRecovery_ContentFilter(t *testing.T) {
 	mock := &mockRequester{}
-	
+
 	mock.sendMessageStreamFunc = func(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string, idleTimeout time.Duration, fallbackTimeout time.Duration, onStreamingFallback func(context.Context) (*api.Response, error)) (<-chan api.StreamContentBlock, *api.StreamResult) {
 		ch := make(chan api.StreamContentBlock)
 		close(ch)

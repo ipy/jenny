@@ -38,7 +38,6 @@ func (t *EnterWorktreeTool) ConcurrencySafe() bool {
 	return false
 }
 
-
 // Description returns a description of the tool.
 func (t *EnterWorktreeTool) Description() string {
 	return "Create an isolated git worktree session for subagent tasks. Use when you need to work on a branch without affecting the main working directory."

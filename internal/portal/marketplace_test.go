@@ -27,11 +27,11 @@ func TestMarketplaceBrowse_CustomSource(t *testing.T) {
 	defer ts.Close()
 
 	p := &Portal{}
-	
+
 	// Test custom source
 	req := httptest.NewRequest("GET", "/api/marketplace/browse?source="+ts.URL, nil)
 	rr := httptest.NewRecorder()
-	
+
 	p.handleMarketplaceBrowse(rr, req)
 
 	if rr.Code != http.StatusOK {
@@ -53,7 +53,7 @@ func TestMarketplaceBrowse_Error502(t *testing.T) {
 	// Use an unreachable local address
 	req := httptest.NewRequest("GET", "/api/marketplace/browse?source=http://127.0.0.1:1", nil)
 	rr := httptest.NewRecorder()
-	
+
 	p.handleMarketplaceBrowse(rr, req)
 
 	if rr.Code != http.StatusBadGateway {
@@ -275,7 +275,6 @@ func TestMarketplaceInstall_Plugin_Unit(t *testing.T) {
 		t.Errorf("expected plugin.json to contain 'test-plugin', got %q", string(content))
 	}
 }
-
 
 func TestPathTraversalDefense(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-traversal-*")

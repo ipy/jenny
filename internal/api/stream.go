@@ -170,7 +170,7 @@ type StreamResult struct {
 
 // ErrorInfo holds normalized error metadata for structured stream-json subtypes.
 type ErrorInfo struct {
-	Category    ErrorCategory
-	Message     string // Cleaned human-readable message
-	StatusCode  int
+	Category   ErrorCategory
+	Message    string // Cleaned human-readable message
+	StatusCode int
 }

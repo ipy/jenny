@@ -36,7 +36,6 @@ func (t *ExitWorktreeTool) ConcurrencySafe() bool {
 	return false
 }
 
-
 // Description returns a description of the tool.
 func (t *ExitWorktreeTool) Description() string {
 	return "Exit a git worktree session. Use 'keep' action to preserve worktree files, or 'remove' to delete the worktree and its branch."
