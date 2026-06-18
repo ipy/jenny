@@ -836,25 +836,37 @@ func TestAC1_RecursiveForkBlocked_ViaContext(t *testing.T) {
 	}
 }
 
+// mockSubagentRunner implements tool.SubagentRunner for testing.
+type mockSubagentRunner struct {
+	runErr error
+}
+
+func (m *mockSubagentRunner) RunSubagent(ctx context.Context, params tool.SubagentParams) (*tool.SubagentResult, error) {
+	if m.runErr != nil {
+		return nil, m.runErr
+	}
+	return &tool.SubagentResult{Output: "mock success"}, nil
+}
+
+func (m *mockSubagentRunner) GetCapturedStreamConfigInfo() map[string]any {
+	return nil
+}
+
 func TestAC1_RecursiveForkBlocked_NoFalsePositive(t *testing.T) {
 	// AC1: Without fork marker in context, recursive fork is NOT blocked.
-	// The agent tool should proceed to execute (and fail with API error, not fork error).
+	// The agent tool should proceed to call the runner (and get the runner's error,
+	// not the fork error). We use a mock runner to avoid real API calls.
 
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
+	// mockRunner returns a predictable error so we can verify the fork check
+	// doesn't intercept before the runner is reached.
+	mockRunner := &mockSubagentRunner{
+		runErr: fmt.Errorf("mock runner error"),
 	}
 
-	// Create context WITHOUT fork child marker, with timeout to prevent hanging
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	agentTool := tool.NewAgentTool(mockRunner, nil)
 
-	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
-	tools := []tool.Tool{readTool}
-	runner := NewLocalSubagentRunner(tools, nil, fastClient())
-
-	agentTool := tool.NewAgentTool(runner, nil)
+	// Context WITHOUT fork child marker
+	ctx := context.Background()
 
 	input := map[string]any{
 		"prompt":        "do something",
@@ -862,14 +874,20 @@ func TestAC1_RecursiveForkBlocked_NoFalsePositive(t *testing.T) {
 	}
 	result, err := agentTool.Execute(ctx, input, "/tmp")
 	if err != nil {
-		// Error from API execution is fine - we're just checking it's NOT the fork error
-		if strings.Contains(err.Error(), "recursive fork") {
-			t.Fatalf("unexpected recursive fork error when context has no fork marker: %v", err)
-		}
-		return
+		t.Fatalf("Execute should not return error for mock runner: %v", err)
 	}
-	if result != nil && result.IsError && strings.Contains(result.Content, "recursive fork") {
-		t.Fatal("unexpected recursive fork error when context has no fork marker")
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if !result.IsError {
+		t.Fatal("expected IsError=true for runner error")
+	}
+	// Must NOT contain the fork error — must contain the runner's error instead
+	if strings.Contains(result.Content, "recursive fork") {
+		t.Fatalf("unexpected recursive fork error when context has no fork marker: %q", result.Content)
+	}
+	if !strings.Contains(result.Content, "mock runner error") {
+		t.Errorf("expected mock runner error in result, got: %q", result.Content)
 	}
 }
 

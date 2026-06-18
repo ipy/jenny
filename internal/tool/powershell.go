@@ -52,6 +52,12 @@ func (t *PowerShellTool) Name() string {
 	return "PowerShell"
 }
 
+// ConcurrencySafe returns false — PowerShell commands must execute serially
+// to maintain consistent state and avoid interleaving output.
+func (t *PowerShellTool) ConcurrencySafe() bool {
+	return false
+}
+
 // Description returns a description of the tool.
 func (t *PowerShellTool) Description() string {
 	return "Execute PowerShell commands on Windows. Use this to run PowerShell commands like Get-ChildItem, Get-Content, etc."

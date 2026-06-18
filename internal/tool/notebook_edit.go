@@ -36,6 +36,12 @@ func (t *NotebookEditTool) Name() string {
 	return "notebook_edit"
 }
 
+// ConcurrencySafe returns false — notebook edits must execute serially
+// to avoid file corruption when multiple edits target the same file.
+func (t *NotebookEditTool) ConcurrencySafe() bool {
+	return false
+}
+
 // WithReadFileCache sets the read cache for read-before-write validation.
 func (t *NotebookEditTool) WithReadFileCache(cache *ReadFileCache) *NotebookEditTool {
 	t.readCache = cache

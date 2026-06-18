@@ -31,6 +31,13 @@ func (t *TodoWriteTool) Name() string {
 	return "TodoWrite"
 }
 
+// ConcurrencySafe returns false — todo writes must execute serially
+// to avoid corrupting the TODO.md file.
+func (t *TodoWriteTool) ConcurrencySafe() bool {
+	return false
+}
+
+
 // Description returns a description of the tool.
 func (t *TodoWriteTool) Description() string {
 	return "Manage in-session todo items. Create, update, or complete todos by subject."

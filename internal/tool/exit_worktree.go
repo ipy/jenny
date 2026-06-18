@@ -30,6 +30,13 @@ func (t *ExitWorktreeTool) Name() string {
 	return "ExitWorktree"
 }
 
+// ConcurrencySafe returns false — worktree operations must be serial
+// as they modify git state and have system-wide side effects.
+func (t *ExitWorktreeTool) ConcurrencySafe() bool {
+	return false
+}
+
+
 // Description returns a description of the tool.
 func (t *ExitWorktreeTool) Description() string {
 	return "Exit a git worktree session. Use 'keep' action to preserve worktree files, or 'remove' to delete the worktree and its branch."

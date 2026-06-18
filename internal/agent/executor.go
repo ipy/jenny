@@ -164,7 +164,7 @@ func (e *ToolExecutor) partitionGroups(toolUseBlocks []toolUseBlock) []toolGroup
 		if len(currentBatch) > 0 {
 			groups = append(groups, toolGroup{
 				tools:  currentBatch,
-				serial: currentBatchType == "Bash",
+				serial: currentBatchType == "shell",
 			})
 		}
 		currentBatch = nil
@@ -203,11 +203,11 @@ func (e *ToolExecutor) partitionGroups(toolUseBlocks []toolUseBlock) []toolGroup
 				}},
 				serial: true,
 			})
-		} else if isBashTool(block.Name) {
-			if currentBatchType != "" && currentBatchType != "Bash" {
+		} else if isShellTool(block.Name) {
+			if currentBatchType != "" && currentBatchType != "shell" {
 				flushBatch()
 			}
-			currentBatchType = "Bash"
+			currentBatchType = "shell"
 			currentBatch = append(currentBatch, toolUseWithIndex{
 				block: block,
 				index: i,
@@ -389,8 +389,8 @@ func (e *ToolExecutor) executeSerial(parentCtx context.Context, batch []toolUseW
 				IsError:     true,
 				Interrupted: interrupted,
 			}
-			// Bash failure aborts siblings in same batch
-			if isBashTool(tw.block.Name) {
+			// Shell failure aborts siblings in same batch
+			if isShellTool(tw.block.Name) {
 				cancel()
 			}
 		} else {
@@ -402,37 +402,43 @@ func (e *ToolExecutor) executeSerial(parentCtx context.Context, batch []toolUseW
 				Content:   execResult.Content,
 				IsError:   execResult.IsError,
 			}
-			// Also abort on logical error for bash if it's considered a "failure"
-			if isBashTool(tw.block.Name) && execResult.IsError {
+			// Also abort on logical error for shell if it's considered a "failure"
+			if isShellTool(tw.block.Name) && execResult.IsError {
 				cancel()
 			}
 		}
 	}
 }
 
-// isReadOnlyTool returns true if the tool is read-only (read, glob, grep).
+// isReadOnlyTool returns true if the tool is read-only (read, glob, grep, read_mcp_resource, McpPrompt).
 func isReadOnlyTool(toolName string) bool {
-	switch toolName {
-	case "Read", "Glob", "Grep":
+	switch strings.ToLower(toolName) {
+	case "read", "glob", "grep", "read_mcp_resource", "mcpprompt":
 		return true
 	default:
+		// Also check exact case for capitalized versions if needed
+		switch toolName {
+		case "Read", "Glob", "Grep", "ReadMcpResource", "McpPrompt":
+			return true
+		}
 		return false
 	}
 }
 
-// isSerialTool returns true if the tool must run serially (write, edit).
+// isSerialTool returns true if the tool must run serially (write, edit, notebook_edit, todo_write, task tools that mutate).
 func isSerialTool(toolName string) bool {
-	switch toolName {
-	case "write", "edit", "Write", "Edit":
+	switch strings.ToLower(toolName) {
+	case "write", "edit", "notebook_edit", "notebook-edit", "notebookedit", "todo_write", "todowrite", "taskcreate", "task_create", "taskupdate", "task_update", "taskstop", "task_stop", "enter_worktree", "enterworktree", "exit_worktree", "exitworktree":
 		return true
 	default:
 		return false
 	}
 }
 
-// isBashTool returns true if the tool is a bash tool.
-func isBashTool(toolName string) bool {
-	return toolName == "Bash"
+// isShellTool returns true if the tool is a shell-like tool (Bash, PowerShell).
+func isShellTool(toolName string) bool {
+	lower := strings.ToLower(toolName)
+	return lower == "bash" || lower == "powershell"
 }
 
 // toolResult represents a tool execution result.

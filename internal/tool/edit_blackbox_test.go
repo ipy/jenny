@@ -747,3 +747,73 @@ func TestEditTool_OldStringEmptyOnExistingFile(t *testing.T) {
 		t.Fatal("expected error when old_string is empty on non-empty file (ambiguous)")
 	}
 }
+
+// TestEditTool_UnrestrictedCreateNewFile tests that creating a new file with
+// old_string="" under unrestricted level (where entry is nil) does not panic.
+// This is a regression test for a nil pointer dereference in finalizeEdit.
+func TestEditTool_UnrestrictedCreateNewFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	cache := NewReadFileCache()
+	et := NewEditTool(cache).WithPermissionLevel(PermissionUnrestricted)
+
+	f := filepath.Join(tmpDir, "brand_new.txt")
+
+	// No prior Read — in unrestricted mode, ReadBeforeWrite() is false,
+	// so entry is nil. Creating a new file with old_string="" should work
+	// without panicking.
+	result, err := et.Execute(context.Background(), map[string]any{
+		"file_path":  f,
+		"old_string": "",
+		"new_string": "hello world",
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success but got error: %s", result.Content)
+	}
+
+	// Verify file was created with correct content
+	data, readErr := os.ReadFile(f)
+	if readErr != nil {
+		t.Fatalf("failed to read created file: %v", readErr)
+	}
+	if string(data) != "hello world" {
+		t.Fatalf("unexpected content: %q", string(data))
+	}
+}
+
+// TestEditTool_UnrestrictedEditExistingFile tests that editing an existing file
+// under unrestricted level without a prior Read (entry is nil) works correctly.
+func TestEditTool_UnrestrictedEditExistingFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	cache := NewReadFileCache()
+	et := NewEditTool(cache).WithPermissionLevel(PermissionUnrestricted)
+
+	f := filepath.Join(tmpDir, "edit_no_read.txt")
+	if err := os.WriteFile(f, []byte("hello world\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Edit without reading first — unrestricted level skips ReadBeforeWrite check
+	result, err := et.Execute(context.Background(), map[string]any{
+		"file_path":  f,
+		"old_string": "hello",
+		"new_string": "goodbye",
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success but got error: %s", result.Content)
+	}
+
+	// Verify file was edited
+	data, readErr := os.ReadFile(f)
+	if readErr != nil {
+		t.Fatalf("failed to read edited file: %v", readErr)
+	}
+	if !strings.Contains(string(data), "goodbye") {
+		t.Fatalf("unexpected content after edit: %q", string(data))
+	}
+}

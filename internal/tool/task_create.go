@@ -21,6 +21,12 @@ func (t *TaskCreateTool) Name() string {
 	return "TaskCreate"
 }
 
+// ConcurrencySafe returns false — task creation should be serialized to
+// avoid logical race conditions in the todo system.
+func (t *TaskCreateTool) ConcurrencySafe() bool {
+	return false
+}
+
 // Description returns a description of the tool.
 func (t *TaskCreateTool) Description() string {
 	return "Creates a tracked task in Todo v2 system. Requires Todo v2 to be enabled."

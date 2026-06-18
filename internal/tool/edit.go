@@ -719,13 +719,18 @@ func (t *EditTool) handleMissingFile(filePath, oldString, newString string, entr
 func (t *EditTool) finalizeEdit(filePath, newContent string, entry *ReadFileEntry) (*ToolResult, error) {
 	// Get new mtime after write
 	newInfo, _ := os.Stat(filePath)
-	newMtime := entry.Mtime
+	var newMtime time.Time
 	if newInfo != nil {
 		newMtime = newInfo.ModTime()
+	} else if entry != nil {
+		newMtime = entry.Mtime
 	}
 
 	// Generate patch diff using old content from cache vs new content
-	oldContentFromCache := entry.Content
+	var oldContentFromCache string
+	if entry != nil {
+		oldContentFromCache = entry.Content
+	}
 	diff := GenerateUnifiedDiff(oldContentFromCache, newContent, filePath)
 
 	// Update readFileCache after successful edit

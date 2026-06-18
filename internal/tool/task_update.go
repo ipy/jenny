@@ -23,6 +23,12 @@ func (t *TaskUpdateTool) Name() string {
 	return "TaskUpdate"
 }
 
+// ConcurrencySafe returns false — task updates should be serialized to
+// avoid logical race conditions in the todo system.
+func (t *TaskUpdateTool) ConcurrencySafe() bool {
+	return false
+}
+
 // Description returns a description of the tool.
 func (t *TaskUpdateTool) Description() string {
 	return "Updates a task in the Todo v2 system. Supports field updates, metadata merge (null deletes keys), and dependency graph changes."
