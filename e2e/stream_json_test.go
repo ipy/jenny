@@ -653,18 +653,18 @@ func TestStreamJSONGap_InitExtendedFields(t *testing.T) {
 			Category:    "stream-json",
 			Description: "init event includes all extended fields (8 total) with real data",
 			Target: harness.TargetInvocation{
+				WorkDirFiles: map[string]string{
+					// A skill so that skills/ slash_commands are populated
+					".jenny/skills/test-skill/SKILL.md": "---\ndescription: e2e test skill\n---\n# Test Skill\n",
+					// A plugin (marker dir inside plugin root) so that plugins field is populated
+					"test-plugin/.jenny-plugin/plugin.json": `{"name":"test-plugin","version":"0.1.0"}`,
+					// .git/HEAD so git.GetRoot succeeds for memory_paths
+					".git/HEAD": "ref: refs/heads/main\n",
+				},
 				Kind:     "prompt",
 				Prompt:   "say hi",
 				Format:   "stream-json",
 				Cassette: "echo-hello",
-			},
-			WorkDirFiles: map[string]string{
-				// A skill so that skills/ slash_commands are populated
-				".jenny/skills/test-skill/SKILL.md": "---\ndescription: e2e test skill\n---\n# Test Skill\n",
-				// A plugin (marker dir inside plugin root) so that plugins field is populated
-				"test-plugin/.jenny-plugin/plugin.json": `{"name":"test-plugin","version":"0.1.0"}`,
-				// .git/HEAD so git.GetRoot succeeds for memory_paths
-				".git/HEAD": "ref: refs/heads/main\n",
 			},
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,

@@ -84,10 +84,10 @@ func TestToolCallTextWithTool(t *testing.T) {
 			ID:          "tool-call.mixed.text-and-tool-in-one-assistant",
 			Category:    "tool-call",
 			Description: "assistant turn with text + tool_use emits single assistant event",
-			WorkDirFiles: map[string]string{
-				"test.txt": "file content for testing\n",
-			},
 			Target: harness.TargetInvocation{
+				WorkDirFiles: map[string]string{
+					"test.txt": "file content for testing\n",
+				},
 				Kind:             "prompt",
 				Prompt:           "check the test file",
 				Format:           "stream-json",
@@ -143,11 +143,11 @@ func TestToolCallParallelReads(t *testing.T) {
 			ID:          "tool-call.parallel.concurrent-reads",
 			Category:    "tool-call",
 			Description: "multiple Read tools execute concurrently",
-			WorkDirFiles: map[string]string{
-				"a.txt": "content of file a\n",
-				"b.txt": "content of file b\n",
-			},
 			Target: harness.TargetInvocation{
+				WorkDirFiles: map[string]string{
+					"a.txt": "content of file a\n",
+					"b.txt": "content of file b\n",
+				},
 				Kind:             "prompt",
 				Prompt:           "read both files",
 				Format:           "stream-json",

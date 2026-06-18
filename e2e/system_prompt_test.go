@@ -207,10 +207,10 @@ func TestSystemPromptInstructionFiles(t *testing.T) {
 			ID:          "system-prompt.instruction.loads-claude-md",
 			Category:    "system-prompt",
 			Description: "CLAUDE.md from cwd appears in system prompt",
-			WorkDirFiles: map[string]string{
-				"CLAUDE.md": "## Project Rules\nAlways use gofmt.\n",
-			},
 			Target: harness.TargetInvocation{
+				WorkDirFiles: map[string]string{
+					"CLAUDE.md": "## Project Rules\nAlways use gofmt.\n",
+				},
 				Kind: "cli",
 				Args: []string{"--print-system-prompt"},
 			},
@@ -225,10 +225,10 @@ func TestSystemPromptInstructionFiles(t *testing.T) {
 			ID:          "system-prompt.instruction.agents-md-fallback",
 			Category:    "system-prompt",
 			Description: "AGENTS.md used when CLAUDE.md absent",
-			WorkDirFiles: map[string]string{
-				"AGENTS.md": "## Agent Rules\nBe concise.\n",
-			},
 			Target: harness.TargetInvocation{
+				WorkDirFiles: map[string]string{
+					"AGENTS.md": "## Agent Rules\nBe concise.\n",
+				},
 				Kind: "cli",
 				Args: []string{"--print-system-prompt"},
 			},
@@ -243,11 +243,11 @@ func TestSystemPromptInstructionFiles(t *testing.T) {
 			ID:          "system-prompt.instruction.claude-md-wins",
 			Category:    "system-prompt",
 			Description: "CLAUDE.md takes precedence when both exist",
-			WorkDirFiles: map[string]string{
-				"CLAUDE.md": "## Claude Rules\nUse tabs.\n",
-				"AGENTS.md": "## Agent Rules\nUse spaces.\n",
-			},
 			Target: harness.TargetInvocation{
+				WorkDirFiles: map[string]string{
+					"CLAUDE.md": "## Claude Rules\nUse tabs.\n",
+					"AGENTS.md": "## Agent Rules\nUse spaces.\n",
+				},
 				Kind: "cli",
 				Args: []string{"--print-system-prompt"},
 			},
@@ -263,10 +263,10 @@ func TestSystemPromptInstructionFiles(t *testing.T) {
 			ID:          "system-prompt.instruction.subdir-not-loaded",
 			Category:    "system-prompt",
 			Description: "subdirectory CLAUDE.md is not loaded",
-			WorkDirFiles: map[string]string{
-				"subdir/CLAUDE.md": "## Subdir Rules\nSubdir content.\n",
-			},
 			Target: harness.TargetInvocation{
+				WorkDirFiles: map[string]string{
+					"subdir/CLAUDE.md": "## Subdir Rules\nSubdir content.\n",
+				},
 				Kind: "cli",
 				Args: []string{"--print-system-prompt"},
 			},

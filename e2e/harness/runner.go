@@ -3,6 +3,7 @@ package harness
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -18,20 +19,13 @@ import (
 
 // RunResult captures the outcome of running the target binary.
 type RunResult struct {
-	// Lines is the raw stdout split by newline.
-	Lines []string
-	// Parsed is the subset of Lines that are valid JSON objects.
-	Parsed []map[string]any
-	// Stdout is the complete raw stdout.
-	Stdout string
-	// Stderr is the captured stderr.
-	Stderr string
-	// ExitCode is the process exit code.
-	ExitCode int
-	// Dir is the working directory of the process.
-	Dir string
-	// DurationMs is the duration in milliseconds.
-	DurationMs int64
+	Lines      []string         // raw stdout split by newline
+	Parsed     []map[string]any // subset of Lines that are valid JSON objects
+	Stdout     string           // complete raw stdout
+	Stderr     string           // captured stderr
+	ExitCode   int              // process exit code
+	Dir        string           // working directory of the process
+	DurationMs int64            // duration in milliseconds
 }
 
 var (
@@ -46,11 +40,23 @@ var (
 
 // RunTarget builds the target binary (once per test binary) and runs it with
 // the given args. env entries are merged with the parent process environment.
+// It applies the timeout from cfg.TimeoutMs (default 60000ms if not set).
 func RunTarget(t E2ETB, cfg *Config, env []string, args ...string) RunResult {
 	return RunTargetInDir(t, cfg, "", env, args...)
 }
 
+// runTimeout returns the timeout duration for RunTargetInDir.
+// cfg.TimeoutMs is used when > 0; otherwise a default of 60000ms is used.
+func runTimeout(cfg *Config) time.Duration {
+	if cfg != nil && cfg.TimeoutMs > 0 {
+		return time.Duration(cfg.TimeoutMs) * time.Millisecond
+	}
+	return 60000 * time.Millisecond
+}
+
 // RunTargetInDir runs the target binary in the specified directory.
+// Per-run timeout via context.WithTimeout: cfg.TimeoutMs when set, otherwise 60000ms.
+// If the binary exceeds the deadline, cmd.Process.Kill() is called.
 func RunTargetInDir(t E2ETB, cfg *Config, dir string, env []string, args ...string) RunResult {
 	if t != nil {
 		t.Helper()
@@ -75,7 +81,10 @@ func RunTargetInDir(t E2ETB, cfg *Config, dir string, env []string, args ...stri
 		dir = repoRoot
 	}
 
-	cmd := exec.Command(bin, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), runTimeout(cfg))
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = append(os.Environ(), env...)
 	cmd.Dir = dir
 

@@ -91,7 +91,7 @@ func (sr *SuiteRunner) RunOne(tc *TestCase) TestResult {
 	defer os.RemoveAll(workDir)
 
 	// Create WorkDirFiles if specified
-	for relPath, content := range tc.WorkDirFiles {
+	for relPath, content := range tc.Target.WorkDirFiles {
 		fullPath := filepath.Join(workDir, relPath)
 		if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
 			return TestResult{
@@ -120,8 +120,15 @@ func (sr *SuiteRunner) RunOne(tc *TestCase) TestResult {
 	// Build args and env based on invocation kind, expanding ${WORK_DIR}
 	args, env := sr.buildArgs(tc), sr.buildEnv(tc, workDir)
 
+	// Merge per-invocation timeout into a runtime copy of Config.
+	// TargetInvocation.TimeoutMs takes precedence over Config.TimeoutMs.
+	cfg := *sr.Config
+	if tc.Target.TimeoutMs > 0 {
+		cfg.TimeoutMs = tc.Target.TimeoutMs
+	}
+
 	// Run the target (jenny)
-	res := RunTargetInDir(nil, sr.Config, workDir, env, args...)
+	res := RunTargetInDir(nil, &cfg, workDir, env, args...)
 
 	// Capture output
 	actual := &CapturedOutput{

@@ -1,301 +1,305 @@
-// Package harness provides blackbox end-to-end test infrastructure for e2e
-// testing of jenny behavior.
-//
-// The harness supports:
-//   - Spawning the target binary with configurable environment
-//   - Mock API server for replaying cassettes
-//   - Capturing stdout, stderr, exit code, API requests, and transcript entries
-//   - Configurable via e2e.Config
+// Package harness provides declarative blackbox test infrastructure for e2e tests.
+// It manages the jenny binary lifecycle, mock API server, and declarative assertions.
 package harness
 
-import "testing"
+// No external imports needed — all types are defined here or aliased from sibling files.
 
-// Config holds e2e test configuration.
+// Config controls how the SuiteRunner operates.
 type Config struct {
-	// ProductName is the name of the product under test (e.g. "jenny").
-	ProductName string
-	// Target is the path to the target binary or "node /path/to/cli.js" style command.
-	Target string
-	// TargetArgs are args to pass before any test-specific args.
-	TargetArgs []string
-	// CassetteDir is the directory containing SSE cassette files.
-	CassetteDir string
-	// TempDir is the temp dir for test runs. Defaults to os.TempDir().
-	TempDir string
-	// TimeoutMs is the timeout per test in ms. Default: 60000.
-	TimeoutMs int
-	// Verbose enables verbose logging.
-	Verbose bool
+	ProductName string // "jenny" or "claude" (used in error messages)
+	Target      string // absolute or relative path to binary under test
+	CassetteDir string // directory containing .sse cassette files
+	TimeoutMs   int64  // per-run timeout in milliseconds; 0 means no timeout
+	TempDir     string // temp directory prefix for test isolation
 }
 
-// TestCase represents a single e2e test case.
-type TestCase struct {
-	// ID is the unique identifier for the test case.
-	ID string
-	// Category is the test category (e.g. "cli-flags", "api-protocol").
-	Category string
-	// Description is the human-readable description.
-	Description string
-	// Tags are tags for filtering.
-	Tags []string
-	// Target is the invocation specification.
-	Target TargetInvocation
-	// Expected is the expected behavior.
-	Expected ExpectedBehavior
-	// Skip indicates the test should be skipped.
-	Skip *SkipCondition
-	// WorkDirFiles are files to create in the temp work dir before running.
-	// Keys are relative paths, values are file contents.
-	WorkDirFiles map[string]string
-}
-
-// TargetInvocation specifies how to invoke the target.
+// TargetInvocation describes a single execution of the binary.
 type TargetInvocation struct {
-	// Kind is "cli", "prompt", "tool", or "subprocess".
+	// Kind is "cli" or "prompt".
+	// "cli": args are passed directly to the binary.
+	// "prompt": the harness synthesizes CLI args from Prompt/Format/Cassette fields.
 	Kind string
-	// Args for cli/subprocess kind.
-	Args []string
-	// Prompt for prompt kind.
-	Prompt string
-	// Format for prompt kind: "stream-json" or "text".
-	Format string
-	// Cassette for prompt kind.
-	Cassette string
-	// CassetteSequence for multi-turn prompt tests: ordered cassette IDs
-	// served in sequence for the same cassette endpoint.
+
+	// For Kind="prompt":
+	Prompt   string   // user prompt passed via -p flag
+	Format   string   // --output-format value (e.g. "stream-json", "text")
+	Cassette string   // cassette file name without extension (e.g. "echo-hello")
+
+	// For multi-turn (tool use): list of cassette IDs in order.
+	// When set, the mock server serves cassettes[0] for the first request,
+	// cassettes[1] for the second, etc.
 	CassetteSequence []string
-	// Env adds per-case environment variables (merged with suite env).
+
+	// Additional CLI args appended after the synthesized args.
+	Args []string
+
+	// Env is a list of "KEY=value" environment variable overrides.
+	// Recognized substitution macros:
+	//   ${WORK_DIR}  — replaced with the work directory path
+	//   ${MOCK_URL}  — replaced with the mock server base URL
+	// If unset, the harness sets ANTHROPIC_BASE_URL to the mock server URL
+	// and ANTHROPIC_AUTH_TOKEN to "test-token".
 	Env []string
-	// Name for tool kind.
-	ToolName string
-	// Input for tool kind.
-	ToolInput any
-	// MockBehavior configures custom rules for the mock server.
+
+	// WorkDirFiles is a map of relative file paths to contents.
+	// Each file is written to the work directory before the binary is spawned.
+	// Use this to provision fixture files for tests.
+	WorkDirFiles map[string]string
+
+	// MockBehavior overrides mock server behavior for this invocation.
 	MockBehavior *MockBehavior
+
+	// TimeoutMs overrides the per-run timeout for this invocation only.
+	// When > 0, this value takes precedence over Config.TimeoutMs.
+	// A value of 0 means use Config.TimeoutMs (or the default 60000ms).
+	TimeoutMs int64
 }
 
-// ExpectedBehavior holds assertions on the target's behavior.
+// TestCase is a declarative end-to-end test case.
+type TestCase struct {
+	ID          string
+	Category    string
+	Description string
+	Tags        []string
+
+	// Skip marks the test as skipped with a reason.
+	Skip *SkipInfo
+
+	// Target describes how to invoke the binary.
+	Target TargetInvocation
+
+	// Expected describes the expected behavior.
+	Expected ExpectedBehavior
+}
+
+// SkipInfo describes why a test should be skipped.
+type SkipInfo struct {
+	Reason string
+}
+
+// ExpectedBehavior encodes all assertions about a test run.
+// Each field is checked independently; all must pass.
 type ExpectedBehavior struct {
-	// ExitCode is the expected process exit code.
+	// ExitCode asserts the process exit code.
 	ExitCode int
-	// Stdout is the expected stdout assertions.
+
+	// Stdout asserts stdout content.
 	Stdout *StdoutExpectation
-	// Stderr is the expected stderr assertions.
+
+	// Stderr asserts stderr content.
 	Stderr *StderrExpectation
-	// APIRequests are assertions on API requests.
-	APIRequests []APIRequestExpectation
-	// StreamJSON are assertions on parsed NDJSON output events.
+
+	// StreamJSON asserts NDJSON output (requires --output-format stream-json).
 	StreamJSON *StreamJSONExpectation
-	// TranscriptEntries are assertions on transcript entries.
-	TranscriptEntries []TranscriptEntryExpectation
-	// FileSystem are assertions on file system state.
+
+	// APIRequests asserts on captured HTTP requests made to the mock API.
+	// Each entry corresponds to one POST /cassette/<id>/v1/messages call.
+	APIRequests []APIRequestExpectation
+
+	// FileSystem asserts on the work directory contents after the run.
 	FileSystem []FileSystemExpectation
 }
 
-// StreamJSONExpectation specifies assertions on NDJSON output events.
+// StdoutExpectation describes assertions on raw stdout text.
+type StdoutExpectation struct {
+	// Equals asserts exact match.
+	Equals string
+
+	// IsEmpty asserts stdout is empty.
+	IsEmpty bool
+
+	// Contains asserts that every string appears somewhere in stdout.
+	Contains []string
+
+	// NotContains asserts that no string appears in stdout.
+	NotContains []string
+
+	// Matches asserts that every pattern (regexp) matches at least one line.
+	Matches []string
+
+	// Length asserts on the character length of stdout.
+	Length *LengthExpectation
+}
+
+// StderrExpectation describes assertions on raw stderr text.
+// It is an alias for StdoutExpectation; both share the same assertion fields.
+type StderrExpectation = StdoutExpectation
+
+// LengthExpectation describes a lower/upper bound on a length.
+type LengthExpectation struct {
+	Min   int // inclusive lower bound; 0 means no minimum
+	Max   int // inclusive upper bound; 0 means no maximum
+	Exact int // exact length; 0 means no exact check
+}
+
+// StreamJSONExpectation describes assertions on parsed NDJSON output.
+// Each event is a JSON object with at least a "type" field.
 type StreamJSONExpectation struct {
-	// AllLinesValidJSON asserts every non-empty stdout line is valid JSON.
+	// AllLinesValidJSON asserts every stdout line parses as JSON.
 	AllLinesValidJSON bool
-	// FirstEvent checks the first NDJSON event.
-	FirstEvent *EventExpectation
-	// LastEvent checks the last NDJSON event.
-	LastEvent *EventExpectation
-	// HasEventTypes asserts these event types appear at least once.
-	HasEventTypes []string
-	// SessionIDConsistent asserts all events share the same session_id.
+
+	// SessionIDConsistent asserts session_id is identical across all events.
 	SessionIDConsistent bool
-	// UUIDsUnique asserts every uuid is distinct.
+
+	// UUIDsUnique asserts every event has a unique uuid.
 	UUIDsUnique bool
-	// EventCount specifies expected event count constraints.
-	EventCount *LengthExpectation
-	// EventAssertions are per-event custom assertions (index-based).
+
+	// EventCount asserts on the number of events.
+	EventCount *EventCountExpectation
+
+	// FirstEvent asserts on the first event (index 0).
+	FirstEvent *EventExpectation
+
+	// LastEvent asserts on the last event.
+	LastEvent *EventExpectation
+
+	// HasEventTypes asserts the output contains at least one event of each listed type.
+	HasEventTypes []string
+
+	// EventAssertions run per-event assertions. Index -1 means last matching event.
 	EventAssertions []IndexedEventExpectation
-	// CompareToReference compares each NDJSON line against the reference binary's output.
+
+	// CompareToReference runs the same binary with REFERENCE_BIN set and compares output.
+	// Reference differences are logged but do not fail the test (informational).
 	CompareToReference bool
 }
 
-// EventExpectation specifies assertions on a single NDJSON event.
+// EventCountExpectation describes bounds on event count.
+type EventCountExpectation struct {
+	Min int // inclusive lower bound; 0 means no minimum
+	Max int // inclusive upper bound; 0 means no maximum
+}
+
+// EventExpectation describes assertions on a single NDJSON event.
 type EventExpectation struct {
-	// Type is the expected "type" field.
-	Type string
-	// Subtype is the expected "subtype" field.
+	Type string // event type field (e.g. "system", "assistant", "result")
+
+	// Subtype e.g. "init", "success", "error".
 	Subtype string
-	// HasFields asserts these top-level keys exist.
+
+	// HasFields asserts the event has these top-level keys.
 	HasFields []string
-	// FieldEquals asserts specific field values.
-	FieldEquals map[string]any
-	// FieldContains asserts field value contains substring (string fields only).
-	FieldContains map[string]string
-	// FieldNotEmpty asserts these fields are non-empty.
+
+	// FieldNotEmpty asserts the named fields exist and are non-empty.
 	FieldNotEmpty []string
-	// Nested checks a nested object field.
+
+	// FieldEquals asserts exact field values.
+	FieldEquals map[string]any
+
+	// FieldContains asserts a field contains a substring.
+	FieldContains map[string]string
+
+	// Nested asserts on nested objects. Key is the JSON path (e.g. "usage", "message.content").
 	Nested map[string]*EventExpectation
 }
 
-// IndexedEventExpectation ties an EventExpectation to an event index or type filter.
+// IndexedEventExpectation runs assertions on the event at a specific index.
+// Index -1 means the last event matching TypeFilter.
 type IndexedEventExpectation struct {
-	// Index is the 0-based event index (-1 means match by Type filter).
-	Index int
-	// TypeFilter matches the first event with this type (used when Index < 0).
-	TypeFilter string
-	// SubtypeFilter narrows TypeFilter matches.
+	Index        int    // event index; -1 means last matching event
+	TypeFilter   string // only consider events with this type; "" means all types
 	SubtypeFilter string
-	// Expect is the assertion.
-	Expect EventExpectation
+	Expect       EventExpectation
 }
 
-// StdoutExpectation specifies stdout assertions.
-type StdoutExpectation struct {
-	// Equals is the exact expected stdout.
-	Equals string
-	// Contains are substrings; at least one must appear (OR semantics).
-	Contains []string
-	// NotContains are substrings that must NOT appear.
-	NotContains []string
-	// Matches are regexes that must match.
-	Matches []string
-	// Length specifies length constraints.
-	Length *LengthExpectation
-	// IsEmpty indicates stdout should be empty.
-	IsEmpty bool
-}
-
-// LengthExpectation specifies length constraints.
-type LengthExpectation struct {
-	Min   int
-	Max   int
-	Exact int
-}
-
-// StderrExpectation specifies stderr assertions (same as stdout).
-type StderrExpectation = StdoutExpectation
-
-// APIRequestExpectation specifies API request assertions.
+// APIRequestExpectation describes assertions on a single captured HTTP request.
 type APIRequestExpectation struct {
-	// Index is the 0-based request index to check (-1 means any request).
-	Index int
-	// Model is the expected model (or regex).
+	Index int // request index; 0 means first POST
+
+	// Model asserts the model field matches this pattern (regex).
 	Model string
-	// MaxTokens is the expected max_tokens value (0 = don't check).
+
+	// MaxTokens asserts max_tokens field equals this value.
 	MaxTokens int
-	// HasSystemPrompt asserts the request has a non-empty system prompt.
+
+	// HasSystemPrompt asserts the request has a non-empty system field.
 	HasSystemPrompt bool
-	// System is the system prompt expectation.
+
+	// System asserts on the system prompt content.
 	System *SystemExpectation
-	// Messages are message expectations.
-	Messages []MessageExpectation
-	// Tools are assertions on tool definitions in the request.
-	Tools *ToolsExpectation
-	// HasField asserts the request body has specific top-level keys.
+
+	// HasField asserts the request body has these keys.
 	HasField []string
-	// FieldEquals asserts specific field values in request body.
+
+	// FieldEquals asserts exact field values.
 	FieldEquals map[string]any
+
+	// Tools asserts on the tools array in the request.
+	Tools *ToolsExpectation
 }
 
-// ToolsExpectation specifies assertions on tool definitions.
+// SystemExpectation describes assertions on the system prompt.
+type SystemExpectation struct {
+	Contains    []string
+	NotContains []string
+}
+
+// ToolsExpectation describes assertions on a tools array in an API request.
 type ToolsExpectation struct {
-	// MinCount is the minimum number of tools expected.
+	// MinCount asserts the tools array has at least this many elements.
 	MinCount int
-	// HasTool asserts a tool with this name is present.
+
+	// HasTool asserts each named tool is present in the array.
 	HasTool []string
-	// NotHasTool asserts a tool with this name is absent.
+
+	// NotHasTool asserts these tools are NOT present.
 	NotHasTool []string
-	// EachHasFields asserts every tool has these top-level keys.
+
+	// EachHasFields asserts every tool has these keys.
 	EachHasFields []string
 }
 
-// SystemExpectation specifies system prompt assertions.
-type SystemExpectation struct {
-	// Contains are substrings that must appear.
-	Contains []string
-	// NotContains are substrings that must NOT appear.
-	NotContains []string
-}
-
-// MessageExpectation specifies a message assertion.
-type MessageExpectation struct {
-	// Role is the expected role ("user" or "assistant").
-	Role string
-	// Content is the expected content (or substring).
-	Content any
-}
-
-// TranscriptEntryExpectation specifies a transcript entry assertion.
-type TranscriptEntryExpectation struct {
-	// Type is the expected entry type.
-	Type string
-	// MustContain are key-value pairs that must be present.
-	MustContain map[string]any
-}
-
-// FileSystemExpectation specifies a file system assertion.
+// FileSystemExpectation describes assertions on the work directory after a run.
 type FileSystemExpectation struct {
-	// Path is the exact path relative to work dir. Mutually exclusive with Pattern.
+	// Path is an exact path (relative to workDir).
 	Path string
-	// Pattern is a glob pattern relative to work dir. Mutually exclusive with Path.
+
+	// Pattern is a glob pattern relative to the work directory.
+	// Supports ** for recursive matching.
 	Pattern string
-	// ExpectedCount is the exact number of files expected to match Pattern.
+
+	// ExpectedCount asserts the number of files matching Pattern.
+	// Use with MustNotExist=false.
+	// 0 with MustNotExist=true asserts no file matches.
 	ExpectedCount int
-	// Content is the expected exact content of the file (used with Path).
-	Content string
-	// MustNotExist indicates the file (or pattern matches) must not exist.
+
+	// MustNotExist asserts no file matches.
 	MustNotExist bool
-	// JSONL specifies assertions for JSONL file content.
+
+	// Content asserts the file content equals this exact string.
+	Content string
+
+	// JSONL asserts on JSONL file contents. Requires ExpectedCount >= 1.
 	JSONL *JSONLExpectation
 }
 
-// JSONLExpectation specifies assertions for a JSONL file.
+// JSONLExpectation describes assertions on a JSONL (JSON Lines) file.
 type JSONLExpectation struct {
-	// AllLinesValidJSON asserts every non-empty line is valid JSON.
+	// AllLinesValidJSON asserts every line parses as JSON.
 	AllLinesValidJSON bool
-	// RequiredFields asserts that every line contains these top-level keys.
+
+	// RequiredFields asserts each line has these top-level keys.
 	RequiredFields []string
-	// HasTypes asserts these event types appear at least once across the lines.
-	HasTypes []string
-	// SessionIDMatchesStdout asserts that the UUID stem of the file matches
-	// the session_id found in the stdout stream-json events.
-	SessionIDMatchesStdout bool
-	// AllLinesHaveUUID asserts that every line has a valid UUID v4 in "uuid" field.
+
+	// AllLinesHaveUUID asserts every line has a "uuid" field with a non-empty value.
 	AllLinesHaveUUID bool
-	// MinCount asserts a minimum number of valid JSON lines.
+
+	// HasTypes asserts the JSONL contains lines with these event types.
+	HasTypes []string
+
+	// MinCount asserts at least this many lines.
 	MinCount int
-	// MaxCount asserts a maximum number of valid JSON lines.
+
+	// MaxCount asserts at most this many lines.
 	MaxCount int
+
+	// SessionIDMatchesStdout asserts the stem of the transcript file matches
+	// the session_id from stdout events. This requires passing a CapturedOutput
+	// to Compare() rather than running through SuiteRunner.
+	SessionIDMatchesStdout bool
 }
 
-// SkipCondition specifies skip conditions.
-type SkipCondition struct {
-	// Reason is the skip reason.
-	Reason string
-	// Unless is a feature flag.
-	Unless string
-	// Platforms are allowed platforms.
-	Platforms []string
-}
-
-// TestResult represents the result of a test case.
-type TestResult struct {
-	ID         string
-	Category   string
-	Status     string // "pass", "fail", "skip", "error"
-	Duration   int64  // milliseconds
-	Message    string
-	Diff       []DiffDetail
-	Actual     *CapturedOutput
-	SkipReason string
-	// ReferenceDiff contains field-by-field differences between jenny and reference binary output.
-	ReferenceDiff []string
-}
-
-// DiffDetail represents a single difference.
-type DiffDetail struct {
-	Path     string
-	Expected any
-	Actual   any
-	Message  string
-}
-
-// CapturedOutput holds all captured output from a test run.
+// CapturedOutput holds output from a single run, used for imperative comparisons.
 type CapturedOutput struct {
 	ExitCode int
 	Stdout   string
@@ -303,16 +307,50 @@ type CapturedOutput struct {
 	Requests []RecordedRequest
 }
 
-// RecordedRequest is a captured API request.
+// RecordedRequest represents a captured HTTP request for comparison.
 type RecordedRequest struct {
 	Body map[string]any
 }
 
-// E2ETB is a testing.TB interface for test helpers.
+// TestResult describes the outcome of a test case execution.
+type TestResult struct {
+	ID          string
+	Category    string
+	Status      string // "pass", "fail", "error", "skip"
+	Message     string
+	Duration    int64  // milliseconds
+	SkipReason  string
+	Diff        []DiffDetail
+	Actual      *CapturedOutput
+	ReferenceDiff []string // differences vs reference binary (informational)
+}
+
+// DiffDetail describes a single failed assertion.
+type DiffDetail struct {
+	Path     string // path to the field (e.g. "exitCode", "stdout")
+	Expected any
+	Actual   any
+	Message  string
+}
+
+// Diff is an alias for DiffDetail for compatibility.
+type Diff = DiffDetail
+
+// E2ETB is a testing.TB wrapper used by imperative test helpers.
 type E2ETB interface {
-	testing.TB
-	Fatal(args ...any)
+	Helper()
+	Logf(format string, args ...any)
+	Errorf(format string, args ...any)
 	Fatalf(format string, args ...any)
-	Skip(args ...any)
 	Skipf(format string, args ...any)
+	TempDir() string
+}
+
+// T wraps *testing.T with helper methods used by the harness.
+type T interface {
+	Helper()
+	Logf(format string, args ...any)
+	Errorf(format string, args ...any)
+	Fatalf(format string, args ...any)
+	TempDir() string
 }

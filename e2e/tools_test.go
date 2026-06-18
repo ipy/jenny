@@ -14,14 +14,14 @@ func TestToolRead(t *testing.T) {
 			Category:    "tools",
 			Description: "Read tool returns line-numbered content for an existing file",
 			Target: harness.TargetInvocation{
+				WorkDirFiles: map[string]string{
+					"test.txt": "line one\nline two\nline three\n",
+				},
 				Kind:             "prompt",
 				Prompt:           "read test.txt",
 				Format:           "stream-json",
 				CassetteSequence: []string{"read-file", "tool-use-turn2"},
 				Cassette:         "read-file",
-			},
-			WorkDirFiles: map[string]string{
-				"test.txt": "line one\nline two\nline three\n",
 			},
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,
@@ -103,14 +103,14 @@ func TestToolWrite(t *testing.T) {
 			Category:    "tools",
 			Description: "write tool succeeds after Read and produces diff",
 			Target: harness.TargetInvocation{
+				WorkDirFiles: map[string]string{
+					"target.txt": "original content\n",
+				},
 				Kind:             "prompt",
 				Prompt:           "update target.txt",
 				Format:           "stream-json",
 				CassetteSequence: []string{"read-then-write", "write-after-read", "tool-use-turn2"},
 				Cassette:         "read-then-write",
-			},
-			WorkDirFiles: map[string]string{
-				"target.txt": "original content\n",
 			},
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,
@@ -147,14 +147,14 @@ func TestToolEdit(t *testing.T) {
 			Category:    "tools",
 			Description: "edit tool rejects when no prior Read was performed",
 			Target: harness.TargetInvocation{
+				WorkDirFiles: map[string]string{
+					"target.txt": "foo bar baz\n",
+				},
 				Kind:             "prompt",
 				Prompt:           "edit target.txt",
 				Format:           "stream-json",
 				CassetteSequence: []string{"edit-no-read", "tool-use-turn2"},
 				Cassette:         "edit-no-read",
-			},
-			WorkDirFiles: map[string]string{
-				"target.txt": "foo bar baz\n",
 			},
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,
@@ -168,14 +168,14 @@ func TestToolEdit(t *testing.T) {
 			Category:    "tools",
 			Description: "edit tool succeeds after Read and produces diff",
 			Target: harness.TargetInvocation{
+				WorkDirFiles: map[string]string{
+					"target.txt": "original content\n",
+				},
 				Kind:             "prompt",
 				Prompt:           "edit target.txt",
 				Format:           "stream-json",
 				CassetteSequence: []string{"read-then-write", "edit-after-read", "tool-use-turn2"},
 				Cassette:         "read-then-write",
-			},
-			WorkDirFiles: map[string]string{
-				"target.txt": "original content\n",
 			},
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,
@@ -294,17 +294,17 @@ func TestToolGlob(t *testing.T) {
 			Category:    "tools",
 			Description: "Glob tool finds matching files in workdir",
 			Target: harness.TargetInvocation{
+				WorkDirFiles: map[string]string{
+					"a.txt": "file a",
+					"b.txt": "file b",
+					"c.go":  "not a txt",
+					"d.txt": "file d",
+				},
 				Kind:             "prompt",
 				Prompt:           "glob *.txt",
 				Format:           "stream-json",
 				CassetteSequence: []string{"glob-pattern", "tool-use-turn2"},
 				Cassette:         "glob-pattern",
-			},
-			WorkDirFiles: map[string]string{
-				"a.txt": "file a",
-				"b.txt": "file b",
-				"c.go":  "not a txt",
-				"d.txt": "file d",
 			},
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,
@@ -341,14 +341,14 @@ func TestToolGrep(t *testing.T) {
 			Category:    "tools",
 			Description: "Grep tool finds matching pattern in files",
 			Target: harness.TargetInvocation{
+				WorkDirFiles: map[string]string{
+					"haystack.txt": "no match here\nsentinel_marker found\nmore text\n",
+				},
 				Kind:             "prompt",
 				Prompt:           "grep for sentinel_marker",
 				Format:           "stream-json",
 				CassetteSequence: []string{"grep-pattern", "tool-use-turn2"},
 				Cassette:         "grep-pattern",
-			},
-			WorkDirFiles: map[string]string{
-				"haystack.txt": "no match here\nsentinel_marker found\nmore text\n",
 			},
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,

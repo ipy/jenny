@@ -148,3 +148,11 @@ required.
 
 `go fix ./e2e/harness/...` requires multiple consecutive runs and exits 1.
 This is a documented constraint of the test infrastructure.
+
+## Process Timeout
+
+`RunTargetInDir` applies a per-run timeout via `context.WithTimeout`.
+When `Config.TimeoutMs > 0`, it is used as the timeout. Otherwise a
+default of 60 000 ms is applied. If the binary exceeds the deadline,
+`cmd.Process.Kill()` is called and the run is treated as an error.
+This prevents a single hanging subprocess from blocking the entire suite.
