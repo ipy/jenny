@@ -419,13 +419,29 @@ func run() error {
 		WithBaseTools().
 		WithWebFetchEnabled(true).
 		WithWebSearchEnabled(true).
-		WithModel(flags.Model).
 		WithReadFileCache(readFileCache).
 		WithMCPTools(mcpTools).
 		WithDenyRules(flags.DeniedTools).
 		WithPermissionLevel(permLevel).
 		WithStrictMCP(flags.StrictMCP).
 		WithSkillsFrameworkEnabled(!flags.Bare, discoveredSkills)
+
+	// Resolve web search configuration from koanf and wire client providers.
+	searchCfg := tool.ResolveWebSearchConfig(k)
+	if err := tool.ValidateWebSearchConfig(searchCfg); err != nil {
+		log.Warn("web search config invalid, using defaults", "err", err)
+		c := tool.DefaultWebSearchConfig()
+		searchCfg = c
+	}
+	if searchCfg.Strategy == tool.StrategyClient || searchCfg.Strategy == tool.StrategyNative {
+		if clientProvider, err := tool.NewSearchClientProvider(searchCfg.ClientConfig); err == nil {
+			registry.WithSearchClientProvider(clientProvider)
+		} else {
+			log.Warn("web search client provider not created", "err", err)
+		}
+	}
+	registry.WithWebSearchConfig(&searchCfg)
+
 	tools = registry.Build()
 
 	// Get skill activator to wire it to the engine for active skill tracking
@@ -531,7 +547,6 @@ func buildPrintTools(flags *cli.Flags) []tool.Tool {
 		WithBaseTools().
 		WithWebFetchEnabled(true).
 		WithWebSearchEnabled(true).
-		WithModel(flags.Model).
 		WithDenyRules(flags.DeniedTools).
 		WithPermissionLevel(permLevel).
 		WithStrictMCP(flags.StrictMCP).

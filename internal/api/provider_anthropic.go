@@ -86,6 +86,11 @@ func (p *anthropicProvider) SetProviderName(name string) {
 	p.providerName = name
 }
 
+// SupportsNativeSearch returns true; Anthropic supports native web search via web_search_20250305.
+func (p *anthropicProvider) SupportsNativeSearch() bool {
+	return true
+}
+
 // SendMessage sends a non-streaming message.
 func (p *anthropicProvider) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string) (*Response, error) {
 	return p.sendWithRetry(ctx, func(ctx context.Context) (*Response, error) {

@@ -93,6 +93,12 @@ func (p *openAIProvider) SetProviderName(name string) {
 	p.providerName = name
 }
 
+// SupportsNativeSearch returns true for OpenAI models that support native web search.
+// DeepSeek models routed through the OpenAI provider do NOT support native web search.
+func (p *openAIProvider) SupportsNativeSearch() bool {
+	return !isDSModel(p.model)
+}
+
 // SendMessage sends a non-streaming message.
 func (p *openAIProvider) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string) (*Response, error) {
 	return p.sendWithRetry(ctx, func(ctx context.Context) (*Response, error) {

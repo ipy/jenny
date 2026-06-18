@@ -26,6 +26,9 @@ type Registry struct {
 	lspEnabled             bool
 	lspClient              *lsp.Client
 	model                  string
+	webSearchConfig        *WebSearchConfig
+	nativeSearchRunner     NativeSearchRunner
+	searchClientProvider   SearchClientProvider
 	skills                 []skills.Skill
 	taskStopEnabled        bool
 	todoWriteEnabled       bool
@@ -122,6 +125,24 @@ func (r *Registry) WithWebFetchEnabled(enabled bool) *Registry {
 // WithWebSearchEnabled enables or disables the WebSearch tool.
 func (r *Registry) WithWebSearchEnabled(enabled bool) *Registry {
 	r.webSearchEnabled = enabled
+	return r
+}
+
+// WithWebSearchConfig sets the web search configuration for the WebSearch tool.
+func (r *Registry) WithWebSearchConfig(config *WebSearchConfig) *Registry {
+	r.webSearchConfig = config
+	return r
+}
+
+// WithNativeSearchRunner sets the native search runner for the WebSearch tool.
+func (r *Registry) WithNativeSearchRunner(runner NativeSearchRunner) *Registry {
+	r.nativeSearchRunner = runner
+	return r
+}
+
+// WithSearchClientProvider sets the search client provider for the WebSearch tool.
+func (r *Registry) WithSearchClientProvider(provider SearchClientProvider) *Registry {
+	r.searchClientProvider = provider
 	return r
 }
 
@@ -331,7 +352,12 @@ func (r *Registry) Build() []Tool {
 
 		// Add WebSearch tool if enabled (P3).
 		if r.webSearchEnabled {
-			r.baseTools = append(r.baseTools, NewWebSearchTool(r.model))
+			cfg := r.webSearchConfig
+			if cfg == nil {
+				c := DefaultWebSearchConfig()
+				cfg = &c
+			}
+			r.baseTools = append(r.baseTools, NewWebSearchTool(cfg, r.nativeSearchRunner, r.searchClientProvider))
 		}
 
 		// Add LSP tool if enabled and client is provided (P3).

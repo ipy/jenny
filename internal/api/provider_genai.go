@@ -13,9 +13,6 @@ import (
 	"github.com/ipy/jenny/internal/log"
 )
 
-// ProviderKind for the Google GenAI provider.
-const ProviderGenAI ProviderKind = "genai"
-
 // genaiProvider implements the Provider interface using a lightweight HTTP client.
 type genaiProvider struct {
 	client            *HTTPClient
@@ -69,6 +66,11 @@ func (p *genaiProvider) SetRetryConfig(cfg RetryConfig) {
 // SetProviderName sets the provider name.
 func (p *genaiProvider) SetProviderName(name string) {
 	p.providerName = name
+}
+
+// SupportsNativeSearch returns true; Gemini supports native web search via Google Search grounding.
+func (p *genaiProvider) SupportsNativeSearch() bool {
+	return true
 }
 
 // setMaxTokensOverride sets the max_tokens override for the provider.

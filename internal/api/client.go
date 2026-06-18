@@ -219,6 +219,11 @@ func (c *Client) SetProviderName(name string) {
 	c.provider.SetProviderName(name)
 }
 
+// Provider returns the underlying Provider for capability checks (e.g., SupportsNativeSearch).
+func (c *Client) Provider() Provider {
+	return c.provider
+}
+
 // SendMessage sends a message to the API and returns the response.
 func (c *Client) SendMessage(ctx context.Context, messages []Message, tools []ToolParam, toolResults []ToolResult, systemPrompt []string, systemPromptSuffix string) (*Response, error) {
 	return c.provider.SendMessage(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix)

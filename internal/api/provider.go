@@ -13,6 +13,7 @@ const (
 	ProviderAnthropic       ProviderKind = "anthropic"
 	ProviderOpenAI          ProviderKind = "openai"
 	ProviderOpenAIResponses ProviderKind = "openai_responses"
+	ProviderGenAI           ProviderKind = "genai"
 )
 
 // Provider defines the interface for AI backend providers.
@@ -32,6 +33,9 @@ type Provider interface {
 
 	// SetProviderName sets the provider name (e.g. "讯飞", "智谱").
 	SetProviderName(name string)
+
+	// SupportsNativeSearch returns true if this provider can perform native web search.
+	SupportsNativeSearch() bool
 }
 
 // ProviderWithRetryConfig allows providers to receive retry configuration.

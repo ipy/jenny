@@ -294,6 +294,15 @@ func (e *QueryEngine) WireTools() {
 				}
 			}
 		}
+
+		// Wire Provider for WebSearch tool capability checks (SupportsNativeSearch).
+		if e.client != nil {
+			if ws, ok := t.(*tool.WebSearchTool); ok {
+				if c, ok := e.client.(*api.Client); ok {
+					ws.WithProvider(c.Provider())
+				}
+			}
+		}
 	}
 }
 

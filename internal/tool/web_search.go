@@ -3,8 +3,9 @@ package tool
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync/atomic"
+
+	"github.com/ipy/jenny/internal/api"
 )
 
 // WebSearch limits.
@@ -17,35 +18,27 @@ const (
 // WebSearchMaxResults is the maximum results per call for web search.
 const WebSearchMaxResults = webSearchMaxResults
 
-// supportedWebSearchModels contains model prefixes that support web search.
-// These are first-party Claude models and their cloud equivalents.
-var supportedWebSearchModels = []string{
-	"claude-4",
-	"claude-3.5",
-	"claude-3",
-}
-
-// isModelSupported checks if the given model supports server-side web search.
-func isModelSupported(model string) bool {
-	lower := strings.ToLower(model)
-	for _, prefix := range supportedWebSearchModels {
-		if strings.HasPrefix(lower, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
-// WebSearchTool provides server-side web search via the Anthropic API's
-// web_search_20250305 tool schema.
+// WebSearchTool provides web search via native provider search or client fallback.
 type WebSearchTool struct {
-	model     string // model name for gating check
-	callCount atomic.Int32
+	config         *WebSearchConfig
+	nativeRunner   NativeSearchRunner
+	clientProvider SearchClientProvider
+	provider       api.Provider
+	callCount      atomic.Int32
 }
 
 // NewWebSearchTool creates a new WebSearchTool.
-func NewWebSearchTool(model string) *WebSearchTool {
-	return &WebSearchTool{model: model}
+func NewWebSearchTool(config *WebSearchConfig, nativeRunner NativeSearchRunner, clientProvider SearchClientProvider) *WebSearchTool {
+	return &WebSearchTool{
+		config:         config,
+		nativeRunner:   nativeRunner,
+		clientProvider: clientProvider,
+	}
+}
+
+// WithProvider sets the active provider for capability checks (SupportsNativeSearch).
+func (t *WebSearchTool) WithProvider(p api.Provider) {
+	t.provider = p
 }
 
 // Name returns the tool name.
@@ -61,7 +54,6 @@ func (t *WebSearchTool) Description() string {
 }
 
 // InputSchema returns the JSON schema for tool input.
-// This registers the web_search_20250305 tool schema with the API.
 func (t *WebSearchTool) InputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
@@ -85,24 +77,13 @@ func (t *WebSearchTool) InputSchema() map[string]any {
 	}
 }
 
-// Execute validates the search inputs and returns a result.
-// Note: The actual search is performed server-side by the API's web_search_20250305 tool.
-// This Execute() call validates inputs and handles local error cases.
-// AC4 (model gating) is checked here; AC5 (server errors) are surfaced by the API.
+// Execute validates the search inputs and performs the search according to the configured strategy.
 func (t *WebSearchTool) Execute(ctx context.Context, input map[string]any, cwd string) (*ToolResult, error) {
 	// Enforce max searches per agent session
 	count := t.callCount.Add(1)
 	if int(count) > webSearchMaxCallsPerAgent {
 		return &ToolResult{
 			Content: fmt.Sprintf("Maximum web searches per session reached (%d). Use previously fetched results or web_fetch for specific URLs.", webSearchMaxCallsPerAgent),
-			IsError: true,
-		}, nil
-	}
-
-	// AC4: Check model support
-	if !isModelSupported(t.model) {
-		return &ToolResult{
-			Content: fmt.Sprintf("Web search is not supported on model '%s'. Supported models include claude-4, claude-3.5, and their Vertex/Foundry equivalents.", t.model),
 			IsError: true,
 		}, nil
 	}
@@ -134,11 +115,92 @@ func (t *WebSearchTool) Execute(ctx context.Context, input map[string]any, cwd s
 		}, nil
 	}
 
-	// All validations passed.
-	// The API will handle the actual search server-side and return results.
-	// This tool_use result indicates the search request was made.
+	// Strategy-based search execution
+	strategy := StrategyNative
+	if t.config != nil {
+		strategy = t.config.Strategy
+	}
+
+	switch strategy {
+	case StrategyDisabled:
+		return &ToolResult{
+			Content: "web search disabled",
+			IsError: true,
+		}, nil
+
+	case StrategyClient:
+		return t.executeClientSearch(ctx, query)
+
+	default: // StrategyNative (or unknown — treat as native)
+		return t.executeNativeSearch(ctx, query)
+	}
+}
+
+// executeNativeSearch attempts native search, falling back to client provider on failure.
+func (t *WebSearchTool) executeNativeSearch(ctx context.Context, query string) (*ToolResult, error) {
+	// Gate on provider capability: if the active provider does not support
+	// native search, fall back to client provider immediately.
+	if t.provider == nil || !t.provider.SupportsNativeSearch() {
+		return t.fallbackToClient(ctx, query)
+	}
+
+	if t.nativeRunner == nil {
+		return t.fallbackToClient(ctx, query)
+	}
+
+	resp, err := t.nativeRunner.RunNativeSearch(ctx, query)
+	if err != nil {
+		return t.fallbackToClient(ctx, query)
+	}
+
 	return &ToolResult{
-		Content: fmt.Sprintf("Web search executed: %q (results handled server-side)", query),
+		Content: RenderSearchResponse(resp),
+		IsError: false,
+	}, nil
+}
+
+// executeClientSearch uses the configured client provider directly.
+func (t *WebSearchTool) executeClientSearch(ctx context.Context, query string) (*ToolResult, error) {
+	if t.clientProvider == nil {
+		return &ToolResult{
+			Content: "web search client provider not configured",
+			IsError: true,
+		}, nil
+	}
+
+	resp, err := t.clientProvider.Search(ctx, query)
+	if err != nil {
+		return &ToolResult{
+			Content: fmt.Sprintf("web search client error: %v", err),
+			IsError: true,
+		}, nil
+	}
+
+	return &ToolResult{
+		Content: RenderSearchResponse(resp),
+		IsError: false,
+	}, nil
+}
+
+// fallbackToClient attempts to use the client provider as a fallback.
+func (t *WebSearchTool) fallbackToClient(ctx context.Context, query string) (*ToolResult, error) {
+	if t.clientProvider == nil {
+		return &ToolResult{
+			Content: "web search unavailable: no native search support and no client provider configured",
+			IsError: true,
+		}, nil
+	}
+
+	resp, err := t.clientProvider.Search(ctx, query)
+	if err != nil {
+		return &ToolResult{
+			Content: fmt.Sprintf("web search fallback error: %v", err),
+			IsError: true,
+		}, nil
+	}
+
+	return &ToolResult{
+		Content: RenderSearchResponse(resp),
 		IsError: false,
 	}, nil
 }
