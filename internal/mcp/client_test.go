@@ -219,7 +219,7 @@ func TestMCPToolExecuteUnknownServer(t *testing.T) {
 		inputSchema: map[string]any{"type": "object"},
 	}
 
-	result, err := mcpTool.Execute(context.Background(), map[string]any{}, "/tmp")
+	result, err := mcpTool.Execute(context.Background(), map[string]any{}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute returned unexpected error: %v", err)
 	}
@@ -260,7 +260,7 @@ func TestMCPToolExecuteDisconnectedServer(t *testing.T) {
 		inputSchema: map[string]any{"type": "object"},
 	}
 
-	result, err := mcpTool.Execute(context.Background(), map[string]any{}, "/tmp")
+	result, err := mcpTool.Execute(context.Background(), map[string]any{}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute returned unexpected error: %v", err)
 	}

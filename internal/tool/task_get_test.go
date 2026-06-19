@@ -117,7 +117,7 @@ func TestTaskGetTool_Execute(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := tool.Execute(ctx, tt.input, "/tmp")
+			result, err := tool.Execute(ctx, tt.input, t.TempDir())
 			if err != nil {
 				t.Errorf("Execute() unexpected error = %v", err)
 				return
@@ -140,7 +140,7 @@ func TestTaskGetTool_Timestamps(t *testing.T) {
 
 	taskID := createTestTask(t, store, "timestamp-test", "", "", nil)
 
-	result, err := tool.Execute(ctx, map[string]any{"task_id": taskID}, "/tmp")
+	result, err := tool.Execute(ctx, map[string]any{"task_id": taskID}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}

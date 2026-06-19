@@ -70,7 +70,7 @@ func TestDynamicSystemSuffix_AlwaysEmpty(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := DynamicSystemSuffix(tt.cfg, "/tmp")
+			result := DynamicSystemSuffix(tt.cfg, t.TempDir())
 			if result != "" {
 				t.Errorf("DynamicSystemSuffix should always be empty, got %q", result)
 			}

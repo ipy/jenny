@@ -217,8 +217,8 @@ func TestRun_HiddenFiles(t *testing.T) {
 func TestRun_EmptyPatternErrors(t *testing.T) {
 	_, err := Run(context.Background(), Options{
 		Pattern: "",
-		Path:    "/tmp",
-		Cwd:     "/tmp",
+		Path:    t.TempDir(),
+		Cwd:     t.TempDir(),
 	})
 	if err == nil {
 		t.Error("expected error for empty pattern")
@@ -228,8 +228,8 @@ func TestRun_EmptyPatternErrors(t *testing.T) {
 func TestRun_InvalidPatternErrors(t *testing.T) {
 	_, err := Run(context.Background(), Options{
 		Pattern: "[unclosed",
-		Path:    "/tmp",
-		Cwd:     "/tmp",
+		Path:    t.TempDir(),
+		Cwd:     t.TempDir(),
 	})
 	if err == nil {
 		t.Error("expected error for invalid pattern")

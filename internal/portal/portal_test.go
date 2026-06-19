@@ -1412,10 +1412,10 @@ func TestListMCPServers(t *testing.T) {
 	t.Setenv("JENNY_HOME", tmpDir)
 
 	// Create mcp.json with 2 servers (one enabled, one disabled)
-	mcpConfig := `{
+	mcpConfig := fmt.Sprintf(`{
 		"filesystem": {
 			"command": "npx",
-			"args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+			"args": ["-y", "@modelcontextprotocol/server-filesystem", "%s"],
 			"disabled": false
 		},
 		"github": {
@@ -1423,7 +1423,7 @@ func TestListMCPServers(t *testing.T) {
 			"args": ["mcp-server-github"],
 			"disabled": true
 		}
-	}`
+	}`, t.TempDir())
 	mcpPath := filepath.Join(tmpDir, "mcp.json")
 	if err := os.WriteFile(mcpPath, []byte(mcpConfig), 0644); err != nil {
 		t.Fatal(err)

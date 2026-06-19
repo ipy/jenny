@@ -61,7 +61,7 @@ func TestExecutor_AC1_ParallelReadOnly(t *testing.T) {
 		&execMockTool{name: "Grep", delay: 100 * time.Millisecond, isSafe: true},
 	}
 
-	executor := NewToolExecutor(tools, "/tmp")
+	executor := NewToolExecutor(tools, t.TempDir())
 
 	blocks := []toolUseBlock{
 		{ID: "1", Name: "Read", Input: map[string]any{"file_path": "a.txt"}},
@@ -103,7 +103,7 @@ func TestExecutor_AC2_SerializedMutation(t *testing.T) {
 		&execMockTool{name: "Read", delay: 100 * time.Millisecond, isSafe: true},
 	}
 
-	executor := NewToolExecutor(tools, "/tmp")
+	executor := NewToolExecutor(tools, t.TempDir())
 
 	// Test: Write + Write should be serial (≥200ms)
 	writeBlocks := []toolUseBlock{
@@ -150,7 +150,7 @@ func TestExecutor_AC2_SerializedMutation(t *testing.T) {
 		&execMockTool{name: "Bash", delay: 1000 * time.Millisecond, isSafe: false},
 		&execMockTool{name: "Bash", delay: 1000 * time.Millisecond, isSafe: false},
 	}
-	bashExecutor := NewToolExecutor(bashTools, "/tmp")
+	bashExecutor := NewToolExecutor(bashTools, t.TempDir())
 
 	bashBlocks := []toolUseBlock{
 		{ID: "6", Name: "Bash", Input: map[string]any{"command": "sleep 1"}},
@@ -203,7 +203,7 @@ func TestExecutor_AC3_BashSiblingAbort(t *testing.T) {
 		},
 	}
 
-	executor := NewToolExecutor(tools, "/tmp")
+	executor := NewToolExecutor(tools, t.TempDir())
 
 	blocks := []toolUseBlock{
 		{ID: "1", Name: "Bash", Input: map[string]any{"command": "echo success"}},
@@ -255,7 +255,7 @@ func TestExecutor_AC4_UnknownTool(t *testing.T) {
 		&execMockTool{name: "Read", delay: 100 * time.Millisecond, isSafe: true},
 	}
 
-	executor := NewToolExecutor(tools, "/tmp")
+	executor := NewToolExecutor(tools, t.TempDir())
 
 	blocks := []toolUseBlock{
 		{ID: "1", Name: "UnknownTool", Input: map[string]any{}},
@@ -296,7 +296,7 @@ func TestExecutor_AC5_ResultOrdering(t *testing.T) {
 		&execMockTool{name: "Grep", delay: 30 * time.Millisecond, isSafe: true},
 	}
 
-	executor := NewToolExecutor(tools, "/tmp")
+	executor := NewToolExecutor(tools, t.TempDir())
 
 	// Send [slow(safe), fast(serial), fast(safe)] - results should be in request order
 	blocks := []toolUseBlock{
@@ -339,7 +339,7 @@ func TestExecutor_MixedBatch(t *testing.T) {
 		&execMockTool{name: "Grep", delay: 50 * time.Millisecond, isSafe: true},
 	}
 
-	executor := NewToolExecutor(tools, "/tmp")
+	executor := NewToolExecutor(tools, t.TempDir())
 
 	blocks := []toolUseBlock{
 		{ID: "1", Name: "Read", Input: map[string]any{}},
@@ -403,7 +403,7 @@ func TestExecutor_ConcurrencyCap(t *testing.T) {
 	// Create executor with maxConcurrency=10
 	executor := &ToolExecutor{
 		tools:          tools,
-		cwd:            "/tmp",
+		cwd:            t.TempDir(),
 		maxConcurrency: 10,
 	}
 
@@ -456,7 +456,7 @@ func TestExecutor_BashFailureDoesNotAbortNonBash(t *testing.T) {
 		},
 	}
 
-	executor := NewToolExecutor(tools, "/tmp")
+	executor := NewToolExecutor(tools, t.TempDir())
 
 	blocks := []toolUseBlock{
 		{ID: "1", Name: "Bash", Input: map[string]any{"command": "exit 1"}},
@@ -487,7 +487,7 @@ func TestExecutor_EmptyBatch(t *testing.T) {
 		&execMockTool{name: "Read", isSafe: true},
 	}
 
-	executor := NewToolExecutor(tools, "/tmp")
+	executor := NewToolExecutor(tools, t.TempDir())
 
 	results, err := executor.Execute(context.Background(), []toolUseBlock{})
 
@@ -509,7 +509,7 @@ func TestExecutor_AllReadOnlyTools(t *testing.T) {
 		&execMockTool{name: "Read", delay: 100 * time.Millisecond, isSafe: true},
 	}
 
-	executor := NewToolExecutor(tools, "/tmp")
+	executor := NewToolExecutor(tools, t.TempDir())
 
 	blocks := []toolUseBlock{
 		{ID: "1", Name: "Read", Input: map[string]any{}},
@@ -545,7 +545,7 @@ func TestExecutor_BashAbortOnlyAffectsBash(t *testing.T) {
 		&execMockTool{name: "Bash", delay: 500 * time.Millisecond, isSafe: false, content: "bash3"},
 	}
 
-	executor := NewToolExecutor(tools, "/tmp")
+	executor := NewToolExecutor(tools, t.TempDir())
 
 	blocks := []toolUseBlock{
 		{ID: "1", Name: "Bash", Input: map[string]any{"command": "sleep 10"}},
@@ -599,7 +599,7 @@ func TestExecutor_SiblingAbort_SetsInterruptedField(t *testing.T) {
 		},
 	}
 
-	executor := NewToolExecutor(tools, "/tmp")
+	executor := NewToolExecutor(tools, t.TempDir())
 
 	blocks := []toolUseBlock{
 		{ID: "1", Name: "Bash", Input: map[string]any{"command": "echo success"}},
@@ -661,7 +661,7 @@ func TestExecutor_CtxCancelled_SetsInterruptedField(t *testing.T) {
 		},
 	}
 
-	executor := NewToolExecutor(tools, "/tmp")
+	executor := NewToolExecutor(tools, t.TempDir())
 
 	blocks := []toolUseBlock{
 		{ID: "1", Name: "Bash", Input: map[string]any{"command": "sleep 1"}},
@@ -704,7 +704,7 @@ func TestExecutor_TaskAliasFallback(t *testing.T) {
 	agentTool := &execMockTool{name: "agent", delay: 10 * time.Millisecond, content: "agent responded"}
 	tools := []tool.Tool{agentTool}
 
-	executor := NewToolExecutor(tools, "/tmp")
+	executor := NewToolExecutor(tools, t.TempDir())
 
 	// Use "task" as the tool name (alias for "agent")
 	blocks := []toolUseBlock{
@@ -735,19 +735,19 @@ func TestExecutor_TaskAliasFallback(t *testing.T) {
 // StreamConfig.MaxToolConcurrency and used the hardcoded default of 10.
 func TestNewToolExecutorWithStreamConfig_RespectsMaxConcurrency(t *testing.T) {
 	// StreamConfig with explicit MaxToolConcurrency
-	e := NewToolExecutorWithStreamConfig(nil, "/tmp", &StreamConfig{MaxToolConcurrency: 3})
+	e := NewToolExecutorWithStreamConfig(nil, t.TempDir(), &StreamConfig{MaxToolConcurrency: 3})
 	if e.maxConcurrency != 3 {
 		t.Errorf("maxConcurrency = %d, want 3 from StreamConfig", e.maxConcurrency)
 	}
 
 	// Zero/empty StreamConfig falls back to default
-	e2 := NewToolExecutorWithStreamConfig(nil, "/tmp", &StreamConfig{MaxToolConcurrency: 0})
+	e2 := NewToolExecutorWithStreamConfig(nil, t.TempDir(), &StreamConfig{MaxToolConcurrency: 0})
 	if e2.maxConcurrency != defaultMaxConcurrency {
 		t.Errorf("maxConcurrency = %d, want default %d when StreamConfig is 0", e2.maxConcurrency, defaultMaxConcurrency)
 	}
 
 	// Nil StreamConfig falls back to default
-	e3 := NewToolExecutorWithStreamConfig(nil, "/tmp", nil)
+	e3 := NewToolExecutorWithStreamConfig(nil, t.TempDir(), nil)
 	if e3.maxConcurrency != defaultMaxConcurrency {
 		t.Errorf("maxConcurrency = %d, want default %d when StreamConfig is nil", e3.maxConcurrency, defaultMaxConcurrency)
 	}
@@ -756,7 +756,7 @@ func TestNewToolExecutorWithStreamConfig_RespectsMaxConcurrency(t *testing.T) {
 // TestNewToolExecutor_UsesDefault is a regression test confirming that
 // NewToolExecutor (no streamCfg) still falls back to defaultMaxConcurrency.
 func TestNewToolExecutor_UsesDefault(t *testing.T) {
-	e := NewToolExecutor(nil, "/tmp")
+	e := NewToolExecutor(nil, t.TempDir())
 	if e.maxConcurrency != defaultMaxConcurrency {
 		t.Errorf("maxConcurrency = %d, want default %d", e.maxConcurrency, defaultMaxConcurrency)
 	}

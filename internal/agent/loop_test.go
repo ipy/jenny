@@ -155,7 +155,7 @@ func TestToolInputValidation(t *testing.T) {
 	bashTool := tool.NewBashTool(tool.PermissionEdit)
 
 	// Test missing command
-	result, err := bashTool.Execute(context.Background(), map[string]any{}, "/tmp")
+	result, err := bashTool.Execute(context.Background(), map[string]any{}, t.TempDir())
 	if err == nil {
 		// Error is returned in content, not as error
 		if result == nil {
@@ -167,7 +167,7 @@ func TestToolInputValidation(t *testing.T) {
 	}
 
 	// Test empty command
-	result, err = bashTool.Execute(context.Background(), map[string]any{"command": ""}, "/tmp")
+	result, err = bashTool.Execute(context.Background(), map[string]any{"command": ""}, t.TempDir())
 	if err == nil {
 		if result == nil {
 			t.Error("expected result")
@@ -183,7 +183,7 @@ func TestReadToolInputValidation(t *testing.T) {
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 
 	// Test missing file_path
-	result, err := readTool.Execute(context.Background(), map[string]any{}, "/tmp")
+	result, err := readTool.Execute(context.Background(), map[string]any{}, t.TempDir())
 	if err == nil {
 		if result == nil {
 			t.Error("expected result")
@@ -194,7 +194,7 @@ func TestReadToolInputValidation(t *testing.T) {
 	}
 
 	// Test empty file_path
-	result, err = readTool.Execute(context.Background(), map[string]any{"file_path": ""}, "/tmp")
+	result, err = readTool.Execute(context.Background(), map[string]any{"file_path": ""}, t.TempDir())
 	if err == nil {
 		if result == nil {
 			t.Error("expected result")
@@ -718,7 +718,7 @@ func TestHasChainMessages_TableDriven(t *testing.T) {
 		{
 			name: "worktree_state only",
 			entries: []session.TranscriptEntry{
-				{Type: "worktree_state", WorktreePath: "/tmp", WorktreeBranch: "main"},
+				{Type: "worktree_state", WorktreePath: t.TempDir(), WorktreeBranch: "main"},
 			},
 			want: false,
 		},
@@ -818,7 +818,7 @@ func TestAC1_RecursiveForkBlocked_ViaContext(t *testing.T) {
 		"prompt":        "do something",
 		"subagent_type": "general-purpose",
 	}
-	result, err := agentTool.Execute(ctx, input, "/tmp")
+	result, err := agentTool.Execute(ctx, input, t.TempDir())
 	if err != nil {
 		t.Fatalf("expected no error from Execute (error is in result), got: %v", err)
 	}
@@ -869,7 +869,7 @@ func TestAC1_RecursiveForkBlocked_NoFalsePositive(t *testing.T) {
 		"prompt":        "do something",
 		"subagent_type": "general-purpose",
 	}
-	result, err := agentTool.Execute(ctx, input, "/tmp")
+	result, err := agentTool.Execute(ctx, input, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute should not return error for mock runner: %v", err)
 	}
@@ -906,7 +906,7 @@ func TestAC1_RecursiveForkBlocked_AllSubagentTypes(t *testing.T) {
 				"prompt":        "test",
 				"subagent_type": st,
 			}
-			result, err := agentTool.Execute(ctx, input, "/tmp")
+			result, err := agentTool.Execute(ctx, input, t.TempDir())
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

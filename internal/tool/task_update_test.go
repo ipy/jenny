@@ -312,7 +312,7 @@ func TestTaskUpdateTool_Execute(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := tool.Execute(ctx, tt.input, "/tmp")
+			result, err := tool.Execute(ctx, tt.input, t.TempDir())
 			if err != nil {
 				t.Errorf("Execute() unexpected error = %v", err)
 				return
@@ -339,7 +339,7 @@ func TestTaskUpdateTool_UpdatedAt(t *testing.T) {
 	result, err := tool.Execute(ctx, map[string]any{
 		"task_id": taskID,
 		"subject": "updated",
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -381,7 +381,7 @@ func TestTaskUpdateTool_MetadataMergeOverwrite(t *testing.T) {
 	result, err := tool.Execute(ctx, map[string]any{
 		"task_id":  taskID,
 		"metadata": map[string]any{"key1": "updated1", "key3": "new3"},
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}

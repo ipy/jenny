@@ -209,7 +209,7 @@ func TestTodoWriteTool_Execute(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := tool.Execute(ctx, tt.input, "/tmp")
+			result, err := tool.Execute(ctx, tt.input, t.TempDir())
 			if err != nil {
 				t.Errorf("Execute() unexpected error = %v", err)
 				return
@@ -234,7 +234,7 @@ func TestTodoWriteTool_AutoClear(t *testing.T) {
 		"action":     "create",
 		"subject":    "clear-me",
 		"activeForm": "First task",
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -243,7 +243,7 @@ func TestTodoWriteTool_AutoClear(t *testing.T) {
 		"action":     "create",
 		"subject":    "clear-me",
 		"activeForm": "Second task",
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -252,7 +252,7 @@ func TestTodoWriteTool_AutoClear(t *testing.T) {
 	result, err := tool.Execute(ctx, map[string]any{
 		"action":  "complete",
 		"subject": "clear-me",
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil || result.IsError {
 		t.Fatalf("First complete failed: error=%v, result=%v", err, result)
 	}
@@ -261,7 +261,7 @@ func TestTodoWriteTool_AutoClear(t *testing.T) {
 	result, err = tool.Execute(ctx, map[string]any{
 		"action":  "complete",
 		"subject": "clear-me",
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil || result.IsError {
 		t.Fatalf("Second complete failed: error=%v, result=%v", err, result)
 	}
@@ -274,7 +274,7 @@ func TestTodoWriteTool_AutoClear(t *testing.T) {
 	result, err = tool.Execute(ctx, map[string]any{
 		"action":  "complete",
 		"subject": "clear-me",
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() unexpected error = %v", err)
 	}

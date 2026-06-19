@@ -104,7 +104,7 @@ func TestAC1_NamedAgent_CannotSpawnNamedAgent(t *testing.T) {
 		"name":          "worker1", // Named agent trying to spawn another named agent
 	}
 
-	result, err := agentTool.Execute(ctx, input, "/tmp")
+	result, err := agentTool.Execute(ctx, input, t.TempDir())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestAC1_NamedAgent_CanSpawnUnnamedAgent(t *testing.T) {
 		// No "name" field - unnamed subagent from named agent should be allowed
 	}
 
-	result, err := agentTool.Execute(ctx, input, "/tmp")
+	result, err := agentTool.Execute(ctx, input, t.TempDir())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestAC2_SwarmModeDisabled_NameParameterReturnsError(t *testing.T) {
 		"name":          "worker1", // Trying to use name without swarm mode enabled
 	}
 
-	result, err := agentTool.Execute(context.Background(), input, "/tmp")
+	result, err := agentTool.Execute(context.Background(), input, t.TempDir())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestAC2_SwarmModeEnabled_NameParameterAccepted(t *testing.T) {
 		"name":          "worker1",
 	}
 
-	result, err := agentTool.Execute(context.Background(), input, "/tmp")
+	result, err := agentTool.Execute(context.Background(), input, t.TempDir())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -270,7 +270,7 @@ func TestAC3_NamedAgentHasAccessToParentTools(t *testing.T) {
 		"name":          "worker1",
 	}
 
-	result, err := agentTool.Execute(context.Background(), input, "/tmp")
+	result, err := agentTool.Execute(context.Background(), input, t.TempDir())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -341,7 +341,7 @@ func TestEdgeCase_EmptyNameParameterIsIgnored(t *testing.T) {
 		"name":          "", // Empty string - should be ignored
 	}
 
-	result, err := agentTool.Execute(context.Background(), input, "/tmp")
+	result, err := agentTool.Execute(context.Background(), input, t.TempDir())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -363,7 +363,7 @@ func TestEdgeCase_ForkChildStillBlocked(t *testing.T) {
 		"subagent_type": "explore",
 	}
 
-	result, err := agentTool.Execute(ctx, input, "/tmp")
+	result, err := agentTool.Execute(ctx, input, t.TempDir())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

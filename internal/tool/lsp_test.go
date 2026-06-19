@@ -206,7 +206,7 @@ func TestLSPTool_AC1_OneBasedCoordinates(t *testing.T) {
 		"uri":       "file:///test.go",
 		"line":      1,
 		"character": 1,
-	}, "/tmp")
+	}, t.TempDir())
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -233,7 +233,7 @@ func TestLSPTool_AC2_DisconnectedError(t *testing.T) {
 		"operation": "hover",
 		"uri":       "file:///test.go",
 		"line":      1,
-	}, "/tmp")
+	}, t.TempDir())
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -317,7 +317,7 @@ func TestLSPTool_AC4_ConcurrencySafety(t *testing.T) {
 				"uri":       "file:///test.go",
 				"line":      6,
 				"character": 11,
-			}, "/tmp")
+			}, t.TempDir())
 			if err != nil {
 				errors <- err
 				return
@@ -335,7 +335,7 @@ func TestLSPTool_AC4_ConcurrencySafety(t *testing.T) {
 				"uri":       "file:///test.go",
 				"line":      6,
 				"character": 11,
-			}, "/tmp")
+			}, t.TempDir())
 			if err != nil {
 				errors <- err
 				return
@@ -452,7 +452,7 @@ func TestLSPTool_InvalidOperation(t *testing.T) {
 
 	result, err := tool.Execute(ctx, map[string]any{
 		"operation": "invalidOperation",
-	}, "/tmp")
+	}, t.TempDir())
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -472,7 +472,7 @@ func TestLSPTool_MissingOperation(t *testing.T) {
 
 	result, err := tool.Execute(ctx, map[string]any{
 		"uri": "file:///test.go",
-	}, "/tmp")
+	}, t.TempDir())
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

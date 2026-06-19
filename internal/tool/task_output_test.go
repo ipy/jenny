@@ -62,7 +62,7 @@ func TestTaskOutputTool_Execute_NonExistentTask(t *testing.T) {
 
 	result, err := tool.Execute(ctx, map[string]any{
 		"task_id": "non-existent-task-id",
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -80,7 +80,7 @@ func TestTaskOutputTool_Execute_NilTaskManager(t *testing.T) {
 
 	result, err := tool.Execute(ctx, map[string]any{
 		"task_id": "some-task",
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -97,7 +97,7 @@ func TestTaskOutputTool_Execute_MissingTaskID(t *testing.T) {
 	tool := NewTaskOutputTool(tm)
 	ctx := context.Background()
 
-	result, err := tool.Execute(ctx, map[string]any{}, "/tmp")
+	result, err := tool.Execute(ctx, map[string]any{}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -126,7 +126,7 @@ func TestTaskOutputTool_Execute_InMemoryResult(t *testing.T) {
 
 	result, err := tool.Execute(ctx, map[string]any{
 		"task_id": "test-task-1",
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -162,7 +162,7 @@ func TestTaskOutputTool_ConcurrentCompletions(t *testing.T) {
 	// Call Execute for task-alpha
 	resultAlpha, err := tool.Execute(ctx, map[string]any{
 		"task_id": "task-alpha",
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute(task-alpha) error = %v", err)
 	}
@@ -176,7 +176,7 @@ func TestTaskOutputTool_ConcurrentCompletions(t *testing.T) {
 	// Call Execute for task-beta
 	resultBeta, err := tool.Execute(ctx, map[string]any{
 		"task_id": "task-beta",
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute(task-beta) error = %v", err)
 	}
@@ -208,7 +208,7 @@ func TestTaskOutputTool_Execute_BlockNonBlocking(t *testing.T) {
 	result, err := tool.Execute(ctx, map[string]any{
 		"task_id": "test-task-2",
 		"block":   false,
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -242,7 +242,7 @@ func TestTaskOutputTool_Execute_Timeout(t *testing.T) {
 		"task_id": "test-task-timeout",
 		"block":   true,
 		"timeout": 0.5, // 500ms timeout
-	}, "/tmp")
+	}, t.TempDir())
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -299,7 +299,7 @@ func TestTaskOutputTool_Execute_FileOutput(t *testing.T) {
 		"task_id": "test-task-file",
 		"block":   true,
 		"timeout": 5,
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -333,7 +333,7 @@ func TestTaskOutputTool_Execute_MaxTimeout(t *testing.T) {
 	result, err := tool.Execute(ctx, map[string]any{
 		"task_id": "test-task-never-completes",
 		"timeout": 0.1, // 100ms timeout
-	}, "/tmp")
+	}, t.TempDir())
 	elapsed := time.Since(start)
 
 	if err != nil {

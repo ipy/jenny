@@ -590,7 +590,7 @@ func TestBashTool_SkipPermissions(t *testing.T) {
 		t.Skip("skipping Unix path test on Windows")
 	}
 	tool := NewBashTool(PermissionEdit)
-	cwd := "/tmp"
+	cwd := t.TempDir()
 
 	// Test that path outside cwd is blocked without unrestricted level
 	result, err := tool.Execute(context.Background(), map[string]any{
@@ -606,7 +606,7 @@ func TestBashTool_SkipPermissions(t *testing.T) {
 	// Test that access is allowed WITH unrestricted level
 	toolWithSkip := NewBashTool(PermissionUnrestricted)
 	result, err = toolWithSkip.Execute(context.Background(), map[string]any{
-		"command": "cat ../../etc/passwd",
+		"command": "cat /etc/passwd",
 	}, cwd)
 	if err != nil {
 		t.Fatalf("unexpected error with unrestricted level: %v", err)

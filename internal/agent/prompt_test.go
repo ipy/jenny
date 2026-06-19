@@ -195,7 +195,7 @@ func TestAssembleSystemPrompt_AppendSupport(t *testing.T) {
 		AppendSystemPrompt: "This is appended content.",
 	}
 	tools := []tool.Tool{}
-	cwd := "/tmp" // Outside git repo to keep it simple
+	cwd := t.TempDir() // Outside git repo to keep it simple
 
 	blocks := AssembleSystemPrompt(&cfg, tools, cwd)
 	prompt := strings.Join(blocks, "\n\n")
@@ -217,7 +217,7 @@ func TestAssembleSystemPrompt_OverrideSuppressesAppend(t *testing.T) {
 		OverrideSystemPrompt: true,
 	}
 	tools := []tool.Tool{}
-	cwd := "/tmp"
+	cwd := t.TempDir()
 
 	blocks := AssembleSystemPrompt(&cfg, tools, cwd)
 	prompt := strings.Join(blocks, "\n\n")
@@ -233,7 +233,7 @@ func TestAssembleSystemPrompt_EmptyAppendIsNoOp(t *testing.T) {
 		AppendSystemPrompt: "",
 	}
 	tools := []tool.Tool{}
-	cwd := "/tmp"
+	cwd := t.TempDir()
 
 	blocks := AssembleSystemPrompt(&cfg, tools, cwd)
 	prompt := strings.Join(blocks, "\n\n")
@@ -332,7 +332,7 @@ func TestAssembleSystemPrompt_CustomWithAppend(t *testing.T) {
 		AppendSystemPrompt: "Appended.",
 	}
 	tools := []tool.Tool{}
-	cwd := "/tmp"
+	cwd := t.TempDir()
 
 	blocks := AssembleSystemPrompt(&cfg, tools, cwd)
 	prompt := strings.Join(blocks, "\n\n")
@@ -353,7 +353,7 @@ func TestAssembleSystemPrompt_CustomWithOverride(t *testing.T) {
 		OverrideSystemPrompt: true,
 	}
 	tools := []tool.Tool{}
-	cwd := "/tmp"
+	cwd := t.TempDir()
 
 	blocks := AssembleSystemPrompt(&cfg, tools, cwd)
 	prompt := strings.Join(blocks, "\n\n")
@@ -372,7 +372,7 @@ func TestAssembleSystemPrompt_DefaultSections(t *testing.T) {
 	tools := []tool.Tool{
 		&mockTool{name: "Read", description: "Read files"},
 	}
-	cwd := "/tmp" // Outside git repo
+	cwd := t.TempDir() // Outside git repo
 
 	blocks := AssembleSystemPrompt(&cfg, tools, cwd)
 	prompt := strings.Join(blocks, "\n\n")
@@ -492,7 +492,7 @@ func TestAssembleSystemPrompt_FreezeOnCachedSystemPrompt(t *testing.T) {
 	tools := []tool.Tool{}
 
 	// First call with CachedSystemPrompt set
-	result := AssembleSystemPrompt(&cfg, tools, "/tmp")
+	result := AssembleSystemPrompt(&cfg, tools, t.TempDir())
 	if len(result) != len(frozen) || result[0] != frozen[0] {
 		t.Errorf("expected frozen prompt, got different result:\n%v", result)
 	}
@@ -502,7 +502,7 @@ func TestAssembleSystemPrompt_FreezeOnCachedSystemPrompt(t *testing.T) {
 		CachedSystemPrompt: frozen,
 		MemoryContent:      "completely different memory",
 	}
-	result2 := AssembleSystemPrompt(&cfg2, tools, "/tmp")
+	result2 := AssembleSystemPrompt(&cfg2, tools, t.TempDir())
 	if len(result2) != len(frozen) || result2[0] != frozen[0] {
 		t.Errorf("expected frozen prompt on second call, got:\n%v", result2)
 	}
@@ -626,7 +626,7 @@ func TestAssembleSystemPrompt_RedactionInstruction(t *testing.T) {
 			cfg := StreamConfig{
 				RedactMode: tt.mode,
 			}
-			blocks := buildSystemPrompt(&cfg, nil, "/tmp")
+			blocks := buildSystemPrompt(&cfg, nil, t.TempDir())
 			prompt := strings.Join(blocks, "\n\n")
 
 			redactMsg := "This session has secret redaction enabled."

@@ -107,7 +107,7 @@ func TestReadMcpResourceTool_AC1_UnknownServer(t *testing.T) {
 	result, err := readTool.Execute(context.Background(), map[string]any{
 		"server": "definitely-nonexistent-server-12345",
 		"uri":    "file:///test.txt",
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute returned unexpected error: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestReadMcpResourceTool_MissingServer(t *testing.T) {
 
 	result, err := readTool.Execute(context.Background(), map[string]any{
 		"uri": "file:///test.txt",
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute returned unexpected error: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestReadMcpResourceTool_MissingURI(t *testing.T) {
 
 	result, err := readTool.Execute(context.Background(), map[string]any{
 		"server": "test-server",
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute returned unexpected error: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestReadMcpResourceTool_ExecuteInterface(t *testing.T) {
 	result, err := readTool.Execute(context.Background(), map[string]any{
 		"server": "any-server",
 		"uri":    "file:///test.txt",
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute returned unexpected error: %v", err)
 	}

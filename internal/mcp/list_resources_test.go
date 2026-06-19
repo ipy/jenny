@@ -46,7 +46,7 @@ func TestListMcpResourcesTool_AC2_InvalidServer(t *testing.T) {
 
 	result, err := tool.Execute(context.Background(), map[string]any{
 		"server": "nonexistent-server",
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute returned unexpected error: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestListMcpResourcesTool_AC4_EmptyResultNote(t *testing.T) {
 
 	tool := NewListMcpResourcesTool()
 
-	result, err := tool.Execute(context.Background(), map[string]any{}, "/tmp")
+	result, err := tool.Execute(context.Background(), map[string]any{}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute returned unexpected error: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestListMcpResourcesTool_AC1_MultiServerAggregation(t *testing.T) {
 	}
 
 	tool := NewListMcpResourcesTool()
-	result, err := tool.Execute(context.Background(), map[string]any{}, "/tmp")
+	result, err := tool.Execute(context.Background(), map[string]any{}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute returned unexpected error: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestListMcpResourcesTool_AC3_PartialFailure(t *testing.T) {
 	}
 
 	tool := NewListMcpResourcesTool()
-	result, err := tool.Execute(context.Background(), map[string]any{}, "/tmp")
+	result, err := tool.Execute(context.Background(), map[string]any{}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute returned unexpected error: %v", err)
 	}
@@ -251,7 +251,7 @@ func TestListMcpResourcesTool_AC5_ServerFieldPerEntry(t *testing.T) {
 	}
 
 	tool := NewListMcpResourcesTool()
-	result, err := tool.Execute(context.Background(), map[string]any{}, "/tmp")
+	result, err := tool.Execute(context.Background(), map[string]any{}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute returned unexpected error: %v", err)
 	}
@@ -319,13 +319,13 @@ func TestListMcpResourcesTool_Cache(t *testing.T) {
 	tool := NewListMcpResourcesTool()
 
 	// First call - should fetch
-	_, _ = tool.Execute(context.Background(), map[string]any{}, "/tmp")
+	_, _ = tool.Execute(context.Background(), map[string]any{}, t.TempDir())
 	if callCount != 1 {
 		t.Errorf("expected 1 call on first execution, got %d", callCount)
 	}
 
 	// Second call - should use cache (within TTL)
-	_, _ = tool.Execute(context.Background(), map[string]any{}, "/tmp")
+	_, _ = tool.Execute(context.Background(), map[string]any{}, t.TempDir())
 	if callCount != 1 {
 		t.Errorf("expected 1 call (cached), got %d", callCount)
 	}
@@ -334,7 +334,7 @@ func TestListMcpResourcesTool_Cache(t *testing.T) {
 	tool.InvalidateCache()
 
 	// Third call - should fetch again
-	_, _ = tool.Execute(context.Background(), map[string]any{}, "/tmp")
+	_, _ = tool.Execute(context.Background(), map[string]any{}, t.TempDir())
 	if callCount != 2 {
 		t.Errorf("expected 2 calls after cache invalidation, got %d", callCount)
 	}
@@ -360,7 +360,7 @@ func TestListMcpResourcesTool_ExecuteInterface(t *testing.T) {
 	tool := NewListMcpResourcesTool()
 
 	// Verify it can be called with the correct signature
-	result, err := tool.Execute(context.Background(), map[string]any{}, "/tmp")
+	result, err := tool.Execute(context.Background(), map[string]any{}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute returned unexpected error: %v", err)
 	}

@@ -349,7 +349,7 @@ func TestLocalSubagentRunner_AC3_ParameterPassthrough(t *testing.T) {
 		Prompt:       "test prompt",
 		SubagentType: "explore",
 		Model:        "sonnet",
-		CWD:          "/tmp",
+		CWD:          t.TempDir(),
 	}
 
 	// This will use the mock API client

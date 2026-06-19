@@ -76,7 +76,7 @@ func TestTaskListTool_Execute(t *testing.T) {
 				}
 
 				// Re-execute to get the updated list
-				result2, err := tool.Execute(ctx, map[string]any{}, "/tmp")
+				result2, err := tool.Execute(ctx, map[string]any{}, t.TempDir())
 				if err != nil || result2.IsError {
 					return false
 				}
@@ -168,7 +168,7 @@ func TestTaskListTool_Execute(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := tool.Execute(ctx, tt.input, "/tmp")
+			result, err := tool.Execute(ctx, tt.input, t.TempDir())
 			if err != nil {
 				t.Errorf("Execute() unexpected error = %v", err)
 				return
@@ -199,7 +199,7 @@ func TestTaskListTool_StatusFilter(t *testing.T) {
 	store.Update(completedTask.ID, map[string]any{"status": "completed"})
 
 	// Filter by pending
-	result, err := tool.Execute(ctx, map[string]any{"status": "pending"}, "/tmp")
+	result, err := tool.Execute(ctx, map[string]any{"status": "pending"}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -212,7 +212,7 @@ func TestTaskListTool_StatusFilter(t *testing.T) {
 	}
 
 	// Filter by in_progress
-	result, err = tool.Execute(ctx, map[string]any{"status": "in_progress"}, "/tmp")
+	result, err = tool.Execute(ctx, map[string]any{"status": "in_progress"}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -225,7 +225,7 @@ func TestTaskListTool_StatusFilter(t *testing.T) {
 	}
 
 	// Filter by completed
-	result, err = tool.Execute(ctx, map[string]any{"status": "completed"}, "/tmp")
+	result, err = tool.Execute(ctx, map[string]any{"status": "completed"}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -254,7 +254,7 @@ func TestTaskListTool_InternalMetadataFilter(t *testing.T) {
 		t.Fatalf("Create() error = %v", err)
 	}
 
-	result, err := tool.Execute(ctx, map[string]any{}, "/tmp")
+	result, err := tool.Execute(ctx, map[string]any{}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -304,7 +304,7 @@ func TestTaskListTool_ResolvedBlockersFiltered(t *testing.T) {
 	blockedTask, _ := store.Create("blocked-task", "", "", nil)
 	store.AddDependencies(blockedTask.ID, nil, []string{activeBlocker.ID, completedBlocker.ID, deletedBlocker.ID})
 
-	result, err := tool.Execute(ctx, map[string]any{}, "/tmp")
+	result, err := tool.Execute(ctx, map[string]any{}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}

@@ -198,7 +198,7 @@ func TestAC1_StructuredOutputTool_Reset(t *testing.T) {
 	// Simulate a call
 	_, _ = outputTool.Execute(context.Background(), map[string]any{
 		"value": map[string]any{"result": "test"},
-	}, "/tmp")
+	}, t.TempDir())
 
 	if !outputTool.IsEmitted() {
 		t.Error("expected IsEmitted() to be true after Execute")
@@ -222,7 +222,7 @@ func TestAC3_SecondExecute_ReturnsError(t *testing.T) {
 	// First call succeeds
 	result1, err1 := outputTool.Execute(context.Background(), map[string]any{
 		"value": map[string]any{"result": "first"},
-	}, "/tmp")
+	}, t.TempDir())
 	if err1 != nil {
 		t.Fatalf("first Execute failed: %v", err1)
 	}
@@ -233,7 +233,7 @@ func TestAC3_SecondExecute_ReturnsError(t *testing.T) {
 	// Second call fails
 	result2, err2 := outputTool.Execute(context.Background(), map[string]any{
 		"value": map[string]any{"result": "second"},
-	}, "/tmp")
+	}, t.TempDir())
 	if err2 != nil {
 		t.Fatalf("second Execute returned error: %v", err2)
 	}
@@ -252,7 +252,7 @@ func TestAC3_ExecuteWithMissingValue_ReturnsError(t *testing.T) {
 	schema := map[string]any{"type": "object"}
 	outputTool := tool.NewStructuredOutputTool(schema)
 
-	result, err := outputTool.Execute(context.Background(), map[string]any{}, "/tmp")
+	result, err := outputTool.Execute(context.Background(), map[string]any{}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)
 	}
@@ -276,7 +276,7 @@ func TestAC3_ExecuteWithValidValue_ReturnsValidatedJSON(t *testing.T) {
 			"name": "test",
 			"age":  42,
 		},
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
@@ -307,7 +307,7 @@ func TestAC3_ExecuteWithRequiredFields_ValidatesPresence(t *testing.T) {
 	// Missing required field
 	result, err := outputTool.Execute(context.Background(), map[string]any{
 		"value": map[string]any{"age": 42},
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)
 	}
@@ -324,7 +324,7 @@ func TestAC3_ExecuteWithRequiredFields_ValidatesPresence(t *testing.T) {
 	// Present required field
 	result2, err2 := outputTool.Execute(context.Background(), map[string]any{
 		"value": map[string]any{"name": "test"},
-	}, "/tmp")
+	}, t.TempDir())
 	if err2 != nil {
 		t.Fatalf("Execute returned error: %v", err2)
 	}

@@ -720,7 +720,7 @@ func TestAC5_TaskStop_NilTaskManager(t *testing.T) {
 
 	result, err := stopTool.Execute(context.Background(), map[string]any{
 		"task_id": "any_task",
-	}, "/tmp")
+	}, t.TempDir())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

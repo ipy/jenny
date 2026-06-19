@@ -61,7 +61,7 @@ func TestExitWorktreeTool_Execute_NotInWorktree(t *testing.T) {
 	tool := NewExitWorktreeTool()
 	ctx := context.Background()
 
-	result, err := tool.Execute(ctx, map[string]any{"action": "keep"}, "/tmp")
+	result, err := tool.Execute(ctx, map[string]any{"action": "keep"}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -82,7 +82,7 @@ func TestExitWorktreeTool_Execute_MissingAction(t *testing.T) {
 	session.SetWorktree("/some/path", "/original")
 	tool.WithWorktreeSession(session)
 
-	result, err := tool.Execute(ctx, map[string]any{}, "/tmp")
+	result, err := tool.Execute(ctx, map[string]any{}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -103,7 +103,7 @@ func TestExitWorktreeTool_Execute_InvalidAction(t *testing.T) {
 	session.SetWorktree("/some/path", "/original")
 	tool.WithWorktreeSession(session)
 
-	result, err := tool.Execute(ctx, map[string]any{"action": "delete"}, "/tmp")
+	result, err := tool.Execute(ctx, map[string]any{"action": "delete"}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
