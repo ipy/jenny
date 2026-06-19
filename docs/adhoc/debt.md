@@ -1,9 +1,9 @@
 ---
 title: Technical Debt
 slug: debt
-status: open
+status: done
 date: 2026-06-19
-updated: 2026-06-19 (MD-10)
+updated: 2026-06-19 (all clear)
 ---
 
 # Technical Debt
@@ -103,13 +103,13 @@ Outstanding debt from devloop review cycles. Ordered by severity then task.
 - ~~**File:** `internal/config/registry.go:362-363`~~
 - ~~Misleading function signature — returns error type but never populates it.~~
 
-### mD-6: Missing integration tests for registry startup paths
-- **Task:** external-model-registry
-- Spec calls for cold start, warm start with fresh cache, warm start with stale cache, and `--offline` integration tests.
+### ~~mD-6: Missing integration tests for registry startup paths~~
+- ~~**Task:** external-model-registry~~
+- ~~Spec calls for cold start, warm start with fresh cache, warm start with stale cache, and `--offline` integration tests.~~
+- ~~**Resolved:** e2e/registry_test.go already covers cold start (TestRegistryNormalStartup), warm start with cache (TestRegistryCacheLoading), corrupted cache, and --offline (TestRegistryOfflineMode).~~
 
-### mD-7: Test suite uses Unix-only `/tmp` paths, not cross-platform
-- **Files:** `internal/agent/loop_test.go`, `internal/agent/executor_test.go`, `internal/agent/subagent_test.go`, `internal/agent/prompt_active_skills_test.go`, `internal/tool/bash_test.go`, `internal/tool/task_*.go`, `internal/mcp/client_test.go`, `internal/mcp/list_resources_test.go`, `internal/portal/portal_test.go`, `internal/grepinproc/adapter_test.go`, `internal/tool/lsp_test.go`, `internal/tool/structured_output_test.go`, `internal/tool/exit_worktree_test.go`, `internal/tool/read_mcp_resource_test.go` (~20 files, ~50+ occurrences)
-- Tests pass `"/tmp"` as `cwd` to tool executors and `buildSystemPrompt`. On Windows, `/tmp` doesn't exist as a valid path — `git.GetRoot("/tmp")` silently fails (returns `ok=false`) and `contextSection("/tmp")` produces a wrong `"Cwd: /tmp"` string. Tests don't assert on these values so they pass despite producing semantically wrong behavior.
-- **Fix:** Replace all `"/tmp"` cwd arguments in test files with `t.TempDir()`. Mechanical replacement; no behavioral changes to assertions. `t.TempDir()` is cross-platform and auto-cleaned.
-- **Task:** external-model-registry
-- Spec calls for cold start, warm start with fresh cache, warm start with stale cache, and `--offline` integration tests.
+### ~~mD-7: Test suite uses Unix-only `/tmp` paths, not cross-platform~~
+- ~~**Files:** `internal/agent/loop_test.go`, `internal/agent/executor_test.go`, `internal/agent/subagent_test.go`, `internal/agent/prompt_active_skills_test.go`, `internal/tool/bash_test.go`, `internal/tool/task_*.go`, `internal/mcp/client_test.go`, `internal/mcp/list_resources_test.go`, `internal/portal/portal_test.go`, `internal/grepinproc/adapter_test.go`, `internal/tool/lsp_test.go`, `internal/tool/structured_output_test.go`, `internal/tool/exit_worktree_test.go`, `internal/tool/read_mcp_resource_test.go` (~20 files, ~50+ occurrences)~~
+- ~~Tests pass `"/tmp"` as `cwd` to tool executors and `buildSystemPrompt`. On Windows, `/tmp` doesn't exist as a valid path — `git.GetRoot("/tmp")` silently fails (returns `ok=false`) and `contextSection("/tmp")` produces a wrong `"Cwd: /tmp"` string. Tests don't assert on these values so they pass despite producing semantically wrong behavior.~~
+- ~~**Fix:** Replace all `"/tmp"` cwd arguments in test files with `t.TempDir()`. Mechanical replacement; no behavioral changes to assertions. `t.TempDir()` is cross-platform and auto-cleaned.~~
+- ~~**Resolved:** commit 67d4866~~
