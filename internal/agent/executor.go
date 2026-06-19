@@ -283,6 +283,13 @@ func (e *ToolExecutor) executeParallel(parentCtx context.Context, batch []toolUs
 			// AC2: Wrap context with progress token (tool_use_id) so MCP tools can report progress
 			toolCtx := mcp.WithProgressToken(ctx, tw.block.ID)
 
+			// Defensive: ensure Input is never nil — some models return
+			// arguments=null which can propagate as nil ToolInput if the
+			// API-layer fallback doesn't catch it (e.g. session resume).
+			if tw.block.Input == nil {
+				tw.block.Input = make(map[string]any)
+			}
+
 			// Check permission denial cache before execution
 			denialKey := BuildDenialKey(tw.block.Name, tw.block.Input)
 			if e.streamCfg != nil && e.streamCfg.HasPermissionDenial(denialKey) {
@@ -359,6 +366,13 @@ func (e *ToolExecutor) executeSerial(parentCtx context.Context, batch []toolUseW
 
 		// AC2: Wrap context with progress token (tool_use_id) so MCP tools can report progress
 		toolCtx := mcp.WithProgressToken(ctx, tw.block.ID)
+
+		// Defensive: ensure Input is never nil — some models return
+		// arguments=null which can propagate as nil ToolInput if the
+		// API-layer fallback doesn't catch it (e.g. session resume).
+		if tw.block.Input == nil {
+			tw.block.Input = make(map[string]any)
+		}
 
 		// Check permission denial cache before execution
 		denialKey := BuildDenialKey(tw.block.Name, tw.block.Input)

@@ -382,8 +382,15 @@ func (p *openAIProvider) parseResponse(resp *OpenAIResponse) (*Response, error) 
 
 	for _, tc := range choice.Message.ToolCalls {
 		var input map[string]any
-		if tc.Function.Arguments != "" {
-			json.Unmarshal([]byte(tc.Function.Arguments), &input)
+		args := tc.Function.Arguments
+		// Skip the literal string "null" — some models return this when
+		// arguments are absent, and json.Unmarshal("null") yields a nil map
+		// which propagates downstream as nil ToolInput.
+		if args != "" && args != "null" {
+			json.Unmarshal([]byte(args), &input)
+		}
+		if input == nil {
+			input = make(map[string]any)
 		}
 		response.Content = append(response.Content, ContentBlock{
 			Type:      BlockTypeToolUse,
@@ -899,12 +906,19 @@ func (acc *openAIStreamAccumulator) appendToolCall(index int, id, name, args str
 	if name != "" {
 		tc.Name = name
 	}
-	if args != "" {
+	// Skip the literal string "null" — some models return this when
+	// arguments are absent. Accumulating "null" would make Args unparseable
+	// and leave Input as nil, causing downstream errors.
+	if args != "" && args != "null" {
 		tc.Args += args
 		var input map[string]any
 		if err := json.Unmarshal([]byte(tc.Args), &input); err == nil {
 			tc.Input = input
 		}
+	}
+	// Ensure Input is never nil so downstream ToolInput is always a valid map.
+	if tc.Input == nil {
+		tc.Input = make(map[string]any)
 	}
 }
 

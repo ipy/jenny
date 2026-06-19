@@ -74,6 +74,13 @@ func NormalizeMessages(messages []Message, tools []ToolParam, caps Capabilities)
 	normalizedMessages, contentLogs := validateContentBlocks(normalizedMessages, &logs)
 	logs = append(logs, contentLogs...)
 
+	// Remove non-final tool_use/tool_result pairs where Input is an empty map
+	// (originally nil/arguments=null from model). Keeps the last occurrence so
+	// the model can see the error and retry, but cleans up earlier failed attempts
+	// to avoid context bloat and repeating the same mistake.
+	normalizedMessages, emptyInputLogs := removeEmptyInputToolPairsNonFinal(normalizedMessages, &logs)
+	logs = append(logs, emptyInputLogs...)
+
 	return normalizedMessages, normalizedTools, logs
 }
 
@@ -141,6 +148,124 @@ func MergeConsecutiveSameRole(messages []Message) []Message {
 	}
 
 	return result
+}
+
+// removeEmptyInputToolPairsNonFinal removes tool_use/tool_result pairs from
+// non-final messages where the tool_use Input is an empty map (originally nil
+// or arguments=null from the model). It keeps the last occurrence so the model
+// can see the error and retry, but cleans up earlier failed attempts to avoid
+// context bloat and reduce the chance of the model repeating the same mistake.
+//
+// An empty Input map (len == 0) indicates the model returned no arguments
+// (arguments=null, arguments missing, or JSON null), which was converted to
+// an empty map by the API-layer fallback. The corresponding tool_result is
+// expected to be an error message (e.g. "command is required").
+func removeEmptyInputToolPairsNonFinal(messages []Message, logs *[]NormalizationLog) ([]Message, []NormalizationLog) {
+	if len(messages) == 0 {
+		return messages, nil
+	}
+
+	// Collect ToolUseIDs of empty-input tool_use blocks that are NOT in the
+	// last assistant+user pair. "Last pair" means the last two messages where
+	// the first is an assistant with tool_use and the second is a user with
+	// tool_results for those IDs.
+	var lastPairToolUseIDs map[string]bool
+
+	// Walk backwards to find the last assistant message with tool_use
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == RoleAssistant && len(messages[i].ToolUse) > 0 {
+			lastPairToolUseIDs = make(map[string]bool)
+			for _, tu := range messages[i].ToolUse {
+				lastPairToolUseIDs[tu.ID] = true
+			}
+			break
+		}
+	}
+
+	// Identify ToolUseIDs to remove: empty-input tool_use blocks NOT in last pair
+	var removeIDs map[string]bool
+	for i := range messages {
+		if messages[i].Role != RoleAssistant {
+			continue
+		}
+		for _, tu := range messages[i].ToolUse {
+			if isEmptyInput(tu.Input) {
+				// Keep if this ID is in the last assistant pair
+				if lastPairToolUseIDs != nil && lastPairToolUseIDs[tu.ID] {
+					continue
+				}
+				if removeIDs == nil {
+					removeIDs = make(map[string]bool)
+				}
+				removeIDs[tu.ID] = true
+			}
+		}
+	}
+
+	if removeIDs == nil {
+		return messages, nil
+	}
+
+	removedCount := 0
+	var result []Message
+
+	for _, msg := range messages {
+		// Remove matching tool_use blocks from assistant messages
+		if msg.Role == RoleAssistant && len(msg.ToolUse) > 0 {
+			var filtered []ToolUseBlock
+			for _, tu := range msg.ToolUse {
+				if !removeIDs[tu.ID] {
+					filtered = append(filtered, tu)
+				} else {
+					removedCount++
+				}
+			}
+			if len(filtered) < len(msg.ToolUse) {
+				msg.ToolUse = filtered
+				// If only empty-input tool_use blocks were removed and nothing
+				// else remains, and content is empty, insert placeholder to
+				// avoid empty assistant message (AC2 consistency).
+				if len(filtered) == 0 && msg.Content == "" {
+					msg.Content = "[No content]"
+				}
+			}
+		}
+
+		// Remove matching tool_result blocks from user messages
+		if msg.Role == RoleUser && len(msg.ToolResults) > 0 {
+			var filtered []ToolResultBlock
+			for _, tr := range msg.ToolResults {
+				if !removeIDs[tr.ToolUseID] {
+					filtered = append(filtered, tr)
+				} else {
+					removedCount++
+				}
+			}
+			if len(filtered) < len(msg.ToolResults) {
+				msg.ToolResults = filtered
+			}
+		}
+
+		result = append(result, msg)
+	}
+
+	var contentLogs []NormalizationLog
+	if removedCount > 0 {
+		contentLogs = append(contentLogs, NormalizationLog{
+			Pass:    "EmptyInputToolPairCleanup",
+			Message: fmt.Sprintf("Removed %d empty-input tool_use/tool_result pair(s) from non-final messages", removedCount/2),
+		})
+	}
+
+	return result, contentLogs
+}
+
+// isEmptyInput checks if a tool input map is empty (originally nil/arguments=null).
+func isEmptyInput(input map[string]any) bool {
+	if input == nil {
+		return true
+	}
+	return len(input) == 0
 }
 
 // flattenToolResultContent ensures all tool_result blocks have plain string content.
@@ -342,6 +467,11 @@ func dropOrphanedThinkingMessages(messages []Message, logs *[]NormalizationLog) 
 	return result
 }
 
+
+
+
+
+
 // isThinkingOnlyContent checks if content consists solely of thinking blocks.
 // Uses the package-level thinkingPattern (compiled once at package init).
 func isThinkingOnlyContent(content string) bool {
@@ -418,3 +548,4 @@ func stripTrailingThinking(content string) string {
 
 	return result
 }
+

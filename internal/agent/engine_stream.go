@@ -297,6 +297,11 @@ func (e *QueryEngine) emitAssistantEvent(sessionID string, block api.ContentBloc
 		blockFields = append(blockFields, `"type":"text"`)
 		blockFields = append(blockFields, `"text":`+encodeString(block.Text))
 	case api.BlockTypeToolUse:
+		// Ensure ToolInput is never nil in stream-json output —
+		// some models return arguments=null which can leave ToolInput nil.
+		if block.ToolInput == nil {
+			block.ToolInput = make(map[string]any)
+		}
 		inputBytes, _ := json.Marshal(block.ToolInput)
 		blockFields = append(blockFields, `"type":"tool_use"`)
 		blockFields = append(blockFields, `"id":`+encodeString(block.ToolID))

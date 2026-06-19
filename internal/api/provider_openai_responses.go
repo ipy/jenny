@@ -401,8 +401,14 @@ func (p *openAIResponsesProvider) parseResponse(resp *OpenAIResponsesResponse) (
 		case "function_call":
 			hasToolCalls = true
 			var input map[string]any
-			if item.Arguments != "" {
-				json.Unmarshal([]byte(item.Arguments), &input)
+			args := item.Arguments
+			// Skip the literal string "null" — some models return this when
+			// arguments are absent, and json.Unmarshal("null") yields a nil map.
+			if args != "" && args != "null" {
+				json.Unmarshal([]byte(args), &input)
+			}
+			if input == nil {
+				input = make(map[string]any)
 			}
 			callID := item.CallID
 			if callID == "" {
@@ -768,7 +774,11 @@ func (p *openAIResponsesProvider) processResponsesStreamEvent(event *OpenAIRespo
 						},
 					}
 				}
+			// Skip the literal string "null" as arguments delta —
+			// some models emit this when arguments are absent.
+			if event.Delta != "" && event.Delta != "null" {
 				item.args += event.Delta
+			}
 				blocksChan <- StreamContentBlock{
 					Type: "stream_event",
 					RawEvent: AnthropicStreamEvent{
@@ -795,8 +805,14 @@ func (p *openAIResponsesProvider) processResponsesStreamEvent(event *OpenAIRespo
 					},
 				}
 				var input map[string]any
-				if item.args != "" {
-					json.Unmarshal([]byte(item.args), &input)
+				args := item.args
+				// Skip the literal string "null" — some models return this when
+				// arguments are absent, and json.Unmarshal("null") yields a nil map.
+				if args != "" && args != "null" {
+					json.Unmarshal([]byte(args), &input)
+				}
+				if input == nil {
+					input = make(map[string]any)
 				}
 				blocksChan <- StreamContentBlock{Block: ContentBlock{
 					Type:      BlockTypeToolUse,
@@ -952,8 +968,14 @@ func (acc *responsesStreamAccumulator) finalize() []ContentBlock {
 	for i := 0; i < len(acc.items); i++ {
 		if item, ok := acc.items[i]; ok && item.itemType == "function_call" && item.id != "" {
 			var input map[string]any
-			if item.args != "" {
-				json.Unmarshal([]byte(item.args), &input)
+			args := item.args
+			// Skip the literal string "null" — some models return this when
+			// arguments are absent, and json.Unmarshal("null") yields a nil map.
+			if args != "" && args != "null" {
+				json.Unmarshal([]byte(args), &input)
+			}
+			if input == nil {
+				input = make(map[string]any)
 			}
 			blocks = append(blocks, ContentBlock{
 				Type:      BlockTypeToolUse,

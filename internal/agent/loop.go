@@ -251,6 +251,12 @@ func Run(ctx context.Context, prompt string, tools []tool.Tool, cwd string, maxI
 					continue
 				}
 
+				// Defensive: ensure Input is never nil — some models return
+				// arguments=null which can propagate as nil ToolInput.
+				if block.ToolInput == nil {
+					block.ToolInput = make(map[string]any)
+				}
+
 				// Execute tool
 				result, err := t.Execute(ctx, block.ToolInput, cwd)
 				if err != nil {
