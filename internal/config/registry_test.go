@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,9 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/log"
+	koanfjson "github.com/knadh/koanf/parsers/json"
+	"github.com/knadh/koanf/providers/rawbytes"
+	"github.com/knadh/koanf/v2"
 )
 
 // test models.json fixture matching the real aidy-models schema
@@ -689,18 +693,17 @@ func TestConfigModelsMergePricingFields(t *testing.T) {
 	}
 }
 
-// TestConfigModelsMalformedWarn verifies malformed config.json models key
-// triggers a warning but does not return an error (graceful degradation).
+// TestConfigModelsMalformedWarn verifies that malformed config.json returns an error.
 func TestConfigModelsMalformedWarn(t *testing.T) {
 	log.ResetForTest()
 	r := newRegistryWithFixture(t, testModelsJSON)
 
 	_, err := r.ParseConfigModels([]byte(`{not valid json`))
-	if err != nil {
-		t.Error("expected no error for malformed config JSON — should degrade gracefully")
+	if err == nil {
+		t.Error("expected an error for malformed config JSON")
 	}
 
-	// Registry should still work
+	// Registry should still work (the error is on ParseConfigModels, not the registry)
 	got, ok := r.Capability("deepseek-v4-flash")
 	if !ok {
 		t.Fatal("expected capability still works after parse error")
@@ -782,15 +785,15 @@ func TestCapabilityOnlyFromRegistry(t *testing.T) {
 }
 
 // TestBadConfigModelsWarnAndEmpty verifies that a corrupt models block logs a warning
-// and returns empty overrides (nil, nil).
+// TestBadConfigModelsWarnAndEmpty verifies that a corrupt models block returns an error.
 func TestBadConfigModelsWarnAndEmpty(t *testing.T) {
 	log.ResetForTest()
 	r := &ModelRegistry{}
 
-	// "models" key exists but is not a valid object
+	// "models" key exists but is not a valid object (string instead of object)
 	models, err := r.ParseConfigModels([]byte(`{"models": "not-an-object"}`))
-	if err != nil {
-		t.Error("expected no error for malformed models, just empty result")
+	if err == nil {
+		t.Error("expected an error for malformed models block (string instead of object)")
 	}
 	if models != nil {
 		t.Errorf("expected nil models for malformed block, got %d entries", len(models))
@@ -973,7 +976,182 @@ func TestFetch_PreservesUserOverrides(t *testing.T) {
 	}
 }
 
-// TestParseConfigModelsDeeplyNestedPricing verifies deep nested override parsing.
+// TestFetchContext_Success verifies FetchContext passes context through and
+// completes successfully when the server responds quickly.
+func TestFetchContext_Success(t *testing.T) {
+	log.ResetForTest()
+	tmpDir := t.TempDir()
+	cachePath := filepath.Join(tmpDir, "models.json")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("ETag", `"ctx-test-etag"`)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(testModelsJSON))
+	}))
+	defer server.Close()
+
+	r := NewModelRegistry(cachePath)
+	r.fetchURL = server.URL
+
+	ctx := context.Background()
+	if err := r.FetchContext(ctx); err != nil {
+		t.Fatal("FetchContext failed:", err)
+	}
+
+	// Verify models were loaded
+	got, ok := r.Capability("claude-sonnet-4-6")
+	if !ok {
+		t.Fatal("expected claude-sonnet-4-6 after FetchContext")
+	}
+	if got != 64000 {
+		t.Errorf("Capability = %d, want 64000", got)
+	}
+}
+
+// TestFetchContext_Cancellation verifies FetchContext aborts the HTTP request
+// when the context is cancelled.
+func TestFetchContext_Cancellation(t *testing.T) {
+	log.ResetForTest()
+	tmpDir := t.TempDir()
+	cachePath := filepath.Join(tmpDir, "models.json")
+
+	// Server that blocks indefinitely.
+	serverStarted := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(serverStarted)
+		// Block until the request context is cancelled.
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+
+	r := NewModelRegistry(cachePath)
+	r.fetchURL = server.URL
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- r.FetchContext(ctx)
+	}()
+
+	// Wait for the HTTP request to reach the server.
+	select {
+	case <-serverStarted:
+		// OK, request is in flight.
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for request to reach server")
+	}
+
+	// Cancel the context — this should abort the in-flight HTTP request.
+	cancel()
+
+	// The fetch should return an error (context cancelled).
+	select {
+	case err := <-errCh:
+		if err == nil {
+			t.Error("expected error from cancelled FetchContext, got nil")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for FetchContext to return after cancellation")
+	}
+}
+
+// TestFetchContext_Timeout verifies FetchContext aborts when the context deadline
+// is exceeded.
+func TestFetchContext_Timeout(t *testing.T) {
+	log.ResetForTest()
+	tmpDir := t.TempDir()
+	cachePath := filepath.Join(tmpDir, "models.json")
+
+	// Server that sleeps longer than the context deadline.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-time.After(2 * time.Second):
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(testModelsJSON))
+		}
+	}))
+	defer server.Close()
+
+	r := NewModelRegistry(cachePath)
+	r.fetchURL = server.URL
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	err := r.FetchContext(ctx)
+	if err == nil {
+		t.Error("expected error from FetchContext with short deadline, got nil")
+	}
+}
+
+// TestFetchContext_304NotModified verifies 304 handling works with context.
+func TestFetchContext_304NotModified(t *testing.T) {
+	log.ResetForTest()
+	tmpDir := t.TempDir()
+	cachePath := filepath.Join(tmpDir, "models.json")
+	metaPath := filepath.Join(tmpDir, "meta.json")
+
+	// Seed a valid cache and meta with an etag.
+	if err := os.WriteFile(cachePath, []byte(testModelsJSON), 0644); err != nil {
+		t.Fatal(err)
+	}
+	seedMeta := `{"fetchedAt":"2026-06-01T00:00:00Z","etag":"\"ctx-etag\"","schemaVersion":1}`
+	if err := os.WriteFile(metaPath, []byte(seedMeta), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("If-None-Match") == `"ctx-etag"` {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"schemaVersion":2,"models":{}}`))
+	}))
+	defer server.Close()
+
+	r := NewModelRegistry(cachePath)
+	r.fetchURL = server.URL
+
+	ctx := context.Background()
+	if err := r.FetchContext(ctx); err != nil {
+		t.Fatal("FetchContext with 304 failed:", err)
+	}
+
+	// Cache should still have original content.
+	_, ok := r.Capability("claude-sonnet-4-6")
+	if !ok {
+		t.Error("expected claude-sonnet-4-6 to still be in cache after 304 via FetchContext")
+	}
+}
+
+// TestFetchContext_Offline verifies FetchContext respects the offline flag.
+func TestFetchContext_Offline(t *testing.T) {
+	log.ResetForTest()
+	tmpDir := t.TempDir()
+	cachePath := filepath.Join(tmpDir, "models.json")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("unexpected HTTP request in offline mode")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	r := NewModelRegistry(cachePath)
+	r.fetchURL = server.URL
+	r.SetOffline(true)
+
+	err := r.FetchContext(context.Background())
+	if err == nil {
+		t.Fatal("expected error from FetchContext in offline mode")
+	}
+	if !strings.Contains(err.Error(), "offline") {
+		t.Errorf("expected error to contain 'offline', got: %v", err)
+	}
+}
+
 // TestModelRegistry_Fetch_Offline verifies that Fetch() returns an error when
 // offline mode is active and does NOT make any HTTP request.
 func TestModelRegistry_Fetch_Offline(t *testing.T) {
@@ -1043,5 +1221,105 @@ func TestParseConfigModelsDeeplyNestedPricing(t *testing.T) {
 	}
 	if m.Pricing.OutputUSD == nil || *m.Pricing.OutputUSD != 8.0 {
 		t.Errorf("Pricing.OutputUSD = %v", m.Pricing.OutputUSD)
+	}
+}
+
+// TestParseConfigModelsFromKoanf_ValidModels verifies that ParseConfigModelsFromKoanf
+// correctly extracts model overrides from a koanf instance with a valid "models" key.
+func TestParseConfigModelsFromKoanf_ValidModels(t *testing.T) {
+	log.ResetForTest()
+	r := &ModelRegistry{}
+
+	jsonContent := `{
+		"models": {
+			"my-model": {
+				"maxOutput": 10000,
+				"contextWindow": 128000,
+				"pricing": {
+					"input": 2.0,
+					"output": 8.0
+				}
+			}
+		}
+	}`
+
+	k := koanf.New(".")
+	if err := k.Load(rawbytes.Provider([]byte(jsonContent)), koanfjson.Parser()); err != nil {
+		t.Fatalf("failed to load test config into koanf: %v", err)
+	}
+
+	models, err := r.ParseConfigModelsFromKoanf(k)
+	if err != nil {
+		t.Fatal("ParseConfigModelsFromKoanf failed:", err)
+	}
+	if models == nil {
+		t.Fatal("expected non-nil models")
+	}
+	if len(models) != 1 {
+		t.Fatalf("expected 1 override, got %d", len(models))
+	}
+
+	m, ok := models["my-model"]
+	if !ok {
+		t.Fatal("expected my-model in parsed overrides")
+	}
+	if m.MaxOutput == nil || *m.MaxOutput != 10000 {
+		t.Errorf("MaxOutput = %v, want 10000", m.MaxOutput)
+	}
+	if m.ContextWindow == nil || *m.ContextWindow != 128000 {
+		t.Errorf("ContextWindow = %v, want 128000", m.ContextWindow)
+	}
+	if m.Pricing == nil {
+		t.Fatal("Pricing is nil")
+	}
+	if m.Pricing.InputUSD == nil || *m.Pricing.InputUSD != 2.0 {
+		t.Errorf("Pricing.InputUSD = %v", m.Pricing.InputUSD)
+	}
+	if m.Pricing.OutputUSD == nil || *m.Pricing.OutputUSD != 8.0 {
+		t.Errorf("Pricing.OutputUSD = %v", m.Pricing.OutputUSD)
+	}
+}
+
+// TestParseConfigModelsFromKoanf_NoModelsKey verifies that ParseConfigModelsFromKoanf
+// returns nil, nil when the config has no "models" key.
+func TestParseConfigModelsFromKoanf_NoModelsKey(t *testing.T) {
+	log.ResetForTest()
+	r := &ModelRegistry{}
+
+	jsonContent := `{"other": "stuff"}`
+
+	k := koanf.New(".")
+	if err := k.Load(rawbytes.Provider([]byte(jsonContent)), koanfjson.Parser()); err != nil {
+		t.Fatalf("failed to load test config into koanf: %v", err)
+	}
+
+	models, err := r.ParseConfigModelsFromKoanf(k)
+	if err != nil {
+		t.Fatal("ParseConfigModelsFromKoanf failed:", err)
+	}
+	if models != nil {
+		t.Errorf("expected nil models when models key is absent, got %d entries", len(models))
+	}
+}
+
+// TestParseConfigModelsFromKoanf_MalformedModels verifies that ParseConfigModelsFromKoanf
+// returns nil, nil and logs a warning when "models" is not a JSON object (e.g., a string).
+func TestParseConfigModelsFromKoanf_MalformedModels(t *testing.T) {
+	log.ResetForTest()
+	r := &ModelRegistry{}
+
+	jsonContent := `{"models": "not-an-object"}`
+
+	k := koanf.New(".")
+	if err := k.Load(rawbytes.Provider([]byte(jsonContent)), koanfjson.Parser()); err != nil {
+		t.Fatalf("failed to load test config into koanf: %v", err)
+	}
+
+	models, err := r.ParseConfigModelsFromKoanf(k)
+	if err != nil {
+		t.Fatal("ParseConfigModelsFromKoanf failed:", err)
+	}
+	if models != nil {
+		t.Errorf("expected nil models for malformed models value, got %d entries", len(models))
 	}
 }

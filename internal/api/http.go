@@ -169,3 +169,68 @@ func (s *SSEScanner) Next() (string, bool) {
 func (s *SSEScanner) Err() error {
 	return s.scanner.Err()
 }
+
+// ctxSSEScanner wraps an SSEScanner with context-aware Next(ctx).
+// The inner scanner runs in a dedicated goroutine, sending results over a
+// buffered channel. Next(ctx) selects between the channel and ctx.Done(),
+// so cancellation unblocks immediately instead of waiting for the underlying
+// io.Read to return.
+type ctxSSEScanner struct {
+	ch      chan scanResult
+	cancel  context.CancelFunc
+	lastErr error
+}
+
+type scanResult struct {
+	data string
+	ok   bool
+	err  error
+}
+
+func newCtxSSEScanner(ctx context.Context, r io.Reader) *ctxSSEScanner {
+	readCtx, cancel := context.WithCancel(ctx)
+	s := &ctxSSEScanner{
+		ch:     make(chan scanResult, 1),
+		cancel: cancel,
+	}
+	inner := NewSSEScanner(r)
+	go func() {
+		defer close(s.ch)
+		for {
+			data, ok := inner.Next()
+			result := scanResult{data: data, ok: ok}
+			if !ok {
+				result.err = inner.Err()
+			}
+			select {
+			case s.ch <- result:
+				if !ok {
+					return
+				}
+			case <-readCtx.Done():
+				return
+			}
+		}
+	}()
+	return s
+}
+
+func (s *ctxSSEScanner) Next(ctx context.Context) (string, bool) {
+	select {
+	case r, ok := <-s.ch:
+		if !ok {
+			return "", false
+		}
+		s.lastErr = r.err
+		return r.data, r.ok
+	case <-ctx.Done():
+		s.cancel()
+		return "", false
+	}
+}
+
+// Err returns the underlying scanner error, if any. It is only populated
+// after the inner scanner finishes (Next returns false naturally).
+func (s *ctxSSEScanner) Err() error {
+	return s.lastErr
+}

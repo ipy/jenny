@@ -15,12 +15,11 @@ import (
 
 // openAIResponsesProvider implements the Provider interface using the OpenAI Responses API.
 type openAIResponsesProvider struct {
-	client            *HTTPClient
-	model             string
-	maxTokensOverride int
-	retryConfig       RetryConfig
-	effort            string
-	providerName      string
+	client       *HTTPClient
+	model        string
+	retryConfig  RetryConfig
+	effort       string
+	providerName string
 }
 
 // newOpenAIResponsesProvider creates a new OpenAI Responses API provider.
@@ -79,11 +78,6 @@ func (p *openAIResponsesProvider) SetThinkingConfig(cfg ThinkingConfig) {
 	if cfg.Effort != "" {
 		p.effort = cfg.Effort
 	}
-}
-
-// setMaxTokensOverride sets the max_tokens override for the provider.
-func (p *openAIResponsesProvider) setMaxTokensOverride(maxTokens int) {
-	p.maxTokensOverride = maxTokens
 }
 
 // SetProviderName sets the provider name.
@@ -193,7 +187,7 @@ func (p *openAIResponsesProvider) doSendMessage(ctx context.Context, messages []
 		sdkTools = p.buildTools(tools)
 	}
 
-	maxTokens := int64(ResolveMaxTokens(p.model, p.maxTokensOverride))
+	maxTokens := int64(ResolveMaxTokens(p.model, 0))
 
 	reqBody := OpenAIResponsesRequest{
 		Model:           p.model,
@@ -458,7 +452,7 @@ func (p *openAIResponsesProvider) SendMessageStream(ctx context.Context, message
 			sdkTools = p.buildTools(tools)
 		}
 
-		maxTokens := int64(ResolveMaxTokens(p.model, p.maxTokensOverride))
+		maxTokens := int64(ResolveMaxTokens(p.model, 0))
 
 		reqBody := OpenAIResponsesRequest{
 			Model:           p.model,
@@ -532,7 +526,7 @@ func (p *openAIResponsesProvider) SendMessageStream(ctx context.Context, message
 
 		acc := newResponsesStreamAccumulator()
 		hasCompleted := false
-		scanner := NewSSEScanner(body)
+		scanner := newCtxSSEScanner(ctx, body)
 
 		// Emit message_start
 		messageID := fmt.Sprintf("msg_openai_resp_%s", GenerateShortID())
@@ -551,7 +545,7 @@ func (p *openAIResponsesProvider) SendMessageStream(ctx context.Context, message
 		}
 
 		for {
-			data, ok := scanner.Next()
+			data, ok := scanner.Next(ctx)
 			if !ok {
 				break
 			}

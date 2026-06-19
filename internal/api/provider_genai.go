@@ -15,11 +15,10 @@ import (
 
 // genaiProvider implements the Provider interface using a lightweight HTTP client.
 type genaiProvider struct {
-	client            *HTTPClient
-	model             string
-	maxTokensOverride int
-	retryConfig       RetryConfig
-	providerName      string
+	client       *HTTPClient
+	model        string
+	retryConfig  RetryConfig
+	providerName string
 }
 
 // newGenAIProvider creates a new GenAI provider.
@@ -71,11 +70,6 @@ func (p *genaiProvider) SetProviderName(name string) {
 // SupportsNativeSearch returns true; Gemini supports native web search via Google Search grounding.
 func (p *genaiProvider) SupportsNativeSearch() bool {
 	return true
-}
-
-// setMaxTokensOverride sets the max_tokens override for the provider.
-func (p *genaiProvider) setMaxTokensOverride(maxTokens int) {
-	p.maxTokensOverride = maxTokens
 }
 
 // SendMessage sends a non-streaming message.
@@ -172,7 +166,7 @@ func (p *genaiProvider) doSendMessage(ctx context.Context, messages []Message, t
 
 	messages, tools, _ = NormalizeMessages(messages, tools, Capabilities{SupportsPromptCaching: false})
 
-	mt := ResolveMaxTokens(p.model, p.maxTokensOverride)
+	mt := ResolveMaxTokens(p.model, 0)
 	reqBody := GenAIRequest{
 		Contents: p.buildContents(messages, toolResults),
 		GenerationConfig: &GenAIGenerationConfig{
@@ -247,7 +241,7 @@ func (p *genaiProvider) SendMessageStream(ctx context.Context, messages []Messag
 
 		messages, tools, _ = NormalizeMessages(messages, tools, Capabilities{SupportsPromptCaching: false})
 
-		mt := ResolveMaxTokens(p.model, p.maxTokensOverride)
+		mt := ResolveMaxTokens(p.model, 0)
 		reqBody := GenAIRequest{
 			Contents: p.buildContents(messages, toolResults),
 			GenerationConfig: &GenAIGenerationConfig{
@@ -325,7 +319,7 @@ func (p *genaiProvider) SendMessageStream(ctx context.Context, messages []Messag
 
 		acc := newGenAIStreamAccumulator()
 		hasFinishReason := false
-		scanner := NewSSEScanner(body)
+		scanner := newCtxSSEScanner(ctx, body)
 
 		idleTimer := time.NewTimer(idleTimeout)
 		defer idleTimer.Stop()
@@ -360,7 +354,7 @@ func (p *genaiProvider) SendMessageStream(ctx context.Context, messages []Messag
 		}
 
 		for {
-			data, ok := scanner.Next()
+			data, ok := scanner.Next(ctx)
 			if !ok {
 				break
 			}

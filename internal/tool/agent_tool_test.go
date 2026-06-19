@@ -2,21 +2,89 @@ package tool_test
 
 import (
 	"context"
+	"encoding/json"
+	"io"
+	"net/http"
 	"testing"
 
 	"github.com/ipy/jenny/internal/agent"
 	"github.com/ipy/jenny/internal/api"
+	"github.com/ipy/jenny/internal/testutil/mockapi"
 	"github.com/ipy/jenny/internal/tool"
 )
 
-// fastClient returns an API client configured to fail fast for testing.
-func fastClient() api.Requester {
-	client, _ := api.NewClient()
+// sseLine formats an SSE event line.
+func sseLine(eventType, data string) string {
+	return "event: " + eventType + "\ndata: " + data + "\n\n"
+}
+
+// newMockClientForToolTest creates an API client backed by a mock server.
+// The caller should defer close the returned cleanup function.
+func newMockClientForToolTest(t *testing.T) (api.Requester, func()) {
+	t.Helper()
+
+	ms := mockapi.NewMockServer()
+	ms.SetPathHandler("POST /v1/messages", func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		r.Body.Close()
+
+		var req api.AnthropicRequest
+		json.Unmarshal(bodyBytes, &req)
+
+		if !req.Stream {
+			resp := api.AnthropicResponse{
+				Type: "message",
+				Role: "assistant",
+				Content: []api.AnthropicContentBlock{
+					{Type: "text", Text: "mock response"},
+				},
+				Model:      "test-model",
+				StopReason: "end_turn",
+				Usage: api.AnthropicUsage{
+					InputTokens:  10,
+					OutputTokens: 5,
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		events := []string{
+			sseLine("message_start", `{"type":"message_start","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"test-model","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":1}}}`),
+			sseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
+			sseLine("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"mock response"}}`),
+			sseLine("content_block_stop", `{"type":"content_block_stop","index":0}`),
+			sseLine("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":5}}`),
+			sseLine("message_stop", `{"type":"message_stop"}`),
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.WriteHeader(http.StatusOK)
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			return
+		}
+		flusher.Flush()
+		for _, e := range events {
+			io.WriteString(w, e)
+			flusher.Flush()
+		}
+	})
+
+	t.Setenv("ANTHROPIC_BASE_URL", ms.URL())
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "test-token")
+
+	client, err := api.NewClient()
+	if err != nil {
+		t.Fatalf("newMockClientForToolTest: failed to create client: %v", err)
+	}
 	client.SetRetryConfig(api.RetryConfig{
 		MaxRetries:    0,
 		Max529Retries: 0,
 	})
-	return client
+
+	return client, ms.Close
 }
 
 // ============================================================================
@@ -181,8 +249,11 @@ func TestAC3_NamedAgentHasAccessToParentTools(t *testing.T) {
 	// The tool.NamedAgentKey context value should propagate
 
 	// Use LocalSubagentRunner to verify StreamConfig capture
+	client, cleanup := newMockClientForToolTest(t)
+	defer cleanup()
+
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
-	runner := agent.NewLocalSubagentRunner([]tool.Tool{readTool}, nil, fastClient())
+	runner := agent.NewLocalSubagentRunner([]tool.Tool{readTool}, nil, client)
 
 	// Set parent config with non-zero values before Execute
 	parentCfg := agent.StreamConfig{

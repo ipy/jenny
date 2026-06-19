@@ -65,7 +65,7 @@ func TestThinkingTokens_EventShape(t *testing.T) {
 	}
 
 	stdout := captureTTStdout(t, func() {
-		engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient()))
+		engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient(t)))
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_, _ = engine.SubmitMessage(ctx, "test")
@@ -150,7 +150,7 @@ func TestThinkingTokens_NoEventWhenDisabled(t *testing.T) {
 	}
 
 	stdout := captureTTStdout(t, func() {
-		engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient()))
+		engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient(t)))
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_, _ = engine.SubmitMessage(ctx, "test")
@@ -189,7 +189,7 @@ func TestThinkingTokens_PeriodicEmission(t *testing.T) {
 	}
 
 	stdout := captureTTStdout(t, func() {
-		engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient()))
+		engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient(t)))
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_, _ = engine.SubmitMessage(ctx, "test")
@@ -256,7 +256,7 @@ func TestThinkingTokens_FinalEmission(t *testing.T) {
 	}
 
 	stdout := captureTTStdout(t, func() {
-		engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient()))
+		engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient(t)))
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_, _ = engine.SubmitMessage(ctx, "test")
@@ -310,7 +310,7 @@ func TestThinkingTokens_NoKindField(t *testing.T) {
 	}
 
 	stdout := captureTTStdout(t, func() {
-		engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient()))
+		engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient(t)))
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_, _ = engine.SubmitMessage(ctx, "test")
@@ -356,7 +356,7 @@ func TestThinkingTokens_EmissionWithin200ms(t *testing.T) {
 
 	before := time.Now()
 	stdout := captureTTStdout(t, func() {
-		engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient()))
+		engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient(t)))
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_, _ = engine.SubmitMessage(ctx, "test")

@@ -113,23 +113,8 @@ func lookupModelCap(model string) int {
 	return unknownModelMaxTokens
 }
 
-// modelMaxOutputCap returns the max output token capability for a model,
-// consulting the external registry first, then falling back to the
-// capability table. This replaces the old modelMaxOutputTokens
-// function that returned stale hard-coded values.
+// modelMaxOutputCap returns the max output token capability for a model
+// by delegating to the canonical lookupModelCap.
 func modelMaxOutputCap(model string) int {
-	// Consult external model registry first
-	if reg := config.GlobalRegistry(); reg != nil {
-		if cap, ok := reg.Capability(model); ok {
-			return cap
-		}
-	}
-
-	lower := strings.ToLower(model)
-	for _, e := range modelCapTable {
-		if strings.HasPrefix(lower, strings.ToLower(e.pattern)) {
-			return e.maxOut
-		}
-	}
-	return unknownModelMaxTokens
+	return lookupModelCap(model)
 }

@@ -36,10 +36,9 @@ type Requester interface {
 
 // Client wraps an API provider.
 type Client struct {
-	provider          Provider
-	maxTokensOverride int
-	retryConfig       RetryConfig
-	providerName      string
+	provider     Provider
+	retryConfig  RetryConfig
+	providerName string
 }
 
 // defaultModel is the default model used when ANTHROPIC_MODEL is not set.
@@ -196,16 +195,6 @@ func (c *Client) GetModel() string {
 	return ""
 }
 
-// setMaxTokensOverride sets the max_tokens override on the underlying provider.
-// This is a package-internal method; callers outside the api package use the
-// centralized ResolveMaxTokens function.
-func (c *Client) setMaxTokensOverride(maxTokens int) {
-	c.maxTokensOverride = maxTokens
-	if setter, ok := c.provider.(interface{ setMaxTokensOverride(int) }); ok {
-		setter.setMaxTokensOverride(maxTokens)
-	}
-}
-
 // SetThinkingConfig sets the thinking configuration for the provider.
 func (c *Client) SetThinkingConfig(cfg ThinkingConfig) {
 	if setter, ok := c.provider.(interface{ SetThinkingConfig(ThinkingConfig) }); ok {
@@ -295,6 +284,8 @@ func (c *Client) SendMessageStream(
 		if shouldFallback && (streamIncomplete || isIdleTimeout || len(result.Blocks) == 0) {
 			if result.IsPermanent {
 				log.Debug("Streaming failed with permanent error, skipping fallback", "error", result.Error)
+			} else if ctx.Err() != nil {
+				log.Debug("Parent context cancelled, skipping fallback")
 			} else {
 				log.Debug("Streaming incomplete or error, attempting fallback", "error", result.Error, "streamIncomplete", streamIncomplete, "isIdleTimeout", isIdleTimeout)
 				// Stream was incomplete - discard pending blocks and use fallback

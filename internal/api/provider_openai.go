@@ -16,12 +16,11 @@ import (
 
 // openAIProvider implements the Provider interface using a lightweight HTTP client.
 type openAIProvider struct {
-	client            *HTTPClient
-	model             string
-	maxTokensOverride int
-	retryConfig       RetryConfig
-	thinkingEffort    string
-	providerName      string
+	client         *HTTPClient
+	model          string
+	retryConfig    RetryConfig
+	thinkingEffort string
+	providerName   string
 }
 
 // newOpenAIProvider creates a new OpenAI provider.
@@ -81,11 +80,6 @@ func (p *openAIProvider) SetThinkingConfig(cfg ThinkingConfig) {
 	if cfg.Effort != "" {
 		p.thinkingEffort = cfg.Effort
 	}
-}
-
-// setMaxTokensOverride sets the max_tokens override for the provider.
-func (p *openAIProvider) setMaxTokensOverride(maxTokens int) {
-	p.maxTokensOverride = maxTokens
 }
 
 // SetProviderName sets the provider name.
@@ -196,7 +190,7 @@ func (p *openAIProvider) doSendMessage(ctx context.Context, messages []Message, 
 		sdkTools = p.buildTools(tools)
 	}
 
-	maxTokens := int64(ResolveMaxTokens(p.model, p.maxTokensOverride))
+	maxTokens := int64(ResolveMaxTokens(p.model, 0))
 
 	reqBody := OpenAIRequest{
 		Model:               p.model,
@@ -425,7 +419,7 @@ func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Messa
 			sdkTools = p.buildTools(tools)
 		}
 
-		maxTokens := int64(ResolveMaxTokens(p.model, p.maxTokensOverride))
+		maxTokens := int64(ResolveMaxTokens(p.model, 0))
 
 		reqBody := OpenAIRequest{
 			Model:               p.model,
@@ -489,7 +483,7 @@ func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Messa
 
 		acc := newOpenAIStreamAccumulator()
 		hasStopReason := false
-		scanner := NewSSEScanner(body)
+		scanner := newCtxSSEScanner(ctx, body)
 
 		idleTimer := time.NewTimer(idleTimeout)
 		defer idleTimer.Stop()
@@ -524,7 +518,7 @@ func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Messa
 		}
 
 		for {
-			data, ok := scanner.Next()
+			data, ok := scanner.Next(ctx)
 			if !ok {
 				break
 			}

@@ -61,9 +61,8 @@ func newGenAIProviderForTest(s *testGenAIServer) *genaiProvider {
 	t.Setenv("GENAI_API_KEY", "test-key")
 
 	return &genaiProvider{
-		client:            NewHTTPClient(30 * time.Second),
-		model:             "gemini-2.5-flash",
-		maxTokensOverride: 64000,
+		client: NewHTTPClient(30 * time.Second),
+		model:  "gemini-2.5-flash",
 	}
 }
 

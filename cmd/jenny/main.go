@@ -165,19 +165,13 @@ func run() error {
 		reg.SetOffline(true)
 		log.Debug("registry: offline mode enabled, using cache as-is")
 	}
-	// Load user model overrides from config.json. Do this early so diagnostics
-	// (e.g. WARN on malformed models block) are emitted before any early exit.
+	// Load user model overrides from config.json via the existing koanf instance.
+	// Do this early so diagnostics (e.g. WARN on malformed models block) are emitted
+	// before any early exit. koanf already loaded .jenny/config.json during cli.Parse().
 	if reg != nil {
-		cwd, err := os.Getwd()
-		if err != nil {
-			cwd = "/"
-		}
-		configPath := filepath.Join(constants.ProjectJennyDir(cwd), "config.json")
-		if data, err := os.ReadFile(configPath); err == nil {
-			if models, err := reg.ParseConfigModels(data); err == nil && models != nil {
-				if err := reg.ApplyUserOverrides(models); err != nil {
-					log.Warn("registry: failed to apply user overrides", "error", err)
-				}
+		if models, err := reg.ParseConfigModelsFromKoanf(k); err == nil && models != nil {
+			if err := reg.ApplyUserOverrides(models); err != nil {
+				log.Warn("registry: failed to apply user overrides", "error", err)
 			}
 		}
 	}
@@ -220,20 +214,31 @@ func run() error {
 	}
 
 	// If no --refresh-registry and not offline, start background fetch with 3s soft timeout.
+	// Uses FetchContext with a 30s total deadline so the HTTP request can be cancelled
+	// when the 3s soft timeout fires, preventing goroutine leaks.
 	if reg != nil && !flags.RefreshRegistry && !flags.Offline && reg.ShouldFetch() {
 		go func() {
-			done := make(chan struct{})
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			done := make(chan error, 1)
 			go func() {
-				if err := reg.Fetch(); err != nil {
+				done <- reg.FetchContext(ctx)
+			}()
+
+			select {
+			case err := <-done:
+				if err != nil {
 					log.Warn("registry: background fetch failed", "error", err)
 				}
-				close(done)
-			}()
-			select {
-			case <-done:
-				// fetch completed within timeout
 			case <-time.After(3 * time.Second):
-				log.Debug("registry: background fetch still running (soft timeout)")
+				log.Debug("registry: background fetch still running (soft timeout), cancelling")
+				cancel()
+				// Drain the done channel to avoid goroutine leak from the inner goroutine.
+				// FetchContext will return with a context error after cancel.
+				if err := <-done; err != nil {
+					log.Debug("registry: background fetch cancelled", "error", err)
+				}
 			}
 		}()
 	}
@@ -260,11 +265,6 @@ func run() error {
 	sessionManager, err := session.NewManager(flags.TranscriptDir, flags.NoSessionPersistence)
 	if err != nil {
 		return fmt.Errorf("creating session manager: %w", err)
-	}
-
-	// Register shutdown flush hook when persistence is enabled
-	if !flags.NoSessionPersistence {
-		sessionManager.RegisterShutdownFlush()
 	}
 
 	// Handle --continue flag: find most recent session
@@ -598,6 +598,17 @@ func run() error {
 	engine, result, _, err := agent.RunStream(ctx, flags.Prompt, tools, cwd, &streamCfg, flags.Model, agent.WithSkillActivator(skillActivator))
 	if err != nil {
 		return err
+	}
+
+	// Drain memory extraction goroutines with bounded timeout first,
+	// so any transcript entries produced during drain get flushed below.
+	drainCtx, drainCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer drainCancel()
+	engine.Drain(drainCtx)
+
+	// Flush transcript before shutdown
+	if !flags.NoSessionPersistence {
+		_ = sessionManager.Flush()
 	}
 
 	// Print result only when NOT in stream-json mode (result is already emitted as JSON in stream-json mode)

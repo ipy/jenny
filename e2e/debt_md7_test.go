@@ -16,8 +16,8 @@ func TestDebtMD7ModelPricingConsolidation(t *testing.T) {
 			Category:    "debt-MD-7",
 			Description: "binary builds with no compilation errors after removing duplicate ModelPricing",
 			Target: harness.TargetInvocation{
-				Kind:   "cli",
-				Args:   []string{"--version"},
+				Kind: "cli",
+				Args: []string{"--version"},
 			},
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,

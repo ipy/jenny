@@ -1414,3 +1414,56 @@ func TestNormalize_RoutesThroughNormalizeMessages(t *testing.T) {
 		t.Error("expected __arg__ placeholder property in serialized request (NormalizeMessages should have added it)")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Graceful shutdown: fallback skip on cancelled context
+// ---------------------------------------------------------------------------
+
+func TestSendMessageStream_SkipsFallbackOnCancelledContext(t *testing.T) {
+	// This test verifies that when the parent context is already cancelled,
+	// the fallback path is skipped (ctx.Err() != nil check).
+	// We use a mock server that returns an incomplete stream, and a cancelled context.
+
+	events := []string{
+		"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"m\",\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":5,\"output_tokens\":1}}}\n\n",
+		// No message_stop — stream is incomplete
+	}
+	ms := mockapi.NewMockServer()
+	ms.SetPathHandler("POST /v1/messages", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.WriteHeader(http.StatusOK)
+		for _, e := range events {
+			w.Write([]byte(e))
+		}
+	})
+	defer ms.Close()
+
+	t.Setenv("ANTHROPIC_BASE_URL", ms.URL())
+	t.Setenv("ANTHROPIC_API_KEY", "test-key-0000000000000000")
+
+	client, _ := NewClientWithModel("m")
+
+	// Create a context that is already cancelled
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	fallbackCalled := false
+	onFallback := func(ctx context.Context) (*Response, error) {
+		fallbackCalled = true
+		return &Response{
+			ID:         "fallback_msg",
+			Content:    []ContentBlock{{Type: "text", Text: "fallback"}},
+			StopReason: StopReasonEndTurn,
+		}, nil
+	}
+
+	blocksChan, _ := client.SendMessageStream(ctx, nil, nil, nil, []string{}, "", 5*time.Second, 5*time.Second, onFallback)
+	for range blocksChan {
+		// drain
+	}
+
+	if fallbackCalled {
+		t.Error("fallback should NOT be called when parent context is already cancelled")
+	}
+}

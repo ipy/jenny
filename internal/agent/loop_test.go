@@ -800,11 +800,8 @@ func TestAC1_RecursiveForkBlocked_ViaContext(t *testing.T) {
 	// AgentTool.Execute() must return error "recursive fork not allowed".
 	// This applies to all subagent types.
 
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
 	// Create context with fork child marker
 	ctx := context.WithValue(context.Background(), tool.ForkChildKey, true)
@@ -812,7 +809,7 @@ func TestAC1_RecursiveForkBlocked_ViaContext(t *testing.T) {
 	// Create AgentTool with a runner that should never be reached
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewLocalSubagentRunner(tools, nil, fastClient())
+	runner := NewLocalSubagentRunner(tools, nil, client)
 
 	agentTool := tool.NewAgentTool(runner, nil)
 
@@ -894,14 +891,11 @@ func TestAC1_RecursiveForkBlocked_NoFalsePositive(t *testing.T) {
 func TestAC1_RecursiveForkBlocked_AllSubagentTypes(t *testing.T) {
 	// AC1: Verify fork blocking applies to ALL subagent types (not just some)
 
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
 	ctx := context.WithValue(context.Background(), tool.ForkChildKey, true)
-	runner := NewLocalSubagentRunner(nil, nil, fastClient())
+	runner := NewLocalSubagentRunner(nil, nil, client)
 	agentTool := tool.NewAgentTool(runner, nil)
 
 	subagentTypes := []string{"general-purpose", "explore", "plan", "shell", "verification"}
@@ -938,7 +932,10 @@ func TestAC1_ForkChildInStreamConfig(t *testing.T) {
 	// Verify that a second agent call from within that context would be blocked.
 
 	// Confirm IsForkChild is set in subagent stream config
-	runner := NewLocalSubagentRunner(nil, nil, fastClient())
+	client, cleanup := newMockClient(t)
+	defer cleanup()
+
+	runner := NewLocalSubagentRunner(nil, nil, client)
 	params := tool.SubagentParams{
 		Prompt:       "test",
 		SubagentType: "explore",
@@ -968,15 +965,12 @@ func TestAC2_WorktreeIsolation_MutuallyExclusiveWithCWD(t *testing.T) {
 	// AC2: When both isolation=worktree and cwd are set,
 	// RunSubagent must return error "worktree isolation is mutually exclusive with cwd"
 
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewLocalSubagentRunner(tools, nil, fastClient())
+	runner := NewLocalSubagentRunner(tools, nil, client)
 
 	params := tool.SubagentParams{
 		Prompt:       "test",
@@ -999,18 +993,15 @@ func TestAC2_WorktreeIsolation_AloneWithoutCWD_Validates(t *testing.T) {
 	// AC2: When isolation=worktree is set WITHOUT cwd, the validation should pass.
 	// It then requires a git repo. Run from a non-git temp dir so git.GetRoot fails.
 
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
 	// Change to a non-git temp directory so git.GetRoot("") fails
 	t.Chdir(t.TempDir())
 
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewLocalSubagentRunner(tools, nil, fastClient())
+	runner := NewLocalSubagentRunner(tools, nil, client)
 
 	params := tool.SubagentParams{
 		Prompt:       "test",
@@ -1033,15 +1024,12 @@ func TestAC2_NoCWD_NoIsolation_Passes(t *testing.T) {
 	// AC2: Without isolation and without cwd, normal validation passes
 	// (will fail later due to no API client, not due to validation)
 
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewLocalSubagentRunner(tools, nil, fastClient())
+	runner := NewLocalSubagentRunner(tools, nil, client)
 
 	params := tool.SubagentParams{
 		Prompt:       "test",
@@ -1066,15 +1054,12 @@ func TestAC2_NoCWD_NoIsolation_Passes(t *testing.T) {
 func TestAC3_AsyncSubagentOutputFile_ReturnsPath(t *testing.T) {
 	// AC3: RunSubagentAsync returns an AsyncResult with a non-empty OutputFile path
 
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewAsyncSubagentRunner(tools, nil, fastClient())
+	runner := NewAsyncSubagentRunner(tools, nil, client)
 
 	params := tool.SubagentParams{
 		Prompt:       "test prompt",
@@ -1101,15 +1086,12 @@ func TestAC3_AsyncSubagentCompletes(t *testing.T) {
 	// AC3: After async subagent completes, Done is closed and subagent_result
 	// entry is written to the parent's transcript.
 
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewAsyncSubagentRunner(tools, nil, fastClient())
+	runner := NewAsyncSubagentRunner(tools, nil, client)
 
 	params := tool.SubagentParams{
 		Prompt:       "test prompt",
@@ -1133,15 +1115,12 @@ func TestAC3_AsyncSubagentCompletes(t *testing.T) {
 func TestAC3_AsyncSubagentErrorContent(t *testing.T) {
 	// AC3: When the subagent fails, Done is still closed and error is recorded.
 
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewAsyncSubagentRunner(tools, nil, fastClient())
+	runner := NewAsyncSubagentRunner(tools, nil, client)
 
 	// Use an invalid subagent type to guarantee failure with a known error
 	params := tool.SubagentParams{
@@ -1172,15 +1151,12 @@ func TestAC4_InterruptCancelledContext_ReturnsOutputPlusError(t *testing.T) {
 	// whatever output was accumulated) AND the cancellation error.
 	// Output is NOT discarded.
 
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewLocalSubagentRunner(tools, nil, fastClient())
+	runner := NewLocalSubagentRunner(tools, nil, client)
 
 	// Create a cancelled context
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1215,15 +1191,12 @@ func TestAC4_InterruptTimeoutContext_ReturnsOutputPlusError(t *testing.T) {
 	// AC4: When context times out, RunSubagent returns a SubagentResult with output
 	// AND the DeadlineExceeded error.
 
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewLocalSubagentRunner(tools, nil, fastClient())
+	runner := NewLocalSubagentRunner(tools, nil, client)
 
 	// Create a context that's already expired
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
@@ -1255,17 +1228,14 @@ func TestAC4_InterruptTimeoutContext_ReturnsOutputPlusError(t *testing.T) {
 
 func TestAC4_InterruptNormalContext_ReturnsNoCancelError(t *testing.T) {
 	// AC4: When context is NOT cancelled, no cancellation error should be returned.
-	// (Verifies baseline behavior - will get API error instead)
+	// (Verifies baseline behavior - uses mock API client)
 
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
-	runner := NewLocalSubagentRunner(tools, nil, fastClient())
+	runner := NewLocalSubagentRunner(tools, nil, client)
 
 	// Normal context (not cancelled)
 	ctx := context.Background()
@@ -1608,8 +1578,11 @@ func TestMaxIterations_LoopContractBounded(t *testing.T) {
 
 func TestMaxIterations_EngineConfigWired(t *testing.T) {
 	// Verify that StreamConfig.MaxIterations is used by QueryEngine
+	client, cleanup := newMockClient(t)
+	defer cleanup()
+
 	cfg := StreamConfig{MaxIterations: 7}
-	engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient()))
+	engine := mustNewQueryEngine(&cfg, nil, "", WithClient(client))
 	// Access the internal runLoop's maxIterations via config — the engine
 	// reads e.streamCfg.MaxIterations in runLoop. Verify the config field is preserved.
 	if engine.streamCfg.MaxIterations != 7 {

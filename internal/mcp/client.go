@@ -1612,14 +1612,22 @@ func ConnectAll(cfg map[string]MCPServerDef) error {
 
 // ShutdownAll disconnects all MCP clients.
 func ShutdownAll() {
-	clientsMu.Lock()
-	defer clientsMu.Unlock()
-
-	for _, client := range clients {
-		client.Disconnect()
+	done := make(chan struct{})
+	go func() {
+		clientsMu.Lock()
+		defer clientsMu.Unlock()
+		for _, client := range clients {
+			client.Disconnect()
+		}
+		clients = make(map[string]*Client)
+		bumpCacheGen()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		log.Warn("MCP shutdown timed out after 5s, exiting anyway")
 	}
-	clients = make(map[string]*Client)
-	bumpCacheGen()
 }
 
 // GetTools returns all discovered MCP tools from all connected servers.

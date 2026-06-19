@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -276,13 +275,10 @@ func TestSubagentType_InvalidTypeError(t *testing.T) {
 		t.Fatal("expected nil for invalid type")
 	}
 	// Verify error message format from RunSubagent for invalid type
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
-	runner := NewLocalSubagentRunner(nil, nil, fastClient())
+	runner := NewLocalSubagentRunner(nil, nil, client)
 	params := tool.SubagentParams{
 		Prompt:       "test",
 		SubagentType: "nonexistent",
@@ -303,16 +299,13 @@ func TestSubagentType_InvalidTypeError(t *testing.T) {
 }
 
 func TestLocalSubagentRunner_AC1_InvalidTypeError(t *testing.T) {
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
 
-	runner := NewLocalSubagentRunner(tools, nil, fastClient())
+	runner := NewLocalSubagentRunner(tools, nil, client)
 
 	params := tool.SubagentParams{
 		Prompt:       "test prompt",
@@ -344,17 +337,13 @@ func TestLocalSubagentRunner_AC1_InvalidTypeError(t *testing.T) {
 
 func TestLocalSubagentRunner_AC3_ParameterPassthrough(t *testing.T) {
 	// Test that parameters are forwarded correctly
-	// This is a basic test - full verification would require mocking RunStream
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
 
-	runner := NewLocalSubagentRunner(tools, nil, fastClient())
+	runner := NewLocalSubagentRunner(tools, nil, client)
 
 	params := tool.SubagentParams{
 		Prompt:       "test prompt",
@@ -363,24 +352,20 @@ func TestLocalSubagentRunner_AC3_ParameterPassthrough(t *testing.T) {
 		CWD:          "/tmp",
 	}
 
-	// This will likely fail due to API client not being configured in test
-	// but we can verify the params are being used
+	// This will use the mock API client
 	_, _ = runner.RunSubagent(context.Background(), params)
 	// If we get here without panic, the params were at least parsed correctly
 }
 
 func TestLocalSubagentRunner_AC4_SubagentLifecycle(t *testing.T) {
 	// Test that subagent runs in its own context
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
 
-	runner := NewLocalSubagentRunner(tools, nil, fastClient())
+	runner := NewLocalSubagentRunner(tools, nil, client)
 
 	params := tool.SubagentParams{
 		Prompt:       "test prompt",
@@ -393,23 +378,20 @@ func TestLocalSubagentRunner_AC4_SubagentLifecycle(t *testing.T) {
 	// Run again - should be independent
 	result2, _ := runner.RunSubagent(context.Background(), params)
 
-	// Both runs should complete (even if they fail due to no API client)
+	// Both runs should complete
 	if result1 == nil && result2 == nil {
 		t.Error("at least one run should produce a result")
 	}
 }
 
 func TestAsyncSubagentRunner_AC2_AsyncLaunch(t *testing.T) {
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 	tools := []tool.Tool{readTool}
 
-	runner := NewAsyncSubagentRunner(tools, nil, fastClient())
+	runner := NewAsyncSubagentRunner(tools, nil, client)
 
 	params := tool.SubagentParams{
 		Prompt:       "test prompt",
@@ -435,14 +417,11 @@ func TestAsyncSubagentRunner_AC2_AsyncLaunch(t *testing.T) {
 }
 
 func TestLocalSubagentRunner_AC4_StreamConfigPropagation(t *testing.T) {
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
-	runner := NewLocalSubagentRunner([]tool.Tool{readTool}, nil, fastClient())
+	runner := NewLocalSubagentRunner([]tool.Tool{readTool}, nil, client)
 
 	// Set up parent config with all inherited fields
 	parentCfg := StreamConfig{
@@ -527,11 +506,8 @@ func TestLocalSubagentRunner_AC7_InheritanceAntiEscalation(t *testing.T) {
 	// Anti-escalation guarantee: SubagentParams has no PermissionLevel field, so
 	// inheritance is the only mechanism. This table-driven test proves the
 	// anti-escalation property for all levels in one pass.
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
 	levels := []tool.PermissionLevel{
 		tool.PermissionRead,
@@ -543,7 +519,7 @@ func TestLocalSubagentRunner_AC7_InheritanceAntiEscalation(t *testing.T) {
 	for _, parentLevel := range levels {
 		t.Run(parentLevel.String(), func(t *testing.T) {
 			readTool := tool.NewReadTool(tool.PermissionEdit, nil)
-			runner := NewLocalSubagentRunner([]tool.Tool{readTool}, nil, fastClient())
+			runner := NewLocalSubagentRunner([]tool.Tool{readTool}, nil, client)
 
 			parentCfg := StreamConfig{
 				PermissionLevel: parentLevel,
@@ -574,14 +550,11 @@ func TestLocalSubagentRunner_AC7_InheritanceAntiEscalation(t *testing.T) {
 func TestLocalSubagentRunner_AC7_UnrestrictedParentInheritsCorrectly(t *testing.T) {
 	// AC3: Subagent at unrestricted inherits correctly. Parent at
 	// PermissionLevel=unrestricted spawns subagent, subagent inherits unrestricted.
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
-	runner := NewLocalSubagentRunner([]tool.Tool{readTool}, nil, fastClient())
+	runner := NewLocalSubagentRunner([]tool.Tool{readTool}, nil, client)
 
 	// Parent config has PermissionLevel=unrestricted
 	parentCfg := StreamConfig{
@@ -617,16 +590,13 @@ func TestLocalSubagentRunner_AC7_NestedSubagentCannotEscalate(t *testing.T) {
 	// Parent at PermissionLevel=edit spawns subagent (captured level edit),
 	// that subagent spawns its own subagent (grandchild), and grandchild
 	// also has PermissionLevel=edit. Double-inheritance does not allow escalation.
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
 
 	// First runner: grandparent
-	runner1 := NewLocalSubagentRunner([]tool.Tool{readTool}, nil, fastClient())
+	runner1 := NewLocalSubagentRunner([]tool.Tool{readTool}, nil, client)
 	parentCfg1 := StreamConfig{
 		PermissionLevel: tool.PermissionEdit,
 	}
@@ -651,7 +621,7 @@ func TestLocalSubagentRunner_AC7_NestedSubagentCannotEscalate(t *testing.T) {
 	}
 
 	// Second runner: parent spawns child (grandchild of original)
-	runner2 := NewLocalSubagentRunner([]tool.Tool{readTool}, nil, fastClient())
+	runner2 := NewLocalSubagentRunner([]tool.Tool{readTool}, nil, client)
 	parentCfg2 := StreamConfig{
 		PermissionLevel: parentCapturedCfg.PermissionLevel, // Should be edit
 	}
@@ -684,14 +654,11 @@ func TestLocalSubagentRunner_AC7_UnnamedSubagentNoInheritance(t *testing.T) {
 	// Verify that unnamed subagents (params.Name == "") do NOT inherit
 	// PermissionLevel - they get the default zero value.
 	// This is important because only named agents trigger the inheritance code.
-	_, hasURL := os.LookupEnv("ANTHROPIC_BASE_URL")
-	_, hasToken := os.LookupEnv("ANTHROPIC_AUTH_TOKEN")
-	if !hasURL || !hasToken {
-		t.Skip("skipping: ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN not set")
-	}
+	client, cleanup := newMockClient(t)
+	defer cleanup()
 
 	readTool := tool.NewReadTool(tool.PermissionEdit, nil)
-	runner := NewLocalSubagentRunner([]tool.Tool{readTool}, nil, fastClient())
+	runner := NewLocalSubagentRunner([]tool.Tool{readTool}, nil, client)
 
 	// Set up parent config with PermissionLevel=execute
 	parentCfg := StreamConfig{

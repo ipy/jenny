@@ -120,7 +120,10 @@ func ValidateWebSearchConfig(cfg WebSearchConfig) error {
 		return fmt.Errorf("invalid web search strategy %q: must be native, client, or disabled", cfg.Strategy)
 	}
 
-	if cfg.Strategy == StrategyClient {
+	if cfg.ClientConfig.Provider != "" {
+		if cfg.Strategy != StrategyClient {
+			return fmt.Errorf("client provider is configured but strategy is not 'client'")
+		}
 		if cfg.ClientConfig.Provider != "tavily" && cfg.ClientConfig.Provider != "custom" {
 			return fmt.Errorf("invalid client provider %q: must be tavily or custom", cfg.ClientConfig.Provider)
 		}

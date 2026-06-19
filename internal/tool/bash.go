@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/ipy/jenny/internal/constants"
@@ -275,6 +276,12 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 
 	cmd := exec.CommandContext(cmdCtx, "sh", "-c", command)
 	cmd.Dir = t.commandCwd
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	defer func() {
+		if cmd.Process != nil {
+			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		}
+	}()
 
 	// Inject JENNY_SCRATCHPAD env var so agent can reference scratchpad in shell
 	cmd.Env = append(os.Environ(), "JENNY_SCRATCHPAD="+constants.ScratchpadDir(t.sessionID))
@@ -488,6 +495,12 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 	go func() {
 		cmd := exec.CommandContext(ctx, "sh", "-c", command)
 		cmd.Dir = cwd
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		defer func() {
+			if cmd.Process != nil {
+				syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			}
+		}()
 
 		// Inject JENNY_SCRATCHPAD env var so agent can reference scratchpad in shell
 		cmd.Env = append(os.Environ(), "JENNY_SCRATCHPAD="+constants.ScratchpadDir(sessionID))

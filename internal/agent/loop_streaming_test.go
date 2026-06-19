@@ -53,7 +53,7 @@ func TestAC1_NoStreamRequestStart(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		_, _, _, err = RunStream(ctx, "test prompt", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
+		_, _, _, err = RunStream(ctx, "test prompt", nil, tmpDir, &cfg, "test-model", WithClient(fastClient(t)))
 		errCh <- err
 	}()
 
@@ -108,7 +108,7 @@ func TestAC1_NoStreamRequestStartWhenDisabled(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _, _, err = RunStream(ctx, "test prompt", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
+		_, _, _, err = RunStream(ctx, "test prompt", nil, tmpDir, &cfg, "test-model", WithClient(fastClient(t)))
 		errCh <- err
 	}()
 
@@ -160,7 +160,7 @@ func TestStreamEvent_EmittedWhenFlagOn(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _, _, err = RunStream(ctx, "test prompt", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
+		_, _, _, err = RunStream(ctx, "test prompt", nil, tmpDir, &cfg, "test-model", WithClient(fastClient(t)))
 		errCh <- err
 	}()
 
@@ -259,7 +259,7 @@ func TestStreamEvent_NotEmittedWhenFlagOff(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _, _, err = RunStream(ctx, "test prompt", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
+		_, _, _, err = RunStream(ctx, "test prompt", nil, tmpDir, &cfg, "test-model", WithClient(fastClient(t)))
 		errCh <- err
 	}()
 
@@ -335,7 +335,7 @@ func TestStreamEvent_NotEmittedOnFallback(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _, _, err = RunStream(ctx, "test prompt", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
+		_, _, _, err = RunStream(ctx, "test prompt", nil, tmpDir, &cfg, "test-model", WithClient(fastClient(t)))
 		errCh <- err
 	}()
 
@@ -427,7 +427,7 @@ func TestStreamEvent_ThinkingAndSignature(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, result, _, err := RunStream(ctx, "hello", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
+	_, result, _, err := RunStream(ctx, "hello", nil, tmpDir, &cfg, "test-model", WithClient(fastClient(t)))
 	if err != nil {
 		t.Fatalf("RunStream error: %v", err)
 	}
@@ -503,7 +503,7 @@ func TestStreamingFallbackParityPreserved(t *testing.T) {
 		cfg := StreamConfig{Enabled: true, SessionManager: sessMgr}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _, _, err := RunStream(ctx, "test", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
+		_, _, _, err := RunStream(ctx, "test", nil, tmpDir, &cfg, "test-model", WithClient(fastClient(t)))
 		errCh <- err
 	}()
 
@@ -622,7 +622,7 @@ func TestStreamingEmitsOneAssistantPerTurn(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _, _, runErr = RunStream(ctx, "test", tools, tmpDir, &cfg, "test-model", WithClient(fastClient()))
+		_, _, _, runErr = RunStream(ctx, "test", tools, tmpDir, &cfg, "test-model", WithClient(fastClient(t)))
 	})
 
 	if runErr != nil {
@@ -727,7 +727,7 @@ func TestStreamingNoTextDuplication(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _, _, runErr = RunStream(ctx, "test", tools, tmpDir, &cfg, "test-model", WithClient(fastClient()))
+		_, _, _, runErr = RunStream(ctx, "test", tools, tmpDir, &cfg, "test-model", WithClient(fastClient(t)))
 	})
 
 	if runErr != nil {
@@ -795,7 +795,7 @@ func TestStreamingTextOnlyTurn(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _, _, runErr = RunStream(ctx, "test", nil, tmpDir, &cfg, "test-model", WithClient(fastClient()))
+		_, _, _, runErr = RunStream(ctx, "test", nil, tmpDir, &cfg, "test-model", WithClient(fastClient(t)))
 	})
 
 	if runErr != nil {
@@ -917,7 +917,7 @@ func TestStreamingToolUseOnlyTurn(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _, _, runErr = RunStream(ctx, "test", tools, tmpDir, &cfg, "test-model", WithClient(fastClient()))
+		_, _, _, runErr = RunStream(ctx, "test", tools, tmpDir, &cfg, "test-model", WithClient(fastClient(t)))
 	})
 
 	if runErr != nil {
@@ -985,7 +985,7 @@ func captureStreamOutput(t *testing.T, cfg *StreamConfig) (string, error) {
 		cfg.SessionManager = sessMgr
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, _, _, err = RunStream(ctx, "test prompt", nil, tmpDir, cfg, "test-model", WithClient(fastClient()))
+		_, _, _, err = RunStream(ctx, "test prompt", nil, tmpDir, cfg, "test-model", WithClient(fastClient(t)))
 		errCh <- err
 	}()
 

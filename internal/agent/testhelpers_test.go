@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -281,14 +282,87 @@ func hasToolUseWithID(content []any, want string) bool {
 	return false
 }
 
-// fastClient returns an API client configured to fail fast for testing.
-func fastClient() api.Requester {
+// fastClient returns an API client for testing. If ANTHROPIC_BASE_URL is not
+// already set via t.Setenv, it sets a safe default so the client never
+// accidentally hits a real API endpoint. Tests that need a working mock
+// server should set t.Setenv("ANTHROPIC_BASE_URL", server.URL) BEFORE calling
+// fastClient(t), or use newMockClient(t) which creates both server and client.
+func fastClient(t *testing.T) api.Requester {
+	t.Helper()
+	if os.Getenv("ANTHROPIC_BASE_URL") == "" {
+		t.Setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:0")
+	}
+	if os.Getenv("ANTHROPIC_AUTH_TOKEN") == "" && os.Getenv("ANTHROPIC_API_KEY") == "" {
+		t.Setenv("ANTHROPIC_AUTH_TOKEN", "test-token")
+	}
 	client, _ := api.NewClient()
 	client.SetRetryConfig(api.RetryConfig{
 		MaxRetries:    0,
 		Max529Retries: 0,
 	})
 	return client
+}
+
+// newMockClient creates an API client backed by a mock server that responds
+// to both streaming and non-streaming Anthropic API requests. The caller
+// should defer close the returned cleanup function.
+//
+// This replaces fastClient(t) for integration tests that need a working API
+// client without hitting real endpoints.
+func newMockClient(t *testing.T) (api.Requester, func()) {
+	t.Helper()
+
+	ms := mockapi.NewMockServer()
+	ms.SetPathHandler("POST /v1/messages", func(w http.ResponseWriter, r *http.Request) {
+		bodyBytes, _ := io.ReadAll(r.Body)
+		r.Body.Close()
+
+		var req api.AnthropicRequest
+		json.Unmarshal(bodyBytes, &req)
+
+		if !req.Stream {
+			resp := api.AnthropicResponse{
+				Type: "message",
+				Role: "assistant",
+				Content: []api.AnthropicContentBlock{
+					{Type: "text", Text: "mock response"},
+				},
+				Model:      "test-model",
+				StopReason: "end_turn",
+				Usage: api.AnthropicUsage{
+					InputTokens:  10,
+					OutputTokens: 5,
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		events := []string{
+			sseLine("message_start", `{"type":"message_start","message":{"id":"msg_mock","type":"message","role":"assistant","content":[],"model":"test-model","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":1}}}`),
+			sseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
+			sseLine("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"mock response"}}`),
+			sseLine("content_block_stop", `{"type":"content_block_stop","index":0}`),
+			sseLine("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":5}}`),
+			sseLine("message_stop", `{"type":"message_stop"}`),
+		}
+		writeSSEEvents(w, events)
+	})
+
+	t.Setenv("ANTHROPIC_BASE_URL", ms.URL())
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "test-token")
+
+	client, err := api.NewClient()
+	if err != nil {
+		t.Fatalf("newMockClient: failed to create client: %v", err)
+	}
+	client.SetRetryConfig(api.RetryConfig{
+		MaxRetries:    0,
+		Max529Retries: 0,
+	})
+
+	return client, ms.Close
 }
 
 // mustNewQueryEngine creates a QueryEngine for testing, panicking on error.

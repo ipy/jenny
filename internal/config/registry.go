@@ -2,6 +2,7 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/log"
+	"github.com/knadh/koanf/v2"
 )
 
 // DefaultRegistryURL is the community-maintained model registry.
@@ -173,7 +175,20 @@ func (r *ModelRegistry) ShouldFetch() bool {
 // It writes the response to the cache file and updates meta.json.
 // On network errors, the existing cache is preserved (if any).
 // The HTTP request is performed outside the write lock so lookups are not blocked.
+// Fetch uses a background context with a 30s HTTP client timeout.
 func (r *ModelRegistry) Fetch() error {
+	return r.fetchWithContext(context.Background())
+}
+
+// FetchContext downloads the model registry like Fetch, but accepts a context
+// to control cancellation of the HTTP request. When the context is cancelled,
+// the in-flight HTTP request is aborted.
+func (r *ModelRegistry) FetchContext(ctx context.Context) error {
+	return r.fetchWithContext(ctx)
+}
+
+// fetchWithContext contains the shared fetch implementation.
+func (r *ModelRegistry) fetchWithContext(ctx context.Context) error {
 	// Serialize fetch calls so only one fetch runs at a time.
 	r.fetchMu.Lock()
 	defer r.fetchMu.Unlock()
@@ -187,7 +202,7 @@ func (r *ModelRegistry) Fetch() error {
 		return fmt.Errorf("registry fetch: offline mode is active")
 	}
 
-	req, err := http.NewRequest(http.MethodGet, r.getFetchURL(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.getFetchURL(), nil)
 	if err != nil {
 		log.Warn("registry fetch: failed to create request", "error", err)
 		return err
@@ -372,7 +387,7 @@ func (r *ModelRegistry) ParseConfigModels(configData []byte) (map[string]*ModelO
 	}
 	if err := json.Unmarshal(configData, &raw); err != nil {
 		log.Warn("registry: failed to parse config.json", "error", err)
-		return nil, nil // non-fatal: return nil map so defaults work
+		return nil, err
 	}
 
 	if len(raw.Models) == 0 {
@@ -382,7 +397,44 @@ func (r *ModelRegistry) ParseConfigModels(configData []byte) (map[string]*ModelO
 	var models map[string]*ModelOverride
 	if err := json.Unmarshal(raw.Models, &models); err != nil {
 		log.Warn("registry: malformed models block in config.json, treating as empty", "error", err)
-		return nil, nil // non-fatal: treat as empty
+		return nil, err
+	}
+	return models, nil
+}
+
+// ParseConfigModelsFromKoanf extracts the "models" key from a koanf instance
+// that has already loaded config.json. It produces the same result as
+// ParseConfigModels would for the same JSON content.
+// Returns (nil, nil) when the "models" key is absent or not a valid object.
+func (r *ModelRegistry) ParseConfigModelsFromKoanf(k *koanf.Koanf) (map[string]*ModelOverride, error) {
+	if k == nil {
+		return nil, nil
+	}
+
+	raw := k.Get("models")
+	if raw == nil {
+		return nil, nil
+	}
+
+	// koanf parses JSON objects as map[string]interface{}.
+	modelsMap, ok := raw.(map[string]interface{})
+	if !ok {
+		log.Warn("registry: models key in config.json is not a JSON object, treating as empty")
+		return nil, nil
+	}
+
+	// Marshal the raw value back to JSON, then unmarshal into the target type.
+	// This round-trip ensures identical semantics to ParseConfigModels (JSON -> bytes -> struct).
+	data, err := json.Marshal(modelsMap)
+	if err != nil {
+		log.Warn("registry: failed to marshal models from koanf", "error", err)
+		return nil, err
+	}
+
+	var models map[string]*ModelOverride
+	if err := json.Unmarshal(data, &models); err != nil {
+		log.Warn("registry: malformed models block in config.json, treating as empty", "error", err)
+		return nil, nil
 	}
 	return models, nil
 }

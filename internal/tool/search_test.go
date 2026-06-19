@@ -223,6 +223,14 @@ func TestValidateWebSearchConfig(t *testing.T) {
 			Strategy:     StrategyClient,
 			ClientConfig: ClientConfig{Provider: "serpapi", APIKey: "key"},
 		}, true, "invalid client provider"},
+		{"native with client provider", WebSearchConfig{
+			Strategy:     StrategyNative,
+			ClientConfig: ClientConfig{Provider: "tavily", APIKey: "key"},
+		}, true, "client provider is configured but strategy is not 'client'"},
+		{"disabled with client provider", WebSearchConfig{
+			Strategy:     StrategyDisabled,
+			ClientConfig: ClientConfig{Provider: "tavily", APIKey: "key"},
+		}, true, "client provider is configured but strategy is not 'client'"},
 	}
 
 	for _, tt := range tests {

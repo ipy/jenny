@@ -16,13 +16,12 @@ import (
 
 // anthropicProvider implements the Provider interface using a lightweight HTTP client.
 type anthropicProvider struct {
-	client            *HTTPClient
-	model             string
-	maxTokensOverride int
-	thinkingConfig    ThinkingConfig
-	retryConfig       RetryConfig
-	isBackground      bool
-	providerName      string
+	client         *HTTPClient
+	model          string
+	thinkingConfig ThinkingConfig
+	retryConfig    RetryConfig
+	isBackground   bool
+	providerName   string
 }
 
 // newAnthropicProvider creates a new Anthropic provider.
@@ -64,11 +63,6 @@ func (p *anthropicProvider) GetModel() string {
 // SetBackground sets whether this is a background classifier call.
 func (p *anthropicProvider) SetBackground(isBackground bool) {
 	p.isBackground = isBackground
-}
-
-// setMaxTokensOverride sets the max_tokens override for the provider.
-func (p *anthropicProvider) setMaxTokensOverride(maxTokens int) {
-	p.maxTokensOverride = maxTokens
 }
 
 // SetRetryConfig sets the retry configuration.
@@ -189,7 +183,7 @@ func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Messag
 	sdkMessages := p.buildMessages(messages, toolResults)
 	sdkTools := p.buildTools(tools)
 
-	maxTokens := ResolveMaxTokens(p.model, p.maxTokensOverride)
+	maxTokens := ResolveMaxTokens(p.model, 0)
 
 	reqBody := AnthropicRequest{
 		Model:     p.model,
@@ -437,7 +431,7 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 		sdkMessages := p.buildMessages(messages, toolResults)
 		sdkTools := p.buildTools(tools)
 
-		maxTokens := ResolveMaxTokens(p.model, p.maxTokensOverride)
+		maxTokens := ResolveMaxTokens(p.model, 0)
 
 		reqBody := AnthropicRequest{
 			Model:     p.model,
@@ -512,7 +506,7 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 		acc := newStreamAccumulator()
 		hasMessageStart := false
 		hasMessageStop := false
-		scanner := NewSSEScanner(body)
+		scanner := newCtxSSEScanner(ctx, body)
 
 		idleTimer := time.NewTimer(idleTimeout)
 		defer idleTimer.Stop()
@@ -531,7 +525,7 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 		}()
 
 		for {
-			data, ok := scanner.Next()
+			data, ok := scanner.Next(ctx)
 			if !ok {
 				break
 			}
@@ -676,7 +670,7 @@ func toolToSDK(t ToolParam, isLast bool) AnthropicTool {
 func categorizeMaxTokensError(model string, outputTokens int, contextRejected bool) *MaxTokensError {
 	maxOutputTokens := modelMaxOutputCap(model)
 	if contextRejected {
-		return &MaxTokensError{Category: CategoryContextExhausted, Model: model, OutputTokens: outputTokens}
+		return &MaxTokensError{Category: CategoryContextExhausted, Model: model, OutputTokens: outputTokens, MaxOutputTokens: maxOutputTokens}
 	}
 	return &MaxTokensError{Category: CategoryOutputCapHit, Model: model, OutputTokens: outputTokens, MaxOutputTokens: maxOutputTokens}
 }
