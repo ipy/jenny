@@ -83,10 +83,10 @@ Outstanding debt from devloop review cycles. Ordered by severity then task.
 - ~~**Files:** `internal/api/client.go`, all four provider files~~
 - ~~`Client.setMaxTokensOverride`, `Client.maxTokensOverride` field, and four provider methods are dead code.~~
 
-### mD-2: `ValidateWebSearchConfig` only validates client config for `StrategyClient`
-- **Task:** web-search-config-and-fallback
-- **File:** `internal/tool/search_config.go:123-130`
-- Should validate `ClientConfig` whenever `ClientConfig.Provider` is set, regardless of strategy.
+### ~~mD-2: `ValidateWebSearchConfig` only validates client config for `StrategyClient`~~
+- ~~**Task:** web-search-config-and-fallback~~
+- ~~**File:** `internal/tool/search_config.go:123-130`~~
+- ~~Should validate `ClientConfig` whenever `ClientConfig.Provider` is set, regardless of strategy.~~
 
 ### mD-3: `buildPrintTools` creates WebSearchTool without wiring
 - **Task:** web-search-config-and-fallback
