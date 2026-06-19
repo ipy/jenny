@@ -3,7 +3,7 @@ title: Technical Debt
 slug: debt
 status: open
 date: 2026-06-19
-updated: 2026-06-19 (MD-9)
+updated: 2026-06-19 (MD-10)
 ---
 
 # Technical Debt
@@ -71,10 +71,10 @@ Outstanding debt from devloop review cycles. Ordered by severity then task.
 - ~~**File:** `cmd/jenny/main.go:199-214`~~
 - ~~After 3s soft timeout, inner goroutine continues with 30s HTTP timeout. Use a context with deadline.~~
 
-### MD-10: Config.json `models` key read via `os.ReadFile`, bypassing koanf
-- **Task:** external-model-registry
-- **File:** `cmd/jenny/main.go:224-225`
-- Config file read a second time; should extract `models` key from existing koanf instance.
+### ~~MD-10: Config.json `models` key read via `os.ReadFile`, bypassing koanf~~
+- ~~**Task:** external-model-registry~~
+- ~~**File:** `cmd/jenny/main.go:224-225`~~
+- ~~Config file read a second time; should extract `models` key from existing koanf instance.~~
 
 ## MINOR
 
