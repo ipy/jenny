@@ -3,7 +3,7 @@ title: Technical Debt
 slug: debt
 status: open
 date: 2026-06-19
-updated: 2026-06-19 (MD-7)
+updated: 2026-06-19 (MD-9)
 ---
 
 # Technical Debt
@@ -66,10 +66,10 @@ Outstanding debt from devloop review cycles. Ordered by severity then task.
 - ~~**File:** `internal/api/model_caps.go`~~
 - ~~Both functions have identical registry-then-bundled-table lookup. Delegate one to the other.~~
 
-### MD-9: Background fetch goroutine has no cancellation
-- **Task:** external-model-registry
-- **File:** `cmd/jenny/main.go:199-214`
-- After 3s soft timeout, inner goroutine continues with 30s HTTP timeout. Use a context with deadline.
+### ~~MD-9: Background fetch goroutine has no cancellation~~
+- ~~**Task:** external-model-registry~~
+- ~~**File:** `cmd/jenny/main.go:199-214`~~
+- ~~After 3s soft timeout, inner goroutine continues with 30s HTTP timeout. Use a context with deadline.~~
 
 ### MD-10: Config.json `models` key read via `os.ReadFile`, bypassing koanf
 - **Task:** external-model-registry
