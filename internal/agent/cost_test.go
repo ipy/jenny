@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/ipy/jenny/internal/api"
+	"github.com/ipy/jenny/internal/config"
 	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/session"
 )
@@ -989,7 +990,7 @@ func TestPricing_AC7_CustomPricingOverride(t *testing.T) {
 	// Override valid JSON
 	jennyDir := filepath.Join(tmpDir, constants.ProjectDirName)
 	os.MkdirAll(jennyDir, 0755)
-	overrideData := map[string]ModelPricing{
+	overrideData := map[string]config.ModelPricing{
 		"claude-sonnet-4-20250514": {InputUSD: 0.000001, OutputUSD: 0.000008},
 	}
 	data, _ := json.Marshal(overrideData)

@@ -13,19 +13,10 @@ import (
 	"github.com/ipy/jenny/internal/log"
 )
 
-// ModelPricing defines per-token USD rates for a model.
-type ModelPricing struct {
-	InputUSD         float64
-	OutputUSD        float64
-	CacheReadUSD     float64
-	CacheCreationUSD float64
-	UnknownModel     bool
-}
-
 // DefaultPricing is the pricing table for known models.
 // Rates are per-token in USD. All entries include source citations.
 // CNY-denominated prices are converted at ~6.77 CNY/USD (June 2026 approximation).
-var DefaultPricing = map[string]ModelPricing{
+var DefaultPricing = map[string]config.ModelPricing{
 	// -------------------------------------------------------------------------
 	// Anthropic Claude models — source: claude.com/pricing#api (June 2026)
 	// -------------------------------------------------------------------------
@@ -292,7 +283,7 @@ var DefaultPricing = map[string]ModelPricing{
 }
 
 // UnknownModelPricing is the conservative default for unknown models.
-var UnknownModelPricing = ModelPricing{
+var UnknownModelPricing = config.ModelPricing{
 	InputUSD:         0.000003,
 	OutputUSD:        0.000015,
 	CacheReadUSD:     0.000003,
@@ -302,7 +293,7 @@ var UnknownModelPricing = ModelPricing{
 
 // Custom pricing override loaded from .jenny/pricing.json.
 // Supports reload: if the file changes, LoadCustomPricing re-reads it.
-var customPricing map[string]ModelPricing
+var customPricing map[string]config.ModelPricing
 var customPricingMu sync.RWMutex
 var customPricingPath string   // path of last loaded file
 var customPricingModTime int64 // mtime of last loaded file
@@ -347,7 +338,7 @@ func LoadCustomPricing(projectDir string) {
 		return
 	}
 
-	var overrides map[string]ModelPricing
+	var overrides map[string]config.ModelPricing
 	if err := json.Unmarshal(data, &overrides); err != nil {
 		log.Warn("failed to parse pricing override", "path", configPath, "error", err)
 		customPricingPath = configPath
@@ -378,7 +369,7 @@ func ResetCustomPricing() {
 //  2. External model registry (fetched from aidy-models)
 //  3. DefaultPricing table (bundled)
 //  4. UnknownModelPricing (conservative default)
-func GetModelPricing(model string) ModelPricing {
+func GetModelPricing(model string) config.ModelPricing {
 	// Check custom overrides first
 	customPricingMu.RLock()
 	p, ok := customPricing[model]
@@ -390,12 +381,7 @@ func GetModelPricing(model string) ModelPricing {
 	// Check external model registry
 	if reg := config.GlobalRegistry(); reg != nil {
 		if regPricing, ok := reg.Pricing(model); ok {
-			return ModelPricing{
-				InputUSD:         regPricing.InputUSD,
-				OutputUSD:        regPricing.OutputUSD,
-				CacheReadUSD:     regPricing.CacheReadUSD,
-				CacheCreationUSD: regPricing.CacheCreationUSD,
-			}
+			return regPricing
 		}
 	}
 
@@ -408,7 +394,7 @@ func GetModelPricing(model string) ModelPricing {
 }
 
 // CalculateCost computes the USD cost for given token counts using model pricing.
-func CalculateCost(pricing ModelPricing, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens int) float64 {
+func CalculateCost(pricing config.ModelPricing, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens int) float64 {
 	cost := float64(inputTokens)*pricing.InputUSD +
 		float64(outputTokens)*pricing.OutputUSD +
 		float64(cacheReadTokens)*pricing.CacheReadUSD +

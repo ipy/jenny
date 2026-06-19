@@ -3,7 +3,7 @@ title: Technical Debt
 slug: debt
 status: open
 date: 2026-06-19
-updated: 2026-06-19 (MD-5)
+updated: 2026-06-19 (MD-7)
 ---
 
 # Technical Debt
@@ -56,10 +56,10 @@ Outstanding debt from devloop review cycles. Ordered by severity then task.
 - ~~Raw error response bodies included in error strings — credential-leak vector if remote server echoes the API key.~~
 - ~~**Fix:** Truncate error bodies to safe length (e.g., 200 chars) or redact API key.~~
 
-### MD-7: Duplicate `ModelPricing` type in two packages
-- **Task:** external-model-registry
-- **Files:** `internal/config/registry.go:64`, `internal/agent/cost.go:17`
-- Identical structs in separate packages with manual field copying. Consolidate into `config.ModelPricing` as single source of truth.
+### ~~MD-7: Duplicate `ModelPricing` type in two packages~~
+- ~~**Task:** external-model-registry~~
+- ~~**Files:** `internal/config/registry.go:64`, `internal/agent/cost.go:17`~~
+- ~~Identical structs in separate packages with manual field copying. Consolidate into `config.ModelPricing` as single source of truth.~~
 
 ### MD-8: `modelMaxOutputCap` duplicates `lookupModelCap` logic
 - **Task:** external-model-registry (same as max-tokens-clamp debt #5)
