@@ -31,9 +31,9 @@ Outstanding debt from devloop review cycles. Ordered by severity then task.
 - ~~**Files:** `internal/agent/engine_test.go:2396`, `internal/agent/compact_test.go:509`~~
 - ~~Comments reference non-existent `50000` instead of `13000` (`minAutoCompactBuffer`).~~
 
-### MD-2: Missing integration test for streaming-fallback max_tokens
-- **Task:** max-tokens-clamp
-- The spec requires: "The streaming fallback path produces the same clamped value as the primary streaming path." No test verifies this for the actual `SendMessageStream` → fallback path.
+### ~~MD-2: Missing integration test for streaming-fallback max_tokens~~
+- ~~**Task:** max-tokens-clamp~~
+- ~~The spec requires: "The streaming fallback path produces the same clamped value as the primary streaming path." No test verifies this for the actual `SendMessageStream` → fallback path.~~
 
 ### MD-3: `MaxOutputTokens` is 0 for `CategoryContextExhausted`
 - **Task:** max-tokens-clamp
