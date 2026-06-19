@@ -885,6 +885,94 @@ func TestHTTPFetchWritesMeta(t *testing.T) {
 	}
 }
 
+// TestFetch_PreservesUserOverrides verifies that user overrides from ApplyUserOverrides
+// survive a Fetch() call. The Fetch() code path calls applyOverridesLocked() at
+// line 273 of registry.go after replacing r.models with freshly-fetched data.
+// This test proves the fix for CD-1 (--refresh-registry skips user override application).
+func TestFetch_PreservesUserOverrides(t *testing.T) {
+	log.ResetForTest()
+	tmpDir := t.TempDir()
+	cachePath := filepath.Join(tmpDir, "models.json")
+
+	// Fixture: only test-model with maxOutput 8000 (representing the "fresh network" data).
+	serverJSON := `{
+		"schemaVersion": 1,
+		"lastUpdated": "2026-06-01T00:00:00Z",
+		"models": {
+			"test-model": {
+				"id": "test-model",
+				"provider": "test",
+				"family": "test",
+				"contextWindow": 128000,
+				"maxOutput": 8000,
+				"pricing": {
+					"input": 1.0,
+					"output": 5.0
+				},
+				"modalities": ["text"],
+				"abilities": ["code"]
+			}
+		}
+	}`
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("ETag", `"test-etag-override"`)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(serverJSON))
+	}))
+	defer server.Close()
+
+	r := NewModelRegistry(cachePath)
+	r.fetchURL = server.URL
+
+	// Apply user overrides BEFORE Fetch(), simulating the fixed main.go ordering.
+	// test-model: override maxOutput to 16000 (higher than registry's 8000)
+	// only-override-model: a model that exists ONLY as an override, not in the registry
+	userModels := map[string]*ModelOverride{
+		"test-model":          {MaxOutput: ptr(16000)},
+		"only-override-model": {MaxOutput: ptr(32000)},
+	}
+	if err := r.ApplyUserOverrides(userModels); err != nil {
+		t.Fatal("ApplyUserOverrides failed:", err)
+	}
+
+	// Fetch from the test server — this replaces r.models with server data
+	// and then calls applyOverridesLocked() at line 273.
+	if err := r.Fetch(); err != nil {
+		t.Fatal("Fetch failed:", err)
+	}
+
+	// Assert: test-model's maxOutput is the user override value (16000), not the
+	// registry value (8000). This proves overrides survive Fetch().
+	got, ok := r.Capability("test-model")
+	if !ok {
+		t.Fatal("expected Capability for test-model after Fetch")
+	}
+	if got != 16000 {
+		t.Errorf("Capability(test-model) = %d, want 16000 (user override survived Fetch)", got)
+	}
+
+	// Assert: the model that exists only as an override (not in the registry JSON)
+	// is still present after Fetch().
+	got2, ok2 := r.Capability("only-override-model")
+	if !ok2 {
+		t.Fatal("expected Capability for only-override-model to survive Fetch")
+	}
+	if got2 != 32000 {
+		t.Errorf("Capability(only-override-model) = %d, want 32000", got2)
+	}
+
+	// Assert: fields NOT overridden still fall through to the registry values.
+	pricing, ok3 := r.Pricing("test-model")
+	if !ok3 {
+		t.Fatal("expected Pricing for test-model after Fetch")
+	}
+	// Registry pricing: input=1.0/1M = 0.000001 per token
+	if pricing.InputUSD != 0.000001 {
+		t.Errorf("Pricing.InputUSD = %f, want 0.000001 (registry fall through)", pricing.InputUSD)
+	}
+}
+
 // TestParseConfigModelsDeeplyNestedPricing verifies deep nested override parsing.
 // TestModelRegistry_Fetch_Offline verifies that Fetch() returns an error when
 // offline mode is active and does NOT make any HTTP request.

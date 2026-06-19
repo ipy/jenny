@@ -13,7 +13,7 @@ import (
 func TestWindowsSystemPromptHint(t *testing.T) {
 	cfg := StreamConfig{}
 	tools := []tool.Tool{}
-	cwd := "/tmp" // Outside git repo for simplicity
+	cwd := t.TempDir()
 
 	blocks := buildSystemPrompt(&cfg, tools, cwd)
 	prompt := strings.Join(blocks, "\n\n")
