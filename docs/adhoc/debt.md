@@ -93,15 +93,15 @@ Outstanding debt from devloop review cycles. Ordered by severity then task.
 - ~~**File:** `cmd/jenny/main.go:543-553`~~
 - ~~No config, native runner, or client provider wired. Latent correctness issue if `Execute()` is ever called.~~
 
-### mD-4: `PricingOverride` JSON tags use snake_case for cache fields
-- **Task:** external-model-registry
-- **File:** `internal/config/registry.go:73-78`
-- Upstream registry uses `cacheRead`/`cacheCreation` (camelCase). Config.json overrides use `cache_read`/`cache_creation` (snake_case). Align conventions.
+### ~~mD-4: `PricingOverride` JSON tags use snake_case for cache fields~~
+- ~~**Task:** external-model-registry~~
+- ~~**File:** `internal/config/registry.go:73-78`~~
+- ~~Upstream registry uses `cacheRead`/`cacheCreation` (camelCase). Config.json overrides use `cache_read`/`cache_creation` (snake_case). Align conventions.~~
 
-### mD-5: `ParseConfigModels` returns `nil, nil` on parse error
-- **Task:** external-model-registry
-- **File:** `internal/config/registry.go:362-363`
-- Misleading function signature — returns error type but never populates it.
+### ~~mD-5: `ParseConfigModels` returns `nil, nil` on parse error~~
+- ~~**Task:** external-model-registry~~
+- ~~**File:** `internal/config/registry.go:362-363`~~
+- ~~Misleading function signature — returns error type but never populates it.~~
 
 ### mD-6: Missing integration tests for registry startup paths
 - **Task:** external-model-registry
