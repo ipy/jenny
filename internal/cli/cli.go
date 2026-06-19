@@ -4,6 +4,7 @@ package cli
 import (
 	stdjson "encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -17,7 +18,8 @@ import (
 
 // Flags holds the parsed command-line flags.
 type Flags struct {
-	Prompt                 string   // prompt: joined from k.Strings("print") after unmarshal
+	Prompt                 string   // prompt: joined from k.Strings("print") after unmarshal, or from --prompt-file
+	PromptFile             []string // --prompt-file: read prompt from file(s); "-" means stdin
 	Model                  string   `koanf:"model"`
 	OutputFormat           string   `koanf:"output-format"`
 	Verbose                bool     `koanf:"verbose"`
@@ -123,7 +125,10 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 
 	// Define flags with defaults from koanf.
 	var pFlag []string
-	flags.StringSliceVarP(&pFlag, "print", "p", nil, "Prompt to send (can be specified multiple times; values are joined with newlines)")
+	flags.StringArrayVarP(&pFlag, "print", "p", nil, "Prompt to send (can be specified multiple times; values are joined with newlines)")
+
+	var promptFile []string
+	flags.StringArrayVar(&promptFile, "prompt-file", nil, "Read prompt from file; use '-' for stdin (can be specified multiple times; values are joined with newlines)")
 
 	var model string
 	flags.StringVarP(&model, "model", "", modelDefault, "Model to use")
@@ -268,7 +273,22 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 		return &parsed, k, nil
 	}
 
-	// Fallback: if -p is empty but there are positional args, use them as the prompt.
+	// --prompt-file: read prompt content from file(s); "-" means stdin.
+	// Only used when -p/--print is empty (p flag has precedence).
+	if parsed.Prompt == "" && len(promptFile) > 0 {
+		var parts []string
+		for _, path := range promptFile {
+			content, err := readPromptFile(path)
+			if err != nil {
+				return nil, nil, err
+			}
+			parts = append(parts, content)
+		}
+		parsed.Prompt = strings.Join(parts, "\n")
+	}
+	parsed.PromptFile = promptFile
+
+	// Fallback: if -p/--prompt-file is empty but there are positional args, use them as the prompt.
 	if parsed.Prompt == "" && len(args) > 0 {
 		parsed.Prompt = strings.Join(args, " ")
 	}
@@ -335,6 +355,23 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	}
 
 	return &parsed, k, nil
+}
+
+// readPromptFile reads prompt content from a file path.
+// A path of "-" reads from stdin.
+func readPromptFile(path string) (string, error) {
+	if path == "-" {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return "", fmt.Errorf("failed to read prompt from stdin: %w", err)
+		}
+		return string(data), nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("prompt file not found: %s", path)
+	}
+	return string(data), nil
 }
 
 // StreamMessage represents a message in the stream-json output.

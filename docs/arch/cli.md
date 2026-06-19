@@ -22,6 +22,8 @@ Jenny CLI is headless-only: accept a prompt, run the agent loop, emit text or st
 ```bash
 jenny [flags] [prompt]
 jenny -p "prompt text"
+jenny --prompt-file prompt.txt
+jenny --prompt-file - < prompt.txt
 ```
 
 ## Flags
@@ -29,6 +31,7 @@ jenny -p "prompt text"
 | Flag | Description |
 |------|-------------|
 | `-p`, `--print <prompt>` | Prompt string (non-interactive) |
+| `--prompt-file <path>` | Read prompt from file. Use `-` to read from stdin. Can be specified multiple times; values are joined with newlines. When `-p` is set, `--prompt-file` is **ignored**; only `-p` values are used |
 | `--version`, `-v` | Prints `<semver> (jenny)` and exits 0. |
 | `--model <name>` | Override model (beats `ANTHROPIC_MODEL` env) |
 | `-r`, `--resume <session_id>` | Resume session from transcript |
@@ -71,7 +74,10 @@ jenny -p "prompt text"
 |------|----------|
 | No prompt | Print usage; exit non-zero |
 | Multiple `-p` flags | Joins values with a single newline |
+| `--prompt-file` | Read prompt from file; `-` means stdin. Multiple values are joined with newlines. Ignored when `-p` is set |
+| `--prompt-file` with nonexistent file | Exit non-zero with error "prompt file not found: <path>" |
 | Positional + `-p` both given | When `-p` is set, positional args are **ignored**; only `-p` values are used |
+| Positional + `--prompt-file` both given | When `--prompt-file` is set, positional args are **ignored**; only `--prompt-file` values are used |
 | `--output-format stream-json` | Requires prompt (`-p` or positional) |
 | `--include-partial-messages` | Requires `--output-format stream-json` |
 | `--continue` with no prior sessions | Exit non-zero with error "no sessions to continue" |

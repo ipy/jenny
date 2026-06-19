@@ -257,6 +257,123 @@ func TestParseDoubleDash(t *testing.T) {
 	}
 }
 
+// --prompt-file tests
+
+func TestParsePromptFile(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	tmpFile, err := os.CreateTemp("", "prompt-*.txt")
+	if err != nil {
+		t.Fatalf("create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.WriteString("hello from file")
+	tmpFile.Close()
+
+	os.Args = []string{"jenny", "--prompt-file", tmpFile.Name()}
+
+	flags, _, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if flags.Prompt != "hello from file" {
+		t.Errorf("expected prompt 'hello from file', got %q", flags.Prompt)
+	}
+}
+
+func TestParsePromptFileMultiple(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	file1, err := os.CreateTemp("", "prompt1-*.txt")
+	if err != nil {
+		t.Fatalf("create temp file: %v", err)
+	}
+	defer os.Remove(file1.Name())
+	file1.WriteString("first part")
+	file1.Close()
+
+	file2, err := os.CreateTemp("", "prompt2-*.txt")
+	if err != nil {
+		t.Fatalf("create temp file: %v", err)
+	}
+	defer os.Remove(file2.Name())
+	file2.WriteString("second part")
+	file2.Close()
+
+	os.Args = []string{"jenny", "--prompt-file", file1.Name(), "--prompt-file", file2.Name()}
+
+	flags, _, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if flags.Prompt != "first part\nsecond part" {
+		t.Errorf("expected 'first part\\nsecond part', got %q", flags.Prompt)
+	}
+}
+
+func TestParsePromptFileNotFound(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "--prompt-file", "/nonexistent/path/prompt.txt"}
+
+	_, _, err := Parse()
+	if err == nil {
+		t.Error("expected error for nonexistent prompt file, got nil")
+	}
+	if !strings.Contains(err.Error(), "prompt file not found") {
+		t.Errorf("expected 'prompt file not found' error, got %v", err)
+	}
+}
+
+func TestParsePromptFileIgnoredWhenPFlagSet(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	tmpFile, err := os.CreateTemp("", "prompt-*.txt")
+	if err != nil {
+		t.Fatalf("create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.WriteString("from file")
+	tmpFile.Close()
+
+	os.Args = []string{"jenny", "--print", "from p flag", "--prompt-file", tmpFile.Name()}
+
+	flags, _, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if flags.Prompt != "from p flag" {
+		t.Errorf("expected prompt 'from p flag' (p flag takes precedence), got %q", flags.Prompt)
+	}
+}
+
+func TestParsePromptFileOverridesPositional(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	tmpFile, err := os.CreateTemp("", "prompt-*.txt")
+	if err != nil {
+		t.Fatalf("create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.WriteString("from file")
+	tmpFile.Close()
+
+	os.Args = []string{"jenny", "--prompt-file", tmpFile.Name(), "from positional"}
+
+	flags, _, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if flags.Prompt != "from file" {
+		t.Errorf("expected prompt 'from file' (prompt-file overrides positional), got %q", flags.Prompt)
+	}
+}
+
 func TestParseContinueFlag(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
