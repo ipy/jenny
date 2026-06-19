@@ -191,6 +191,18 @@ When no file-based `routes` configuration is present (or as a supplement), the r
 
 If `config.json` contains a `routes` block, those definitions load first. Environment-synthesized providers are appended only when no provider with the same name already exists. This allows a stable `config.json` for most models while quickly adding or overriding a provider via a single environment variable.
 
+### Env-Only Provider Priority Order
+
+When only environment variables are present (no explicit `routes` configuration), synthesized providers are sorted by priority to determine default routing order:
+
+| Priority | Provider | Notes |
+|----------|----------|-------|
+| 1 (highest) | Anthropic | Preferred for quality and prompt-caching efficiency |
+| 2 | OpenAI | Strong general-purpose fallback |
+| 3 (lowest) | GenAI/Gemini | Used when other providers are unavailable |
+
+This ordering ensures that when multiple env-only providers are available, Anthropic is selected first, followed by OpenAI, then Gemini. File-based providers override env-synthesized ones of the same name and can define any custom priority order.
+
 ## Profile Selection
 
 The active routing profile defaults to `default`. Subagents can specify an alternative profile to trigger specialized routing (e.g., vision-capable or cost-optimized) while inheriting the main session's context.

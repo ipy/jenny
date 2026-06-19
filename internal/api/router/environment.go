@@ -7,7 +7,7 @@ import (
 )
 
 // SynthesizeConfigFromEnv creates a Config from standard environment variables,
-// sorted by priority (OpenAI > GenAI > Anthropic). This is the Zero-Config path
+// sorted by priority (Anthropic > OpenAI > GenAI). This is the Zero-Config path
 // and supplements any file-based providers in the config.
 func SynthesizeConfigFromEnv() *Config {
 	cfg := &Config{
@@ -32,12 +32,12 @@ func SynthesizeConfigFromEnv() *Config {
 			Accounts: []Account{{
 				Name:     "default",
 				Keys:     []string{openAIKey},
-				Priority: 1,
+				Priority: 2,
 			}},
 			Models: []Model{{
 				Name:          model,
 				Tags:          []string{},
-				Priority:      1,
+				Priority:      2,
 				ContextWindow: 128000,
 				MaxOutput:     16384,
 			}},
@@ -77,12 +77,12 @@ func SynthesizeConfigFromEnv() *Config {
 				Accounts: []Account{{
 					Name:     "default",
 					Keys:     apiKeys,
-					Priority: 2,
+					Priority: 3,
 				}},
 				Models: []Model{{
 					Name:          model,
 					Tags:          []string{},
-					Priority:      2,
+					Priority:      3,
 					ContextWindow: 1000000,
 					MaxOutput:     8192,
 				}},
@@ -108,12 +108,12 @@ func SynthesizeConfigFromEnv() *Config {
 			Accounts: []Account{{
 				Name:     "default",
 				Keys:     []string{anthropicKey},
-				Priority: 3,
+				Priority: 1,
 			}},
 			Models: []Model{{
 				Name:          model,
 				Tags:          []string{},
-				Priority:      3,
+				Priority:      1,
 				ContextWindow: 200000,
 				MaxOutput:     20000,
 			}},
