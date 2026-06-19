@@ -3,7 +3,7 @@ title: Technical Debt
 slug: debt
 status: open
 date: 2026-06-19
-updated: 2026-06-19 (mD-7)
+updated: 2026-06-19 (MD-5)
 ---
 
 # Technical Debt
@@ -46,9 +46,9 @@ Outstanding debt from devloop review cycles. Ordered by severity then task.
 - ~~Returns `!isDSModel(p.model)` — too broad. Non-OpenAI models routed through the OpenAI-compatible provider incorrectly report native search support.~~
 - ~~**Fix:** Use explicit allowlist of OpenAI model families (e.g., `gpt-`, `o3`, `o4`, `chatgpt-`).~~
 
-### MD-5: Zero test coverage for `SupportsNativeSearch()` in `internal/api/`
-- **Task:** web-search-config-and-fallback
-- No `*_test.go` files in `internal/api/` test this method. The only test (`TestProvider_SupportsNativeSearch` in `search_test.go`) checks a nil interface.
+### ~~MD-5: Zero test coverage for `SupportsNativeSearch()` in `internal/api/`~~
+- ~~**Task:** web-search-config-and-fallback~~
+- ~~No `*_test.go` files in `internal/api/` test this method. The only test (`TestProvider_SupportsNativeSearch` in `search_test.go`) checks a nil interface.~~
 
 ### ~~MD-6: API key leaked in error response bodies~~
 - **Task:** web-search-config-and-fallback
