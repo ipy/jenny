@@ -2393,7 +2393,7 @@ func TestEngine_AutoCompactFiresAboveThreshold(t *testing.T) {
 
 	// Verify the engine's compact config has correct threshold
 	// deepseek-v4-flash: effectiveWindow = 1M - 384000 = 616000
-	// autoCompactBuffer = max(384000+5000, 50000) = 389000
+	// autoCompactBuffer = max(384000+5000, 13000) = 389000
 	// threshold = 616000 - 389000 = 227000
 	threshold := engine.compactConfig.autoCompactThreshold()
 	expectedThreshold := 227000

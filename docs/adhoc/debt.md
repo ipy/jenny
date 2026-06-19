@@ -26,10 +26,10 @@ Outstanding debt from devloop review cycles. Ordered by severity then task.
 
 ## MAJOR
 
-### MD-1: Fix inaccurate test comments (wrong constant value)
-- **Task:** max-tokens-clamp
-- **Files:** `internal/agent/engine_test.go:2396`, `internal/agent/compact_test.go:509`
-- Comments reference non-existent `50000` instead of `13000` (`minAutoCompactBuffer`).
+### ~~MD-1: Fix inaccurate test comments (wrong constant value)~~
+- ~~**Task:** max-tokens-clamp~~
+- ~~**Files:** `internal/agent/engine_test.go:2396`, `internal/agent/compact_test.go:509`~~
+- ~~Comments reference non-existent `50000` instead of `13000` (`minAutoCompactBuffer`).~~
 
 ### MD-2: Missing integration test for streaming-fallback max_tokens
 - **Task:** max-tokens-clamp

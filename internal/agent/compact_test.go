@@ -506,7 +506,7 @@ func TestAC6_DeepSeekThresholdMath(t *testing.T) {
 	}
 
 	// Auto-compact should trigger at 616K - the threshold is lower now since max output is larger
-	// With 384K max output, autoCompactBuffer = max(384000+5000, 50000) = 389000
+	// With 384K max output, autoCompactBuffer = max(384000+5000, 13000) = 389000
 	// threshold = 616000 - 389000 = 227000
 	// 648K should trigger auto-compact (since 648K > 227K)
 	if !cfg.checkCompactThreshold(648_000, "user") {
