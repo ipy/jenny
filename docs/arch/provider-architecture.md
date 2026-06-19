@@ -177,7 +177,7 @@ Clamp events emit structured WARN log lines via the existing logger. The log con
 
 ### Relationship to MaxTokensError
 
-The `categorizeMaxTokensError` function populates `MaxOutputTokens` from the same capability table, making the field trustworthy for callers receiving a `CategoryOutputCapHit` error. Since pre-request clamping prevents configuration overshoot from reaching the API, a `MaxTokensError` represents a legitimate output-cap hit — the caller configured correctly, and the model simply filled its budget.
+The `categorizeMaxTokensError` function populates `MaxOutputTokens` from the same capability table, making the field trustworthy for callers receiving either a `CategoryOutputCapHit` or `CategoryContextExhausted` error. Since pre-request clamping prevents configuration overshoot from reaching the API, a `MaxTokensError` represents a legitimate output-cap hit — the caller configured correctly, and the model simply filled its budget.
 
 ## External Model Registry
 

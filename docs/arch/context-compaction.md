@@ -151,7 +151,7 @@ When the streaming API returns `stop_reason: "max_tokens"`, the engine emits a s
 | Category | Condition | Fields Emitted |
 |----------|-----------|----------------|
 | `output_cap_hit` | `output_tokens >= modelMaxOutputTokens` | `category`, `model`, `output_tokens`, `max_output_tokens` |
-| `context_exhausted` | `output_tokens < modelMaxOutputTokens` (request limited/rejected) | `category`, `model`, `input_tokens`, `threshold` |
+| `context_exhausted` | `output_tokens < modelMaxOutputTokens` (request limited/rejected) | `category`, `model`, `output_tokens`, `max_output_tokens`, `input_tokens`, `threshold` |
 
 ### Structured `result` Event Schema
 

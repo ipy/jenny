@@ -35,10 +35,10 @@ Outstanding debt from devloop review cycles. Ordered by severity then task.
 - ~~**Task:** max-tokens-clamp~~
 - ~~The spec requires: "The streaming fallback path produces the same clamped value as the primary streaming path." No test verifies this for the actual `SendMessageStream` → fallback path.~~
 
-### MD-3: `MaxOutputTokens` is 0 for `CategoryContextExhausted`
-- **Task:** max-tokens-clamp
-- **File:** `internal/api/provider_anthropic.go:671-677`
-- When `contextRejected` is true, `MaxOutputTokens` is left at zero value. Spec says this field should be trustworthy for all categories.
+### ~~MD-3: `MaxOutputTokens` is 0 for `CategoryContextExhausted`~~
+- ~~**Task:** max-tokens-clamp~~
+- ~~**File:** `internal/api/provider_anthropic.go:671-677`~~
+- ~~When `contextRejected` is true, `MaxOutputTokens` is left at zero value. Spec says this field should be trustworthy for all categories.~~
 
 ### MD-4: `openAIProvider.SupportsNativeSearch()` uses exclusion logic
 - **Task:** web-search-config-and-fallback
