@@ -18,11 +18,11 @@ Outstanding debt from devloop review cycles. Ordered by severity then task.
 - The `--refresh-registry` block calls `reg.Fetch()` and returns on success before the user override loading block runs. `jenny --refresh-registry` never applies user overrides from config.json.
 - **Fix:** Move user override loading before the `--refresh-registry` block, or re-apply overrides after `Fetch()`.
 
-### CD-2: `--refresh-registry` and `--offline` not mutually exclusive
-- **Task:** external-model-registry
-- **File:** `cmd/jenny/main.go:185-196`
-- `Fetch()` does not check `r.offline`. Passing both flags causes a network request despite offline mode.
-- **Fix:** Make `Fetch()` check `r.offline` and return an error, or make flags mutually exclusive in `cli.go`.
+### ~~CD-2: `--refresh-registry` and `--offline` not mutually exclusive~~
+- ~~**Task:** external-model-registry~~
+- ~~**File:** `cmd/jenny/main.go:185-196`~~
+- ~~`Fetch()` does not check `r.offline`. Passing both flags causes a network request despite offline mode.~~
+- ~~**Fix:** Make `Fetch()` check `r.offline` and return an error, or make flags mutually exclusive in `cli.go`.~~
 
 ## MAJOR
 

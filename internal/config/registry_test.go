@@ -886,6 +886,33 @@ func TestHTTPFetchWritesMeta(t *testing.T) {
 }
 
 // TestParseConfigModelsDeeplyNestedPricing verifies deep nested override parsing.
+// TestModelRegistry_Fetch_Offline verifies that Fetch() returns an error when
+// offline mode is active and does NOT make any HTTP request.
+func TestModelRegistry_Fetch_Offline(t *testing.T) {
+	log.ResetForTest()
+	tmpDir := t.TempDir()
+	cachePath := filepath.Join(tmpDir, "models.json")
+
+	// Create a mock server that will fail the test if an HTTP request is made.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("unexpected HTTP request in offline mode")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	r := NewModelRegistry(cachePath)
+	r.fetchURL = server.URL
+	r.SetOffline(true)
+
+	err := r.Fetch()
+	if err == nil {
+		t.Fatal("expected error from Fetch() in offline mode")
+	}
+	if !strings.Contains(err.Error(), "offline") {
+		t.Errorf("expected error to contain 'offline', got: %v", err)
+	}
+}
+
 func TestParseConfigModelsDeeplyNestedPricing(t *testing.T) {
 	log.ResetForTest()
 	r := &ModelRegistry{}

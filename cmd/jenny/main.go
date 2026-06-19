@@ -204,12 +204,18 @@ func run() error {
 	// the canonical site; flags.Verbose here is the CLI-flag-driven override.
 	log.SetVerbose(flags.Verbose)
 
-	// --refresh-registry: synchronous fetch, blocking, errors surface
+	// --refresh-registry: synchronous fetch, blocking, errors surface.
+	// When --offline is also set, skip the fetch with a clear warning since the
+	// two flags are mutually exclusive (enforced by cli.Parse).
 	if flags.RefreshRegistry && reg != nil {
-		if err := reg.Fetch(); err != nil {
-			return fmt.Errorf("failed to refresh model registry: %w", err)
+		if flags.Offline {
+			log.Warn("registry: --refresh-registry ignored because --offline is active")
+		} else {
+			if err := reg.Fetch(); err != nil {
+				return fmt.Errorf("failed to refresh model registry: %w", err)
+			}
+			log.Info("registry: refreshed successfully")
 		}
-		log.Info("registry: refreshed successfully")
 	}
 
 	// If no --refresh-registry and not offline, start background fetch with 3s soft timeout.

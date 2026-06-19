@@ -238,6 +238,8 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	// Needed for validation where "set to empty" differs from "not set".
 	permLevelChanged := flags.Changed("permission-level")
 	includePartialChanged := flags.Changed("include-partial-messages")
+	refreshRegistryChanged := flags.Changed("refresh-registry")
+	offlineChanged := flags.Changed("offline")
 
 	// Load CLI flags into koanf (highest precedence).
 	_ = k.Load(posflag.Provider(flags, ".", k), nil)
@@ -285,6 +287,11 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	// Validate: --continue requires session persistence.
 	if parsed.Continue && parsed.NoSessionPersistence {
 		return nil, nil, fmt.Errorf("--continue requires session persistence")
+	}
+
+	// Validate: --refresh-registry and --offline are mutually exclusive.
+	if refreshRegistryChanged && offlineChanged && parsed.RefreshRegistry && parsed.Offline {
+		return nil, nil, fmt.Errorf("--refresh-registry and --offline are mutually exclusive")
 	}
 
 	// Validate: --include-partial-messages requires --output-format stream-json.

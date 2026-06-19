@@ -178,6 +178,15 @@ func (r *ModelRegistry) Fetch() error {
 	r.fetchMu.Lock()
 	defer r.fetchMu.Unlock()
 
+	// Check offline mode — Fetch() is a direct call (not background), so it must
+	// respect the offline flag just like ShouldFetch() does.
+	r.mu.RLock()
+	offline := r.offline
+	r.mu.RUnlock()
+	if offline {
+		return fmt.Errorf("registry fetch: offline mode is active")
+	}
+
 	req, err := http.NewRequest(http.MethodGet, r.getFetchURL(), nil)
 	if err != nil {
 		log.Warn("registry fetch: failed to create request", "error", err)
