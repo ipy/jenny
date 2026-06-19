@@ -78,10 +78,10 @@ Outstanding debt from devloop review cycles. Ordered by severity then task.
 
 ## MINOR
 
-### mD-1: Remove dead `setMaxTokensOverride` code
-- **Task:** max-tokens-clamp
-- **Files:** `internal/api/client.go`, all four provider files
-- `Client.setMaxTokensOverride`, `Client.maxTokensOverride` field, and four provider methods are dead code.
+### ~~mD-1: Remove dead `setMaxTokensOverride` code~~
+- ~~**Task:** max-tokens-clamp~~
+- ~~**Files:** `internal/api/client.go`, all four provider files~~
+- ~~`Client.setMaxTokensOverride`, `Client.maxTokensOverride` field, and four provider methods are dead code.~~
 
 ### mD-2: `ValidateWebSearchConfig` only validates client config for `StrategyClient`
 - **Task:** web-search-config-and-fallback
