@@ -50,11 +50,11 @@ Outstanding debt from devloop review cycles. Ordered by severity then task.
 - **Task:** web-search-config-and-fallback
 - No `*_test.go` files in `internal/api/` test this method. The only test (`TestProvider_SupportsNativeSearch` in `search_test.go`) checks a nil interface.
 
-### MD-6: API key leaked in error response bodies
+### ~~MD-6: API key leaked in error response bodies~~
 - **Task:** web-search-config-and-fallback
-- **Files:** `internal/tool/search_tavily.go:73`, `internal/tool/search_custom.go:68`
-- Raw error response bodies included in error strings — credential-leak vector if remote server echoes the API key.
-- **Fix:** Truncate error bodies to safe length (e.g., 200 chars) or redact API key.
+- **Files:** ~~`internal/tool/search_tavily.go:73`, `internal/tool/search_custom.go:68`~~
+- ~~Raw error response bodies included in error strings — credential-leak vector if remote server echoes the API key.~~
+- ~~**Fix:** Truncate error bodies to safe length (e.g., 200 chars) or redact API key.~~
 
 ### MD-7: Duplicate `ModelPricing` type in two packages
 - **Task:** external-model-registry
