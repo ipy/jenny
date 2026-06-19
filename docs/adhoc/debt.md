@@ -40,11 +40,11 @@ Outstanding debt from devloop review cycles. Ordered by severity then task.
 - ~~**File:** `internal/api/provider_anthropic.go:671-677`~~
 - ~~When `contextRejected` is true, `MaxOutputTokens` is left at zero value. Spec says this field should be trustworthy for all categories.~~
 
-### MD-4: `openAIProvider.SupportsNativeSearch()` uses exclusion logic
-- **Task:** web-search-config-and-fallback
-- **File:** `internal/api/provider_openai.go:98-99`
-- Returns `!isDSModel(p.model)` — too broad. Non-OpenAI models routed through the OpenAI-compatible provider incorrectly report native search support.
-- **Fix:** Use explicit allowlist of OpenAI model families (e.g., `gpt-`, `o3`, `o4`, `chatgpt-`).
+### ~~MD-4: `openAIProvider.SupportsNativeSearch()` uses exclusion logic~~
+- ~~**Task:** web-search-config-and-fallback~~
+- ~~**File:** `internal/api/provider_openai.go:98-99`~~
+- ~~Returns `!isDSModel(p.model)` — too broad. Non-OpenAI models routed through the OpenAI-compatible provider incorrectly report native search support.~~
+- ~~**Fix:** Use explicit allowlist of OpenAI model families (e.g., `gpt-`, `o3`, `o4`, `chatgpt-`).~~
 
 ### MD-5: Zero test coverage for `SupportsNativeSearch()` in `internal/api/`
 - **Task:** web-search-config-and-fallback
