@@ -66,6 +66,7 @@ In-place `sed` edits may be simulated as file edits internally:
 
 - Default/max timeout from tool config.
 - After execution: cwd is reset if it has drifted outside the project root.
+- On context cancellation, the entire process group is terminated to catch grandchildren spawned by the shell.
 
 ## Background Execution
 

@@ -50,7 +50,7 @@ In-progress runs stash latest context for one trailing run.
 
 ## Shutdown
 
-Drain with 60s soft timeout before exit.
+Drain with 60s soft timeout before exit. The main process calls drain on exit (normal, Ctrl+C, budget exceeded, or max turns) with a bounded deadline to ensure extraction goroutines do not block process termination.
 
 Pre-inject memory manifest to avoid extra ls turn.
 

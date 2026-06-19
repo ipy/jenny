@@ -172,6 +172,7 @@ Planned: During long MCP tool calls, emit progress entries (not chain nodes):
 | Multiple content parts (text + blob) | Process each; blob to disk |
 | Persist failure for binary | Error text; never inline base64 |
 | Concurrent MCP calls same server | Serialize or use connection pool per server policy |
+| Shutdown with unresponsive child | Disconnect bounded to 5s timeout; process exits regardless |
 
 ## Headless Protocol Compatibility
 

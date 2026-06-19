@@ -51,10 +51,11 @@ Fallback:
 - `onStreamingFallback`: tombstone partial assistant messages, discard streaming tool executor, clear pending tool_use IDs.
 - Count streaming 529 toward 529 budget.
 - Optional env to disable fallback (avoid double tool execution).
+- Skip fallback when parent context is already cancelled (e.g., after Ctrl+C).
 
 ## Resource Cleanup
 
-Always cancel response body on exit.
+Always cancel response body on exit. Stream reader is context-aware: when the parent context is cancelled (e.g., Ctrl+C), the stream loop exits within one read cycle rather than waiting for the idle watchdog timeout.
 
 ## Edge Cases
 

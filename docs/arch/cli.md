@@ -81,6 +81,8 @@ jenny -p "prompt text"
 | Non-zero | Missing prompt, API error, agent error, session not found |
 | Non-zero | Unknown or invalid flag |
 
+On exit (normal, Ctrl+C, budget exceeded, or max turns), the process performs an ordered shutdown: flush transcript data to disk, drain memory extraction goroutines with bounded timeout, and disconnect MCP clients with bounded timeout.
+
 Help (`-h`) exits 0. Version (`--version`) uses `constants.Version` for unified reporting.
 
 ## Environment Variables
