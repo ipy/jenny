@@ -40,7 +40,7 @@ Token counting matches autocompact: input + output + cache tokens.
 
 - May **Edit only** the session memory file.
 - Uses standalone `SendMessage` API call (not a forked sub-agent with shared prompt cache).
-- Gated on auto-compact enabled.
+- Gated on auto-compact enabled AND `EnableSessionMemory` flag (`--enable-session-memory` / `JENNY_ENABLE_SESSION_MEMORY`). Both must be true for session memory to activate; either false → disabled.
 
 ## Edge Cases
 
@@ -56,3 +56,4 @@ Token counting matches autocompact: input + output + cache tokens.
 - **AC3:** 15s extraction timeout.
 - **AC4:** Forked agent Edit-only on memory file.
 - **AC5:** Disabled when auto-compact off.
+- **AC6:** Disabled when `EnableSessionMemory` is false (default). Must not create, init, or update the session memory file unless explicitly enabled.

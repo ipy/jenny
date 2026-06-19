@@ -29,8 +29,9 @@ func (m *mockAPIClient) SendMessage(ctx context.Context, messages []api.Message,
 func TestAC1_SessionMemoryInitAt10KTokens(t *testing.T) {
 	// Create compact config with auto-compact enabled
 	compactCfg := CompactConfig{
-		DisableAutoCompact: false,
-		DisableCompact:     false,
+		SessionMemoryEnabled: true,
+		DisableAutoCompact:   false,
+		DisableCompact:       false,
 	}
 
 	// Create mock API client
@@ -105,8 +106,9 @@ func TestAC1_SessionMemoryInitAt10KTokens(t *testing.T) {
 // token growth >= 8K AND tool calls >= 3.
 func TestAC2_UpdateRequiresBothThresholds(t *testing.T) {
 	compactCfg := CompactConfig{
-		DisableAutoCompact: false,
-		DisableCompact:     false,
+		SessionMemoryEnabled: true,
+		DisableAutoCompact:   false,
+		DisableCompact:       false,
 	}
 
 	mockClient := &mockAPIClient{}
@@ -155,8 +157,9 @@ func TestAC2_UpdateRequiresBothThresholds(t *testing.T) {
 // and the main agent loop continues without blocking.
 func TestAC3_15SecondTimeout(t *testing.T) {
 	compactCfg := CompactConfig{
-		DisableAutoCompact: false,
-		DisableCompact:     false,
+		SessionMemoryEnabled: true,
+		DisableAutoCompact:   false,
+		DisableCompact:       false,
 	}
 
 	// Create a slow mock client that blocks beyond 15 seconds
@@ -201,8 +204,9 @@ func TestAC3_15SecondTimeout(t *testing.T) {
 // Edit tool only on the session memory file.
 func TestAC4_ForkedAgentEditOnly(t *testing.T) {
 	compactCfg := CompactConfig{
-		DisableAutoCompact: false,
-		DisableCompact:     false,
+		SessionMemoryEnabled: true,
+		DisableAutoCompact:   false,
+		DisableCompact:       false,
 	}
 
 	mockClient := &mockAPIClient{
@@ -302,6 +306,34 @@ func TestAC5_DisabledBothFlags(t *testing.T) {
 	}
 	if action != "disabled" {
 		t.Fatalf("Action should be 'disabled', got '%s'", action)
+	}
+}
+
+// TestAC6_DisabledWhenSessionMemoryFlagOff verifies that session memory is
+// disabled when EnableSessionMemory is false (the default).
+func TestAC6_DisabledWhenSessionMemoryFlagOff(t *testing.T) {
+	compactCfg := CompactConfig{
+		SessionMemoryEnabled: false,
+		DisableAutoCompact:   false,
+		DisableCompact:       false,
+	}
+
+	mockClient := &mockAPIClient{}
+	sm := NewSessionMemory("test-session-ac6", mockClient, compactCfg).WithMemdir(t.TempDir())
+
+	// Even with 15K+ tokens, should not trigger when EnableSessionMemory is false
+	shouldAct, action := sm.CheckThreshold(15000, 5)
+
+	if shouldAct {
+		t.Fatal("Should NOT trigger action when EnableSessionMemory is false")
+	}
+	if action != "disabled" {
+		t.Fatalf("Action should be 'disabled', got '%s'", action)
+	}
+
+	// Verify no file was created
+	if sm.fileExists() {
+		t.Fatal("Memory file should not exist when EnableSessionMemory is false")
 	}
 }
 

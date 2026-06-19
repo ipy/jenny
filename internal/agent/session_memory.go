@@ -94,8 +94,12 @@ func (sm *SessionMemory) MemoryFilePath() string {
 // accumulated token count and tool call count.
 // Returns (shouldAct, action) where action is "init", "update", or "".
 func (sm *SessionMemory) CheckThreshold(turnTokens int, toolCallCount int) (bool, string) {
-	// AC5: First check if auto-compact is disabled - gate on auto-compact enabled
-	// Session memory shares lifecycle with auto-compact
+	// AC6: Gate on EnableSessionMemory flag — must be explicitly enabled
+	if !sm.compactCfg.SessionMemoryEnabled {
+		return false, "disabled"
+	}
+
+	// AC5: Gate on auto-compact enabled — session memory shares lifecycle with auto-compact
 	if sm.compactCfg.DisableAutoCompact || sm.compactCfg.DisableCompact {
 		return false, "disabled"
 	}
