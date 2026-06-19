@@ -30,7 +30,7 @@ The system prompt is split into 4 blocks, from most stable to most volatile:
 | 2 | Machine/Session stable | Platform (OS/Arch) + skills manifest | `buildSystemPrompt()` |
 | 3 | Project stable | **CWD (Working Directory)** + Memory content (`AGENTS.md`) | `buildSystemPrompt()` |
 | 4 | Turn stable (Most volatile) | Current Date + Git status | `buildSystemPrompt()` |
-| 5 | User customization | `appendSystemPrompt` (when set) | Appended after Block 4 |
+| 5 | User customization | `prependSystemPrompt` + `appendSystemPrompt` | Prepended before Block 1 and/or appended after Block 4 |
 
 Rationale: Placing CWD in Block 3 ensures that if you switch projects, Block 1 and 2 (OS/Arch and Jenny version) can still hit the cache. Placing Date and Git Status in Block 4 ensures that even if they change across sessions, the first 3 blocks remain cache-hit candidates.
 
@@ -111,14 +111,16 @@ When tool search enabled: omit deferred tool **descriptions** from API schemas (
 | Input | Effect |
 |-------|--------|
 | `customSystemPrompt` | Replaces all default sections |
+| `prependSystemPrompt` | Prepended before Block 1 (unless `overrideSystemPrompt` set) |
 | `appendSystemPrompt` | Appended as Block 5 after Date/Git (unless `overrideSystemPrompt` set) |
-| `overrideSystemPrompt` | Suppresses append |
+| `overrideSystemPrompt` | Suppresses both prepend and append |
 
 ## Edge Cases
 
 | Case | Expected behavior |
 |------|-------------------|
-| Empty custom prompt | Valid but minimal; still inject append if set |
+| Empty custom prompt | Valid but minimal; still inject prepend/append if set |
+| Both prepend and append set | Prepend appears first (before Block 1), append appears last (after Block 4) |
 | Worktree cwd switch | Not supported across resume; new process re-freezes |
 | MCP servers connect mid-session | Refresh MCP section next turn |
 | `--bare` mode | Skip skills, memory, non-essential sections |
@@ -132,6 +134,7 @@ When tool search enabled: omit deferred tool **descriptions** from API schemas (
 - **AC3:** Git status injected with 2000 char cap.
 - **AC4:** Deferred tools omitted from schemas when tool search on.
 - **AC5:** appendSystemPrompt appended unless override suppresses.
+- **AC5b:** prependSystemPrompt prepended before Block 1 unless override suppresses.
 - **AC6:** Default intro includes "autonomous" and "non-interactive" identity keywords
 - **AC7:** Assembled prompt >= 1000 chars with default tools and no git repo
 - **AC8:** Default intro includes bash-safety language ("destructive" or "rm -rf")

@@ -200,6 +200,65 @@ func TestSystemPromptAppend(t *testing.T) {
 	})
 }
 
+// TestSystemPromptPrepend verifies --prepend-system-prompt.
+func TestSystemPromptPrepend(t *testing.T) {
+	runE2ESuite(t, []*harness.TestCase{
+		{
+			ID:          "system-prompt.prepend.added-before-default",
+			Category:    "system-prompt",
+			Description: "--prepend-system-prompt prepended before default sections",
+			Target: harness.TargetInvocation{
+				Kind: "cli",
+				Args: []string{"--prepend-system-prompt", "PREPENDED_CUSTOM_TEXT_XYZ", "--print-system-prompt"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				Stdout: &harness.StdoutExpectation{
+					Contains: []string{"AI assistant", "PREPENDED_CUSTOM_TEXT_XYZ"},
+				},
+			},
+		},
+		{
+			ID:          "system-prompt.prepend.with-custom-prompt",
+			Category:    "system-prompt",
+			Description: "--prepend-system-prompt works with --system-prompt",
+			Target: harness.TargetInvocation{
+				Kind: "cli",
+				Args: []string{
+					"--system-prompt", "Custom base prompt.",
+					"--prepend-system-prompt", "PREPEND_BEFORE_CUSTOM",
+					"--print-system-prompt",
+				},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				Stdout: &harness.StdoutExpectation{
+					Contains: []string{"Custom base prompt", "PREPEND_BEFORE_CUSTOM"},
+				},
+			},
+		},
+		{
+			ID:          "system-prompt.prepend.with-append",
+			Category:    "system-prompt",
+			Description: "--prepend-system-prompt and --append-system-prompt can both be used",
+			Target: harness.TargetInvocation{
+				Kind: "cli",
+				Args: []string{
+					"--prepend-system-prompt", "PREPENDED_MARKER_ABC",
+					"--append-system-prompt", "APPENDED_MARKER_DEF",
+					"--print-system-prompt",
+				},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				Stdout: &harness.StdoutExpectation{
+					Contains: []string{"PREPENDED_MARKER_ABC", "APPENDED_MARKER_DEF"},
+				},
+			},
+		},
+	})
+}
+
 // TestSystemPromptInstructionFiles verifies CLAUDE.md / AGENTS.md loading.
 func TestSystemPromptInstructionFiles(t *testing.T) {
 	runE2ESuite(t, []*harness.TestCase{

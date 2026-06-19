@@ -259,6 +259,7 @@ func (r *LocalSubagentRunner) GetCapturedStreamConfigInfo() map[string]any {
 		"MaxBudgetUSD":         cfg.MaxBudgetUSD,
 		"MaxTurns":             cfg.MaxTurns,
 		"CustomSystemPrompt":   cfg.CustomSystemPrompt,
+		"PrependSystemPrompt":  cfg.PrependSystemPrompt,
 		"AppendSystemPrompt":   cfg.AppendSystemPrompt,
 		"OverrideSystemPrompt": cfg.OverrideSystemPrompt,
 		"StructuredSchema":     cfg.StructuredSchema,
@@ -374,8 +375,9 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 		streamCfg.Skills = r.parentConfig.Skills
 		streamCfg.MaxBudgetUSD = r.parentConfig.MaxBudgetUSD
 		streamCfg.MaxTurns = r.parentConfig.MaxTurns
-		streamCfg.CustomSystemPrompt = r.parentConfig.CustomSystemPrompt
-		streamCfg.AppendSystemPrompt = r.parentConfig.AppendSystemPrompt
+		streamCfg.CustomSystemPrompt  = r.parentConfig.CustomSystemPrompt
+		streamCfg.PrependSystemPrompt = r.parentConfig.PrependSystemPrompt
+		streamCfg.AppendSystemPrompt  = r.parentConfig.AppendSystemPrompt
 		streamCfg.OverrideSystemPrompt = r.parentConfig.OverrideSystemPrompt
 		streamCfg.StructuredSchema = r.parentConfig.StructuredSchema
 		streamCfg.StructuredDenyRules = r.parentConfig.StructuredDenyRules

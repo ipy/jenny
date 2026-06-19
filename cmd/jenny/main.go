@@ -190,9 +190,10 @@ func run() error {
 		}
 		tools := buildPrintTools(flags)
 		cfg := agent.StreamConfig{
-			CustomSystemPrompt: flags.CustomSystemPrompt,
-			AppendSystemPrompt: flags.AppendSystemPrompt,
-			MemoryContent:      agent.LoadInstructionFile(cwd),
+			CustomSystemPrompt:  flags.CustomSystemPrompt,
+			PrependSystemPrompt: flags.PrependSystemPrompt,
+			AppendSystemPrompt:  flags.AppendSystemPrompt,
+			MemoryContent:       agent.LoadInstructionFile(cwd),
 			MaxIterations:      flags.MaxIterations,
 		}
 		fmt.Print(agent.AssembleSystemPrompt(&cfg, tools, cwd))
@@ -557,7 +558,8 @@ func run() error {
 		MCPConfig:           mcpConfig,
 		ReadFileCache:       readFileCache,
 		Skills:              discoveredSkills,
-		CustomSystemPrompt:  flags.CustomSystemPrompt,
+		CustomSystemPrompt:   flags.CustomSystemPrompt,
+		PrependSystemPrompt: flags.PrependSystemPrompt,
 		AppendSystemPrompt:  flags.AppendSystemPrompt,
 		MemoryContent:       agent.LoadInstructionFile(cwd),
 		MaxIterations:       flags.MaxIterations,

@@ -42,8 +42,9 @@ type StreamConfig struct {
 	MaxTurns             int                         // Maximum turns (0 = unlimited)
 	MCPConfig            map[string]mcp.MCPServerDef // Loaded MCP server configurations
 	CustomSystemPrompt   string                      // Custom system prompt; replaces defaults when set
-	AppendSystemPrompt   string                      // Content appended after assembled prompt
-	OverrideSystemPrompt bool                        // When true, suppresses AppendSystemPrompt
+	AppendSystemPrompt    string                      // Content appended after assembled prompt
+	PrependSystemPrompt   string                      // Content prepended before assembled prompt
+	OverrideSystemPrompt  bool                        // When true, suppresses PrependSystemPrompt and AppendSystemPrompt
 	ReadFileCache        *tool.ReadFileCache         // Cache for read-before-write enforcement
 	AutoMemoryEnabled    bool                        // Whether auto-memory is enabled
 	MemoryContent        string                      // Memory content to inject into system prompt

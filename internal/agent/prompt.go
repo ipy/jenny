@@ -168,6 +168,11 @@ func buildSystemPrompt(cfg *StreamConfig, tools []tool.Tool, cwd string) []strin
 	// AC1: Custom prompt replaces all defaults
 	if cfg.CustomSystemPrompt != "" {
 		var content strings.Builder
+		// AC5b: Prepend before custom content (unless override)
+		if !cfg.OverrideSystemPrompt && cfg.PrependSystemPrompt != "" {
+			content.WriteString(cfg.PrependSystemPrompt)
+			content.WriteString("\n\n")
+		}
 		content.WriteString(cfg.CustomSystemPrompt)
 
 		// AC5: Append section always checked last, independent of custom/default
@@ -185,6 +190,10 @@ func buildSystemPrompt(cfg *StreamConfig, tools []tool.Tool, cwd string) []strin
 	// --- Block 1: Global Identity (Most stable) ---
 	{
 		var sections []string
+		// AC5b: Prepend first (unless override), before even the stable intro
+		if !cfg.OverrideSystemPrompt && cfg.PrependSystemPrompt != "" {
+			sections = append(sections, cfg.PrependSystemPrompt)
+		}
 		// Default intro first — this is the stable, cache-friendly part
 		if intro, ok := defaultIntroSection(); ok {
 			sections = append(sections, intro)

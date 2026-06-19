@@ -245,6 +245,86 @@ func TestAssembleSystemPrompt_EmptyAppendIsNoOp(t *testing.T) {
 	}
 }
 
+func TestAssembleSystemPrompt_PrependSupport(t *testing.T) {
+	// AC5b: PrependSystemPrompt is prepended before assembled sections
+	cfg := StreamConfig{
+		PrependSystemPrompt: "This is prepended content.",
+	}
+	tools := []tool.Tool{}
+	cwd := t.TempDir()
+
+	blocks := AssembleSystemPrompt(&cfg, tools, cwd)
+	prompt := strings.Join(blocks, "\n\n")
+
+	if !strings.Contains(prompt, "This is prepended content.") {
+		t.Error("prepend content should be present")
+	}
+
+	// Should be at the beginning
+	if !strings.HasPrefix(prompt, "This is prepended content.") {
+		t.Error("prepend content should be at the beginning")
+	}
+}
+
+func TestAssembleSystemPrompt_PrependOverrideSuppresses(t *testing.T) {
+	// OverrideSystemPrompt suppresses prepend
+	cfg := StreamConfig{
+		PrependSystemPrompt:   "This should not appear.",
+		OverrideSystemPrompt: true,
+	}
+	tools := []tool.Tool{}
+	cwd := t.TempDir()
+
+	blocks := AssembleSystemPrompt(&cfg, tools, cwd)
+	prompt := strings.Join(blocks, "\n\n")
+
+	if strings.Contains(prompt, "This should not appear.") {
+		t.Error("prepend content should NOT be present when override is true")
+	}
+}
+
+func TestAssembleSystemPrompt_EmptyPrependIsNoOp(t *testing.T) {
+	// Empty prepend is no-op
+	cfg := StreamConfig{
+		PrependSystemPrompt: "",
+	}
+	tools := []tool.Tool{}
+	cwd := t.TempDir()
+
+	blocks := AssembleSystemPrompt(&cfg, tools, cwd)
+	prompt := strings.Join(blocks, "\n\n")
+
+	if !(strings.Contains(prompt, "autonomous") || strings.Contains(prompt, "non-interactive")) {
+		t.Error("should have default intro")
+	}
+}
+
+func TestAssembleSystemPrompt_BothPrependAndAppend(t *testing.T) {
+	// Prepend appears first, append appears last
+	cfg := StreamConfig{
+		PrependSystemPrompt: "PREPENDED_XYZ",
+		AppendSystemPrompt:  "APPENDED_XYZ",
+	}
+	tools := []tool.Tool{}
+	cwd := t.TempDir()
+
+	blocks := AssembleSystemPrompt(&cfg, tools, cwd)
+	prompt := strings.Join(blocks, "\n\n")
+
+	if !strings.Contains(prompt, "PREPENDED_XYZ") {
+		t.Error("prepend content should be present")
+	}
+	if !strings.Contains(prompt, "APPENDED_XYZ") {
+		t.Error("append content should be present")
+	}
+	// Prepend comes before append in the string
+	prependIdx := strings.Index(prompt, "PREPENDED_XYZ")
+	appendIdx := strings.Index(prompt, "APPENDED_XYZ")
+	if prependIdx >= appendIdx {
+		t.Error("prepend should appear before append in prompt")
+	}
+}
+
 func TestAssembleSystemPrompt_CustomWithAppend(t *testing.T) {
 	// When custom is set, append is still added (unless override)
 	cfg := StreamConfig{

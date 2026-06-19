@@ -37,6 +37,7 @@ type Flags struct {
 	PrintSystemPrompt      bool     `koanf:"print-system-prompt"`   // --print-system-prompt: print the assembled system prompt and exit
 	CustomSystemPrompt     string   `koanf:"system-prompt"`         // --system-prompt: replaces default system prompt entirely
 	AppendSystemPrompt     string   `koanf:"append-system-prompt"`  // --append-system-prompt: appended after assembled system prompt
+	PrependSystemPrompt    string   `koanf:"prepend-system-prompt"` // --prepend-system-prompt: prepended before assembled system prompt
 	MaxIterations          int      `koanf:"max-iterations"`        // --max-iterations: maximum loop iterations (0 = unlimited)
 	MaxTurns               int      `koanf:"max-turns"`             // --max-turns: maximum number of turns (0 = unlimited)
 	MaxBudgetUsd           float64  `koanf:"max-budget-usd"`        // --max-budget-usd: budget limit in USD (0.0 = no limit)
@@ -103,6 +104,7 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	pspDefault := k.Bool("print-system-prompt")
 	customSysDefault := k.String("system-prompt")
 	appendSysDefault := k.String("append-system-prompt")
+	prependSysDefault := k.String("prepend-system-prompt")
 	maxIterDefault := k.Int("max-iterations")
 	maxTurnsDefault := k.Int("max-turns")
 	maxBudgetDefault := k.Float64("max-budget-usd")
@@ -179,6 +181,9 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 
 	var appendSys string
 	flags.StringVarP(&appendSys, "append-system-prompt", "", appendSysDefault, "Append text after the system prompt")
+
+	var prependSys string
+	flags.StringVarP(&prependSys, "prepend-system-prompt", "", prependSysDefault, "Prepend text before the system prompt")
 
 	var maxIter int
 	flags.IntVarP(&maxIter, "max-iterations", "", maxIterDefault, "Maximum loop iterations (0 = unlimited)")
