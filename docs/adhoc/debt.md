@@ -61,10 +61,10 @@ Outstanding debt from devloop review cycles. Ordered by severity then task.
 - ~~**Files:** `internal/config/registry.go:64`, `internal/agent/cost.go:17`~~
 - ~~Identical structs in separate packages with manual field copying. Consolidate into `config.ModelPricing` as single source of truth.~~
 
-### MD-8: `modelMaxOutputCap` duplicates `lookupModelCap` logic
-- **Task:** external-model-registry (same as max-tokens-clamp debt #5)
-- **File:** `internal/api/model_caps.go`
-- Both functions have identical registry-then-bundled-table lookup. Delegate one to the other.
+### ~~MD-8: `modelMaxOutputCap` duplicates `lookupModelCap` logic~~
+- ~~**Task:** external-model-registry (same as max-tokens-clamp debt #5)~~
+- ~~**File:** `internal/api/model_caps.go`~~
+- ~~Both functions have identical registry-then-bundled-table lookup. Delegate one to the other.~~
 
 ### MD-9: Background fetch goroutine has no cancellation
 - **Task:** external-model-registry
