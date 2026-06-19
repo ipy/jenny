@@ -15,9 +15,9 @@ import (
 //
 // Because --refresh-registry fetches from an external URL (no env var to
 // override), we verify the override semantics indirectly:
-//   1. User override takes effect even when registry cache is present
-//   2. Overrides for models not in the cache don't cause errors
-//   3. config.json with valid overrides produces the expected max_tokens
+//  1. User override takes effect even when registry cache is present
+//  2. Overrides for models not in the cache don't cause errors
+//  3. config.json with valid overrides produces the expected max_tokens
 func TestDebtCD1_OverridePreservedWithRefresh(t *testing.T) {
 	runE2ESuite(t, []*harness.TestCase{
 		{

@@ -269,7 +269,7 @@ func TestAssembleSystemPrompt_PrependSupport(t *testing.T) {
 func TestAssembleSystemPrompt_PrependOverrideSuppresses(t *testing.T) {
 	// OverrideSystemPrompt suppresses prepend
 	cfg := StreamConfig{
-		PrependSystemPrompt:   "This should not appear.",
+		PrependSystemPrompt:  "This should not appear.",
 		OverrideSystemPrompt: true,
 	}
 	tools := []tool.Tool{}

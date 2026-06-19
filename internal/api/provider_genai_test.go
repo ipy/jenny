@@ -605,3 +605,24 @@ func TestGenAIProvider_KindConstant(t *testing.T) {
 		t.Errorf("expected ProviderGenAI = genai, got %q", ProviderGenAI)
 	}
 }
+
+// TestGenaiProvider_SupportsNativeSearch verifies that SupportsNativeSearch
+// returns true unconditionally for the GenAI provider.
+func TestGenaiProvider_SupportsNativeSearch(t *testing.T) {
+	tests := []struct {
+		model string
+	}{
+		{model: "gemini-2.5-flash"},
+		{model: "gemini-2.5-pro"},
+		{model: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.model, func(t *testing.T) {
+			p := &genaiProvider{model: tt.model}
+			if !p.SupportsNativeSearch() {
+				t.Errorf("SupportsNativeSearch() for model %q = false, want true", tt.model)
+			}
+		})
+	}
+}

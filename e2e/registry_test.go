@@ -66,7 +66,7 @@ func TestRegistryCLIFlags(t *testing.T) {
 				Kind: "cli",
 				Args: []string{"--refresh-registry"},
 				// Network fetch will likely fail but flag parsing should accept it
-				Env:  []string{"ANTHROPIC_AUTH_TOKEN=dummy"},
+				Env:       []string{"ANTHROPIC_AUTH_TOKEN=dummy"},
 				TimeoutMs: 5000,
 			},
 			Expected: harness.ExpectedBehavior{

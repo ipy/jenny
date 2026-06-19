@@ -194,7 +194,7 @@ func run() error {
 			PrependSystemPrompt: flags.PrependSystemPrompt,
 			AppendSystemPrompt:  flags.AppendSystemPrompt,
 			MemoryContent:       agent.LoadInstructionFile(cwd),
-			MaxIterations:      flags.MaxIterations,
+			MaxIterations:       flags.MaxIterations,
 		}
 		fmt.Print(agent.AssembleSystemPrompt(&cfg, tools, cwd))
 		return nil
@@ -558,7 +558,7 @@ func run() error {
 		MCPConfig:           mcpConfig,
 		ReadFileCache:       readFileCache,
 		Skills:              discoveredSkills,
-		CustomSystemPrompt:   flags.CustomSystemPrompt,
+		CustomSystemPrompt:  flags.CustomSystemPrompt,
 		PrependSystemPrompt: flags.PrependSystemPrompt,
 		AppendSystemPrompt:  flags.AppendSystemPrompt,
 		MemoryContent:       agent.LoadInstructionFile(cwd),
