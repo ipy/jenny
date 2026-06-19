@@ -8,12 +8,14 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/ipy/jenny/internal/agent"
 	"github.com/ipy/jenny/internal/api/router"
 	"github.com/ipy/jenny/internal/clean"
 	"github.com/ipy/jenny/internal/cli"
 	"github.com/ipy/jenny/internal/compact"
+	"github.com/ipy/jenny/internal/config"
 	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/git"
 	"github.com/ipy/jenny/internal/log"
@@ -148,6 +150,38 @@ func run() error {
 		return nil
 	}
 
+	// Initialize the global model registry early so that config.json models
+	// block validation (WARN on malformed) happens even for --print-system-prompt.
+	// Cache is stored at ~/.jenny/models.json with metadata in ~/.jenny/meta.json.
+	registryCachePath := filepath.Join(constants.JennyHomeDir(), "models.json")
+	config.InitGlobalRegistry(registryCachePath)
+	reg := config.GlobalRegistry()
+	if reg == nil {
+		log.Warn("registry: failed to initialize global registry")
+	}
+
+	// --offline: skip all network fetch
+	if flags.Offline && reg != nil {
+		reg.SetOffline(true)
+		log.Debug("registry: offline mode enabled, using cache as-is")
+	}
+	// Load user model overrides from config.json. Do this early so diagnostics
+	// (e.g. WARN on malformed models block) are emitted before any early exit.
+	if reg != nil {
+		cwd, err := os.Getwd()
+		if err != nil {
+			cwd = "/"
+		}
+		configPath := filepath.Join(constants.ProjectJennyDir(cwd), "config.json")
+		if data, err := os.ReadFile(configPath); err == nil {
+			if models, err := reg.ParseConfigModels(data); err == nil && models != nil {
+				if err := reg.ApplyUserOverrides(models); err != nil {
+					log.Warn("registry: failed to apply user overrides", "error", err)
+				}
+			}
+		}
+	}
+
 	// --print-system-prompt: print the assembled system prompt and exit.
 	if flags.PrintSystemPrompt {
 		cwd, err := os.Getwd()
@@ -169,6 +203,33 @@ func run() error {
 	// The JENNY_DEBUG env var is read by internal/log/log.go's init() and is
 	// the canonical site; flags.Verbose here is the CLI-flag-driven override.
 	log.SetVerbose(flags.Verbose)
+
+	// --refresh-registry: synchronous fetch, blocking, errors surface
+	if flags.RefreshRegistry && reg != nil {
+		if err := reg.Fetch(); err != nil {
+			return fmt.Errorf("failed to refresh model registry: %w", err)
+		}
+		log.Info("registry: refreshed successfully")
+	}
+
+	// If no --refresh-registry and not offline, start background fetch with 3s soft timeout.
+	if reg != nil && !flags.RefreshRegistry && !flags.Offline && reg.ShouldFetch() {
+		go func() {
+			done := make(chan struct{})
+			go func() {
+				if err := reg.Fetch(); err != nil {
+					log.Warn("registry: background fetch failed", "error", err)
+				}
+				close(done)
+			}()
+			select {
+			case <-done:
+				// fetch completed within timeout
+			case <-time.After(3 * time.Second):
+				log.Debug("registry: background fetch still running (soft timeout)")
+			}
+		}()
+	}
 
 	// Initialize the multi-provider router from config.json via koanf (or env).
 	// Idempotent: subsequent calls are no-ops.

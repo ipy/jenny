@@ -12,20 +12,22 @@ func TestAPIMaxTokens(t *testing.T) {
 		{
 			ID:          "api.max-tokens.default",
 			Category:    "api-protocol",
-			Description: "default max_tokens is 32000",
+			Description: "default max_tokens is determined by model capability table",
 			Tags:        []string{"api"},
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "say hello",
 				Format:   "stream-json",
 				Cassette: "echo-hello",
+				// Set an explicit model so the test is deterministic regardless of env.
+				Env: []string{"ANTHROPIC_MODEL=claude-sonnet-4-6"},
 			},
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 32000,
+						MaxTokens: 64000,
 					},
 				},
 			},

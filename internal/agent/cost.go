@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/ipy/jenny/internal/api"
+	"github.com/ipy/jenny/internal/config"
 	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/log"
 )
@@ -372,8 +373,11 @@ func ResetCustomPricing() {
 	customPricingMu.Unlock()
 }
 
-// GetModelPricing returns the pricing for a model, checking custom overrides first,
-// then DefaultPricing, then returning a conservative default for unknown models.
+// GetModelPricing returns the pricing for a model, checking in order:
+//  1. Custom pricing overrides (pricing.json)
+//  2. External model registry (fetched from aidy-models)
+//  3. DefaultPricing table (bundled)
+//  4. UnknownModelPricing (conservative default)
 func GetModelPricing(model string) ModelPricing {
 	// Check custom overrides first
 	customPricingMu.RLock()
@@ -381,6 +385,18 @@ func GetModelPricing(model string) ModelPricing {
 	customPricingMu.RUnlock()
 	if ok {
 		return p
+	}
+
+	// Check external model registry
+	if reg := config.GlobalRegistry(); reg != nil {
+		if regPricing, ok := reg.Pricing(model); ok {
+			return ModelPricing{
+				InputUSD:         regPricing.InputUSD,
+				OutputUSD:        regPricing.OutputUSD,
+				CacheReadUSD:     regPricing.CacheReadUSD,
+				CacheCreationUSD: regPricing.CacheCreationUSD,
+			}
+		}
 	}
 
 	// Check default table

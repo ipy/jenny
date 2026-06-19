@@ -5,6 +5,7 @@ package api
 import (
 	"strings"
 
+	"github.com/ipy/jenny/internal/config"
 	"github.com/ipy/jenny/internal/log"
 )
 
@@ -83,9 +84,21 @@ func ResolveMaxTokens(model string, override int) int {
 	return cap
 }
 
-// lookupModelCap finds the max output tokens for a model using the capability
-// table. Returns unknownModelMaxTokens for unrecognized models.
+// lookupModelCap finds the max output tokens for a model by consulting the
+// external model registry first, then falling back to the bundled capability table.
+// Returns unknownModelMaxTokens for unrecognized models.
 func lookupModelCap(model string) int {
+	// Consult external model registry first
+	if reg := config.GlobalRegistry(); reg != nil {
+		if cap, ok := reg.Capability(model); ok {
+			log.Debug("max_tokens: using registry capability",
+				"model", model,
+				"capability", cap,
+			)
+			return cap
+		}
+	}
+
 	lower := strings.ToLower(model)
 	for _, e := range modelCapTable {
 		if strings.HasPrefix(lower, strings.ToLower(e.pattern)) {
@@ -101,9 +114,17 @@ func lookupModelCap(model string) int {
 }
 
 // modelMaxOutputCap returns the max output token capability for a model,
-// consulting the capability table. This replaces the old modelMaxOutputTokens
+// consulting the external registry first, then falling back to the
+// capability table. This replaces the old modelMaxOutputTokens
 // function that returned stale hard-coded values.
 func modelMaxOutputCap(model string) int {
+	// Consult external model registry first
+	if reg := config.GlobalRegistry(); reg != nil {
+		if cap, ok := reg.Capability(model); ok {
+			return cap
+		}
+	}
+
 	lower := strings.ToLower(model)
 	for _, e := range modelCapTable {
 		if strings.HasPrefix(lower, strings.ToLower(e.pattern)) {

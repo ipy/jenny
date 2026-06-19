@@ -178,3 +178,43 @@ Clamp events emit structured WARN log lines via the existing logger. The log con
 ### Relationship to MaxTokensError
 
 The `categorizeMaxTokensError` function populates `MaxOutputTokens` from the same capability table, making the field trustworthy for callers receiving a `CategoryOutputCapHit` error. Since pre-request clamping prevents configuration overshoot from reaching the API, a `MaxTokensError` represents a legitimate output-cap hit — the caller configured correctly, and the model simply filled its budget.
+
+## External Model Registry
+
+Jenny fetches a community-maintained model registry (`aidy-models`) to keep capability, pricing, and context-window data current without hand-maintenance. The registry is consulted at lookup time and falls back gracefully to the bundled table when unavailable.
+
+### Resolution Order
+
+Capability and pricing lookups consult three sources, in order:
+
+1. **User config.json override** — `config.json`'s `models` key, a sparse patch keyed by model ID. Supports partial field-level overrides for `maxOutput`, `contextWindow`, `pricing` (field-by-field merge), `modalities`, and `abilities`. A malformed block emits a WARN log and is treated as empty.
+2. **External registry snapshot** — `~/.jenny/models.json`, fetched from `aidy-models` on startup. Contains 6700+ models across 190+ providers.
+3. **Bundled defaults** — the capability table in `internal/api/model_caps.go` and the pricing table in `internal/agent/cost.go`.
+
+### Storage
+
+| File | Role | Writer |
+|------|------|--------|
+| `~/.jenny/models.json` | Upstream registry snapshot (verbatim JSON, ~5.5MB) | jenny (fetch on startup) |
+| `~/.jenny/meta.json` | Fetch metadata (fetchedAt, ETag, schemaVersion) and exchange rates | jenny |
+| `config.json` → `models` key | User-supplied field overrides on individual models | user (handwritten) |
+
+`models.json` and `meta.json` are separate files so their lifecycles do not collide: the fetch goroutine rewrites them; the user rewrites `config.json`. A user editing their override block does not race with a fetch.
+
+### Fetch Strategy
+
+- On startup, jenny reads `meta.json`. If the cache is **missing** or **older than 24 hours**, a background goroutine fetches the registry with a 3-second soft timeout.
+- The fetch honors `If-None-Match` (ETag); a 304 response is a no-op.
+- `--refresh-registry` triggers a synchronous, blocking fetch.
+- `--offline` skips all fetch attempts.
+- On HTTP error or timeout, the existing cache is preserved. A corrupt cache file is renamed to `.broken` and treated as missing.
+- The cached file is parsed lazily on first lookup, then memoized in memory.
+
+### Graceful Degradation
+
+Every subsystem that consults the registry continues to work when it is unavailable:
+- **Capability resolution** falls back to the bundled table.
+- **Cost tracking** falls back to hard-coded per-model pricing (or zero cost for unknown models).
+- **Future consumers** (protocol detection) fall back to environment-variable-based provider selection.
+
+The worst case is identical to the behavior before the registry existed.

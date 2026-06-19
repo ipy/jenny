@@ -51,6 +51,8 @@ type Flags struct {
 	EnableSessionMemory    bool     `koanf:"enable-session-memory"` // --enable-session-memory: JENNY_ENABLE_SESSION_MEMORY
 	DisableAutoMemory      bool     `koanf:"disable-auto-memory"`   // --disable-auto-memory: JENNY_DISABLE_AUTO_MEMORY
 	RoutesProfile          string   `koanf:"routes-profile"`        // --routes-profile: JENNY_ROUTES_PROFILE: select active routing profile
+	RefreshRegistry        bool     `koanf:"refresh-registry"`      // --refresh-registry: synchronously fetch model registry
+	Offline                bool     `koanf:"offline"`               // --offline: skip all network fetch, use cache as-is
 }
 
 // envTransform transforms environment variable names from JENNY_* format to
@@ -114,6 +116,8 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	disableAutoCompactDefault := k.Bool("disable-auto-compact")
 	enableSessionMemoryDefault := k.Bool("enable-session-memory")
 	disableAutoMemoryDefault := k.Bool("disable-auto-memory")
+	refreshRegistryDefault := k.Bool("refresh-registry")
+	offlineDefault := k.Bool("offline")
 
 	// Define flags with defaults from koanf.
 	var pFlag []string
@@ -214,6 +218,12 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 
 	var disableAutoMemory bool
 	flags.BoolVarP(&disableAutoMemory, "disable-auto-memory", "", disableAutoMemoryDefault, "Disable auto-memory directory; JENNY_DISABLE_AUTO_MEMORY env var is used when unset")
+
+	var refreshRegistry bool
+	flags.BoolVarP(&refreshRegistry, "refresh-registry", "", refreshRegistryDefault, "Synchronously fetch the latest model registry")
+
+	var offline bool
+	flags.BoolVarP(&offline, "offline", "", offlineDefault, "Skip all network fetch, use cached data as-is")
 
 	// Parse the flags.
 	if err := flags.Parse(os.Args[1:]); err != nil {
