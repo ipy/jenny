@@ -3,11 +3,11 @@ title: LSP Tool
 slug: lsp
 priority: P3
 status: done
-spec: complete
+spec: partial
 code: done
 package: internal/tool
 gaps:
-  []
+  - Gitignore filtering only applied to findReferences and workspaceSymbol, not all operations
 depends_on:
   - tool-registry
 ---
@@ -19,7 +19,7 @@ Language Server Protocol operations for code intelligence. Read-only, concurrenc
 
 ## Gating
 
-Requires LSP server connected (`ENABLE_LSP_TOOL`). Fail clearly if not connected.
+Requires LSP client to be configured and connected (via `WithLSPEnabled(true)` + `WithLSPClient(client)` on the registry). Returns immediate error if not connected.
 
 ## Limits
 
@@ -31,9 +31,9 @@ Coordinates: **1-based** line and character (editor style); convert to LSP 0-bas
 
 goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol, goToImplementation, prepareCallHierarchy, incomingCalls, outgoingCalls.
 
-Wait for pending LSP init before operations.
+Returns immediate error if LSP server not connected (no wait-for-init logic).
 
-Filter gitignored locations from results.
+Filter gitignored locations from findReferences and workspaceSymbol results only.
 
 ## Acceptance Criteria
 
@@ -41,4 +41,4 @@ Filter gitignored locations from results.
 - **AC2:** Clear error when LSP disconnected.
 - **AC3:** Files >10MB rejected.
 - **AC4:** Concurrency-safe read-only.
-- **AC5:** Gitignored paths filtered from results.
+- **AC5:** Gitignored paths filtered from findReferences and workspaceSymbol results.

@@ -3,16 +3,13 @@ title: Tasks
 slug: tasks
 priority: P4
 status: done
-spec: complete
+spec: partial
 code: done
 package: internal/tool
-gaps:
-  []
+gaps: []
 depends_on:
   - tool-registry
-  - task-create
   - background-tasks
-  - task-subagent
   - subagent-types
   - agent-loop
 ---
@@ -160,7 +157,7 @@ Prefer in-memory agent result over raw transcript JSONL.
 
 ### Overview
 
-Spawns subagents with typed tool allowlists. Wire tool name `Agent` (legacy alias `Task`).
+Spawns subagents with typed tool allowlists. Wire tool name `agent` (legacy alias `task`). Not concurrency-safe.
 
 ### Parameters
 
@@ -173,6 +170,8 @@ Spawns subagents with typed tool allowlists. Wire tool name `Agent` (legacy alia
 | `run_in_background` | Async execution |
 | `isolation` | `worktree` for temp worktree |
 | `cwd` | Working directory override |
+| `name` | Named agent (swarm mode only; gated by `swarmsEnabled`) |
+| `profile` | Router profile override (e.g. `"vision"`) |
 
 ### Results
 
@@ -181,7 +180,7 @@ Spawns subagents with typed tool allowlists. Wire tool name `Agent` (legacy alia
 | Sync | Final text result |
 | Async | `{ status: async_launched, agentId, outputFile }` |
 
-Per-type tool allowlists determined by subagent type. Partial extraction on interrupt.
+Per-type tool allowlists determined by subagent type. Skill-specific `AllowedTools` intersection further restricts available tools. Partial extraction on interrupt. Nested named agents blocked via `NamedAgentKey` context value.
 
 ### Acceptance Criteria
 
@@ -189,3 +188,5 @@ Per-type tool allowlists determined by subagent type. Partial extraction on inte
 - **AC2:** Sync returns text; async returns outputFile.
 - **AC3:** worktree isolation creates temp worktree.
 - **AC4:** Interrupt extracts partial result.
+- **AC5:** Named agents blocked from nested named-agent spawning.
+- **AC6:** AllowedTools intersection restricts skill-specific tools.

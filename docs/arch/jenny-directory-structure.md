@@ -6,6 +6,9 @@ status: done
 spec: complete
 code: done
 package: internal/constants, internal/session, internal/tool
+depends_on:
+  - session-persistence
+  - cost-tracking
 ---
 
 # .jenny Directory Structure
@@ -25,6 +28,16 @@ The `.jenny` directory can exist in two locations:
 | :--- | :--- |
 | `sessions/` | Root for session-specific data isolation. |
 | `sessions/<id>/` | Dedicated directory for a specific session. |
+| `transcripts/` | Legacy directory — created at startup by `NewManager` for backward compatibility. New sessions use `sessions/<id>/transcript.jsonl` instead. |
+| `config` | Global cost state fallback (used when no session ID is set). |
+
+### Project-Local Layout (`<project-root>/.jenny/`)
+
+The project-local `.jenny/` directory may contain:
+- `config.json` — project-specific configuration (model overrides, permission level, etc.)
+- `pricing.json` — custom per-model pricing overrides
+- `.env` — environment variable overrides
+- `mcp-resources/` — MCP resource persistence scoped to project
 
 ---
 
@@ -52,6 +65,6 @@ Each session has a dedicated folder to prevent file "sprawl" and ensure all data
 
 Jenny strictly enforces this nested structure for all data persistence:
 
-1.  **Path Resolution**: All session-related paths are derived from `constants.SessionDir(id)`.
+1.  **Path Resolution**: Session-related paths use `constants.SessionDir(id)`, with `ScratchpadDir()` and `SpillsDir()` as dedicated helpers for their respective subdirectories.
 2.  **Isolation**: Tools are wired with the session ID to ensure their outputs are correctly scoped.
 3.  **Cost State**: Cost tracking is persisted per-session within the session's `config` file.

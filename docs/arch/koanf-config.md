@@ -6,9 +6,9 @@ status: done
 spec: complete
 code: done
 package: internal/cli
-gaps: []
-depends_on:
-  - cli
+gaps:
+  - struct tag listing is a representative sample; see cli.md for the full catalog
+depends_on: []
 ---
 # Koanf Configuration Layering
 
@@ -30,7 +30,7 @@ Migrate CLI flag parsing from the standard library `flag` package to `koanf` wit
 
 ## Struct Tags
 
-The `Flags` struct uses `koanf:"<key>"` tags for unmarshalling:
+The `Flags` struct uses `koanf:"<key>"` tags for unmarshalling. The struct has 33 koanf-tagged fields. Representative examples:
 
 - `koanf:"model"` for Model
 - `koanf:"output-format"` for OutputFormat
@@ -38,6 +38,8 @@ The `Flags` struct uses `koanf:"<key>"` tags for unmarshalling:
 - `koanf:"resume"` for SessionResume
 - `koanf:"deny-tool"` for DeniedTools (string slice)
 - `koanf:"permission-level"` for PermissionLevel
+
+See [cli.md](./cli.md) for the complete flag and environment variable catalog.
 
 ## Environment Variable Mapping
 
@@ -56,6 +58,9 @@ The `Flags` struct uses `koanf:"<key>"` tags for unmarshalling:
 | `JENNY_DISABLE_AUTO_COMPACT` | `disable-auto-compact` | bool | Disable auto-compact only |
 | `JENNY_ENABLE_SESSION_MEMORY` | `enable-session-memory` | bool | Enable session-memory compaction branch |
 | `JENNY_DISABLE_AUTO_MEMORY` | `disable-auto-memory` | bool | Disable auto-memory directory entirely |
+| `JENNY_ROUTES_PROFILE` | `routes-profile` | string | Select active routing profile |
+| `JENNY_REFRESH_REGISTRY` | `refresh-registry` | bool | Synchronously fetch model registry |
+| `JENNY_OFFLINE` | `offline` | bool | Skip network fetch, use cached data |
 
 ### Precedence Summary
 
@@ -70,11 +75,11 @@ For any given config key:
 
 A small number of environment variables are intentionally read directly via `os.Getenv` rather than going through the koanf layer, because their consumers run before `cli.Parse()` is reachable or they follow third-party SDK conventions:
 
-- `JENNY_DEBUG`, `JENNY_VERBOSE`, `DEBUG` — read in `internal/log/log.go:32` from `init()` (pre-`cli.Parse`); the canonical site is the log package.
+- `JENNY_DEBUG`, `JENNY_VERBOSE`, `DEBUG` — read in `internal/log/log.go:32` from `init()` (pre-`cli.Parse`); the canonical site is the log package. Note: `JENNY_VERBOSE` is also read by koanf for the `--verbose` struct field — the dual read is necessary because `log.init()` runs before koanf parsing.
 - `JENNY_HOME`, `JENNY_AGENTS_HOME` — read in `internal/constants/constants.go` from `init()`; controls the jenny home directory.
 - `ANTHROPIC_*`, `OPENAI_*`, `GENAI_*`, `GOOGLE_*`, `GEMINI_*` — third-party SDK / proxy conventions; not Jenny's to namespace.
 - `MCP_HTTP_REQUEST_TIMEOUT`, `MCP_MAX_OUTPUT_CHARS` — MCP-layer knobs; kept in-package.
-- `AUTO_COMPACT_WINDOW` — non-`JENNY_*` prefix; legacy override for `CompactConfig.ModelContextWindow`. Coexists with the migrated C-group vars inside `newCompactConfigForModel`.
+- `AUTO_COMPACT_WINDOW` — non-`JENNY_*` prefix; override for `CompactConfig.ModelContextWindow`. Not migrated to `JENNY_*` namespace. Coexists with the migrated C-group vars inside `newCompactConfigForModel`.
 - `TEMP`, `TMP`, `LOCALAPPDATA`, `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, `API_TIMEOUT_MS` — OS / standard HTTP / library conventions.
 
 ## Acceptance Criteria

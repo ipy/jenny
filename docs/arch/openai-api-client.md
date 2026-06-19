@@ -9,6 +9,7 @@ package: internal/api
 gaps: []
 depends_on:
   - anthropic-api-client
+  - provider-architecture
 ---
 
 # OpenAI API Client
@@ -61,9 +62,31 @@ The OpenAI provider utilizes the `NormalizeMessages` pipeline to ensure payload 
 - **Tool Result Dedup:** Ensures `tool_call_id` matches.
 - **Role Alternation:** Merges consecutive messages of the same role.
 
+## Native Web Search Support
+
+The `SupportsNativeSearch()` method determines whether web search tools are available:
+
+- **Chat API provider**: Returns `true` only for known OpenAI model prefixes (`gpt-`, `o3`, `o4`, `chatgpt-`). Returns `false` for third-party models routed through OpenAI-compatible APIs (DeepSeek, Moonshot, etc.).
+- **Responses API provider**: Always returns `true`.
+
+## DeepSeek Thinking Mode
+
+When thinking effort is configured and the model is detected as a DeepSeek model (via `isDSModel()`), the provider injects `extra_body: {"thinking": {"type": "enabled"}}` into both streaming and non-streaming requests. This enables DeepSeek's native chain-of-thought reasoning.
+
+## Thinking Content Round-Trip
+
+Both providers preserve thinking/reasoning content across multi-turn conversations:
+
+- **Chat API**: Round-trips thinking as `reasoning_content` / `ReasoningContent` fields on assistant messages.
+- **Responses API**: Emits reasoning as `reasoning` / `summary` item types in the `output` array.
+
+On input, previously-generated thinking blocks are re-sent to the model to maintain context continuity.
+
 ## Streaming
 
 Streaming uses Server-Sent Events (SSE). Both Chat and Responses API implementations yield partial content blocks as they arrive from the network without buffering the full response.
+
+Stream events are normalized to Anthropic-compatible events (`message_start`, `content_block_start`, `content_block_delta`, `content_block_stop`, `message_delta`, `message_stop`) for compatibility with the shared event consumption layer. See [`provider-architecture.md`](./provider-architecture.md) for the cross-provider normalization design.
 
 ## Acceptance Criteria
 

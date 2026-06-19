@@ -7,8 +7,10 @@ spec: complete
 code: done
 package: internal/agent
 depends_on:
-  - git-helpers (done)
   - tool-registry
+  - mcp-client
+  - secret-redaction
+  - active-skills-persistence
 ---
 # System Prompt Assembly
 
@@ -27,7 +29,7 @@ The system prompt is split into 4 blocks, from most stable to most volatile:
 | Block | Stability | Content | Implementation |
 |-------|-----------|---------|----------------|
 | 1 | Global (Most stable) | Default intro + tool list + redaction instructions | `buildSystemPrompt()` |
-| 2 | Machine/Session stable | Platform (OS/Arch) + skills manifest | `buildSystemPrompt()` |
+| 2 | Machine/Session stable | Platform (OS/Arch) + MCP prompts/templates + skills manifest | `buildSystemPrompt()` |
 | 3 | Project stable | **CWD (Working Directory)** + Memory content (`AGENTS.md`) | `buildSystemPrompt()` |
 | 4 | Turn stable (Most volatile) | Current Date + Git status | `buildSystemPrompt()` |
 | 5 | User customization | `prependSystemPrompt` + `appendSystemPrompt` | Prepended before Block 1 and/or appended after Block 4 |
@@ -89,12 +91,16 @@ This prevents any change in the environment from busting the system prompt cache
 
 | Section | Source | Limits | Block |
 |---------|--------|--------|-------|
-| User context | Project instruction files | Truncated per policy | 3 |
 | System identity | Default identity keywords | — | 1 |
-| Git status | branch, status snapshot | Max 2000 chars | 4 |
-| Cwd | Current working directory | Absolute path | 3 |
+| Tool list | Registered tool names | — | 1 |
+| Redaction instructions | `redactSection()` | — | 1 |
 | Platform | OS, arch | — | 2 |
+| MCP prompts/templates | `mcpSection()` | — | 2 |
+| Skills manifest | `skillsSection()` | — | 2 |
+| User context | Project instruction files | Truncated per policy | 3 |
+| Cwd | Current working directory | Absolute path | 3 |
 | Date | time.Now() (YYYY-MM-DD) | — | 4 |
+| Git status | branch, status snapshot | Max 2000 chars | 4 |
 
 Git status truncated at 2000 characters with ellipsis. Date and Git Status are in the most volatile Block 4. CWD and Memory are in Block 3. Platform and Skills are in Block 2. Global identity and tools are in Block 1.
 
@@ -104,7 +110,6 @@ Git status truncated at 2000 characters with ellipsis. Date and Git Status are i
 
 Must mention available tools (Read, Edit, Write, Glob, Grep, Bash) or embedded-search variants when Glob/Grep omitted.
 
-When tool search enabled: omit deferred tool **descriptions** from API schemas (`deferLoading: true`); optional meta message lists deferred tool names.
 
 ## Override Rules
 
@@ -122,8 +127,8 @@ When tool search enabled: omit deferred tool **descriptions** from API schemas (
 | Empty custom prompt | Valid but minimal; still inject prepend/append if set |
 | Both prepend and append set | Prepend appears first (before Block 1), append appears last (after Block 4) |
 | Worktree cwd switch | Not supported across resume; new process re-freezes |
-| MCP servers connect mid-session | Refresh MCP section next turn |
-| `--bare` mode | Skip skills, memory, non-essential sections |
+| MCP servers connect mid-session | MCP section is frozen from session start; no mid-session refresh |
+| `--bare` mode | Skips skills and MCP loading; memory/instruction files still loaded |
 | Resume with different git status | Uses frozen prompt from transcript; suffix reflects new status |
 | Cross-process same session ID | System prompt restored from transcript; cache may or may not hit depending on TTL |
 
@@ -132,7 +137,7 @@ When tool search enabled: omit deferred tool **descriptions** from API schemas (
 - **AC1:** Custom system prompt replaces defaults entirely.
 - **AC2:** Tool list matches registered tools exactly.
 - **AC3:** Git status injected with 2000 char cap.
-- **AC4:** Deferred tools omitted from schemas when tool search on.
+- **AC4:** Tool list section lists registered tool names via `toolListSection()`.
 - **AC5:** appendSystemPrompt appended unless override suppresses.
 - **AC5b:** prependSystemPrompt prepended before Block 1 unless override suppresses.
 - **AC6:** Default intro includes "autonomous" and "non-interactive" identity keywords

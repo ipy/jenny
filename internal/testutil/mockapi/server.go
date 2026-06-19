@@ -398,12 +398,17 @@ func (m *MockServer) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// File-based cassette read
+	// File-based cassette read: try .sse first, then .json
 	cassettePath := filepath.Join(m.CassetteDir, effectiveID+".sse")
 	cassetteData, err := os.ReadFile(cassettePath)
 	if err != nil {
-		m.writeError(w, http.StatusBadRequest, fmt.Sprintf("cassette not found: %s: %v", cassettePath, err))
-		return
+		jsonPath := filepath.Join(m.CassetteDir, effectiveID+".json")
+		cassetteData, err = os.ReadFile(jsonPath)
+		if err != nil {
+			m.writeError(w, http.StatusBadRequest, fmt.Sprintf("cassette not found: %s (.sse and .json checked)", effectiveID))
+			return
+		}
+		cassettePath = jsonPath
 	}
 
 	// E4: Content-Type for file-based cassette

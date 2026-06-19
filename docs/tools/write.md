@@ -3,20 +3,19 @@ title: Write Tool
 slug: write
 priority: P1
 status: done
-spec: complete
+spec: partial
 code: done
 package: internal/tool
-gaps:
-  []
+gaps: []
 depends_on:
   - read
-  - query-engine
+  - tool-registry
 ---
 # Write Tool
 
 ## Overview
 
-Write creates or overwrites files. Requires prior Read of same path with matching mtime (read-before-write contract).
+Write creates or overwrites files. Read-before-write contract enforced at constrained permission levels. At `PermissionUnrestricted`, all gates are skipped.
 
 ## Parameters
 
@@ -25,23 +24,38 @@ Write creates or overwrites files. Requires prior Read of same path with matchin
 | `file_path` | Target path |
 | `content` | Full file content |
 
+## Permission Level Gating
+
+| Gate | Blocks at | Skipped at |
+|------|-----------|------------|
+| `WriteAllowed()` | read, analyze | edit+ |
+| `PathConstrained()` | read, analyze, edit | unrestricted |
+| `ReadBeforeWrite()` | read, analyze, edit | unrestricted |
+
 ## Read-Before-Write
 
-1. `readFileState` must contain path from prior Read in this session.
+1. ReadFileCache must contain path from prior Read in this session.
 2. Reject if entry is partial view (`offset`/`limit` set on read).
 3. Staleness: if `mtime > readTimestamp` → error (file changed since read).
-4. Windows: content-compare fallback for full reads when mtime unreliable.
+
+## AllowedPaths
+
+`SetAllowedPaths(paths)` restricts writes to specific path prefixes. Allowlisted paths bypass the cwd gate. Non-allowlisted paths fall back to scratchpad prefix check.
+
+## Scratchpad Prefix
+
+`$JENNY_SCRATCHPAD/` prefix is resolved to the session-scoped scratchpad directory. Escape via `..` is blocked.
 
 ## Write Behavior
 
 - Create parent directories (`mkdir -p`).
-- Preserves original content bytes (no line-ending normalization).
+- Atomic write: temp file in target directory → `Sync` → `os.Rename`. Cross-device (`EXDEV`) fallback via `copyAndReplace`. Windows: rename retry loop.
 - Return structured patch diff in tool result.
 
 ## Post-Write Updates
 
-- Update `readFileState` with new content and mtime.
-- Skill directory discovery when the skills framework is enabled. No LSP or IDE file-history integration (headless CLI).
+- Update ReadFileCache with new content and mtime.
+- Path-triggered skill activation when the skills framework is enabled.
 
 ## Edge Cases
 
@@ -54,8 +68,8 @@ Write creates or overwrites files. Requires prior Read of same path with matchin
 
 ## Acceptance Criteria
 
-- **AC1:** Write without readFileState entry fails.
+- **AC1:** Write without ReadFileCache entry fails (at constrained permission levels).
 - **AC2:** Stale mtime fails before write.
 - **AC3:** Parent dirs created automatically.
 - **AC4:** Result includes patch diff.
-- **AC5:** readFileState updated after success.
+- **AC5:** ReadFileCache updated after success.

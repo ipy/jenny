@@ -24,9 +24,10 @@ Thresholds are derived from per-model parameters via `api.ModelParams(model)`:
 
 | Model | Context Window | Max Output Tokens |
 |-------|---------------|-------------------|
-| `deepseek-v4-flash` | 1,000,000 | 8,192 |
-| `deepseek-v4-pro` | 1,000,000 | 8,192 |
-| Default (other models) | 200,000 | 20,000 |
+| `deepseek-v4-*` | 1,000,000 | 384,000 |
+| `claude-opus-4-*` | 200,000 | 128,000 |
+| `claude-sonnet-4-*` / `claude-haiku-4-*` | 200,000 | 64,000 |
+| Default (unknown models) | 200,000 | 16,384 |
 
 `newCompactConfigForModel(model, streamCfg)` looks up actual values; `streamCfg` fields carry `DisableCompact`, `DisableAutoCompact`, and `EnableSessionMemory` (populated by koanf from `JENNY_DISABLE_*` / `JENNY_ENABLE_SESSION_MEMORY` env vars and matching CLI flags). `AUTO_COMPACT_WINDOW` env (non-`JENNY_*`) still overrides context window if set.
 
@@ -63,14 +64,19 @@ Track `consecutiveFailures` per session.
 - Success: reset to 0.
 - After **3** failures (`MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES`): skip all further auto-compact for session.
 
+The fail count is persisted to the transcript as `state` entries (`persistCompactFailCount`) so the circuit breaker state survives session resumes via `-r`.
+
 ## Execution
 
-1. Try session-memory compaction when enabled.
-2. Else fork summary agent: `querySource=compact`, tools disabled, max 1 turn.
-3. Strip images/documents from summarizer input (replace with `[image]` / `[document]` markers).
-4. On prompt-too-long during summarize: retry up to 3× dropping oldest API-round groups from head.
+Three-step strategy (first success wins):
 
-Post-compact order: `boundaryMarker → summaryMessages → messagesToKeep → attachments → hookResults`.
+1. **In-session compaction** (`inSessionCompact`): appends a summary instruction to the existing message chain, reusing the cached system prompt + tools prefix. A pre-flight check skips this step if estimated tokens exceed `effectiveContextWindow - MIN_SAFETY_OVERHEAD (30,000) - SUMMARY_MAX_TOKENS`.
+2. **Session-memory compaction** (when enabled): currently a stub — returns `"session memory compaction not implemented"`.
+3. **Fork summary agent**: `querySource=compact`, tools disabled, max 1 turn. Strips images/documents from summarizer input (replace with `[image]` / `[document]` markers). On prompt-too-long during summarize: retry up to 3× dropping oldest API-round groups from head.
+
+After successful compaction, active skills are re-injected as a `[system]: Active Skills: ...` virtual user message to ensure skill activations survive compaction.
+
+Post-compact chain order: `boundaryMarker → summaryMessages → messagesToKeep (10) → attachments → hookResults`.
 
 ## Persistence & Session Resume
 
@@ -86,7 +92,8 @@ Compaction boundaries are recorded as `system` messages with `subtype: "compact_
   "compact_metadata": {
     "trigger": "auto",
     "pre_tokens": 125000,
-    "preserved_segment": 5
+    "preserved_segment": 5,
+    "summary": "<compacted summary text>"
   }
 }
 ```
@@ -98,16 +105,17 @@ When resuming a session, `LoadPostBoundaryMessages` scans the transcript for the
 - **AC8:** Compaction boundary persisted to transcript as `system`/`compact_boundary` entry.
 - **AC9:** `LoadPostBoundaryMessages` returns only entries after the last boundary.
 - **AC10:** Resume after compaction sends only post-boundary messages to API.
-- **AC11:** Boundary metadata includes `trigger`, `pre_tokens`, and `preserved_segment`.
+- **AC11:** Boundary metadata includes `trigger`, `pre_tokens`, `preserved_segment`, and `summary`.
 
 ## Post-Compact Normalization
 
 Before next API call:
 
-1. Filter orphaned thinking-only messages.
-2. Strip trailing thinking from last assistant (insert `[No message content]` if needed).
-3. `ensureToolResultPairing`.
-4. Filter whitespace-only assistant messages.
+1. `filterOrphanedThinking` — remove thinking-only messages with no subsequent content.
+2. `stripTrailingThinking` — strip trailing thinking blocks from all assistant messages.
+3. `ensureNonEmptyAssistant` — insert `[Tool use interrupted]` if stripping left an empty assistant.
+4. `filterWhitespaceOnly` — remove whitespace-only assistant messages.
+5. `ensureToolResultPairing` — synthesize missing tool_result blocks.
 
 ## Warning and Hard Block
 
@@ -193,9 +201,10 @@ The categorizer applies this logic:
 
 | Model | Max Output Tokens |
 |-------|-------------------|
-| `deepseek-v4-flash` | 8,192 |
-| `deepseek-v4-pro` | 8,192 |
-| Default (other models) | 20,000 |
+| `deepseek-v4-*` | 384,000 |
+| `claude-opus-4-*` | 128,000 |
+| `claude-sonnet-4-*` / `claude-haiku-4-*` | 64,000 |
+| Default (unknown models) | 16,384 |
 
 ### Backward Compatibility
 

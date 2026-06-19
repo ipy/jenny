@@ -2,13 +2,12 @@
 title: Plugin System
 slug: plugins
 priority: P3
-status: done
-spec: complete
+status: partial
+spec: partial
 code: done
 package: internal/plugin
 gaps:
   - Lifecycle hooks execution
-  - Plugin-enabled skill activation
   - Plugin enable/disable toggling
 depends_on:
   - mcp-config
@@ -97,6 +96,10 @@ Plugins use a `<marker>/plugin.json` manifest file located at the plugin root. T
 | `websiteURL` | string | Must start with `https://` |
 | `privacyPolicyURL` | string | Must start with `https://` |
 | `termsOfServiceURL` | string | Must start with `https://` |
+| `defaultPrompt` | array | Default prompt lines for the plugin |
+| `composerIcon` | string | Icon for the composer UI |
+| `logo` | string | Plugin logo image path or URL |
+| `screenshots` | array | Screenshot image paths or URLs |
 
 ## Plugin Directory Structure
 
@@ -132,7 +135,7 @@ When multiple markers exist in the same directory, `.jenny-plugin` takes priorit
 
 ### Discovery Sources
 
-Plugins are discovered from multiple directory roots, searched in this priority order:
+Plugins are discovered from multiple directory roots. The caller invokes `FindPluginRoots` once per source root. Roots are searched in this priority order:
 
 | Source | Path | Scope |
 |--------|------|-------|
@@ -181,13 +184,13 @@ Validates:
 
 ## Integration with Existing Systems
 
-### Skills Framework (`internal/skills/`)
+### Plugin Package (`internal/plugin/`)
 
 Plugins can bundle skills via the `skills` field:
 
 - Path must be relative starting with `./`
 - Skills are loaded in addition to default skill discovery
-- Integration point: `LoadPluginSkills(p *LoadedPlugin)`
+- Integration point: `LoadPluginSkills(p *LoadedPlugin)` (defined in `internal/plugin/discovery.go`)
 
 ### MCP Client (`internal/mcp/`)
 
@@ -215,9 +218,9 @@ func LoadPluginMCPServers(p *LoadedPlugin) (map[string]mcp.MCPServerDef, error)
 3. Delegates to `mcp.LoadConfig([path], false)` to parse the MCP config file
 4. Returns error for missing file or invalid JSON
 
-### Hooks (Future)
+### Hooks (Manifest Field Present, Execution Deferred)
 
-Plugins can define lifecycle hooks via `hooks`:
+Plugins can define lifecycle hooks via `hooks` (the manifest field is parsed and validated, but hook execution is not yet implemented):
 
 ```json
 {
@@ -301,8 +304,8 @@ my-plugin/
 - [ ] Plugin installation command
 - [ ] Plugin registry/discovery UI
 
-### Phase 3: Integration (Deferred)
-- [ ] Plugin skill activation
+### Phase 3: Integration (Partially Implemented)
+- [x] Plugin skill activation (implemented in `cmd/jenny/plugin_skills.go`)
 - [x] Plugin MCP server launch
 - [ ] Lifecycle hook execution
 - [ ] Plugin enable/disable toggling

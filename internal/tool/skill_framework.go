@@ -1,11 +1,6 @@
 // Package tool provides skill activation framework support.
 package tool
 
-import (
-	"fmt"
-	"os"
-)
-
 // SkillActivator defines the interface for triggering skill activation on file access.
 type SkillActivator interface {
 	// ActivateForPath checks if any skill matches the given path and activates it.
@@ -19,10 +14,4 @@ type SkillActivator interface {
 	// GetActivatedTools returns the union of allowed tools for all active skills.
 	// If no skills are active, returns nil (no skill-based restrictions).
 	GetActivatedTools() []string
-}
-
-// LogSkillActivated logs a skill activation event for debugging.
-// Emits a stream-json event for headless compatibility.
-func LogSkillActivated(skill, path string) {
-	fmt.Fprintf(os.Stdout, `{"type":"skill_activated","skill":%q,"path":%q}`+"\n", skill, path)
 }

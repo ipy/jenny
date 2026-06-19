@@ -42,13 +42,13 @@ The Portal operates as a **Sidecar Observer** that interacts with the filesystem
 ### 1. Sidecar Observer Model
 The Portal is decoupled from the agent. It derives state by observing the filesystem and the system's process table.
 - **No Database:** To maintain a small binary footprint, the Portal uses the existing `~/.jenny/sessions` structure.
-- **UUID v7 Indexing:** Sessions are identified by UUID v7, which embeds a timestamp. The Portal lists sessions in chronological order by simply reading the directory names, avoiding the need for a separate index or database.
+- **UUID v4 Indexing:** Sessions are identified by UUID v4 (random). The Portal lists sessions sorted by modification time (`mtimeNano` from directory stat), avoiding the need for a separate index or database.
 - **Liveness Detection:** The Portal determines if a session is "Running" or "Exited" by reading the `pid` file in the session directory and checking the process status (e.g., via `os.FindProcess(pid).Signal(0)` on Unix).
 
 ### 2. Headless Interaction Flow
 Jenny is a headless CLI. The Portal manages this through detached process orchestration:
 - **Starting Sessions:** The Portal spawns a new detached process: `jenny -p "prompt" --output-format stream-json`.
-- **Real-time Observation:** The Portal uses `fsnotify` to monitor the session's transcript file. New events are streamed to the WebUI via **Server-Sent Events (SSE)**.
+- **Real-time Observation:** The Portal uses a 500ms polling ticker (comparing `info.Size() > lastSize`) to monitor the session's transcript file. New events are streamed to the WebUI via **Server-Sent Events (SSE)**.
 - **Resuming Sessions:** Resuming involves forking a new process with the `-r` flag: `jenny -r <id> -p "new prompt"`.
 
 ## UI Structure & Layout
@@ -57,14 +57,14 @@ The UI uses a **Master-Detail** layout, optimized for high-density information d
 
 ### 1. Dashboard (Start)
 The landing page for launching new work.
-- **Global Stats:** Cards showing total sessions, active count, total token cost, and cache hit rates.
+- **Global Stats:** Cards showing total sessions, active count, total token cost, and total tokens.
 - **Prompt Input:** A large, focused area for entering the initial agent prompt.
 - **Context Selectors:** Quick pickers for the Working Directory, Model Profiles, and global configurations.
 - **Recent Projects:** A grid of frequently used project paths.
 
 ### 2. Sessions (Master-Detail)
 The primary monitoring interface, inspired by advanced log viewers.
-- **Master Sidebar:** A scrollable list of sessions (UUID v7 sorted), showing status indicators and brief activity summaries.
+- **Master Sidebar:** A scrollable list of sessions (sorted by modification time), showing status indicators and brief activity summaries.
 - **Detail Panel:**
   - **Metrics Row:** Real-time cost, token usage, turn count, and model name.
   - **Event Timeline:** A sequence of high-level events (Init, User Prompt, Tool Use, Result).

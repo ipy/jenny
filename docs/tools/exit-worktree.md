@@ -26,8 +26,9 @@ Exits worktree session and optionally removes worktree.
 
 ## Behavior
 
-- `countWorktreeChanges` null → fail-closed (cannot remove safely)
-- Restore original cwd and project root
+- If worktree dirty-state cannot be determined, fail-closed (refuse removal)
+- Restore original cwd via `NewCwd` result field
+- `remove`: removes worktree directory and deletes the associated branch
 - `keep`: leave worktree on disk, restore parent cwd
 
 ## Acceptance Criteria

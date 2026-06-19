@@ -3,20 +3,19 @@ title: Notebook Edit Tool
 slug: notebook-edit
 priority: P2
 status: done
-spec: complete
+spec: partial
 code: done
 package: internal/tool
-gaps:
-  []
+gaps: []
 depends_on:
   - read
-  - query-engine
+  - tool-registry
 ---
 # Notebook Edit Tool
 
 ## Overview
 
-Modifies Jupyter `.ipynb` files only. Modes: replace, insert, delete. Read-before-write via readFileState.
+Modifies Jupyter `.ipynb` files only. Modes: replace, insert, delete. Read-before-write via ReadFileCache. Not concurrency-safe — must execute serially.
 
 ## Parameters
 
@@ -31,7 +30,7 @@ Modifies Jupyter `.ipynb` files only. Modes: replace, insert, delete. Read-befor
 ## Validation
 
 - Extension must be `.ipynb` else error → use file Edit tool.
-- readFileState must contain path (Read first).
+- ReadFileCache must contain path (Read first).
 - mtime > readTimestamp → stale error.
 - Invalid JSON → error.
 - Missing cell → error; supports `cell-N` numeric index alias.
@@ -40,19 +39,18 @@ Modifies Jupyter `.ipynb` files only. Modes: replace, insert, delete. Read-befor
 
 | Mode | Behavior |
 |------|----------|
-| replace | Set source; reset execution_count/outputs for code cells. Fails with error if cell not found. |
-| insert | Splice after target or index 0; assign random id nbformat ≥4.5 |
-| delete | Splice out cell |
+| replace | Set source; reset execution_count/outputs for code cells. Fails with error if cell not found. Returns unified diff. |
+| insert | Splice after target or index 0; assign random id nbformat ≥4.5. Returns insertion message. |
+| delete | Splice out cell. Returns unified diff. |
 
 Write via `json.MarshalIndent` (UTF-8, indent=1).
 
-Update readFileState (offset undefined to break Read dedup).
+Update ReadFileCache (offset=0 to break Read dedup).
 
 ## Edge Cases
 
 | Case | Expected behavior |
 |------|-------------------|
-| UNC paths | Skip pre-validation I/O |
 | Empty notebook insert | No cell_id → insert at beginning |
 | In-place JSON mutation | Non-memoized parse in call() |
 

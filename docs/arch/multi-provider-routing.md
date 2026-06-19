@@ -4,7 +4,7 @@ slug: multi-provider-routing
 priority: P2
 status: done
 spec: complete
-code: done
+code: partial
 package: internal/api, internal/agent
 depends_on:
   - anthropic-api-client
@@ -15,6 +15,8 @@ depends_on:
 # Multi-Provider Routing
 
 Specifications for high-availability routing across multiple LLM providers, models, and API keys. This system ensures service continuity, cost optimization, and capability-based routing (e.g., vision) while preserving Prompt Caching through session stickiness.
+
+**Integration status:** The router component (`StickyClient`, `findCandidates`, health registry) is implemented and tested. However, the engine's main request path (`engine.go`) uses `api.NewClientWithModel` directly and does not route through `StickyClient`. The router is currently used only for subagent profile switching.
 
 ## Design Goals
 
@@ -84,7 +86,7 @@ Defines how resources are selected and used.
     "profiles": {
       "default": {
         "targets": [
-          { "match": { "models": ["deepseek:deepseek-chat"] } },
+          { "match": { "models": ["deepseek-chat"] } },
           { "match": { "tags": ["cheap"] } }
         ],
         "routing-mode": "sticky",
@@ -168,8 +170,8 @@ When a field is omitted from the configuration, the following defaults apply:
 |-------|---------------|
 | `priority` (Account/Model) | `1` |
 | `routing-mode` | `sticky` |
-| `selection-policy` | `round_robin` (within same priority) |
-| `max-retries` | `5` |
+| `selection-policy` | `round_robin` |
+| `max-retries` | `5` (config path) / `3` (env-synthesized path) |
 | `backoff` | `exponential` |
 | `allow-fallback` | `true` |
 

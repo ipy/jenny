@@ -3,13 +3,17 @@ title: Rate Limit Handling & Universal Error Classification
 slug: rate-limit-handling
 priority: P1
 status: done
-spec: complete
-code: done
-package: internal/api
+spec: partial
+code: partial
+package: internal/api, internal/api/router
 gaps:
   - Retry-After header not yet wired from HTTP response into category backoff path
+  - Max Output Token Recovery not implemented (doc describes planned behavior)
+  - Background 529 suppression only implemented for Anthropic provider
+  - openAIResponsesProvider streaming path does not populate ErrorInfo
 depends_on:
   - anthropic-api-client
+  - multi-provider-routing
 ---
 # Rate Limit Handling & Universal Error Classification
 
@@ -119,7 +123,7 @@ Jitter: ±25% on computed delay. `Retry-After` header takes precedence when pres
 - Base delay: 500ms
 - Exponential cap: 32s
 - Jitter: 25%
-- Default max retries: 10 (env override)
+- Default max retries: 10 (programmatic override via `SetRetryConfig`)
 
 ## 529 Overload Cap
 
@@ -131,18 +135,19 @@ Background query sources (classifiers, summaries, memory extraction) do **not** 
 
 Foreground sources (main agent loop) receive the full 529 retry budget.
 
+**Note:** Background 529 suppression is currently only implemented for the Anthropic provider (`anthropicProvider.SetBackground`). Other providers always use the foreground retry path.
+
 ## Retry Context Preservation
 
 Each retry passes unchanged:
 
 - `model`
 - `thinkingConfig`
-- `maxTokensOverride` (adjusted on max-output overflow)
-- `fastMode`
+- `maxTokensOverride`
 
-## Max Output Token Recovery
+## Max Output Token Recovery (Planned)
 
-On max-output-tokens stop reason:
+**Not yet implemented.** Planned behavior on max-output-tokens stop reason:
 
 - Retry with increased `maxTokensOverride` (bounded).
 - Cap recovery retries to avoid infinite loops (see agent loop).
@@ -193,7 +198,6 @@ The error category drives the multi-provider router's layer selection (see [mult
 | Case | Expected behavior |
 |------|-------------------|
 | 529 during streaming | Count toward 529 budget; fails after cap (no model fallback) |
-| Budget exhausted mid-retry | Stop with distinct error |
 | Content filter on HTTP 200 (domestic providers) | Error info populated from body classification; fast-fail |
 | ModelNotFound during streaming | Try next target in sticky router; emit error_model_not_found if exhausted |
 | 429 with no keyword signal | Classified as `rate_limit_generic`; default backoff applies |

@@ -95,15 +95,17 @@ Per MCP spec 2025-03-26. Single HTTP endpoint, JSON-RPC over POST.
 - Request timeout: 120s default (tool calls may be long-running)
 - Configurable via environment: `MCP_HTTP_REQUEST_TIMEOUT` (value in seconds)
 
-## OAuth and 401 Handling (Not Implemented — P4)
+## OAuth and 401 Handling
 
-Planned behavior for when OAuth is implemented:
+OAuth token refresh is implemented via `refresh_token` grant:
 
-1. Attempt token refresh via stored OAuth credentials.
-2. Retry request once with refreshed token.
-3. If refresh fails, mark server status `needs-auth` and surface error to operator (no interactive prompt in headless mode).
+1. On 401 response, the HTTP transport attempts token refresh using stored OAuth credentials from `~/.jenny/mcp-oauth/`.
+2. Retries the request once with the refreshed access token.
+3. If refresh fails, surfaces the error to the caller.
 
-Currently, static auth tokens can be passed via `headers` config field (e.g., `"Authorization": "Bearer <token>"`).
+Static auth tokens can also be passed via `headers` config field (e.g., `"Authorization": "Bearer <token>"`).
+
+**Not implemented (P4):** OAuth 2.1 authorization code flow (interactive user-facing grant). Only device-less refresh_token grant is supported.
 
 ## Tool Naming
 
@@ -150,18 +152,20 @@ Oversized MCP text responses truncate before model context:
 
 Per-server LRU cache for `resources/list` and `resources/read`.
 
-Invalidate cache on:
+Cache TTL: 30 seconds. Invalidate cache on:
 
 - Server disconnect
 - Session expired
 - `notifications/resources/list_changed`
+- `notifications/resources/updated`
 
-## Progress Events (Not Implemented — P4)
+## Progress Events
 
-Planned: During long MCP tool calls, emit progress entries (not chain nodes):
+Progress events are implemented via the MCP `notifications/progress` protocol:
 
-- `mcp_progress` with `status: started | completed`
-- Yield separately from final tool_result in stream-json
+- Progress tokens are injected into tool call requests via `_meta.progressToken`.
+- A global handler registry dispatches progress notifications to registered handlers.
+- Progress events may appear as `tool_progress` lines in stream-json output.
 
 ## Edge Cases
 
@@ -188,6 +192,8 @@ Both transports implement a common interface:
 type Transport interface {
     SendRequest(ctx context.Context, req jsonRPCRequest) (*jsonRPCResponse, error)
     SendNotification(ctx context.Context, notif jsonRPCRequest) error
+    SetNotificationHandler(handler func(Notification))
+    BackgroundListen(ctx context.Context) error
     Close() error
 }
 ```

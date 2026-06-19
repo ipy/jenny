@@ -568,6 +568,9 @@ func (e *QueryEngine) syncActiveSkills() {
 			}
 		}
 		e.streamCfg.SetActiveSkills(activated)
+		for _, s := range skillsList {
+			e.streamCfg.AddDiscoveredSkillName(s.Name)
+		}
 	}
 }
 

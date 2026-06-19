@@ -2,8 +2,8 @@
 title: Stream-JSON Output Protocol
 slug: stream-json
 priority: P0
-status: done
-spec: complete
+status: draft
+spec: partial
 code: done
 defer_to: P3
 package: internal/cli, internal/agent
@@ -42,9 +42,10 @@ Every event carries these fields in declaration order:
 2. stream_event        (raw SSE deltas when --include-partial-messages)
 3. assistant           (per content block after content_block_stop)
 4. tool_progress/started   (before tool execution)
-5. tool_progress/completed (after tool execution)
-6. user (aggregated tool result batch after last tool_progress completed)
-7. [repeat 2-6 for each turn]
+5. tool_progress/output    (MCP mid-execution progress, optional)
+6. tool_progress/complete  (after tool execution)
+7. user (aggregated tool result batch after last tool_progress complete)
+8. [repeat 2-7 for each turn]
 …
 N. result              (terminal line, always last)
 ```
@@ -180,7 +181,8 @@ Claude Code emits `tool_progress` for long-running tool progress updates. jenny 
 
 ```json
 { "type": "tool_progress", "subtype": "started", "tool_name": "Bash", "tool_use_id": "…", "session_id": "sess_…", "parent_tool_use_id": null, "uuid": "…" }
-{ "type": "tool_progress", "subtype": "completed", "tool_use_id": "…", "is_error": false, "session_id": "sess_…", "parent_tool_use_id": null, "uuid": "…" }
+{ "type": "tool_progress", "subtype": "output", "tool_name": "…", "tool_use_id": "…", "content": "…", "session_id": "sess_…", "parent_tool_use_id": null, "uuid": "…" }
+{ "type": "tool_progress", "subtype": "complete", "tool_use_id": "…", "is_error": false, "session_id": "sess_…", "parent_tool_use_id": null, "uuid": "…" }
 ```
 
 ### `stream_event` (partial messages)
@@ -207,19 +209,18 @@ For `tool_progress`, inner event contains tool progress for long-running operati
 
 Requires live SSE streaming from API (see [`sse-streaming.md`](./sse-streaming.md)).
 
-### `system` / `compact_boundary`
+### `system` / `thinking_tokens`
 
-Emitted after context compaction:
+Emitted during streaming to report thinking token usage. Debounced (100ms) during streaming, with a final emission on block stop.
 
 ```json
 {
   "type": "system",
-  "subtype": "compact_boundary",
-  "compact_metadata": {
-    "trigger": "auto",
-    "pre_tokens": 180000,
-    "preserved_segment": "…"
-  }
+  "subtype": "thinking_tokens",
+  "estimated_tokens": 1500,
+  "estimated_tokens_delta": 200,
+  "session_id": "sess_…",
+  "uuid": "…"
 }
 ```
 
@@ -273,16 +274,16 @@ Always the last line on successful run. Note: `parent_tool_use_id` is NOT presen
 }
 ```
 
-Field order: `type`, `subtype`, `is_error`, `api_error_status`, `duration_ms`, `duration_api_ms`, `ttft_ms`, `ttft_stream_ms`, `time_to_request_ms`, `num_turns`, `result`, `stop_reason`, `session_id`, `total_cost_usd`, `usage`, `modelUsage`, `terminal_reason`, `permission_denials`, `fast_mode_state`, `uuid`.
+Field order: `type`, `subtype`, `is_error`, `duration_ms`, `duration_api_ms`, `num_turns`, `result`, `stop_reason`, `ttft_ms`, `ttft_stream_ms`, `time_to_request_ms`, `terminal_reason`, `api_error_status`, `session_id`, `total_cost_usd`, `usage`, `modelUsage`, `permission_denials`, `fast_mode_state`, `uuid`.
 
 New result event fields:
-- `ttft_ms`: Time to first token in milliseconds. Measured from API call start to first content block received. Omitted if zero.
-- `ttft_stream_ms`: Time from API call start to first token received on the stream. Omitted if zero.
-- `time_to_request_ms`: Time to build and send the API request. Omitted if zero.
+- `ttft_ms`: Time to first token in milliseconds. Measured from API call start to first content block received. Always emitted (0 when not measured).
+- `ttft_stream_ms`: Time from API call start to first token received on the stream. Always emitted (0 when not measured).
+- `time_to_request_ms`: Time to build and send the API request. Always emitted (0 when not measured).
 - `terminal_reason`: Maps the stop reason to a stable string. `"completed"` for end_turn/stop_sequence, `"max_tokens"` for max_tokens. Omitted if empty.
 - `api_error_status`: `null` on successful API response. Contains the error message string when the API call fails permanently (after retry exhaustion). Always present.
 
-Error subtypes: `error`, `error_max_tokens`, `error_max_turns`, `error_budget`.
+Error subtypes: `error`, `error_max_tokens`, `error_max_turns`, `error_budget`, `error_quota_exhausted`, `error_payment_required`, `error_content_filter`.
 
 #### `error_max_tokens` shape
 
@@ -294,7 +295,6 @@ When output is capped due to `max_tokens`, the `result` event includes `error_ma
   "subtype": "error_max_tokens",
   "result": "max tokens reached: output_cap",
   "session_id": "sess_…",
-  "parent_tool_use_id": null,
   "uuid": "…",
   "usage": { "input_tokens": 100, "output_tokens": 50, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0 },
   "total_cost_usd": 0.001,

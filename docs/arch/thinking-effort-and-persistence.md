@@ -3,14 +3,17 @@ title: Thinking Effort, Persistence & DeepSeek Reasoning
 slug: thinking-effort-and-persistence
 priority: P0
 status: done
-spec: complete
+spec: partial
 code: done
 package: internal/session,internal/api,internal/cli,internal/agent
-gaps: []
+gaps:
+  - thinking_tokens system event emission semantics not documented here (see stream-json-spec)
 depends_on:
   - session-persistence
   - anthropic-api-client
   - openai-api-client
+  - stream-json-spec
+  - agent-loop
 ---
 
 # Thinking Effort, Persistence & DeepSeek Reasoning
@@ -85,11 +88,7 @@ Assistant entries with thinking blocks are persisted to `.jsonl` transcripts wit
 {"type":"assistant","content":"The answer is 42.","thinking":"6 * 7 = 42","signature":"sig_abc123"}
 ```
 
-The `TranscriptEntry` struct includes optional `thinking` and `signature` fields persisted to the JSONL transcript:
-
-```json
-{"type":"assistant","content":"The answer is 42.","thinking":"6 * 7 = 42","signature":"sig_abc123"}
-```
+The `TranscriptEntry` struct includes optional `thinking` and `signature` fields persisted to the JSONL transcript.
 
 #### Observation: Prompt Caching
 
@@ -134,7 +133,7 @@ Thinking from previous turns is reconstructed as `reasoning` items in the `input
 ```json
 {
   "input": [
-    {"type": "reasoning", "summary": {"type": "text", "text": "Previous thinking..."}},
+    {"type": "reasoning", "summary": [{"type": "summary_text", "text": "Previous thinking..."}]},
     {"type": "message", "role": "assistant", "content": [...]}
   ]
 }
@@ -149,15 +148,16 @@ Loading older transcripts that lack `thinking` and `signature` fields does not c
 ### CLI Interface
 
 - `--effort <level>`: Sets reasoning effort for OpenAI (`low`, `medium`, `high`)
+- `--thinking-budget <tokens>`: Maximum thinking tokens for Anthropic `thinking.budget_tokens`
 
 ### Provider Implementation
 
 | Provider | Thinking Config Field | Notes |
 |----------|----------------------|-------|
-| Anthropic | `thinking.budget_tokens` | Deferred for this iteration |
+| Anthropic | `thinking.budget_tokens` | Set via `--thinking-budget`; wired through `ThinkingConfig.BudgetTokens` |
 | OpenAI Chat | `reasoning_effort` | Top-level field |
 | OpenAI Responses | `reasoning_config.effort` | When `OPENAI_WIRE_API=responses` |
-| DeepSeek | `extra_body.thinking.type` | `extra_body: {"thinking": {"type": "enabled"}}` |
+| DeepSeek | `extra_body.thinking.type` | `extra_body: {"thinking": {"type": "enabled"}}`; also sends `reasoning_effort` when effort is configured |
 
 ### Package Responsibilities
 
@@ -166,9 +166,17 @@ Loading older transcripts that lack `thinking` and `signature` fields does not c
 - **internal/session:** Persist and load `thinking`/`signature` in transcript entries
 - **internal/agent:** Extract thinking from API responses, rebuild messages for multi-turn
 
+## Thinking Tokens System Events
+
+During extended thinking, the engine emits `system/subtype: thinking_tokens` events via stream-json. These provide real-time token usage feedback:
+
+- Periodic debounced emission during thinking blocks
+- Final emission on thinking block stop
+- Fields: `estimated_tokens`, `estimated_tokens_delta`
+
+See `stream-json-spec.md` for the full event format.
+
 ## Out of Scope
 
-- Anthropic `budget_tokens` configuration (deferred)
-- DeepSeek non-tool-call `reasoning_content` omission optimization
 - Prompt caching integration tests
 - Performance or benchmarking

@@ -33,13 +33,13 @@ tools := tool.NewRegistry().
     Build()
 ```
 
-`WithBaseTools()` registers Read, Bash (or PowerShell on Windows), Glob, Grep, and — when `WithReadFileCache` is set — Write, Edit, NotebookEdit. Optional tools are added by their respective `With*` methods.
+`WithBaseTools()` registers Read, Bash (or PowerShell on Windows), Glob, Grep, ReadMcpResource, McpPrompt, and — when `WithReadFileCache` is set — Write, Edit, NotebookEdit. Optional tools are added by their respective `With*` methods.
 
 ## Build Order
 
 1. Instantiate base tools (platform-aware shell tool selection).
 2. Wire sandbox, skill activator, task manager as configured.
-3. Append optional tools (WebFetch, WebSearch, LSP, Skill, worktree, Todo v2, …).
+3. Append optional tools (WebFetch, WebSearch, LSP, activate_skill, worktree, Todo v2, …).
 4. Filter by `WithDenyRules` and per-tool `WithEnabled`.
 5. Append MCP tools; **built-in wins** on name collision.
 
@@ -53,22 +53,30 @@ Built-ins appear first for prompt cache stability.
 
 When `WithTodoV2Enabled(true)`:
 
-- Register: TaskCreate, TaskGet, TaskUpdate, TaskList (and TaskStop/TaskOutput when enabled).
+- Register: TaskCreate, TaskGet, TaskUpdate, TaskList.
 - TodoWrite is not registered even if `WithTodoWriteEnabled(true)`.
+
+TaskStop and TaskOutput are independent of Todo v2 and controlled by their own feature flags (`WithTaskStopEnabled`, `WithTaskOutputEnabled`).
 
 ## Feature Flags
 
 | Tool / group | Builder method |
 |--------------|----------------|
+| Write / Edit / NotebookEdit | `WithReadFileCache(cache)` — gates registration |
 | LSP | `WithLSPEnabled(true)` + `WithLSPClient(client)` |
 | EnterWorktree / ExitWorktree | `WithEnterWorktreeEnabled` / `WithExitWorktreeEnabled` |
 | WebFetch / WebSearch | `WithWebFetchEnabled` / `WithWebSearchEnabled` |
+| TodoWrite | `WithTodoWriteEnabled(true)` |
+| TaskCreate / TaskGet / TaskUpdate / TaskList | `WithTodoV2Enabled(true)` |
+| TaskStop | `WithTaskStopEnabled(true)` |
+| TaskOutput | `WithTaskOutputEnabled(true)` |
 | Skills framework | `WithSkillsFrameworkEnabled(true, skills)` |
+| Sandbox | `WithSandbox(sandbox)` — wires into Bash and Grep |
 | Strict MCP | `WithStrictMCP(true)` — suppresses all built-ins, MCP only |
 
 ## MCP Tools
 
-Merged after built-ins via `WithMCPTools`; names prefixed `mcp__<server>__<tool>`.
+Merged after built-ins via `WithMCPTools`; names prefixed `mcp__<server>__<tool>` (convention applied by the MCP integration layer before tools reach the registry).
 
 ## Edge Cases
 

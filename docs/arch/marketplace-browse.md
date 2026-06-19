@@ -18,6 +18,10 @@ The Marketplace tab shows only installed assets. This iteration adds the ability
 
 ## API Endpoints
 
+### Authentication
+
+Both endpoints require authentication via `token` query parameter or `Authorization: Bearer` header (same as all `/api/` endpoints).
+
 ### GET /api/marketplace/browse
 
 Fetches a JSON marketplace index and returns parsed items.
@@ -39,8 +43,8 @@ Fetches a JSON marketplace index and returns parsed items.
 ```
 
 **Error Responses:**
-- `400 Bad Request`: Invalid URL (non-http/https scheme)
-- `502 Bad Gateway`: Unreachable URL or fetch failure
+- `400 Bad Request`: Invalid URL (non-http/https scheme) or invalid marketplace index JSON
+- `502 Bad Gateway`: Unreachable URL, fetch failure, or non-200 response from source
 
 ### POST /api/marketplace/install
 
@@ -57,8 +61,8 @@ Downloads and extracts a package to the correct directory.
 
 **Install Paths:**
 - `skill` → `~/.jenny/skills/<name>/`
-- `plugin` → `<cwd>/.jenny-plugin/<name>/`
-- `mcp` → updates `~/.jenny/mcp.json`
+- `plugin` → `<git-root>/.jenny-plugin/<name>/` (falls back to `<cwd>/.jenny-plugin/<name>/` if not in a git repo)
+- `mcp` → downloads to temp directory, extracts, reads `manifest.json` (requires `command` field, optional `args`), validates, then writes structured config to `~/.jenny/mcp.json`
 
 **Response:**
 ```json
@@ -69,7 +73,11 @@ Downloads and extracts a package to the correct directory.
 ```
 
 **Error Responses:**
+- `400 Bad Request`: Missing required fields, invalid type, download_url must end with `.tar.gz`, invalid/missing manifest.json (MCP), empty command in manifest (MCP)
 - `409 Conflict`: Already installed (directory exists)
+- `500 Internal Server Error`: Download or extraction failure
+
+Note: For MCP installs, the response `path` field returns the path to `mcp.json` (a file), not a directory.
 
 ## Marketplace Index Format
 
@@ -106,4 +114,4 @@ Each item has: `name`, `description`, `version`, `download_url`.
 - Uninstall from UI
 - Private marketplace authentication
 - Search/filtering
-- Zip format support (tar.gz only)
+- Zip format support (only `.tar.gz` archives are accepted; non-`.tar.gz` URLs are rejected with 400)

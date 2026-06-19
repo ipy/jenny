@@ -2,13 +2,15 @@
 title: Session Persistence
 slug: session-persistence
 priority: P0
-status: done
-spec: complete
+status: draft
+spec: partial
 code: done
 package: internal/session
-gaps: []
+gaps:
+  - "Many implemented methods undocumented (LoadPostBoundaryMessages, LoadCompactFailCount, AppendSystemPrompt, etc.)"
+  - "TranscriptEntry fields incomplete (thinking, signature, subagent, worktree, compact_metadata, etc.)"
 depends_on:
-  - session-id-stability
+  - context-compaction
 ---
 # Session Persistence
 
@@ -31,7 +33,7 @@ All three fields must be non-empty on every line. The `session_id` and `cwd` val
 ## Transcript Location
 
 ```
-.jenny/sessions/<session_id>/transcript.jsonl
+~/.jenny/sessions/<session_id>/transcript.jsonl
 ```
 
 Each line is one JSON object. The session directory is created on first write.
@@ -48,7 +50,7 @@ Not every persisted line becomes an API message on reload.
 |--------|---------------|
 | `user` | User turn |
 | `assistant` | Model turn (may include `tool_use`) |
-| `attachment` | Attachment context |
+| `tool_result` | Tool execution results |
 | `system` | Selected system subtypes (e.g. compact boundary) |
 
 ### Non-chain entries (persist but do not fork conversation)
@@ -56,24 +58,24 @@ Not every persisted line becomes an API message on reload.
 | Category | Examples | Behavior on reload |
 |----------|----------|-------------------|
 | Progress / ephemeral | `progress`, `bash_progress`, `powershell_progress`, `mcp_progress` | UI/telemetry only; skipped for API chain |
-| Metadata | `queue-operation`, `custom-title`, `tag`, `file-history-snapshot`, `content-replacement` | Stored; not sent to model |
+| Metadata | Various metadata types | Stored; not sent to model |
 
 **Critical:** Progress messages must never become chain nodes. Reloading a transcript with progress entries must not fork or duplicate the conversation.
 
-Legacy transcripts may contain `type: "progress"` entries; on load, rewire `parentUuid` to the nearest chain participant.
+Legacy transcripts may contain `type: "progress"` entries; on load, these are filtered/skipped.
 
 ## Write Path
 
 1. Append each turn synchronously after it completes (no write buffer).
 2. Use append mode for crash recovery (partial last line may be discarded on parse).
-3. `FlushPendingWrites()` is a no-op hook (writes are already synchronous).
+3. `Flush()` is a no-op hook (writes are already synchronous).
 
 ## Persistence Disable
 
 When persistence is disabled (e.g. `--no-session-persistence`):
 
 - Skip all transcript writes.
-- Resume (`-r`) must fail or start fresh (no read from disk).
+- Resume (`-r`) fails at the CLI layer (the Manager still supports reads when disabled; the CLI enforces the restriction).
 - Headless print mode only in reference behavior.
 
 ## Edge Cases
@@ -93,7 +95,7 @@ When persistence is disabled (e.g. `--no-session-persistence`):
 
 ## Acceptance Criteria
 
-- **AC1:** Chain rebuild includes only user/assistant/attachment/system participants; progress types excluded.
+- **AC1:** Chain rebuild includes only user/assistant/tool_result/system participants; progress types excluded.
 - **AC3:** Shutdown completes without data loss when persistence enabled (synchronous writes).
 - **AC4:** With persistence disabled, no files written under `.jenny/sessions/`.
 - **AC5:** Append-only writes survive normal crash (at most one partial line lost).
@@ -114,7 +116,7 @@ The `Manager.ListSessions()` method returns session IDs sorted by modification t
 4. Directories without `transcript.jsonl` are silently skipped.
 5. Results are sorted by `transcript.jsonl` modification time, descending (most recent first).
 6. Returns `nil` (not an empty slice) when no sessions exist or directory is absent.
-7. Thread-safe: holds a read lock during directory scan.
+7. No explicit lock is acquired during the scan.
 
 ### Acceptance Criteria
 
@@ -128,3 +130,4 @@ The `Manager.ListSessions()` method returns session IDs sorted by modification t
 
 - Resume behavior: [`session-resume.md`](./session-resume.md)
 - Cost restore: [`cost-tracking.md`](./cost-tracking.md)
+- Compaction: [`context-compaction.md`](./context-compaction.md)

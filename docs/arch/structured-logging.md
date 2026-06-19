@@ -21,8 +21,10 @@ Jenny uses structured logging to stderr. Debug gated on env/flag; diagnostics ri
 | Control | Behavior |
 |---------|----------|
 | `JENNY_DEBUG=1` | DEBUG level slog to stderr |
+| `DEBUG=1` | Alias for `JENNY_DEBUG=1` |
+| `JENNY_VERBOSE=1` | Same as debug enable |
 | unset | INFO and above |
-| `--verbose` | Same as debug enable |
+| `--verbose` | Calls `SetVerbose()` which sets `JENNY_VERBOSE=1` and resets the logger |
 
 All logs to **stderr**; stdout reserved for agent output / stream-json.
 
@@ -30,7 +32,7 @@ All logs to **stderr**; stdout reserved for agent output / stream-json.
 
 - Max **100** entries `{ error, timestamp }`
 - FIFO eviction
-- `getInMemoryErrors()` for diagnostics export
+- `GetInMemoryErrors()` for diagnostics export
 
 ## Last-Request Capture (target)
 
@@ -39,9 +41,13 @@ All logs to **stderr**; stdout reserved for agent output / stream-json.
 - Main-thread query source only
 - Overwritten each turn
 
-## MCP Channels
+## Public API
 
-Error/debug channels from MCP clients drained on attach.
+| Function | Purpose |
+|----------|---------|
+| `SetOutput(w io.Writer)` | Redirects log output (used by engine in stream-json mode to separate from stdout) |
+| `SetVerbose(v bool)` | Enables/disables debug logging programmatically; sets `JENNY_VERBOSE` and resets logger |
+| `Output() io.Writer` | Returns the current writer (used in tests) |
 
 ## Headless Policy
 

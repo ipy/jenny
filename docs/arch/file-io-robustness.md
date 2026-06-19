@@ -25,21 +25,21 @@ Given a file under concurrent modification: when an agent reads the file for the
 
 ### AC2: Session Transcript Concurrency (P0)
 
-Access to session transcript files is protected by a per-session `sync.RWMutex`. Concurrent `AppendEntry` (write-lock) and `LoadTranscript` (read-lock) do not collide and never produce a corrupted JSONL file.
+Access to session transcript files is protected by a manager-scoped `sync.RWMutex`. Concurrent `AppendEntry` (write-lock) and `LoadTranscript` (read-lock) do not collide and never produce a corrupted JSONL file.
 
 *Verification:* `TestConcurrency` starts two goroutines: one appending 100 entries while the other concurrently loads the transcript. After both finish, the loaded transcript contains exactly the appended entries. No data race reported under `-race`.
 
 ### AC3: Resource-Aware Reads — OOM Prevention (P0)
 
-The Read tool rejects files larger than 1 GiB (1,073,741,824 bytes) with a clear error message *before* reading any content. The check uses `os.Stat` and inspects `Size()` before opening the file for reading.
+The Read and Edit tools reject files larger than 1 GiB (1,073,741,824 bytes) with a clear error message *before* reading any content. The check uses `os.Stat` and inspects `Size()` before opening the file for reading.
 
-*Verification:* `TestReadTool_1GiBLimit` attempts to read a file ≥1 GiB and verifies `isError: true` with a message containing "too large". A 500 MiB file is read successfully.
+*Verification:* `TestReadTool_1GiBRejection` attempts to read a file ≥1 GiB and verifies `isError: true` with a message containing "too large". A 500 MiB file is read successfully.
 
 ### AC4: Atomic File Operations (P1)
 
 The Write (and Edit) tool writes file content to a temporary file in the same directory, calls `Sync()` on it, then renames the temp file over the target path atomically. On cross-device rename, it falls back to copy-then-delete. A crash during the write never leaves a partially-written target file.
 
-*Verification:* `TestAtomicWrite` and `TestAtomicEdit` verify that write operations use temp-file-then-rename. The temp file is cleaned up on success.
+*Verification:* `TestAtomicWrite` and `TestEditAtomic` verify that write operations use temp-file-then-rename. The temp file is cleaned up on success.
 
 ### AC5: Task Output Integrity (P1)
 
@@ -72,7 +72,7 @@ The Glob tool enforces both a maximum recursion depth (configurable, default 64)
 - **Reasoning:** Prevents race conditions where a stale mtime is cached between the check and the cache update.
 
 ### 2. Session Transcript Concurrency
-- **Rule:** Access to session transcripts MUST be protected by a per-session read-write mutex.
+- **Rule:** Access to session transcripts MUST be protected by a manager-scoped read-write mutex.
 - **Reasoning:** Ensures that JSONL line-appending and full-file reading do not collide.
 
 ### 3. Resource-Aware Reads (OOM Prevention)

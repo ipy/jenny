@@ -7,10 +7,9 @@ spec: complete
 code: done
 package: internal/mcp
 implemented:
-  - "Resource templates"
-  - "notifications/resources/list_changed"
-  - "Resource subscriptions (subscribe/unsubscribe)"
-  - "Server icons metadata"
+  - "TTL-cached resource listing with generation invalidation"
+  - "Bounded concurrent multi-server fetch"
+  - "Partial failure resilience"
 gaps: []
 # Reviewed 2026-06-16: all gaps addressed
 depends_on:
@@ -31,7 +30,7 @@ Read-only listing of MCP resources from connected servers. Optional server filte
 ## Behavior
 
 - `server` set but no match → **error** listing available server names.
-- Per connected server: fetch resources (LRU cache).
+- Per connected server: fetch resources (TTL cache, 30s, with generation-based invalidation).
 - Per-server failure → `[]` for that server (not whole-call failure).
 - Disconnected clients skipped.
 
@@ -40,6 +39,8 @@ Read-only listing of MCP resources from connected servers. Optional server filte
 Empty aggregate: note that resources may be empty while tools still exist.
 
 Non-empty: JSON array with `uri`, `name`, optional `mimeType`/`description`, `server`.
+
+Partial failure: `{"resources":[...], "errors":{"server":"msg"}}`.
 
 ## Properties
 

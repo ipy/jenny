@@ -2,13 +2,14 @@
 title: Message Normalization
 slug: message-normalization
 priority: P2
-status: done
-spec: complete
+status: draft
+spec: partial
 code: done
 package: internal/agent
 gaps: []
 depends_on:
   - anthropic-api-client
+  - universal-normalization-architecture
 ---
 # Message Normalization
 
@@ -41,9 +42,19 @@ Applied to every message before each API request:
 
 No message filtering, no tool_result pairing, no role merging — content-level only.
 
-## NormalizeMessagesAPI (Compaction)
+## normalizeCompactedChain (Compaction)
 
-Used exclusively after context compaction. Same 6-step pipeline as before. Full structural normalization is acceptable here because compaction already destroys cache continuity by changing the message array.
+Used exclusively after context compaction (`compact.go`). A 5-step pipeline:
+
+1. Filter orphaned thinking-only messages
+2. Strip trailing thinking from last assistant
+3. Non-empty assistant guard (insert `[Tool use interrupted]` placeholder)
+4. Filter whitespace-only messages
+5. Ensure tool result pairing
+
+Full structural normalization is acceptable here because compaction already destroys cache continuity by changing the message array. Note: unlike `NormalizeMessagesAPI` (which exists only in tests), this pipeline does **not** include `filterInternalMessages` or `MergeConsecutiveSameRole`.
+
+This doc covers agent-package normalization only. API-level normalization (`api.NormalizeMessages`) runs on every provider `SendMessage` call and handles additional role merging and content block validation — see [`anthropic-api-client.md`](./anthropic-api-client.md).
 
 ## Strip Internal Content
 
@@ -52,8 +63,7 @@ Drop from API send:
 - `progress`, most system subtypes (except allowed).
 - Synthetic API error messages.
 - Virtual (`isVirtual`) user/assistant messages.
-- Non-API fields on tool_use (e.g. `caller` when tool search off).
-- `tool_reference` blocks when tool search off or tool disconnected.
+- Non-API fields on tool_use blocks.
 
 ## Tool Result Pairing
 
@@ -67,7 +77,6 @@ Tool result pairing:
 | Leading orphaned user tool_result | Strip or placeholder text |
 | Empty assistant after strip | Insert `[Tool use interrupted]` text |
 
-**Strict mode:** throw on mismatch instead of repair.
 
 ## Role Merging
 
@@ -77,7 +86,7 @@ Tool result pairing:
 ## Read Output Format
 
 - `offset=1` default (1-based); `offset=0` → line 1.
-- Line numbers: compact `{n}\t{text}` or legacy padded format.
+- Line numbers: 6-char right-padded format (`%6s\t%s`).
 - Empty content: warning, not error.
 - Past EOF: warning with actual line count.
 
@@ -91,14 +100,14 @@ Tool result pairing:
 | Invalid PDF | getPdfInvalidErrorMessage |
 | 413 request too large | getRequestTooLargeErrorMessage |
 
-Strip offending media from meta user message on retry.
+On media errors during API calls, `HandleMediaErrorOnRetry` identifies the offending tool_result using `FindLargestMediaToolUseID` (heuristic: largest content in the last user message's tool_results), strips it, and returns modified messages for retry.
 
 ## Thinking Normalization Order
 
 1. Orphaned thinking filter
 2. Trailing thinking strip
-3. Whitespace-only filter
-4. Non-empty assistant guard
+3. Non-empty assistant guard (must run BEFORE whitespace filter so placeholder is inserted first)
+4. Whitespace-only filter
 5. Tool pairing
 
 ## Edge Cases
@@ -107,7 +116,6 @@ Strip offending media from meta user message on retry.
 |------|-------------------|
 | is_error tool_result | Inner content text-only |
 | Resume mid-turn tool_result only | Repair without assistant-first payload |
-| Snip runtime tags | Append [id:xxx] to user messages (non-test) |
 
 ## Acceptance Criteria
 

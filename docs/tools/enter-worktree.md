@@ -17,10 +17,16 @@ depends_on:
 
 Creates git worktree and switches session cwd to isolated copy.
 
+## Parameters
+
+| Param | Description |
+|-------|-------------|
+| `name` | Optional. Worktree slug name; random generated if omitted |
+
 ## Rules
 
 - Reject if already in worktree session
-- Slug: alphanumeric segments, max 64 chars; random slug if omitted
+- Slug: alphanumeric first char, dots/underscores/hyphens allowed after; max 64 chars per segment, 128 chars total; random slug if omitted
 - Resolve to canonical git root first
 - Prompt/memory caches are **not** explicitly cleared; caches invalidate naturally via mtime/generation counters.
 

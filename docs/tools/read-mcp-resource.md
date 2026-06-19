@@ -3,17 +3,15 @@ title: ReadMcpResource Tool
 slug: read-mcp-resource
 priority: P2
 status: done
-spec: complete
+spec: partial
 code: done
 package: internal/tool
 implemented:
-  - "Resource templates"
-  - "notifications/resources/list_changed"
-  - "Resource subscriptions (subscribe/unsubscribe)"
+  - "Read resource by server+URI"
+  - "List resource templates"
+  - "URI template expansion"
   - "Binary content persistence to disk"
-  - "Server icons metadata"
 gaps: []
-# Reviewed 2026-06-16: resource templates and subscriptions implemented
 depends_on:
   - mcp-client
 ---
@@ -21,14 +19,17 @@ depends_on:
 
 ## Overview
 
-Fetches single MCP resource by server and URI. Binary content persisted to disk — never inline base64.
+Dual-action tool: reads a single MCP resource by server+URI, or lists available resource templates. Binary content persisted to disk — never inline base64.
 
 ## Parameters
 
 | Param | Description |
 |-------|-------------|
-| `server` | MCP server name (required) |
-| `uri` | Resource URI (required) |
+| `action` | `read` or `list_templates` (required) |
+| `server` | MCP server name (required for `read`) |
+| `uri` | Resource URI (required for `read` unless `template` provided) |
+| `template` | URI template string; mutually exclusive with `uri` |
+| `arguments` | Map for `{placeholder}` substitution in template |
 
 ## Validation
 
@@ -51,7 +52,9 @@ Persist failure → error string, no inline blob.
 
 ## Output
 
-JSON: `{ contents: [{ uri, mimeType?, text?, blobSavedTo? }] }`
+`read` action: JSON `{ contents: [{ uri, mimeType?, text?, blobSavedTo? }] }`
+
+`list_templates` action: plain text listing `"Available MCP Resource Templates:\n- <template> (server: <name>): <desc>\n"`
 
 ## Edge Cases
 

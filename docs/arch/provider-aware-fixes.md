@@ -1,6 +1,15 @@
 ---
+title: Provider-Aware Fixes → Universal Normalization
+slug: provider-aware-fixes
+priority: P2
 status: done
+spec: complete
 code: done
+package: internal/api
+gaps: []
+depends_on:
+  - universal-normalization-architecture
+  - anthropic-api-client
 ---
 # Provider-Aware Fixes → Universal Normalization
 
@@ -12,12 +21,16 @@ See [`universal-normalization-architecture.md`](./universal-normalization-archit
 
 ## Normalization Pass Map
 
-The following passes were previously provider-aware but are now universal:
+`NormalizeMessages()` applies the following passes unconditionally in order:
 
-| Pass | Trigger | Commit | Notes |
-|------|---------|--------|-------|
-| Tool Result Dedup | Every `tool_result` block | a154210 | Deduplicated by `tool_use_id` (last-writer-wins). Now universal via `NormalizeMessages`. |
-| Empty Schema Placeholder | Tools with empty `input_schema.properties` | 127a1b5 | Injects `__arg__: {type: string}` placeholder. Now universal via `NormalizeMessages`. |
+| Pass | Function | Description |
+|------|----------|-------------|
+| Tool Schema Stabilization | `NormalizeTools` | Injects `__arg__: {type: string}` for empty `input_schema.properties`. Strips experimental beta fields (`defer_loading`, `cache_control`, `eager_input_streaming`) when `DisableExperimentalBetas` is set. |
+| Tool Result Flattening | `flattenToolResultContent` | Universal hook for tool result content normalization (currently a pass-through). |
+| Merge Consecutive Same-Role | `MergeConsecutiveSameRole` | Collapses adjacent messages with the same role (Bedrock compatibility). |
+| Credential-Bound Artifact Strip | `stripCredentialBoundArtifacts` | Strips `redacted_thinking` blocks when session is resumed with a different API key (`OriginalAPIKey` mismatch). |
+| Tool Result Dedup | `deduplicateToolResults` | Deduplicated by `tool_use_id` (last-writer-wins). |
+| Content Block Validation | `validateContentBlocks` | AC1: strip whitespace-only text blocks. AC2: insert `[No content]` for empty non-final assistant messages. AC3: strip trailing thinking/redacted_thinking blocks. AC4: drop messages containing only thinking blocks. |
 
 ## Why Universal?
 

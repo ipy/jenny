@@ -129,6 +129,16 @@ func (m *MockServer) ClearRequests()
 
 Resets the internal list of captured requests.
 
+### SetDelay (E6)
+
+```go
+func (m *MockServer) SetDelay(cassetteID string, delayMs int) *MockServer
+```
+
+Sets a response delay in milliseconds for a given `cassetteID`. Applied via
+`time.Sleep` before serving both inline and file-based responses. Zero delay
+clears the override. Returns `*MockServer` for method chaining.
+
 ### SetSequence
 
 ```go
@@ -137,7 +147,7 @@ func (m *MockServer) SetSequence(cassetteID string, cassettes []string)
 
 Registers an ordered list of cassette file names to serve sequentially for the
 given `cassetteID`. Each request to that `cassetteID` serves the next cassette in
-the list. Used for multi-turn conversation test scenarios.
+the list. Each entry in `cassettes` must be a `provider/name` ID matching the cassette naming convention (without file extension). Used for multi-turn conversation test scenarios.
 
 ### SetMockBehavior
 
@@ -264,6 +274,19 @@ ms.SetPathHandler("POST /v1/chat/completions", func(w http.ResponseWriter, r *ht
     w.Write([]byte(jsonContent))
 })
 ```
+
+## API: internal/testutil/mockapi -- Functions
+
+### Lookup
+
+```go
+func Lookup(cassetteID string) (string, error)
+```
+
+Resolves a cassette ID to an absolute filesystem path. Checks for `.sse` first,
+then `.json`. Uses `runtime.Caller(0)` to locate the `testdata/` directory
+co-located with the source file, making it safe to call from any working directory.
+Returns an error if neither extension exists.
 
 ## API: internal/testutil/mockapi -- Types
 
@@ -449,6 +472,7 @@ data: {"type":"message_stop"}
 
 A single valid JSON document. Whitespace is permitted; the loader trims it before
 serving. The JSON is written directly to the HTTP response body without SSE framing.
+File-based dispatch tries `.sse` first, then falls back to `.json`.
 
 **Example:**
 ```json

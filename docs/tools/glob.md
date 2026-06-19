@@ -30,6 +30,8 @@ Glob finds files matching a pattern. Read-only, concurrency-safe.
 - Set `truncated: true` in result when capped.
 - Return paths **relative to cwd** for token savings.
 - Sort by modification time (newest first) unless specified otherwise.
+- Max traversal depth: 64 directories.
+- Honors `.gitignore` and `.jennyignore` filtering.
 
 ## Validation
 
@@ -48,7 +50,8 @@ Glob finds files matching a pattern. Read-only, concurrency-safe.
 |------|-------------------|
 | Pattern matches >100 files | Return 100 + truncated flag |
 | Invalid pattern syntax | Clear error |
-| Symlink directories | Follow policy consistent with search tools |
+| Symlink directories | Not followed (uses `filepath.Walk`) |
+| Depth > 64 | Silently excluded |
 
 ## Acceptance Criteria
 

@@ -35,7 +35,7 @@ func (t *LSPTool) Description() string {
 	return "Language Server Protocol operations for code intelligence. " +
 		"Provides goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol, " +
 		"goToImplementation, prepareCallHierarchy, incomingCalls, outgoingCalls. " +
-		"Coordinates are 1-based (editor style). Requires LSP server connected via ENABLE_LSP_TOOL."
+		"Coordinates are 1-based (editor style). Requires LSP server connected."
 }
 
 // InputSchema returns the JSON schema for tool input.
@@ -74,7 +74,7 @@ func (t *LSPTool) Execute(ctx context.Context, input map[string]any, cwd string)
 	// AC2: Check if LSP client is connected
 	if !t.client.Connected() {
 		return &ToolResult{
-			Content: "LSP server not connected. Use ENABLE_LSP_TOOL to enable.",
+			Content: "LSP server not connected.",
 			IsError: true,
 		}, nil
 	}

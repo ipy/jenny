@@ -15,14 +15,13 @@ depends_on:
 
 ## Overview
 
-Fetches URL content, converts HTML to markdown, applies optional prompt to extracted text.
+Fetches URL content and converts HTML to markdown.
 
 ## Parameters
 
 | Param | Description |
 |-------|-------------|
 | `url` | HTTP(S) URL (max 2000 chars) |
-| `prompt` | Applied to fetched content via secondary model (unless preapproved) |
 
 ## Limits
 
@@ -38,7 +37,7 @@ Reject credentials in URL.
 
 ## Behavior
 
-- HTML → markdown (turndown).
+- HTML → markdown (html-to-markdown).
 - Domain blocklist preflight (10s timeout).
 - Cache: 15 min / 50 MB LRU; hostname cache 5 min.
 - Cross-host redirect → instruct model to re-fetch redirect URL (no auto cross-host follow).

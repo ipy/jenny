@@ -2,10 +2,18 @@
 title: API Provider Architecture
 slug: provider-architecture
 priority: P0
-status: done
-spec: complete
+status: partial
+spec: partial
 code: done
 package: internal/api
+gaps:
+  - "ThinkingConfig / ProviderWithThinkingConfig interface undocumented"
+  - "Requester interface and Client delegation layer undocumented"
+  - "Streaming fallback mechanism undocumented"
+  - "Vertex AI backend path not implemented despite documentation"
+depends_on:
+  - anthropic-api-client
+  - openai-api-client
 ---
 # API Provider Architecture
 
@@ -16,8 +24,8 @@ The `internal/api/` package provides a unified interface for calling LLM APIs, w
 ```go
 // Provider defines the interface for AI backend providers.
 type Provider interface {
-    SendMessage(ctx, messages, tools, toolResults, systemPrompt) (*Response, error)
-    SendMessageStream(ctx, messages, tools, toolResults, systemPrompt, idleTimeout) (<-chan StreamContentBlock, *StreamResult)
+    SendMessage(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix) (*Response, error)
+    SendMessageStream(ctx, messages, tools, toolResults, systemPrompt, systemPromptSuffix, idleTimeout) (<-chan StreamContentBlock, *StreamResult)
     Kind() ProviderKind
     SetProviderName(name string)
     SupportsNativeSearch() bool
@@ -29,17 +37,23 @@ type Provider interface {
 | Kind | Description |
 |------|-------------|
 | `anthropic` | Anthropic API (Claude models) |
-| `openai` | OpenAI-compatible API (Chat/Responses) |
-| `genai` | Google GenAI / Vertex AI (Gemini models) |
+| `openai` | OpenAI Chat Completions API (`/v1/chat/completions`) |
+| `openai_responses` | OpenAI Responses API (`/v1/responses`) — selected via `OPENAI_WIRE_API=responses` |
+| `genai` | Google GenAI (Gemini models) |
 
 ## Provider Selection
 
 `NewClientWithModel(model)` selects the provider at client creation time based on environment variables:
 
-1. If `OPENAI_BASE_URL` is set → `openAIProvider`
-2. If `GENAI_API_KEY` is set → `genaiProvider` (Gemini API backend)
-3. If `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` are set → `genaiProvider` (Vertex AI backend with ADC)
-4. Otherwise → `anthropicProvider` (default)
+1. If `OPENAI_BASE_URL` is set → `openAIProvider` (or `openAIResponsesProvider` if `OPENAI_WIRE_API=responses`)
+2. If `GENAI_BASE_URL` is set → `genaiProvider`
+3. If `GENAI_API_KEY` is set → `genaiProvider`
+4. If `GOOGLE_API_KEY` or `GEMINI_API_KEY` is set → `genaiProvider`
+5. If `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` are set → `genaiProvider`
+6. If `GOOGLE_GENAI_USE_VERTEXAI=1|true` → `genaiProvider`
+7. Otherwise → `anthropicProvider` (default)
+
+`DetectAPIKeySource()` returns the detected provider name ("openai", "genai", "anthropic", "none") and is consumed by the agent loop for cost tracking.
 
 ## Core Implementation Strategy: Surgical HTTP Clients
 
@@ -64,7 +78,7 @@ Jenny now implements a **Surgical HTTP Client** approach:
 - `SendMessage` must return a `*Response` with at minimum `Content`, `StopReason`, `Model`, and `Usage` fields populated
 - `SendMessageStream` runs in a goroutine, yields `StreamContentBlock` via the channel, and returns a `*StreamResult` when the channel closes
 - Both methods call `NormalizeMessages(messages, tools, Capabilities{...})` before building the request
-- Both methods must set `StreamResult.StreamComplete = true` only when a terminal stop reason is received
+- Both methods must set `StreamResult.StreamComplete = true` when a finish/stop reason is received (note: Anthropic uses `hasMessageStop`, OpenAI/GenAI use any non-empty `finish_reason` including `max_tokens`)
 - `StreamResult.Error` should be a plain string (not wrapped error type) for downstream compatibility
 - Providers should implement `ProviderWithRetryConfig` to receive shared retry configuration
 - `SupportsNativeSearch()` must return `true` for providers with native web search capability (Anthropic, OpenAI, OpenAI Responses, GenAI); other providers return `false`
@@ -84,7 +98,7 @@ The system prompt consists of multiple logical blocks ordered by stability (see 
 |----------|-----------|
 | Anthropic | Multiple `AnthropicContentBlock` in the `system` array; `cache_control` on the last stable block. |
 | OpenAI ChatCompletion | Single `role: system` message with multiple text content blocks at the start of the `messages` array. |
-| OpenAI Responses | Single `message` item with `role: system` and multiple `input_text` content blocks in the `input` array. |
+| OpenAI Responses | First system prompt block goes to top-level `instructions` field; subsequent blocks + suffix go as a `role: system` message in the `input` array. |
 | GenAI | Single `SystemInstruction` block with multiple `GenAIPart` entries. |
 
 Concatenating the suffix into the system prompt would invalidate the cache on every turn.
@@ -121,36 +135,32 @@ Providers MUST use these constants rather than string literals for content block
 
 ### Anthropic Provider
 - `ANTHROPIC_BASE_URL` — API base URL
-- `ANTHROPIC_AUTH_TOKEN` — API key
+- `ANTHROPIC_AUTH_TOKEN` — API key (note: `DetectAPIKeySource` and normalization also check `ANTHROPIC_API_KEY`)
 - `ANTHROPIC_MODEL` — default model
 - `ANTHROPIC_BETAS` — comma-separated list of additional beta headers
 - `API_TIMEOUT_MS` — request timeout in milliseconds
 
-### GenAI Provider (Gemini / Vertex AI)
-The `genaiProvider` is backed by Google's official `google.golang.org/genai` Go SDK. It can target either the public Gemini API (`BackendGeminiAPI`) or Vertex AI (`BackendVertexAI`) — selection is automatic from environment variables.
+### GenAI Provider (Gemini)
+The `genaiProvider` uses a surgical HTTP client (like all other providers) to call the Gemini REST API at `generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`. It does **not** use Google's `google.golang.org/genai` Go SDK. All GenAI types are lightweight local structs in `genai_types.go`.
 
-Environment variables (in precedence order, higher wins):
+Environment variables:
 - `GENAI_BASE_URL` — override the API base URL (e.g. proxy or VPC endpoint). Optional.
-- `GENAI_API_KEY` — explicit API key. Highest precedence; bypasses the SDK's built-in `GOOGLE_API_KEY` / `GEMINI_API_KEY` lookups.
-- `GOOGLE_API_KEY` / `GEMINI_API_KEY` — Gemini API key (read by the SDK when no explicit key is set).
-- `GOOGLE_CLOUD_PROJECT` — required to select the Vertex AI backend.
-- `GOOGLE_CLOUD_LOCATION` (or `GOOGLE_CLOUD_REGION`) — required to select the Vertex AI backend.
-- `GOOGLE_GENAI_USE_VERTEXAI=1|true` — force the Vertex AI backend.
+- `GENAI_API_KEY` — explicit API key. Highest precedence.
+- `GOOGLE_API_KEY` / `GEMINI_API_KEY` — Gemini API key.
+- `GOOGLE_CLOUD_PROJECT` — triggers GenAI provider selection (but Vertex AI backend is not yet implemented).
+- `GOOGLE_CLOUD_LOCATION` (or `GOOGLE_CLOUD_REGION`) — triggers GenAI provider selection.
+- `GOOGLE_GENAI_USE_VERTEXAI=1|true` — triggers GenAI provider selection.
 - `GENAI_DEFAULT_MODEL` — default model (required when using the genai provider).
 
-Selection rules (mirrors the SDK's own logic):
-1. If `GENAI_API_KEY` is set explicitly → Gemini API backend.
-2. Else if `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` are set → Vertex AI backend with Application Default Credentials.
-3. Else if `GOOGLE_API_KEY` / `GEMINI_API_KEY` is set → Gemini API backend.
-4. Otherwise the provider constructor returns an error.
+**Note:** The Vertex AI backend path is not yet implemented. The provider always defaults to `https://generativelanguage.googleapis.com` regardless of `GOOGLE_CLOUD_PROJECT`/`GOOGLE_CLOUD_LOCATION` settings.
 
 Behavior:
-- Non-streaming and streaming requests use `client.Models.GenerateContent` and `client.Models.GenerateContentStream` respectively.
-- System prompt and suffix are sent as separate `GenAIPart` entries within the single `SystemInstruction` content block. This preserves the stable prefix for potential future caching support.
-- Tools are translated from `ToolParam` to `*genai.Tool` with a `*genai.FunctionDeclaration` per tool. Empty property sets receive a synthetic `__arg__: string` placeholder.
-- Tool results are fed back as `*genai.FunctionResponse` parts on a `RoleUser` content turn, paired with the model's prior `*genai.FunctionCall` turn (the SDK requires both to be present in the conversation history).
-- Errors are mapped to `*RetryableHTTPError` (or returned unwrapped) based on `genai.APIError.Code` so the existing retry/streaming-fallback machinery works without changes.
-- Usage tokens: `PromptTokenCount → InputTokens`, `ResponseTokenCount → OutputTokens`, `CachedContentTokenCount → CacheReadInputTokens`, `ThoughtsTokenCount` is folded into `OutputTokens` (matching the Anthropic behavior where thinking tokens are part of the output budget).
+- Non-streaming and streaming requests use direct REST calls via `HTTPClient.Request` and `HTTPClient.StreamRequest`.
+- System prompt and suffix are sent as separate `GenAIPart` entries within the single `SystemInstruction` content block.
+- Tools are translated from `ToolParam` to GenAI `FunctionDeclaration` entries. Empty property sets receive a synthetic `__arg__: string` placeholder.
+- Tool results are sent as standalone `functionResponsePart` entries on a `user` content turn.
+- Errors use the standard `classifyErrorDomestic`/`classifyErrorInternational`/`classifyErrorCommon` pipeline.
+- Usage tokens: `PromptTokenCount → InputTokens`, `ResponseTokenCount → OutputTokens`, `CachedContentTokenCount → CacheReadInputTokens`, `ThoughtsTokenCount` is folded into `OutputTokens`.
 
 ## Max Tokens Resolution
 

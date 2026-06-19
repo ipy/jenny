@@ -25,7 +25,6 @@ Bash executes shell commands with permission classifier, optional sandbox, read-
 | `command` | Shell command string |
 | `timeout` | Max execution time in **seconds** (default 30) |
 | `run_in_background` | Spawn tracked background task |
-| `dangerouslyDisableSandbox` | Per-invocation sandbox opt-out (internal) |
 
 ## Permission Flow
 
@@ -43,7 +42,7 @@ Bash execution passes through layered security checks:
 
 - Massive allowlist with flag-level validation.
 - Pipelines: every segment must pass read-only check.
-- Concurrency safety flag is true only for read-only commands.
+- Concurrency safety is always disabled; all bash commands execute serially to maintain consistent cwd state.
 
 ## Sandbox
 
@@ -55,18 +54,22 @@ In-place `sed` edits may be simulated as file edits internally:
 
 - Parse sed command → apply as Edit/Write.
 - Sed simulation is never exposed in the tool schema.
-- No git attribution; writes files directly via Edit/Write internals.
+- No git attribution; writes files directly via `os.WriteFile`.
 
 ## Output Limits
 
-- Inline cap ~**30K characters**.
+- Inline cap ~**30K bytes**.
 - Larger output spilled to disk; tool result references path.
 
 ## Timeout and Cwd
 
-- Default/max timeout from tool config.
+- Default timeout is 30 seconds; override with the `timeout` parameter.
 - After execution: cwd is reset if it has drifted outside the project root.
 - On context cancellation, the entire process group is terminated to catch grandchildren spawned by the shell.
+
+## Environment
+
+Every command (foreground and background) gets `JENNY_SCRATCHPAD` injected into its environment, pointing to the session scratchpad directory.
 
 ## Background Execution
 
@@ -74,6 +77,7 @@ In-place `sed` edits may be simulated as file edits internally:
 - Progress events after ~2s.
 - Block standalone `sleep ≥2` seconds — use TaskOutput with block=true.
 - Auto-background hint emitted for foreground commands exceeding **120s**.
+- Background task timeout uses two-phase kill: SIGTERM first, then SIGKILL after 5 seconds.
 
 ## Exit Codes
 
@@ -84,14 +88,14 @@ Non-zero exit codes are returned as-is in tool output; the agent interprets them
 | Case | Expected behavior |
 |------|-------------------|
 | Bash fails in parallel batch | Abort sibling bash processes |
-| Sandbox unavailable | Fail with clear reason if sandbox required |
-| Output spill disk full | Error with partial path if any |
+| Sandbox unavailable | Command executes without sandbox (no error if sandbox not configured) |
+| Output spill disk full | Error with truncated inline output |
 | Heredoc / substitution | Blocked by dangerous-command gate |
 
 ## Acceptance Criteria
 
 - **AC1:** Read-only pipelines validated per segment.
-- **AC2:** Output >30K spilled to disk.
+- **AC2:** Output >30K bytes spilled to disk.
 - **AC3:** sleep ≥2 blocked in foreground bash.
 - **AC4:** Cwd reset when outside project.
 - **AC5:** Sed simulation invisible in schema.

@@ -5,11 +5,24 @@ priority: P0
 status: done
 spec: complete
 code: done
-package: internal/agent
+package: internal/agent, internal/tool
 defer_to: P3
 depends_on:
   - anthropic-api-client
-gaps: []
+  - query-engine
+  - stream-json
+  - session-persistence
+  - parallel-tool-execution
+  - message-normalization
+  - tool-registry
+  - cost-tracking
+  - context-compaction
+  - secret-redaction
+  - session-memory
+  - system-prompt
+gaps:
+  - tool coverage partial — see tool-registry.md
+  - engine lifecycle details → query-engine.md
 ---
 # Core Agent Loop
 
@@ -21,16 +34,18 @@ The core agent loop implements a minimal viable pipeline for AI-driven tool exec
 ## Architecture
 
 ```
-User Input → agent.Run() → API Client → Anthropic API
+User Input → RunStream()/QueryEngine.SubmitMessage()
+                              ↓
+                     API Client → Provider API (Anthropic/OpenAI/etc.)
                               ↓
                      stop_reason == "tool_use"?
                     / \
                   Yes                        No
                    | |
-            Execute tools Return text
-            Send results output
+            Execute tools          Return text output
+            Send results
                    |                         |
-            Loop back to API Final response
+            Loop back to API         Final response
 ```
 
 ## Components
@@ -48,14 +63,18 @@ The main agent loop orchestrates the interaction:
 
 ### Tool Implementations
 
-- **BashTool**: Executes shell commands (read-only by default)
-  - Validates commands against read-only allowlist
-  - Captures stdout/stderr and exit codes
-  - Enforces timeout (default 30s)
-- **ReadTool**: Reads files with line numbers
-  - Validates paths to prevent traversal attacks
-  - Returns content in `cat -n` format
-  - Supports offset and limit parameters
+Tools are assembled via `tool.Registry` (see [tool-registry.md](./tool-registry.md) for the full list). The registry wires 25+ tools across categories:
+
+- **Filesystem**: Read, Write, Edit, NotebookEdit, Glob, Grep
+- **Shell**: Bash (with read-only mode and dangerous command gating)
+- **Web**: WebSearch, WebFetch
+- **Tasks**: TaskCreate, TaskUpdate, TaskList, TaskStop, TaskOutput
+- **MCP**: ReadMcpResource, McpPrompt, ListMcpResources
+- **Subagent**: Subagent (worktree-based)
+- **LSP**: LSP tool for code intelligence
+- **Skills**: ActivateSkill
+
+All tools implement the `tool.Tool` interface from `internal/tool/`.
 
 ### API Client
 
@@ -110,7 +129,7 @@ BashTool enforces a read-only allowlist by default:
 func isReadOnlyCommand(command string) bool {
     readOnlyCommands := []string{
         "ls", "pwd", "whoami", "cat", "head", "tail", "grep", "find", "wc",
-        "echo", "date", "which", "type", "file", "stat", "diff",
+        "echo", "date", "which", "type", "file", "stat", "diff", "sleep",
     }
     // Check command against allowlist
 }
@@ -153,18 +172,19 @@ messages = append(messages, api.Message{
 
 ## Usage
 
-```go
-tools := []tool.Tool{
-    tool.NewBashTool(),
-    tool.NewReadTool(),
-}
+The primary API is `RunStream` with `StreamConfig` (supports streaming, cost tracking, session persistence, compaction, and all P1+ features). `agent.Run()` is a legacy simple-path function without these capabilities.
 
-result, err := agent.Run(ctx, "list the files in the current directory", tools, cwd, 0)
-if err != nil {
-    // Handle error
+```go
+cfg := &agent.StreamConfig{
+    Enabled:       true,
+    MaxIterations: 200,
+    SessionID:     sessionID,
+    // ... other fields
 }
-fmt.Print(result)
+engine, result, sessionID, err := agent.RunStream(ctx, prompt, tools, cwd, cfg, model)
 ```
+
+For multi-turn interactions, use `QueryEngine.SubmitMessage()` directly (see [query-engine.md](./query-engine.md)).
 
 ## CLI
 
@@ -204,21 +224,9 @@ jenny --output-format stream-json -p "what is 2+2?"
 
 ### Streaming JSON Output (stream-json)
 
-When using `--output-format stream-json`, each output line is a JSON object:
+When using `--output-format stream-json`, each output line is a JSON object. The protocol uses these top-level types: `assistant` (with nested content blocks including thinking/text/tool_use), `user` (with tool_result content), `tool_progress`, `system` (for init and thinking_tokens), `stream_event` (raw SDK passthrough), and `result` (final summary).
 
-```json
-{"type":"message","content":"partial text","session_id":"sess_12345","is_partial":true,"message_idx":0}
-{"type":"tool_use","session_id":"sess_12345","tool_name":"bash","tool_input":{"command":"ls"},"message_idx":1}
-{"type":"tool_result","session_id":"sess_12345","content":"file1.txt\nfile2.txt","is_error":false,"message_idx":1}
-{"type":"result","result":"Final response text","session_id":"sess_12345","model":"deepseek-v4-flash","usage":{"input_tokens":100,"output_tokens":50}}
-```
-
-#### Message Types
-
-- `message`: Partial text content (when `--include-partial-messages` is used)
-- `tool_use`: Model requested a tool call
-- `tool_result`: Tool execution result
-- `result`: Final result (last line), includes `model` and `usage` fields
+See [stream-json.md](./stream-json.md) and [stream-json-spec.md](./stream-json-spec.md) for the full protocol specification and examples.
 
 ## Configuration
 
@@ -227,7 +235,9 @@ The agent reads configuration from the unified koanf layer — see [koanf-config
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `JENNY_MAX_TOOL_CONCURRENCY` | Max parallel tool executions | `10` |
-| `JENNY_DEBUG` | Enable debug-level structured logging to stderr (canonical read site: `internal/log/log.go`; pre-`cli.Parse`) | (none) |
+| `DEBUG` | Enable debug-level structured logging to stderr | (none) |
+| `JENNY_DEBUG` | Enable debug-level structured logging to stderr | (none) |
+| `JENNY_VERBOSE` | Enable debug-level structured logging to stderr | (none) |
 
 Example `.env` file:
 ```
@@ -240,10 +250,10 @@ ANTHROPIC_MODEL=deepseek-v4-flash
 
 The agent uses Go's `log/slog` for structured logging. All log output is written to stderr to keep stdout clean for agent responses.
 
-| JENNY_DEBUG value | Log level | Example output |
-|------------------|-----------|----------------|
-| unset | `INFO` and above only | `level=INFO msg="Sending message" model=deepseek-v4-flash` |
-| `1` | `DEBUG` and above | `level=DEBUG msg="Sending message" model=deepseek-v4-flash` |
+| `DEBUG` / `JENNY_DEBUG` / `JENNY_VERBOSE` | Log level | Example output |
+|------------------------------------------|-----------|----------------|
+| all unset | `INFO` and above only | `level=INFO msg="Sending message" model=deepseek-v4-flash` |
+| any set to `1` | `DEBUG` and above | `level=DEBUG msg="Sending message" model=deepseek-v4-flash` |
 
 Debug-level logging includes:
 - API request details (model, system prompt, tool count)
@@ -295,16 +305,17 @@ Source: MCP client (output size limit and binary persistence), constants (home d
 
 Context compaction is triggered when the total token count exceeds a threshold (≈60% of model context window). The engine rewrites the message history by:
 
-1. **Summarizing** earlier turns into a condensed `compacted_boundary` system message.
+1. **Summarizing** earlier turns into a condensed summary message.
 2. **Preserving** the last N turns (including the pending tool results) unchanged.
-3. **Emitting** a `system/subtype: compact_boundary` event in stream-json mode with metadata (`trigger`, `pre_tokens`, `preserved_segment`).
+3. **Persisting** a compaction boundary entry to the session transcript. On session resume, this boundary is restored as a `[system]:` prefixed user message.
 
-Compaction is only triggered between turns (not mid-stream).
+Compaction is only triggered between turns (not mid-stream). See [context-compaction.md](./context-compaction.md) for details.
 
 ### Retry Caps
 
 - **API retries**: On transient API failures (5xx, network errors), the API client retries up to `MaxRetries` times (default 10) with exponential backoff (base delay 500ms, max 32s, ±25% jitter).
-- **Max turns**: The agent loop respects `maxTurns` / `MaxIterations` (default 0 = unlimited). When exceeded, the loop terminates with `error_max_turns`.
+- **MaxTurns** (`StreamConfig.MaxTurns`): A cost/budget concept checked inside the engine loop before each API call. When exceeded, returns `error_max_turns: limit reached at turn %d`. Default 0 = unlimited.
+- **MaxIterations** (`StreamConfig.MaxIterations`, `--max-iterations` CLI flag): An outer loop bound checked by the `RunStream` for-loop. When exceeded, returns `max iterations (%d) exceeded`. Default 0 = unlimited.
 - **Max tokens**: When the API returns `stop_reason: max_tokens`, the engine emits `subtype: error_max_tokens` with detailed metadata (`category`, `output_tokens`, `max_output_tokens`, `input_tokens`, `threshold`).
 - **Max budget**: When cost exceeds `MaxBudgetUSD`, the loop terminates with `error_budget_exceeded`.
 
@@ -312,9 +323,14 @@ Compaction is only triggered between turns (not mid-stream).
 
 | Topic | Spec |
 |-------|------|
+| Query engine lifecycle | [query-engine.md](./query-engine.md) |
 | Stream-json protocol | [stream-json.md](./stream-json.md) |
 | CLI flags | [cli.md](./cli.md) |
 | API client / tool pairing | [anthropic-api-client.md](./anthropic-api-client.md) |
+| Context compaction | [context-compaction.md](./context-compaction.md) |
+| Cost tracking | [cost-tracking.md](./cost-tracking.md) |
 | Parallel tool execution | [parallel-tool-execution.md](./parallel-tool-execution.md) |
 | Message normalization | [message-normalization.md](./message-normalization.md) |
 | Session persistence | [session-persistence.md](./session-persistence.md) |
+| Secret redaction | [secret-redaction.md](./secret-redaction.md) |
+| Tool registry | [tool-registry.md](./tool-registry.md) |

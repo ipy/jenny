@@ -3,19 +3,19 @@ title: Memory Extraction
 slug: memory-extraction
 priority: P3
 status: done
-spec: complete
+spec: partial
 code: done
 package: internal/agent
-gaps:
-  []
+gaps: []
 depends_on:
   - memdir
+  - tool-registry
 ---
 # Memory Extraction
 
 ## Overview
 
-End-of-turn forked agent extracts durable memories to auto-memory directory. Runs after turn completes, not mid-loop.
+End-of-turn extraction agent extracts durable memories to auto-memory directory. Uses a single `SendMessage` API call (not a multi-turn loop or forked subagent).
 
 ## Timing
 
@@ -23,15 +23,13 @@ End-of-turn forked agent extracts durable memories to auto-memory directory. Run
 - Main agent only (not subagents).
 - Throttle: every N eligible turns (default 1).
 
-## Fork Configuration
+## Extraction Model
 
-- `skipTranscript: true`
-- `maxTurns: 5`
-- `querySource: extract_memories`
+The extractor calls `client.SendMessage()` directly with a fresh message containing the extraction prompt and conversation context. This is a single-shot API call with no transcript involvement.
 
 ## Mutual Exclusion
 
-If main agent wrote to auto-mem paths since cursor → skip fork, advance cursor only.
+If main agent wrote to auto-mem paths since cursor → skip extraction, advance cursor only.
 
 ## Cursor
 
@@ -42,22 +40,22 @@ If main agent wrote to auto-mem paths since cursor → skip fork, advance cursor
 
 In-progress runs stash latest context for one trailing run.
 
-## Permissions (forked agent)
+## Permissions (extraction tools)
 
 - Read/Grep/Glob unrestricted
-- Read-only Bash
 - Edit/Write only under auto-mem dir
+- No Bash tool provided
 
 ## Shutdown
 
-Drain with 60s soft timeout before exit. The main process calls drain on exit (normal, Ctrl+C, budget exceeded, or max turns) with a bounded deadline to ensure extraction goroutines do not block process termination.
+Drain with 15s default extraction timeout. The main process calls drain on exit (normal, Ctrl+C, budget exceeded, or max turns) with a bounded deadline. `Drain` respects the caller's context deadline.
 
 Pre-inject memory manifest to avoid extra ls turn.
 
 ## Acceptance Criteria
 
 - **AC1:** Runs end-of-turn only.
-- **AC2:** Skips when main agent wrote memory in range. The test blocks on the channel with a 3-second timeout, then checks coalescing.
+- **AC2:** Skips when main agent wrote memory in range.
 - **AC3:** Compaction cursor fallback by message count.
-- **AC4:** Edit scoped to auto-mem dir. The second select uses 50ms timeout to confirm coalescing (not 500ms). Production code runs a trailing extraction ~100-200ms after the first, so 50ms avoids false positives.
+- **AC4:** Edit scoped to auto-mem dir.
 - **AC5:** Coalesces concurrent extraction requests.

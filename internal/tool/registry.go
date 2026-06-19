@@ -283,7 +283,7 @@ func (r *Registry) Build() []Tool {
 			r.baseTools = append(r.baseTools,
 				NewWriteTool(r.readCache).WithPermissionLevel(r.permissionLevel).WithSessionID(r.sessionID),
 				NewEditTool(r.readCache).WithPermissionLevel(r.permissionLevel).WithSessionID(r.sessionID),
-				NewNotebookEditTool(r.readCache).WithSessionID(r.sessionID),
+				NewNotebookEditTool(r.readCache).WithPermissionLevel(r.permissionLevel).WithSessionID(r.sessionID),
 			)
 		}
 
@@ -299,7 +299,7 @@ func (r *Registry) Build() []Tool {
 			}
 		}
 
-		// Wire skill activator to Read/Write/Edit tools if skills framework is enabled
+		// Wire skill activator to Read/Write/Edit/NotebookEdit tools if skills framework is enabled
 		if r.skillsFrameworkEnabled && r.skillActivator != nil {
 			for _, t := range r.baseTools {
 				switch tool := t.(type) {
@@ -308,6 +308,8 @@ func (r *Registry) Build() []Tool {
 				case *WriteTool:
 					tool.WithSkillActivator(r.skillActivator)
 				case *EditTool:
+					tool.WithSkillActivator(r.skillActivator)
+				case *NotebookEditTool:
 					tool.WithSkillActivator(r.skillActivator)
 				}
 			}

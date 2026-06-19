@@ -7,6 +7,8 @@ spec: complete
 code: done
 package: internal/redact
 gaps: []
+depends_on:
+  - cli
 ---
 
 # Secret Redaction
@@ -47,7 +49,7 @@ type SecretRedactor struct {
 type RedactMode string
 
 const (
-    ModeDisabled RedactMode = ""
+    ModeDisabled RedactMode = "disabled"
     ModeRedact   RedactMode = "redact"
     ModeRecover  RedactMode = "recover"
 )
@@ -68,6 +70,11 @@ func (r *SecretRedactor) Recover(content string) string
 
 // Reset clears all stored mappings and resets the counter.
 func (r *SecretRedactor) Reset()
+
+// ParseRedactMode parses a string into a RedactMode.
+// Accepts "disabled"/"0"/"false", "redact"/"1"/"true", "recover".
+// Unknown values default to ModeRedact.
+func ParseRedactMode(s string) RedactMode
 ```
 
 ### Placeholder Format
@@ -91,14 +98,14 @@ Tool inputs are recovered before execution. When the redactor is in recover mode
 
 When enabled, the following is appended to the system prompt:
 
+**Recover mode (`ModeRecover`):**
 ```
-This session has secret redaction enabled. Tool results may contain `[REDACTED:<hex>]` placeholders (e.g. `[REDACTED:a3f1b2c9]`). Copy them verbatim — including the full hex suffix — and never simplify, abbreviate, or otherwise modify them.
+This session has secret redaction enabled. Tool results may contain `[REDACTED:<hex>]` placeholders (e.g. `[REDACTED:a3f1b2c9]`). They will be automatically recovered when you use them in tool calls, so you can refer to them directly as needed. Copy them verbatim - including the full hex suffix - and never simplify, abbreviate, or otherwise modify them.
 ```
 
-If the mode is `recover`, this sentence is also appended:
-
+**Redact mode (`ModeRedact`):**
 ```
-They will be automatically recovered when you use them in tool calls, so you can refer to them directly as needed.
+This session has secret redaction enabled. Tool results may contain `[REDACTED:<hex>]` markers. You can still use the original content internally (e.g., through local scripts), but you are strictly prohibited from exposing it in any way.
 ```
 
 ## Configuration
@@ -155,7 +162,7 @@ type Allowlist struct {
 
 ### Default rule set (gitleaks-aligned)
 
-`defaultRules()` returns a 25-rule set covering the most common vendor
+`defaultRules()` returns a 26-rule set covering the most common vendor
 tokens plus a generic high-entropy fallback. Each rule mirrors the
 corresponding gitleaks default rule in shape (regex, entropy, keywords,
 allowlist):
@@ -165,6 +172,7 @@ allowlist):
 - `aws-access-token` — `AKIA[0-9A-Z]{16}`
 - `aws-secret-key` — context-anchored `aws_secret_key = "..."` (entropy 3.5)
 - `stripe-access-token` — `sk_live_...` / `sk_test_...` / `rk_live_...`
+- `stripe-restricted-key` — `rk_live_...` (24-99 chars)
 - `github-pat`, `github-oauth`, `github-app-token`,
   `github-fine-grained-pat`, `github-refresh-token` — all `gh*_` variants
 - `gitlab-pat`, `gitlab-runner-token`
@@ -223,5 +231,4 @@ The gitleaks Shannon entropy helper is unexported, so it cannot be imported dire
 - Audit logging
 - Streaming output redaction
 - Transcript redaction
-- CLI flag (env var only)
 - Web search, MCP, or subagent result redaction

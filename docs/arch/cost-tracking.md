@@ -5,12 +5,14 @@ priority: P0
 status: done
 spec: complete
 code: done
-package: internal/agent, internal/session
-gaps: []
+package: internal/agent
+gaps:
+  - external model registry pricing details
 defer_to: P3
 depends_on:
   - anthropic-api-client
   - stream-json
+  - koanf-config
 ---
 # Cost and Token Tracking
 
@@ -36,6 +38,7 @@ Session totals (`CostState`):
 |-------|-------------|
 | `totalCostUSD` | Sum of all model costs in USD |
 | `hasUnknownModelCost` | Set when an unknown model is used |
+| `CompactFailCount` | Compaction circuit breaker state — persisted for session resume (co-located for persistence convenience) |
 
 ## Pricing Table
 
@@ -95,15 +98,32 @@ Users can supply custom per-model pricing via `.jenny/pricing.json` in the proje
 - Malformed JSON or invalid field values produce a logged warning (not fatal) and fall through to default pricing
 - Path resolved relative to project working directory
 
+## External Model Registry
+
+`GetModelPricing` resolves pricing via a 4-tier cascade:
+
+1. **Custom pricing** (`.jenny/pricing.json`) — highest priority
+2. **External model registry** (`config.GlobalRegistry().Pricing(model)`) — fetched from a remote URL with 24-hour ETag-based caching. Supports `config.json`-based `ModelOverride`/`PricingOverride` field-level overrides.
+3. **DefaultPricing** — bundled pricing table
+4. **UnknownModelPricing** — conservative fallback with `hasUnknownModelCost` flag
+
+## Subagent Cost Merge
+
+When a subagent completes, its `CostState` is merged back into the parent engine via `CostState.Merge()`. This aggregates per-model usage across the parent and all subagents for accurate total cost reporting.
+
 ## Persistence
 
-After each turn (or on shutdown), save to project config:
+After each turn (or on shutdown), save to session-specific config:
+
+- With session ID: `~/.jenny/sessions/<sessionID>/config`
+- Without session ID (fallback): `~/.jenny/config`
 
 ```json
 {
-  "lastSessionId": "sess_…",
-  "lastModelUsage": { "claude-sonnet-4-…": { "inputTokens": 1000, … } },
-  "totalCostUSD": 0.042
+  "LastSessionID": "sess_…",
+  "ModelUsage": { "claude-sonnet-4-…": { "InputTokens": 1000, … } },
+  "TotalCostUSD": 0.042,
+  "CompactFailCount": 0
 }
 ```
 
@@ -111,10 +131,10 @@ After each turn (or on shutdown), save to project config:
 
 ## Restore on Resume
 
-`restoreCostStateForSession(sessionId)`:
+`RestoreCostState(sessionID string) (*CostState, bool, error)`:
 
-- Restore counters **only if** `lastSessionId === sessionId`.
-- Mismatch → reset to zero (prevents attributing prior session spend to new ID).
+- Returns `(state, true, nil)` when `LastSessionID` matches the given session ID.
+- Returns `(nil, false, nil)` on mismatch — caller decides whether to reset (prevents attributing prior session spend to new ID).
 
 ## Stream-JSON Terminal Line
 
@@ -142,7 +162,7 @@ Every successful headless run ends with a `result` line. Usage object uses **sna
 
 **Compatibility note:** Field names are `cache_read_input_tokens` and `cache_creation_input_tokens` (not `cache_read_tokens` / `cache_write_tokens`).
 
-Additional optional fields: `modelUsage` (per-model breakdown), `model`.
+Additional optional fields: `modelUsage` (per-model breakdown). Note: `model` is not emitted on `result` events (only on other event types).
 
 ## Budget Limits
 
@@ -158,9 +178,9 @@ When `maxBudgetUsd` is set on QueryEngine:
 |------|-------------------|
 | Unknown model in pricing table | Set `hasUnknownModelCost`; use conservative default pricing; still track tokens |
 | Retry after 429 | Count tokens from successful attempt only (or sum per policy) |
-| Compaction turn | Compaction agent usage counted separately or excluded per config |
-| Resume with wrong ID | Zero restored cost |
-| Fast mode / advisor usage | Merge advisor token counts if enabled |
+| Compaction turn | Compaction agent usage always accumulated into the same cost state (no config to exclude) |
+| Resume with wrong ID | `RestoreCostState` returns `(nil, false, nil)` — caller resets |
+| Subagent cost | Merged back into parent via `CostState.Merge()` on completion |
 
 ## Headless Protocol Compatibility
 

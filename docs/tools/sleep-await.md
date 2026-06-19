@@ -10,7 +10,7 @@ gaps:
   []
 depends_on:
   - background-tasks
-  - task-output
+  - tasks
 ---
 # Sleep and Await
 

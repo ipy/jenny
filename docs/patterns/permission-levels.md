@@ -49,7 +49,7 @@ The current `--dangerously-skip-permissions` flag is all-or-nothing:
 
 #### `read` — Structured Read-Only
 
-Agent can only use structured tools that read state: `Read`, `Grep`, `Glob`, `ListFiles`, `ReadMCPResource`, `WebFetch`, `WebSearch`. No Bash execution at all. No file modification through any tool. Note: `Read`/`Glob`/`Grep` are restricted to cwd + scratchpad paths (inherited from existing tool guards Agent can only use structured tools that read state: `Read`, `Grep`, `Glob`, `ListFiles`, `ReadMCPResource`, `WebFetch`, `WebSearch`. No Bash execution at all. No file modification through any tool. Note: `Read`/`Glob`/`Grep` are restricted to cwd + scratchpad paths (inherited from existing tool guards at constrained permission levels).).
+Agent can only use structured tools that read state: `Read`, `Grep`, `Glob`, `ReadMCPResource`, `McpPrompt`, `WebFetch`, `WebSearch`. No Bash or PowerShell execution at all. No file modification through any tool (Write, Edit, NotebookEdit all return permission denied). Note: `Read` is restricted to cwd + scratchpad paths via `PathConstrained()` at constrained permission levels. `Glob`/`Grep` are inherently constrained to cwd by design (Glob uses cwd as default search root, Grep operates within cwd), separate from the permission-level gate system.
 
 Use case: Audit agents, documentation generators, CI lint reviewers that only need to analyze code without executing anything.
 
@@ -57,8 +57,8 @@ Use case: Audit agents, documentation generators, CI lint reviewers that only ne
 
 Extends `read` with Bash commands that are provably non-mutating. Every pipeline segment must pass read-only validation:
 
-- Allowlist: `cat`, `head`, `tail`, `ls`, `find`, `grep`, `rg`, `git log`, `git diff`, `git show`, `git status`, `git branch`, `git remote`, `wc`, `sort`, `uniq`, `echo`, `true`
-- Blocked: `$VAR` expansion (unquoted), output redirection (`>`, `>>`), pipes to mutating commands, `cd && git` escape patterns
+- Allowlist: `ls`, `pwd`, `whoami`, `cat`, `head`, `tail`, `grep`, `find`, `echo`, `date`, `which`, `file`, `stat`, `diff`, `wc`, `type`, `sleep`, `cd`
+- Blocked: bare `$VAR` expansion for user-defined variables (special shell variables like `$?`, `$#`, `$@`, `$*`, `$-` are permitted as read-only), output redirection (`>`, `>>`), pipes to mutating commands
 - Write/Edit tools return permission denied
 
 Use case: Security scanners, codebase analysts that need to run `git log --oneline | head -20` or `find . -name '*.go'` but must not modify anything.
@@ -67,9 +67,9 @@ Use case: Security scanners, codebase analysts that need to run `git log --oneli
 
 Extends `analyze` with file write capability via Write/Edit tools. Bash remains on the read-only allowlist.
 
-- Write/Edit require target path to be within cwd or scratchpad
-- Write/Edit require read-before-write — must `Read` the same path before modifying
-- Bash still restricted to 18-command read-only allowlist
+- Write/Edit/NotebookEdit require target path to be within cwd or scratchpad
+- Write/Edit/NotebookEdit require read-before-write — must `Read` the same path before modifying
+- Bash/PowerShell still restricted to read-only allowlist
 - Edit replaces file content in-place; Write creates or overwrites
 
 This is the **current default behavior** (equivalent to running without `--dangerously-skip-permissions`).
@@ -181,7 +181,7 @@ When both `--dangerously-skip-permissions` and `--permission-level` are specifie
 |------|-------------------|
 | `read` level + MCP tool that writes | MCP tool gating is out of scope for v1 (see below) |
 | `analyze` level + `echo "hello" > file` | Blocked: output redirection fails read-only check |
-| `edit` level + `npm install` via Bash | Blocked: `npm` not in 18-command allowlist |
+| `edit` level + `npm install` via Bash | Blocked: `npm` not in read-only allowlist |
 | `execute` level + `rm -rf /` | Blocked by path boundary check (path outside cwd) + Sandbox filesystem policy |
 | `execute` level + `$(whoami)` | Blocked by dangerous pattern block (command substitution) |
 | `unrestricted` level + `rm -rf /` | Allowed (no gate); operator assumes full risk |
@@ -214,6 +214,7 @@ When both `--dangerously-skip-permissions` and `--permission-level` are specifie
 - Bash tool: [bash.md](../tools/bash.md)
 - Write tool: [write.md](../tools/write.md)
 - Edit tool: [edit.md](../tools/edit.md)
+- NotebookEdit tool: permission-level gated (same as Write/Edit)
 - Sandbox abstraction: [sandbox.md](./sandbox.md)
 - CLI flags: [cli.md](../arch/cli.md)
 - Swarm (subagent level inheritance): [swarm.md](./swarm.md)

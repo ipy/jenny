@@ -7,9 +7,11 @@ spec: complete
 code: done
 package: e2e
 depends_on:
-  - cli.md
-  - stream-json-spec.md
-  - anthropic-api-client.md
+  - cli
+  - stream-json-spec
+  - anthropic-api-client
+gaps:
+  - test file listing needs periodic refresh
 ---
 # E2E Test Harness
 
@@ -26,25 +28,31 @@ functions under `e2e/`. No live API access is required.
 ```
 e2e/
 ├── harness/                       # shared test infrastructure
-│   ├── runner.go                  # jenny binary builder + spawner (RunJenny, RunTarget)
-│   ├── mock_api.go                # mock Anthropic API server
-│   ├── types.go                   # TestCase, ExpectedBehavior, etc.
-│   ├── comparator.go             # declarative comparison engine
+│   ├── runner.go                  # jenny binary builder + spawner (RunJenny, RunTarget, etc.)
+│   ├── types.go                   # TestCase, TargetInvocation, ExpectedBehavior, etc.
+│   ├── comparator.go             # declarative comparison engine (Compare)
 │   ├── suite.go                  # declarative SuiteRunner
 │   └── reporter.go              # TextReporter / JSONReporter
-├── fixtures/cassettes/           # SSE cassette files
-├── cli_test.go                   # CLI flags
-├── stream_json_test.go           # stream-json envelope
+├── fixtures/cassettes/           # SSE and JSON cassette files
 ├── api_protocol_test.go          # API request shape
+├── cli_test.go                   # CLI flags
+├── cost_tracking_test.go         # cost/usage
+├── e2e_test.go                   # top-level test definitions
+├── env_override_test.go          # env var override tests
+├── helpers_test.go               # shared test helpers
+├── max_tokens_clamp_test.go      # max_tokens clamping
+├── minimax_test.go               # MiniMax provider parity
+├── model_registry_test.go        # model registry
+├── normalization_test.go         # message normalization
+├── session_test.go               # session persistence
+├── skill_plugin_test.go          # skills/plugin discovery
+├── stream_json_test.go           # stream-json envelope
 ├── system_prompt_test.go         # system prompt assembly
 ├── tool_call_test.go             # tool call flows
 ├── tools_test.go                 # per-tool behavior
-├── skill_plugin_test.go          # skills/plugin discovery
-├── cost_tracking_test.go         # cost/usage
-├── session_test.go               # session persistence
-├── normalization_test.go         # message normalization
 ├── transcript_test.go            # transcript file tests
-└── e2e_test.go                   # top-level test definitions
+├── web_search_test.go            # web search tool
+└── debt_*_test.go                # tech debt regression tests
 ```
 
 All mock server, runner, and comparison infrastructure is consolidated
@@ -60,10 +68,7 @@ session initialization.
 
 ## Cassette File Format
 
-Cassettes are plain SSE text files. One file per API exchange. The mock
-server streams the file verbatim as `Content-Type: text/event-stream`,
-byte-for-byte, with no transformation. Consumers parse the SSE blocks
-just as they would parse a live Anthropic streaming response.
+Cassettes are SSE text files (`.sse`) or JSON files (`.json`). One file per API exchange. The mock server streams SSE files verbatim as `Content-Type: text/event-stream`. The `Lookup()` function checks for `.sse` first, then `.json` as fallback.
 
 Naming convention: `<cassette-id>.sse`, all lowercase, hyphen-separated,
 unique across the suite. The cassette id is the only thing the mock
@@ -72,9 +77,7 @@ server needs to find a file; it is taken from the URL path prefix
 
 ## Mock Server
 
-The mock server is started per-test via `harness.NewMockServer(cassetteDir)`.
-It returns an `*httptest.Server` plus a `*MockServer` handle for inspecting
-captured requests.
+The mock server is started per-test via `harness.NewTestServer(t, cassetteID, opts...)` which delegates to `mockapi.NewMockServer(opts...)`. It returns a `*MockServer` handle for inspecting captured requests.
 
 Captured requests:
 
@@ -113,6 +116,45 @@ type RunResult struct {
     DurationMs int64            // total execution time
 }
 ```
+
+## Declarative Test Infrastructure
+
+The primary test-writing interface is declarative, defined in `harness/types.go`:
+
+### TargetInvocation
+Defines how to invoke jenny:
+- `Kind`: `"cli"`, `"prompt"`, or `"subprocess"`
+- `Prompt`: prompt string
+- `Format`: output format (`"text"`, `"stream-json"`)
+- `Cassette` / `CassetteSequence`: mock API responses
+- `Args`, `Env`: additional CLI args and env vars (supports `${WORK_DIR}` and `${MOCK_URL}` macros)
+- `WorkDirFiles`: map of relative path → content to provision before running
+- `MockBehavior`: customize mock server behavior (e.g., `RejectEmptyToolProperties`)
+- `TimeoutMs`: per-invocation timeout override
+
+### ExpectedBehavior
+Defines assertions:
+- `ExitCode`: expected exit code
+- `Stdout`, `Stderr`: substring/regex assertions
+- `StreamJSON`: `StreamJSONExpectation` for stream-json assertions
+- `APIRequests`: `APIRequestExpectation` for outbound request shape
+- `FileSystem`: `FileSystemExpectation` for work directory file assertions
+
+### SuiteRunner and Compare
+`SuiteRunner` iterates `TestCase` definitions, builds args, launches the binary, and passes results to `Compare()` which runs all expectation checks.
+
+### Reference Binary Comparison
+When `REFERENCE_BIN` is set, the suite also runs the reference binary and compares stream-json output between builds via `CompareToReference` / `CompareJSONLines`.
+
+### Runner Functions
+- `RunJenny(t, env, args...)` — convenience wrapper using built jenny binary
+- `RunJennyInDir(t, dir, env, args...)` — same, with custom working directory
+- `RunTarget(t, target, env, args...)` — run arbitrary binary
+- `RunTargetInDir(t, dir, target, env, args...)` — same, with custom working directory
+- `RunReferenceTarget(t, env, args...)` — run reference binary for comparison
+- `RunReferenceTargetInDir(t, dir, env, args...)` — same, with custom working directory
+
+Note: `--verbose` is auto-injected when `--output-format stream-json` is used.
 
 ## Running the Suite
 

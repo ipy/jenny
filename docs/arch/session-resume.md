@@ -10,6 +10,7 @@ gaps: []
 depends_on:
   - session-persistence
   - cli
+  - context-compaction
 ---
 # Session Resume
 
@@ -24,7 +25,6 @@ Jenny resumes prior conversations via `-r <session_id>`. Resume rebuilds API mes
 | `-r`, `--resume <session_id>` | Load transcript for given ID; continue with same ID |
 | `--continue` | Resume most recent session in project (no ID required) |
 | `--fork-session` | Copy history into a new session ID |
-| `--resume-session-at <message_id>` | Truncate chain at given message UUID (requires `--resume`) |
 | `--no-session-persistence` | Disables load/write (incompatible with resume) |
 
 ## Load Flow
@@ -33,7 +33,10 @@ Jenny resumes prior conversations via `-r <session_id>`. Resume rebuilds API mes
 -r session_id
     │
     ▼
-Read .jenny/transcripts/<session_id>.jsonl
+MaybeExtractArchive (extract .tar.gz if dir missing)
+    │
+    ▼
+Read ~/.jenny/sessions/<session_id>/transcript.jsonl
     │
     ▼
 Parse chain participants (see session-persistence.md)
@@ -45,7 +48,10 @@ Filter queue-only / empty sessions
 Restore system prompt (CachedSystemPrompt) from transcript state entry
     │
     ▼
-Restore caches (readFileState, cost, compaction boundaries)
+Restore caches (ReadFileCache, cost, compaction boundaries)
+    │
+    ▼
+Detect environment changes (cwd, date, skills) → inject system reminders
     │
     ▼
 Continue with user prompt
@@ -59,12 +65,26 @@ The frozen system prompt is persisted as a transcript `state` entry with field `
 {"type":"state","system_prompt":"You are an expert software engineering assistant with tools..."}
 ```
 
-On resume loaded at `engine.go:131-149`:
+On resume loaded in `engine.go` (`LoadSystemPrompt` integration):
 1. Scan transcript for latest `state` entry with non-empty `SystemPrompt`
 2. Set `cfg.CachedSystemPrompt` to the loaded value
 3. Subsequent `AssembleSystemPrompt` calls return the frozen string
 
 This ensures the system prompt prefix is byte-for-byte identical across process boundaries, enabling prompt caching hits even on resumed sessions.
+
+## Environment Change Detection
+
+On resume, `detectResumeChanges` (engine.go) compares the current environment against the frozen system prompt:
+
+- **CWD change**: Detects if the working directory differs from the original session.
+- **Date change**: Detects if the date has changed since the session was frozen.
+- **Skills change**: Detects if activated skills differ.
+
+When changes are detected, `<system-reminder>` blocks are injected as virtual user messages. These are persisted as transcript `system` entries with `subtype: system_reminder` via `persistSystemReminder`, and are restored on subsequent resumes.
+
+## Archive Extraction
+
+`MaybeExtractArchive` transparently extracts `.tar.gz` session archives (created by `jenny compact`) before resume. If a session directory does not exist but a sibling `.tar.gz` archive does, the archive is extracted to recreate the session directory.
 
 ## Queue-Only Filtering
 
@@ -74,15 +94,13 @@ If a transcript contains only `queue-operation` entries and zero chain messages,
 >
 > Helper-level and CLI-resume tests directly exercise chain message validation for comprehensive regression coverage.
 
-## readFileState Restoration
+## ReadFileCache Restoration
 
-Seed the read-before-write cache from prior Read/Write/Edit tool_use + tool_result pairs in the transcript:
+Seed the read-before-write cache from prior Read tool_use + tool_result pairs in the transcript via `seedReadFileCacheFromTranscript`:
 
-- Extract path, offset, limit, mtime, and content snapshot from completed reads.
-- Write/Edit entries update cache after successful tool_result.
-- Partial reads (`offset`/`limit` set) mark entries as partial — Write/Edit must reject partial views.
-
-On resume, `QueryEngine` clones this cache at start and writes back at end of turn.
+- Extract path, offset, limit, mtime, and content snapshot from completed Read entries.
+- Write/Edit entries update the cache during live execution (via `WireTools`), but are NOT used for transcript-based seeding.
+- Partial reads (`offset`/`limit` set) mark entries as partial.
 
 ## Cost State Restoration
 
@@ -99,18 +117,18 @@ Transcripts may contain `system` entries with subtype `compact_boundary` and `co
 On load:
 
 1. Emit `system`/`compact_boundary` to stream-json consumers when replaying.
-2. Splice pre-boundary messages from in-memory chain (only post-boundary content goes to API).
+2. `LoadPostBoundaryMessages` loads only post-compaction-boundary messages (only post-boundary content goes to API).
 3. Reset file-history commits before boundary marker.
 
 ## Deserialize Filters
 
-Drop or repair on load:
+Applied during the compaction path (not during resume `RebuildMessages`). Drop or repair:
 
 | Condition | Action |
 |-----------|--------|
 | Unresolved `tool_use` (no matching result) | Drop or synthesize error result |
 | Orphaned thinking-only assistant | Drop |
-| Whitespace-only assistant | Drop |
+| Whitespace-only user or assistant | Drop |
 | Trailing user with no assistant response | Detect interrupt; may synthesize assistant placeholder |
 | Duplicate tool_use IDs | Dedupe |
 
@@ -127,7 +145,6 @@ Drop or repair on load:
 | Case | Expected behavior |
 |------|-------------------|
 | Transcript file missing | Error: `session not found: <id>` |
-| `--resume-session-at` invalid UUID | Error with available message IDs |
 | Resume mid-tool-turn (pending tool_use) | Repair pairing or reject with clear error |
 | Compaction + resume | Post-boundary only in API payload |
 | Session ID path traversal | Reject malicious IDs before filesystem access |

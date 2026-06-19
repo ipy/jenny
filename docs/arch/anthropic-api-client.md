@@ -6,16 +6,19 @@ status: done
 spec: complete
 code: done
 package: internal/api
-gaps: []
+gaps:
+  - doc scoped to Anthropic provider; see provider-architecture.md for multi-provider design
 defer_to: P3
 depends_on:
-  []
+  - system-prompt
+  - message-normalization
+  - sse-streaming
 ---
 # Anthropic API Client
 
 ## Overview
 
-Jenny's API client wraps the Anthropic Messages API for the agent loop. It handles message shape, system prompt placement, tool pairing, and media validation.
+Jenny's API client is a multi-provider facade (`internal/api`) with a `Provider` interface implemented by Anthropic, OpenAI Chat, OpenAI Responses, and GenAI backends. This doc focuses on the Anthropic provider specifics. It handles message shape, system prompt placement, tool pairing, media validation, and provider-agnostic normalization. See [provider-architecture.md](./provider-architecture.md) and [multi-provider-routing.md](./multi-provider-routing.md) for the full multi-provider design.
 
 ## System Prompt
 
@@ -65,7 +68,7 @@ Pre-request validation:
 | Max media items per request | 100 |
 | Max base64 size per image | 5 MB |
 
-`validateImagesForAPI()` runs before send; fail fast with actionable error.
+`ValidateMessagesMedia()` runs before send; fail fast with actionable error.
 
 ## Oversize Media Error Mapping
 
@@ -75,12 +78,9 @@ Map API 400/413 responses to user-facing strings:
 |-----------|-----------------|
 | Image too large (pre or post) | Actionable resize/remove guidance |
 | Too many images dimensions | Compact or remove images guidance |
-| PDF too many pages | Page limit guidance |
-| Password-protected PDF | Password protected error |
-| Invalid PDF | Invalid PDF error |
 | Request too large (413) | Reduce context guidance |
 
-After synthetic error, strip offending image/document blocks from meta user message on retry.
+Note: PDF-specific error mapping (page limits, password-protected, invalid PDF) is not implemented in the current codebase.
 
 ## Streaming vs Non-Streaming
 
@@ -90,16 +90,16 @@ SSE streaming is the default path with non-streaming fallback on incomplete stre
 
 Prompt cache: optional cache control breakpoints on system blocks and stable prefixes. Track `cache_read_input_tokens` and `cache_creation_input_tokens` in usage.
 
-The `anthropic-beta: prompt-caching-2024-07-31` header is sent on all requests. The tool definitions array is cached as a stable prefix by setting `cache_control` on the last tool entry.
+The `anthropic-beta: prompt-caching-2024-07-31` header is sent on all requests. The tool definitions array is cached as a stable prefix by setting `cache_control` on the last tool entry. Additionally, `markLastMessageForCaching` sets `cache_control: ephemeral` on the last content block of the last non-empty message, enabling prefix caching to cover the entire conversation history.
 
 ## Edge Cases
 
 | Case | Expected behavior |
 |------|-------------------|
-| Empty assistant after tool strip | Insert `[Tool use interrupted]` text |
-| Bedrock consecutive user messages | Merge consecutive same-role messages |
-| Invalid tool JSON in tool_use | Reject at parse or return tool error |
-| Max output tokens exceeded | Retry with adjusted max_tokens (bounded) |
+| Empty assistant after tool strip | Insert `[Tool use interrupted]` text (implemented in `internal/agent/normalize.go`, not `internal/api`) |
+| Consecutive same-role messages | `MergeConsecutiveSameRole()` in `NormalizeMessages()` — universal pass for all providers, not Bedrock-specific |
+| Invalid tool JSON in tool_use | Silently replaced with empty map (`make(map[string]any)`) in both streaming (`finalizeToolInput`) and non-streaming paths |
+| Max output tokens exceeded | Returns `MaxTokensError` to signal the caller for structured error reporting — no automatic retry with adjusted max_tokens |
 
 ## Acceptance Criteria
 
@@ -115,10 +115,15 @@ Tool serialization uses **universal normalization** — all fixes apply uncondit
 
 ### Universal Normalization
 
-The following passes are applied universally via `NormalizeMessages`:
+The following passes are applied universally via `NormalizeMessages` (provider-agnostic):
 
 | Pass | Trigger | Description |
 |------|---------|-------------|
+| Merge Consecutive Same-Role | Adjacent messages with same role | Merges consecutive same-role messages into one |
+| Credential-Bound Artifact Stripping | `redacted_thinking` with key mismatch | Strips redacted thinking blocks when API key changes |
+| Content Block Validation | Every message | Validates content blocks are well-formed |
+| Thinking-Orphan Dropping | Orphaned thinking messages | Drops messages that only contain thinking blocks without subsequent content |
+| Trailing Thinking Stripping | Last assistant message | Strips trailing thinking block from last assistant before request |
 | Empty Schema Placeholder | Tools with empty `input_schema.properties` | Injects `__arg__: {type: string}` placeholder |
 | Tool Result Dedup | Every `tool_result` block | Deduplicates by `tool_use_id` (last-writer-wins) |
 

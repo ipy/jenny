@@ -7,7 +7,7 @@ spec: complete
 code: done
 package: internal/sandbox
 gaps:
-  []
+  - AllowUnsandboxedCommands field exists but is never consumed by any backend
 depends_on:
   - bash
 ---
@@ -21,7 +21,7 @@ Pluggable OS-level sandbox wraps Bash and optionally Grep ripgrep. Policy from s
 
 Interface `SandboxManager` wrapping external sandbox-runtime.
 
-Platforms: macOS, Linux, WSL2 (not WSL1).
+Platforms: macOS, Linux, WSL2 (not WSL1). `none` backend represents sandbox disabled.
 
 - `initialize()` builds config from settings.
 - `wrapWithSandbox(command)` returns wrapped shell command.
@@ -31,7 +31,7 @@ Platforms: macOS, Linux, WSL2 (not WSL1).
 ## Per-Invocation Opt-Out
 
 - `sandbox.excludedCommands[]`: patterns not wrapped.
-- `sandbox.allowUnsandboxedCommands`: policy for non-sandboxed bash when sandbox on.
+- `sandbox.allowUnsandboxedCommands`: config field exists but is not consumed by any backend in production.
 - Bash `dangerouslyDisableSandbox` per call.
 
 ## Network Policy
@@ -51,16 +51,13 @@ Grep tool uses sandboxed ripgrep when sandbox active.
 
 ## Filesystem Policy
 
-- Allow write: `.`, temp dir, `--add-dir` paths, worktree main `.git` when detected.
-- Deny write: settings files, skills dir, bare-repo escape files when present.
+- Allow write: paths in `FilesystemAllowedDirs` (populated by caller from `.`, temp dir, `--add-dir` paths).
+- Deny write: paths in `FilesystemDenyDirs` (populated by caller from settings files, skills dir).
 
 ## Edge Cases
 
 | Case | Expected behavior |
 |------|-------------------|
-| Worktree main repo | Cache at init for index.lock writes |
-| Linux glob in permissions | Warn via getLinuxGlobPatternWarnings |
-| Policy-locked settings | Override local changes |
 | Sandbox off | Grep uses host ripgrep |
 
 ## Acceptance Criteria

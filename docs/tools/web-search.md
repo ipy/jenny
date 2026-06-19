@@ -3,13 +3,14 @@ title: WebSearch Tool
 slug: web-search
 priority: P3
 status: done
-spec: complete
+spec: partial
 code: done
 package: internal/tool
-gaps: []
+gaps:
+  - allowed_domains/blocked_domains accepted in schema but not wired to provider interfaces
+  - NativeSearchRunner interface exists but no production implementation is wired
 depends_on:
   - tool-registry
-  - provider-architecture
 ---
 # WebSearch Tool
 
@@ -22,8 +23,8 @@ Web search via native provider server-side search or client-provider fallback. T
 | Param | Description |
 |-------|-------------|
 | `query` | Search query (min length 2) |
-| `allowed_domains` | Restrict results (mutually exclusive with blocked) |
-| `blocked_domains` | Exclude domains |
+| `allowed_domains` | Restrict results (mutually exclusive with blocked) — accepted but not yet wired to providers |
+| `blocked_domains` | Exclude domains — accepted but not yet wired to providers |
 
 ## Limits
 
@@ -59,8 +60,8 @@ The tool queries the active provider's `SupportsNativeSearch() bool` method inst
 | `ProviderKind` | Native web search? | Notes |
 |----------------|--------------------|-------|
 | `anthropic` | yes | Server tool `web_search_20250305` |
-| `openai` | yes | Model-gated: GPT-5/5.4/5.5 series, o3, o4-mini |
-| `openai_responses` | yes | Same as `openai` |
+| `openai` | yes | All models except DeepSeek |
+| `openai_responses` | yes | All models unconditionally |
 | `genai` | yes | Google Search grounding |
 | Other (e.g. DeepSeek) | no | Falls back to client provider |
 

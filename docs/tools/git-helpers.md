@@ -3,11 +3,12 @@ title: Git Helpers
 slug: git-helpers
 priority: P1
 status: done
-spec: complete
+spec: partial
 code: done
 package: internal/git
 gaps:
-  []
+  - IsIgnored (gitignore matching) undocumented
+  - CreateWorktree/RemoveWorktree undocumented
 depends_on:
   []
 ---
@@ -15,7 +16,7 @@ depends_on:
 
 ## Overview
 
-Filesystem-based git introspection without spawning `git` for hot paths: repo root, worktrees, ref safety, shallow detection, cached branch/HEAD/remote.
+Filesystem-based git introspection for hot paths: repo root, worktrees, ref safety, shallow detection, cached branch/HEAD/remote. Worktree creation/removal spawns `git`.
 
 ## GetRoot(startPath)
 
@@ -59,7 +60,7 @@ Worktree: branch refs + config read from the worktree's own `gitDir`.
 
 ## Ref Safety
 
-Reject path traversal (`..`), leading `-`, shell metacharacters in refs/SHAs from `.git/`.
+`ValidateRefName(ref)` rejects leading `-`, shell metacharacters, `..`, `.lock` suffix, whitespace in refs/SHAs.
 
 ## Edge Cases
 

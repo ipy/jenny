@@ -45,7 +45,9 @@ Supports **scoped editing** via `start_line`/`end_line` to modify a specific lin
 | `old_string === ''` on missing file | Create file |
 | `old_string === ''` on non-empty file | Error |
 | Multiple matches without `replace_all` | Error requiring replace_all |
-| `.ipynb` path | Redirect to NotebookEdit tool |
+| `.ipynb` path | Error instructing user to use NotebookEdit tool |
+| Binary content (null bytes) | Error |
+| UTF-16 BOM file | Error |
 | `end_line < start_line` | Error |
 | `num_expected` doesn't match actual count | Error; file unchanged |
 | After partial read, no `start_line`/`end_line` | Error requiring scoped params |
@@ -53,8 +55,8 @@ Supports **scoped editing** via `start_line`/`end_line` to modify a specific lin
 
 ## Matching
 
-- **Exact** string match required; CRLF in file content is normalized to LF for matching only.
-- Atomic check-then-write (no async gap between staleness check and write).
+- **Exact** string match required; CRLF in file content is normalized to LF for matching and write (CRLF is converted to LF in output).
+- Atomic write via temp file + rename; small TOCTOU window on staleness check.
 - Scoped edit uses line-by-line streaming I/O: only the scoped line range is buffered in memory; before/after sections stream directly through.
 
 ## Post-Edit
@@ -67,7 +69,7 @@ Update `readFileState` and run skill discovery when the skills framework is enab
 |------|-------------------|
 | Zero matches | Clear error with snippet hint |
 | Overlapping matches | replace_all replaces all non-overlapping |
-| Line ending mismatch | CRLF normalized for match; original bytes preserved on write |
+| Line ending mismatch | CRLF normalized to LF for match and write; original CRLF not preserved |
 | Scoped edit on partial read, range within | Succeeds; only scoped range modified |
 | Scoped edit on partial read, range outside | Error: outside read range |
 | Scoped edit on partial read, no line params | Error: requires start_line/end_line |
@@ -80,7 +82,7 @@ Update `readFileState` and run skill discovery when the skills framework is enab
 - **AC2:** Stale mtime rejected.
 - **AC3:** old===new rejected.
 - **AC4:** Multiple matches require replace_all.
-- **AC5:** ipynb redirected to notebook tool.
+- **AC5:** ipynb returns error instructing use of NotebookEdit.
 - **AC6:** Scoped edit after partial read works within range.
 - **AC7:** Scoped edit uses streaming I/O (before/after sections not buffered in memory).
 - **AC8:** num_expected aborts on count mismatch.

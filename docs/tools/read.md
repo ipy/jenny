@@ -3,7 +3,7 @@ title: Read Tool
 slug: read
 priority: P1
 status: done
-spec: complete
+spec: partial
 code: done
 package: internal/tool
 implemented:
@@ -11,16 +11,16 @@ implemented:
   - "Offset/limit partial reads"
   - "Size limits (256KB pre-read, 25K tokens post-read, 1GiB hard limit)"
   - "Block device rejection"
-  - "Path security (traversal prevention, deny rules)"
+  - "Path security (traversal prevention)"
   - "Read deduplication cache (mtime-based, TOCTOU-safe)"
-  - "macOS screenshot filename retry (U+202F)"
   - "Image files (png, jpg, gif, webp) returned as base64 data URIs"
   - "Skill directory discovery on read paths"
   - "Scratchpad prefix resolution"
+  - "UTF-16 LE/BE with BOM detection and decoding"
 gaps:
   - "PDF reading (page extraction, poppler fallback) not implemented"
   - "Notebook (.ipynb) structured cell parsing not implemented"
-  - "UTF-16 encoding detection not implemented"
+  - "macOS screenshot filename retry (U+202F) not implemented"
 defer_to: P3
 depends_on:
   - tool-registry
@@ -35,23 +35,25 @@ Read returns file contents with line numbers, or structured blocks for images/PD
 
 | Param | Description |
 |-------|-------------|
-| `file_path` | Absolute or relative path (expand `~`) |
+| `file_path` | Absolute or relative path; resolved relative to cwd |
 | `offset` | 1-based start line; `0` treated as line 1 |
 | `limit` | Max lines to return |
-| `pages` | PDF page limit per request |
+| `max_size` | Override max file size in bytes |
+| `max_tokens` | Override max token count |
 
 ## Size Limits
 
 | Limit | Default | When checked | On exceed |
 |-------|---------|--------------|-----------|
-| `maxSizeBytes` | 256 KB | stat before read | Throw pre-read |
+| `maxSizeBytes` | 256 KB | stat before read (full reads only) | Throw pre-read |
+| `maxSizeHardLimit` | 1 GiB | stat before read | Throw pre-read |
 | `maxTokens` | 25,000 | after read | Throw post-read (not silent truncate) |
 
-Partial reads (`offset`/`limit`): use range read — do not load full file.
+Partial reads (`offset`/`limit`): file is read in full, then offset/limit slice the lines in memory. Partial reads skip the `maxSizeBytes` pre-read check.
 
 ## Binary Files
 
-Extension blocklist rejects binary files. **Exempt:** images (png, jpg, gif, webp), PDFs.
+Image-extension allowlist triggers base64 encoding for png/jpg/gif/webp. All other files are read as text (no binary-file rejection blocklist).
 
 ## Images
 
@@ -88,16 +90,15 @@ The response includes `CacheHit: true` on the ToolResult to allow programmatic d
 
 Reject without reading: `/dev/zero`, `/dev/urandom`, stdio fds, `/proc/self/fd/{0,1,2}`.
 
-## macOS Screenshots
+## Scratchpad Prefix
 
-Filenames with thin-space (U+202F) before AM/PM: retry alternate space variant on ENOENT.
+`$JENNY_SCRATCHPAD/` prefix in file paths is expanded to the session scratchpad directory. `..` traversal out of the scratchpad is blocked.
 
 ## Path Security
 
-- Expand `~`; resolve relative to cwd.
-- Deny-rule matching before I/O.
-- ENOENT: suggest similar files.
-- UNC paths (Windows): skip pre-validation stat (NTLM leak prevention).
+- Resolve relative paths to cwd via `filepath.Join`.
+- Block device paths rejected (see Block Devices).
+- Windows: `WindowsCommandGate` path validation applied.
 
 ## Side Effects
 
@@ -107,10 +108,7 @@ Filenames with thin-space (U+202F) before AM/PM: retry alternate space variant o
 
 ## Output Format
 
-Line-numbered text:
-
-- Compact: `{line}\t{content}`
-- Legacy: `{line padded 6 chars}→{content}`
+Line-numbered text: `%6s\t%s` (6-char right-padded line number, tab, content).
 
 Empty file or offset past EOF: warning in result, not hard error.
 
@@ -119,9 +117,9 @@ Empty file or offset past EOF: warning in result, not hard error.
 | Case | Expected behavior |
 |------|-------------------|
 | Symlink outside cwd | Reject per path policy |
-| UTF-16 LE with BOM | Detect encoding |
+| UTF-16 LE/BE with BOM | Detect and decode to UTF-8 |
 | File changes during read | mtime check on subsequent Write/Edit |
-| 256KB file, limit 10 lines | Byte gate on total file size still applies |
+| 256KB file, limit 10 lines | Partial reads skip pre-read size check |
 
 ## Acceptance Criteria
 

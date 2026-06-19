@@ -35,10 +35,10 @@ jenny -p "prompt text"
 | `--continue` | Resume most recent session in project |
 | `--fork-session` | Fork resumed session to new ID |
 | `--output-format <fmt>` | `text` (default) or `stream-json` |
-| `--include-partial-messages` | Emit SSE partial events (requires stream-json + SSE) |
-| `--mcp-config <path>…` | MCP config file(s) or inline JSON |
+| `--include-partial-messages` | Include partial messages in output (requires `--output-format stream-json`) |
+| `--mcp-config <path>…` | MCP configuration file path(s) (can be specified multiple times) |
 | `--strict-mcp-config` | Only use `--mcp-config` servers |
-| `--no-session-persistence` | Disable transcript read/write |
+| `--no-session-persistence` | Disable session persistence |
 | `--verbose` | Debug logging to stderr |
 | `--dangerously-skip-permissions` | Bypass permission/classifier gates (maps to `--permission-level unrestricted`) |
 | `--permission-level <level>` | Set permission level: `read`, `analyze`, `edit` (default), `execute`, `unrestricted`. See [permission-levels.md](../patterns/permission-levels.md). |
@@ -57,6 +57,13 @@ jenny -p "prompt text"
 | `--disable-auto-compact` | Disable auto-compact only. Overrides `JENNY_DISABLE_AUTO_COMPACT`. |
 | `--enable-session-memory` | Enable session-memory compaction branch. Overrides `JENNY_ENABLE_SESSION_MEMORY`. |
 | `--disable-auto-memory` | Disable auto-memory directory. Overrides `JENNY_DISABLE_AUTO_MEMORY`. |
+| `--bare` | Disable skill discovery for minimal environments. |
+| `--swarm` | Enable swarm mode for named agent delegation. |
+| `--deny-tool <name>…` | Tool name to deny (can be specified multiple times). |
+| `--effort <level>` | Reasoning effort level (`low`, `medium`, `high`) for OpenAI o-series and DeepSeek models. |
+| `--thinking-budget <n>` | Maximum thinking tokens for Anthropic extended thinking. |
+| `--refresh-registry` | Synchronously fetch the latest model registry. |
+| `--offline` | Skip all network fetch, use cached data as-is. |
 
 ## Flag Rules
 
@@ -69,8 +76,12 @@ jenny -p "prompt text"
 | `--include-partial-messages` | Requires `--output-format stream-json` |
 | `--continue` with no prior sessions | Exit non-zero with error "no sessions to continue" |
 | Both `--dangerously-skip-permissions` and `--permission-level` | `--dangerously-skip-permissions` wins (unrestricted); warning logged |
-| `--permission-level` without value | Exit non-zero with error "permission level required" |
+| `--permission-level` without value | Exit non-zero with pflag error "flag needs an argument: --permission-level" |
 | Invalid `--permission-level` value | Exit non-zero with error listing valid levels |
+| `--fork-session` without `-r` | Exit non-zero with error "--fork-session requires -r/--resume" |
+| `--continue` with `-r` | Exit non-zero with error "--continue is mutually exclusive with -r/--resume" |
+| `--continue` with `--no-session-persistence` | Exit non-zero with error "--continue requires session persistence" |
+| `--refresh-registry` with `--offline` | Exit non-zero with error "--refresh-registry and --offline are mutually exclusive" |
 | Boolean flag negation | `--flag=false` is accepted and overrides a `true` set in `.jenny/config.json` or via `JENNY_*`. The absence of the flag is the only way to leave the value at its low-precedence default. `--no-<flag>` is **not** a registered form. |
 
 ## Exit Codes
@@ -109,6 +120,14 @@ Help (`-h`) exits 0. Version (`--version`) uses `constants.Version` for unified 
 | `JENNY_DISABLE_AUTO_COMPACT` | Disable auto-compact only. `--disable-auto-compact` overrides this. |
 | `JENNY_ENABLE_SESSION_MEMORY` | Enable session-memory compaction branch. `--enable-session-memory` overrides this. |
 | `JENNY_DISABLE_AUTO_MEMORY` | Disable auto-memory directory. `--disable-auto-memory` overrides this. |
+| `JENNY_BARE` | Disable skill discovery. `--bare` overrides this. |
+| `JENNY_SWARM` | Enable swarm mode. `--swarm` overrides this. |
+| `JENNY_DENY_TOOL` | Denied tool names. `--deny-tool` overrides this. |
+| `JENNY_EFFORT` | Reasoning effort level. `--effort` overrides this. |
+| `JENNY_THINKING_BUDGET` | Max thinking tokens. `--thinking-budget` overrides this. |
+| `JENNY_ROUTES_PROFILE` | Select active routing profile. Config/env only, no CLI flag. |
+| `JENNY_REFRESH_REGISTRY` | Synchronously fetch model registry. `--refresh-registry` overrides this. |
+| `JENNY_OFFLINE` | Skip network fetch. `--offline` overrides this. |
 | `NO_PROXY` | Comma-separated list of domains to bypass proxy for. |
 | `OPENAI_BASE_URL` | Base URL for OpenAI-compatible API (e.g., `https://api.openai.com/v1`). When set, selects the OpenAI provider instead of the default Anthropic provider. |
 | `OPENAI_API_KEY` | API key for OpenAI-compatible backend. Sent as `Authorization: Bearer <key>`. |
@@ -126,14 +145,7 @@ All Jenny-owned env vars and CLI flags listed above go through the unified [koan
 
 ## Jenny Gaps vs Target Spec
 
-| Feature | Status |
-|---------|--------|
-| `-r` resume | Wired |
-| `--mcp-config` | Wired |
-| `--continue` | Wired |
-| `--no-session-persistence` | Wired |
-| `--fork-session` | Wired |
-| stream-json to stdout | Wired |
+All flags listed in the Flags table above are wired in code. No known feature gaps remain.
 
 ## Acceptance Criteria
 

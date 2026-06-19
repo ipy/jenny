@@ -22,7 +22,7 @@ Each test that needed a mock API constructed its own `httptest.NewServer` with i
 handler logic, leading to duplicated boilerplate across `internal/api`,
 `internal/agent`, and `e2e/harness`.
 
-Stage 2 extends mockapi with five capabilities (E1-E5) to consolidate all API mocking
+Stage 2 extends mockapi with seven capabilities (E1-E7) to consolidate all API mocking
 into a single package with a consistent interface. The `NewTestServer` helper further
 eliminates boilerplate by combining server creation, environment variable setup, and
 cleanup registration.
@@ -30,7 +30,7 @@ cleanup registration.
 **Backward compatibility:** The old `NewMockServer(cassetteDir string)` API is removed.
 Callers are updated in Stage 3. No shim is provided.
 
-## The Five Extensions (E1-E5)
+## The Extensions (E1-E7)
 
 ### E1 -- SetInlineResponse
 
@@ -157,6 +157,50 @@ ms.SetPathHandler("POST /v1/chat/completions", func(w http.ResponseWriter, r *ht
 })
 ```
 
+### E6 -- SetDelay
+
+```go
+func (m *MockServer) SetDelay(cassetteID string, delayMs int) *MockServer
+```
+
+Sets a response delay in milliseconds for a given `cassetteID`. Applied before serving
+the response to simulate network latency. Zero or negative delay clears the override.
+
+**Why needed:** Timing-sensitive tests (e.g., timeout behavior, progress events) need
+controlled latency without real network delays.
+
+**Harness integration:** The e2e harness exposes `SetMockDelay(cassetteID, delayMs)`
+which delegates to `SetDelay`.
+
+### E7 -- SetSequence
+
+```go
+func (m *MockServer) SetSequence(cassetteID string, cassettes []string)
+```
+
+Registers an ordered list of cassette file names to serve for successive requests
+to the same `cassetteID`. On each request, the next cassette in the sequence is
+served. After exhausting the sequence, subsequent requests use the last cassette.
+
+**Why needed:** Multi-turn tests where successive API calls must return different
+responses (e.g., tool-use followed by final response).
+
+**Harness integration:** The `CassetteSequence []string` field on `TargetInvocation`
+is wired through the harness suite runner.
+
+### MockBehavior
+
+```go
+type MockBehavior struct {
+    RejectEmptyToolProperties bool
+}
+func (m *MockServer) SetMockBehavior(mb *MockBehavior)
+```
+
+When `RejectEmptyToolProperties` is `true`, the handler rejects requests where any
+tool (except `web_search`) has empty or missing `input_schema.properties` with a
+400 error. Used for testing tool schema validation.
+
 ## NewTestServer Helper
 
 ```go
@@ -215,13 +259,10 @@ internal/testutil/mockapi/
 └── testdata/
     ├── anthropic/
     │   ├── hello-world.sse
-    │   ├── message-stream-1.sse
-    │   ├── tool-use-turn1.sse
-    │   └── partial-events.sse
+    │   └── tool-use-turn1.sse
     └── openai/
         ├── chat-basic.json        # JSON response (non-streaming)
-        ├── chat-stream.sse        # OpenAI streaming SSE response
-        └── chat-stream-reasoning.sse
+        └── chat-stream.sse        # OpenAI streaming SSE response
 ```
 
 **Naming convention:** `{provider}/{cassette-id}.{sse|json}`
@@ -438,25 +479,22 @@ package harness
 
 import "github.com/ipy/jenny/internal/testutil/mockapi"
 
-// APIRequest aliases the mockapi type.
+// Type aliases for the public contract.
 type APIRequest = mockapi.APIRequest
-
-// MockServer aliases the mockapi type.
 type MockServer = mockapi.MockServer
-
-// MockBehavior aliases the mockapi type.
 type MockBehavior = mockapi.MockBehavior
+type Option = mockapi.Option
 
 // NewTestServer is a convenience wrapper around mockapi.NewTestServer.
-// It delegates entirely to mockapi.NewTestServer.
 func NewTestServer(t *testing.T, cassetteID string, opts ...mockapi.Option) *MockServer {
     return mockapi.NewTestServer(t, cassetteID, opts...)
 }
+
+// resolveCassetteDir resolves the cassette directory path.
+func resolveCassetteDir(cassetteDir string) string { ... }
 ```
 
-**Note:** `suite.go:175` calls `NewMockServer(sr.Config.CassetteDir)` with the old API.
-In Stage 3, this call site is updated to use `NewTestServer(t, provider/cassette-id)` or
-`NewMockServer(opts ...Option)`.
+Migration from the old `NewMockServer(cassetteDir)` API is complete.
 
 ## Permanent Exceptions
 

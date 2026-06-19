@@ -29,8 +29,8 @@ Tools are scanned in model request order and grouped:
 | Tool class | Grouping | Execution |
 |------------|----------|-----------|
 | Read, Glob, Grep (and `ConcurrencySafe()` tools) | Consecutive batch | Parallel (semaphore-limited) |
-| Bash | Consecutive batch | Serial within batch; sibling abort on failure |
-| Write, Edit | Individual | Serial (one per group) |
+| Bash, PowerShell (shell tools) | Consecutive batch | Serial within batch; sibling abort on failure |
+| Write, Edit, NotebookEdit, TodoWrite, TaskCreate/Update/Stop, EnterWorktree, ExitWorktree | Individual | Serial (one per group) |
 | Unknown tool | Individual | Immediate synthetic error |
 
 When tool class changes, the current batch is flushed and a new group starts.
@@ -39,13 +39,17 @@ When tool class changes, the current batch is flushed and a new group starts.
 
 Default max parallel tools: **10**. Override with `JENNY_MAX_TOOL_CONCURRENCY` env var or `--max-tool-concurrency` CLI flag (see [koanf-config.md](./koanf-config.md) for precedence).
 
-## Bash Sibling Abort
+## Shell Sibling Abort
 
-When a **Bash** tool fails (execution error or `IsError` result):
+When a **Bash** or **PowerShell** tool fails (execution error or `IsError` result):
 
 - Cancel the batch context.
-- Subsequent bash tools in the same batch receive `"Tool execution aborted due to sibling failure"`.
+- Subsequent shell tools in the same batch receive `"Tool execution aborted due to sibling failure"`.
 - Other tool types failing do **not** abort siblings.
+
+## MCP Progress Tokens
+
+Every tool execution context is wrapped with an MCP progress token (`mcp.WithProgressToken(ctx, toolUseID)`). This allows MCP tools to report progress back to the client using the `tool_use_id` as the progress token.
 
 ## Unknown Tool
 
@@ -73,13 +77,13 @@ Tools that return `NewCwd` update the executor's cwd. Updates from serial tools 
 |------|-------------------|
 | 10+ parallel reads | Cap at `JENNY_MAX_TOOL_CONCURRENCY` (or `--max-tool-concurrency`) |
 | Bash + Read same turn | Separate groups; reads may complete while bash runs serially |
-| Interrupt mid-batch | Context cancellation marks pending tools interrupted |
+| Interrupt mid-batch | Context cancellation marks pending tools interrupted (sets `Interrupted` field on result) |
 | Duplicate tool names same turn | Each tool_use ID independent |
 
 ## Acceptance Criteria
 
 - **AC1:** Read/Glob/Grep run in parallel when consecutive.
 - **AC2:** Write/Edit/Bash never run concurrently with each other or with parallel batch.
-- **AC3:** Bash failure aborts sibling bash in same batch.
+- **AC3:** Shell tool failure aborts sibling shell tools in same batch.
 - **AC4:** Unknown tool returns immediate error.
 - **AC5:** Results emitted in request order.

@@ -16,18 +16,32 @@ import (
 
 // NotebookEditTool modifies Jupyter .ipynb files.
 type NotebookEditTool struct {
-	readCache *ReadFileCache
-	sessionID string
+	readCache       *ReadFileCache
+	sessionID       string
+	activator       SkillActivator
+	permissionLevel PermissionLevel
 }
 
 // NewNotebookEditTool creates a new NotebookEditTool.
 func NewNotebookEditTool(readCache *ReadFileCache) *NotebookEditTool {
-	return &NotebookEditTool{readCache: readCache}
+	return &NotebookEditTool{readCache: readCache, permissionLevel: DefaultPermissionLevel}
+}
+
+// WithPermissionLevel sets the permission level for the NotebookEditTool.
+func (t *NotebookEditTool) WithPermissionLevel(level PermissionLevel) *NotebookEditTool {
+	t.permissionLevel = level
+	return t
 }
 
 // WithSessionID sets the session ID for the NotebookEditTool.
 func (t *NotebookEditTool) WithSessionID(id string) *NotebookEditTool {
 	t.sessionID = id
+	return t
+}
+
+// WithSkillActivator sets the skill activator for path-triggered activation.
+func (t *NotebookEditTool) WithSkillActivator(activator SkillActivator) *NotebookEditTool {
+	t.activator = activator
 	return t
 }
 
@@ -118,6 +132,17 @@ func (t *NotebookEditTool) Execute(ctx context.Context, input map[string]any, cw
 			Content: pathErr.Error(),
 			IsError: true,
 		}, nil
+	}
+
+	if !t.permissionLevel.WriteAllowed() {
+		return &ToolResult{
+			Content: fmt.Sprintf("Error: NotebookEdit is not allowed at %s permission level. Use --permission-level edit or higher.", t.permissionLevel),
+			IsError: true,
+		}, nil
+	}
+
+	if t.activator != nil {
+		t.activator.ActivateForPath(notebookPath)
 	}
 
 	// AC1: Check extension is .ipynb

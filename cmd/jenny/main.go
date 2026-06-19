@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -190,7 +191,7 @@ func run() error {
 			MemoryContent:       agent.LoadInstructionFile(cwd),
 			MaxIterations:       flags.MaxIterations,
 		}
-		fmt.Print(agent.AssembleSystemPrompt(&cfg, tools, cwd))
+		fmt.Println(strings.Join(agent.AssembleSystemPrompt(&cfg, tools, cwd), "\n\n"))
 		return nil
 	}
 

@@ -3,13 +3,14 @@ title: Dangerous Command Gate
 slug: dangerous-command-gate
 priority: P1
 status: done
-spec: complete
+spec: partial
 code: done
 package: internal/tool
 gaps:
-  []
+  - Heredoc injection detection not implemented
+  - Unicode whitespace normalization not implemented
 depends_on:
-  - tool-registry
+  - permission-levels
 ---
 # Dangerous Command Gate
 
@@ -24,20 +25,20 @@ Before Bash execution, commands pass security validation independent of sandbox.
 | Command substitution | `$()`, `${}`, backticks |
 | Process substitution | `<()`, `>()`, `=()` |
 | Zsh extras | `=cmd`, `$[`, `~[` |
-| ANSI-C / locale quoting tricks | Exploit tokenization differential |
-| Brace expansion mismatch | Unbalanced `{}` |
+| ANSI-C quoting tricks | `$'...'` exploit tokenization differential |
+| Brace expansion | `{}` with `,` or `..` (both balanced and unbalanced) |
 | Carriage return smuggling | `\r` in tokens |
-| Device paths | `/dev/zero`, `/dev/urandom`, `/dev/random`, `/dev/full`, stdio fds |
-| Proc environ | `/proc/*/environ` |
+| Device paths | `/dev/null`, `/dev/zero`, `/dev/urandom`, `/dev/random`, `/dev/full`, `/dev/stdin`, `/dev/stdout`, `/dev/stderr`, `/dev/fd/*`, `/proc/self/fd/*` |
+| Proc environ | `/proc/*/environ` (uses `strings.Contains` matching) |
 | Git config injection | `git … -c`, `--exec-path`, `--config-env` |
 
 ## Read-Only Pipeline Validation
 
 Every pipeline segment must pass read-only allowlist:
 
-- Semantic-neutral commands (`echo`, `true`) skipped in `||` chains only.
-- Unquoted `$VAR` / globs fail read-only check.
-- `cd && git` escape patterns blocked.
+- `echo`, `true` and similar commands pass the read-only allowlist regardless of chain operator.
+- Unquoted `$VAR` expansion fails read-only check (special shell variables `$?`, `$#`, etc. are permitted).
+- `git` commands blocked because `git` is not in the read-only allowlist (no dedicated pattern).
 - All segments must be read/search commands.
 
 Prefer flag-level validation over regex where possible.
@@ -60,6 +61,14 @@ Permission levels control which checks are enforced. See [permission-levels.md](
 
 Legacy `--dangerously-skip-permissions` maps to `unrestricted` level — all security checks bypassed entirely. Must be explicit CLI flag; never default in headless production.
 
+## CheckDevicePathsInCommand
+
+`CheckDevicePathsInCommand()` scans all tokens in a command for device paths. Called from the Bash tool before execution, separate from single-path `CheckDevicePath`.
+
+## Windows Command Gate
+
+On Windows, `WindowsCommandGate` blocks commands like `Set-ExecutionPolicy`, `reg.exe`, `sc.exe` and paths like `C:\Windows\System32`, `AppData`, `\\.\PhysicalDrive`. Called from both `CheckCommand()` and `CheckDevicePath()`.
+
 ## Read Tool Device Blocks
 
 Same device path blocklist for Read tool without reading content.
@@ -69,9 +78,7 @@ Same device path blocklist for Read tool without reading content.
 | Case | Expected behavior |
 |------|-------------------|
 | Nested substitution | Block even if inner looks safe |
-| Unicode whitespace tricks | Normalize or reject |
-| Heredoc injection | Block dangerous heredoc patterns |
-| Read-only `git log` | Allow if no injection flags |
+| Read-only `git log` | Blocked: `git` not in read-only allowlist |
 
 ## Acceptance Criteria
 
