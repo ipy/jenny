@@ -74,7 +74,9 @@ func TestOpenAIProvider_ChatBasic(t *testing.T) {
 	t.Setenv("OPENAI_BASE_URL", ms.URL())
 	t.Setenv("OPENAI_API_KEY", "test-key-123")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "gpt-5.4-nano")
-	t.Setenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com") // Should be ignored
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_BASE_URL", "")
 
 	client, err := NewClientWithModel("")
 	if err != nil {
@@ -163,6 +165,9 @@ func TestOpenAIProvider_ChatWithTools(t *testing.T) {
 	t.Setenv("OPENAI_BASE_URL", ms.URL())
 	t.Setenv("OPENAI_API_KEY", "test-key-123")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "gpt-5.4-nano")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_BASE_URL", "")
 
 	client, _ := NewClientWithModel("")
 
@@ -245,6 +250,10 @@ func TestOpenAIProvider_ChatStream(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-key-123")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "gpt-5.4-nano")
 
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+
 	client, _ := NewClientWithModel("")
 
 	blocksChan, result := client.SendMessageStream(
@@ -272,8 +281,8 @@ func TestOpenAIProvider_ChatStream(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// TestOpenAIProvider_EnvPrecedence tests that OPENAI_* takes precedence
-// AC5: Env var precedence
+// TestOpenAIProvider_EnvPrecedence tests that ANTHROPIC_* takes precedence
+// over OPENAI_* when both are set (provider priority: Anthropic > OpenAI > GenAI).
 // ---------------------------------------------------------------------------
 
 func TestOpenAIProvider_EnvPrecedence(t *testing.T) {
@@ -290,9 +299,9 @@ func TestOpenAIProvider_EnvPrecedence(t *testing.T) {
 		t.Fatalf("NewClientWithModel error = %v", err)
 	}
 
-	// OpenAI provider should be selected
-	if client.GetModel() != "gpt-5.4-nano" {
-		t.Errorf("expected OpenAI model 'gpt-5.4-nano', got %q", client.GetModel())
+	// Anthropic provider should be selected (higher priority)
+	if client.GetModel() != "claude-opus-4-5-20251101" {
+		t.Errorf("expected Anthropic model 'claude-opus-4-5-20251101', got %q", client.GetModel())
 	}
 }
 
@@ -344,6 +353,9 @@ func TestOpenAIResponsesProvider_WireAPIResponses(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "o3-mini")
 	t.Setenv("OPENAI_WIRE_API", "responses")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_BASE_URL", "")
 
 	client, err := NewClientWithModel("")
 	if err != nil {
@@ -402,6 +414,10 @@ func TestOpenAIProvider_SystemPrompt(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "gpt-5.4-nano")
 
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+
 	client, _ := NewClientWithModel("")
 
 	_, err := client.SendMessage(
@@ -446,6 +462,10 @@ func TestOpenAIProvider_ChatStreamWithToolCalls(t *testing.T) {
 	t.Setenv("OPENAI_BASE_URL", ms.URL())
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "gpt-5.4-nano")
+
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
 
 	client, _ := NewClientWithModel("")
 
@@ -523,6 +543,10 @@ func TestOpenAIProvider_ReasoningContent(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "o3-mini")
 
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+
 	client, _ := NewClientWithModel("")
 	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "What is the answer?"}}, nil, nil, []string{}, "")
 	if err != nil {
@@ -576,6 +600,10 @@ func TestOpenAIProvider_CachedTokensNonStreaming(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "gpt-5.4-nano")
 
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+
 	client, _ := NewClientWithModel("")
 	resp, err := client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Hi"}}, nil, nil, []string{}, "")
 	if err != nil {
@@ -616,6 +644,10 @@ func TestOpenAIProvider_StreamingReasoningContent(t *testing.T) {
 	t.Setenv("OPENAI_BASE_URL", ms.URL())
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "o3-mini")
+
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
 
 	client, _ := NewClientWithModel("")
 
@@ -708,6 +740,10 @@ func TestOpenAIProvider_StreamingCachedTokens(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "gpt-5.4-nano")
 
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+
 	client, _ := NewClientWithModel("")
 
 	blocksChan, result := client.SendMessageStream(
@@ -794,6 +830,10 @@ func TestOpenAIProvider_ReasoningContentRoundTrip(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "o3-mini")
 
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+
 	client, _ := NewClientWithModel("")
 
 	// Simulate a resumed conversation with thinking from previous turn
@@ -864,6 +904,10 @@ func TestOpenAIResponsesProvider_Basic(t *testing.T) {
 	t.Setenv("OPENAI_BASE_URL", ms.URL())
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "o3-mini")
+
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
 	t.Setenv("OPENAI_WIRE_API", "responses")
 
 	client, err := NewClientWithModel("")
@@ -947,6 +991,10 @@ func TestOpenAIResponsesProvider_ReasoningEffort(t *testing.T) {
 	t.Setenv("OPENAI_BASE_URL", ms.URL())
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "o3-mini")
+
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
 	t.Setenv("OPENAI_WIRE_API", "responses")
 
 	client, err := NewClientWithModel("")
@@ -1018,6 +1066,10 @@ func TestOpenAIResponsesProvider_ToolCalls(t *testing.T) {
 	t.Setenv("OPENAI_BASE_URL", ms.URL())
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "o3-mini")
+
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
 	t.Setenv("OPENAI_WIRE_API", "responses")
 
 	client, _ := NewClientWithModel("")
@@ -1115,6 +1167,10 @@ func TestOpenAIProvider_ReasoningEffortChat(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "o3-mini")
 
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+
 	client, err := NewClientWithModel("")
 	if err != nil {
 		t.Fatalf("NewClientWithModel error = %v", err)
@@ -1186,6 +1242,10 @@ func TestOpenAIProvider_DeepSeekThinking(t *testing.T) {
 	t.Setenv("OPENAI_BASE_URL", ms.URL())
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "deepseek-reasoner")
+
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
 
 	client, err := NewClientWithModel("")
 	if err != nil {

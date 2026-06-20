@@ -13,6 +13,7 @@ import (
 )
 
 func TestNewClientWithModelEnvVar(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "test-key")
 	t.Setenv("ANTHROPIC_MODEL", "test-env-model")
 
 	// Create client with empty model - should use env var
@@ -31,6 +32,7 @@ func TestNewClientWithModelEnvVar(t *testing.T) {
 }
 
 func TestNewClientWithModelEmpty(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "test-key")
 	t.Setenv("ANTHROPIC_MODEL", "")
 
 	client, err := NewClientWithModel("")
@@ -47,6 +49,7 @@ func TestNewClientWithModelEmpty(t *testing.T) {
 }
 
 func TestNewClientWithModelOverride(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "test-key")
 	t.Setenv("ANTHROPIC_MODEL", "env-model")
 
 	// Create client with model override - should use override
@@ -640,6 +643,7 @@ func TestResolveTimeout(t *testing.T) {
 func TestClient_API_TIMEOUT_MS_Creation(t *testing.T) {
 	// Test that client creation works with API_TIMEOUT_MS set
 	t.Setenv("API_TIMEOUT_MS", "300000") // 5 minutes
+	t.Setenv("ANTHROPIC_API_KEY", "test-key-0000000000000000")
 
 	client, err := NewClientWithModel("")
 	if err != nil {
@@ -653,6 +657,7 @@ func TestClient_API_TIMEOUT_MS_Creation(t *testing.T) {
 func TestClient_API_TIMEOUT_MS_InvalidValue(t *testing.T) {
 	// Test that invalid values fall back to default (1 hour)
 	t.Setenv("API_TIMEOUT_MS", "invalid")
+	t.Setenv("ANTHROPIC_API_KEY", "test-key-0000000000000000")
 
 	client, err := NewClientWithModel("")
 	if err != nil {
@@ -666,6 +671,7 @@ func TestClient_API_TIMEOUT_MS_InvalidValue(t *testing.T) {
 func TestClient_API_TIMEOUT_MS_NegativeValue(t *testing.T) {
 	// Test that negative values fall back to default
 	t.Setenv("API_TIMEOUT_MS", "-1000")
+	t.Setenv("ANTHROPIC_API_KEY", "test-key-0000000000000000")
 
 	client, err := NewClientWithModel("")
 	if err != nil {

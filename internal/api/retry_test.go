@@ -824,7 +824,11 @@ func TestBackoff_Jitter(t *testing.T) {
 
 // Test set and get retry config
 func TestSetRetryConfig(t *testing.T) {
-	client, _ := NewClientWithModel("")
+	t.Setenv("ANTHROPIC_API_KEY", "test-key")
+	client, err := NewClientWithModel("")
+	if err != nil {
+		t.Fatalf("NewClientWithModel error = %v", err)
+	}
 
 	cfg := RetryConfig{
 		MaxRetries:    5,
@@ -845,7 +849,11 @@ func TestSetRetryConfig(t *testing.T) {
 
 // Test set background
 func TestSetBackground(t *testing.T) {
-	client, _ := NewClientWithModel("")
+	t.Setenv("ANTHROPIC_API_KEY", "test-key")
+	client, err := NewClientWithModel("")
+	if err != nil {
+		t.Fatalf("NewClientWithModel error = %v", err)
+	}
 
 	client.SetBackground(true)
 

@@ -163,6 +163,9 @@ func TestSticky_401DoesNotRetry(t *testing.T) {
 	// doesn't connect to a real API that may hang.
 	t.Setenv("OPENAI_BASE_URL", srv.URL)
 	t.Setenv("OPENAI_API_KEY", "sk-test-key")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_BASE_URL", "")
 
 	cfg := &Config{
 		Providers: []Provider{

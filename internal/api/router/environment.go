@@ -4,6 +4,8 @@ package router
 import (
 	"os"
 	"sort"
+
+	"github.com/ipy/jenny/internal/api"
 )
 
 // SynthesizeConfigFromEnv creates a Config from standard environment variables,
@@ -45,7 +47,7 @@ func SynthesizeConfigFromEnv() *Config {
 	}
 
 	// Check GenAI (Gemini/Vertex AI)
-	if isGenAIEnvSet() {
+	if api.IsGenAIEnvSet() {
 		model := os.Getenv("GENAI_MODEL")
 		if model == "" {
 			model = os.Getenv("GEMINI_MODEL")
@@ -91,7 +93,8 @@ func SynthesizeConfigFromEnv() *Config {
 	}
 
 	// Check Anthropic
-	if anthropicKey := os.Getenv("ANTHROPIC_API_KEY"); anthropicKey != "" {
+	// Use consolidated detection (same as client.NewClientWithModel) to avoid drift.
+	if api.IsAnthropicEnvSet() {
 		model := os.Getenv("ANTHROPIC_MODEL")
 		if model == "" {
 			model = "claude-opus-4-5-20251101"
@@ -101,13 +104,26 @@ func SynthesizeConfigFromEnv() *Config {
 			baseURL = "https://api.anthropic.com"
 		}
 
+		// Prefer API key for the account, fall back to auth token.
+		var keys []string
+		if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
+			keys = append(keys, apiKey)
+		}
+		if authToken := os.Getenv("ANTHROPIC_AUTH_TOKEN"); authToken != "" {
+			keys = append(keys, authToken)
+		}
+		// At least one of API_KEY or AUTH_TOKEN is guaranteed to exist here,
+		// because IsAnthropicEnvSet checks for them; when only BASE_URL is
+		// present we still create the provider so it can be used with no-key
+		// setups (e.g. local proxies that inject the key).
+
 		cfg.Providers = append(cfg.Providers, Provider{
 			Name:    "anthropic",
 			Type:    "anthropic",
 			BaseURL: baseURL,
 			Accounts: []Account{{
 				Name:     "default",
-				Keys:     []string{anthropicKey},
+				Keys:     keys,
 				Priority: 1,
 			}},
 			Models: []Model{{
@@ -138,25 +154,4 @@ func SynthesizeConfigFromEnv() *Config {
 	}
 
 	return cfg
-}
-
-// isGenAIEnvSet reports whether any GenAI-related environment variables are set.
-func isGenAIEnvSet() bool {
-	if os.Getenv("GENAI_API_KEY") != "" {
-		return true
-	}
-	if os.Getenv("GENAI_BASE_URL") != "" {
-		return true
-	}
-	if os.Getenv("GOOGLE_API_KEY") != "" || os.Getenv("GEMINI_API_KEY") != "" {
-		return true
-	}
-	if os.Getenv("GOOGLE_CLOUD_PROJECT") != "" &&
-		(os.Getenv("GOOGLE_CLOUD_LOCATION") != "" || os.Getenv("GOOGLE_CLOUD_REGION") != "") {
-		return true
-	}
-	if os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") == "1" || os.Getenv("GOOGLE_GENAI_USE_VERTEXAI") == "true" {
-		return true
-	}
-	return false
 }

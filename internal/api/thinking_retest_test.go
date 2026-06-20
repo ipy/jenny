@@ -61,6 +61,10 @@ func TestAC2_ResponsesAPI_EffortTranslation(t *testing.T) {
 	t.Setenv("OPENAI_DEFAULT_MODEL", "o3-mini")
 	t.Setenv("OPENAI_WIRE_API", "responses")
 
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+
 	client, err := NewClientWithModel("")
 	if err != nil {
 		t.Fatalf("NewClientWithModel error = %v", err)
@@ -116,6 +120,10 @@ func TestAC2_NoEffort_NoReasoningConfig(t *testing.T) {
 	t.Setenv("OPENAI_DEFAULT_MODEL", "o3-mini")
 	t.Setenv("OPENAI_WIRE_API", "responses")
 
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+
 	client, err := NewClientWithModel("")
 	if err != nil {
 		t.Fatalf("NewClientWithModel error = %v", err)
@@ -166,6 +174,10 @@ func TestAC2_EffortNotThreaded_EmptyEffortFromCLI(t *testing.T) {
 	t.Setenv("OPENAI_BASE_URL", ms.URL())
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "gpt-4o")
+
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
 
 	client, err := NewClientWithModel("")
 	if err != nil {
@@ -230,6 +242,10 @@ func TestAC2_DeepSeekExtraBody_Enabled(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "deepseek-reasoner")
 
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+
 	client, err := NewClientWithModel("")
 	if err != nil {
 		t.Fatalf("NewClientWithModel error = %v", err)
@@ -293,6 +309,10 @@ func TestAC2_DeepSeekExtraBody_NoEffort_NoExtraBody(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "deepseek-reasoner")
 
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+
 	client, err := NewClientWithModel("")
 	if err != nil {
 		t.Fatalf("NewClientWithModel error = %v", err)
@@ -351,6 +371,10 @@ func TestAC2_EffortThreaded_FromCLIThroughEngine(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "o3-mini")
 	t.Setenv("OPENAI_WIRE_API", "responses")
+
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
 
 	client, err := NewClientWithModel("")
 	if err != nil {
@@ -442,6 +466,10 @@ func TestAC3_ThinkingPersisted_OpenAIChat_Provider(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "o3-mini")
 
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+
 	client, err := NewClientWithModel("")
 	if err != nil {
 		t.Fatalf("NewClientWithModel error = %v", err)
@@ -513,6 +541,10 @@ func TestAC3_ThinkingPersisted_DeepSeek_Provider(t *testing.T) {
 	t.Setenv("OPENAI_BASE_URL", ms.URL())
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "deepseek-reasoner")
+
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
 
 	client, err := NewClientWithModel("")
 	if err != nil {
@@ -621,6 +653,10 @@ func TestAC4_ResponsesAPI_ThinkingRoundTrip(t *testing.T) {
 	t.Setenv("OPENAI_DEFAULT_MODEL", "o3-mini")
 	t.Setenv("OPENAI_WIRE_API", "responses")
 
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+
 	client, err := NewClientWithModel("")
 	if err != nil {
 		t.Fatalf("NewClientWithModel error = %v", err)
@@ -722,6 +758,10 @@ func TestAC4_ChatAPI_ThinkingWithToolCalls(t *testing.T) {
 	t.Setenv("OPENAI_BASE_URL", ms.URL())
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "o3-mini")
+
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
 
 	client, err := NewClientWithModel("")
 	if err != nil {
@@ -847,6 +887,10 @@ func TestAC4_RoundTrip_No400Error(t *testing.T) {
 	t.Setenv("OPENAI_DEFAULT_MODEL", "o3-mini")
 	t.Setenv("OPENAI_WIRE_API", "responses")
 
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+
 	client, err := NewClientWithModel("")
 	if err != nil {
 		t.Fatalf("NewClientWithModel error = %v", err)
@@ -956,6 +1000,10 @@ func TestAC4_ChatAPIRoundTrip_ThinkingToolCalls_No400(t *testing.T) {
 	t.Setenv("OPENAI_BASE_URL", ms.URL())
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "o3-mini")
+
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
 
 	client, err := NewClientWithModel("")
 	if err != nil {
@@ -1127,6 +1175,10 @@ func TestAC4_RoundTrip_StillBroken_NoMessageThinking(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "o3-mini")
 	t.Setenv("OPENAI_WIRE_API", "responses")
+
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
 
 	client, err := NewClientWithModel("")
 	if err != nil {
@@ -1321,6 +1373,10 @@ func TestRetest_AC4_FullRoundTrip(t *testing.T) {
 	t.Setenv("OPENAI_DEFAULT_MODEL", "o3-mini")
 	t.Setenv("OPENAI_WIRE_API", "responses")
 
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
+
 	client, err := NewClientWithModel("")
 	if err != nil {
 		t.Fatalf("NewClientWithModel error = %v", err)
@@ -1418,6 +1474,10 @@ func TestAC2_ChatAPI_ReasoningEffort_NoExtraBodyForNonDeepSeek(t *testing.T) {
 	t.Setenv("OPENAI_BASE_URL", ms.URL())
 	t.Setenv("OPENAI_API_KEY", "test-key")
 	t.Setenv("OPENAI_DEFAULT_MODEL", "gpt-4o")
+
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_API_KEY", "")
 
 	client, err := NewClientWithModel("")
 	if err != nil {

@@ -493,6 +493,11 @@ func (r *AsyncSubagentRunner) SetParentSessionID(sessionID string) {
 	r.runner.parentSessionID = sessionID
 }
 
+// SetClient sets the API client for the underlying runner.
+func (r *AsyncSubagentRunner) SetClient(client api.Requester) {
+	r.runner.SetClient(client)
+}
+
 // RunSubagentAsync launches a subagent asynchronously.
 // It returns immediately with an AsyncResult without blocking.
 func (r *AsyncSubagentRunner) RunSubagentAsync(params tool.SubagentParams) (*tool.AsyncResult, error) {

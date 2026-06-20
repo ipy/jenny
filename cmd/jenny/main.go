@@ -349,6 +349,8 @@ func run() error {
 		}
 	}
 
+	log.Info("jenny starting", "session_id", sessionID)
+
 	// Load MCP configuration
 	var mcpConfig map[string]mcp.MCPServerDef
 	var mcpTools []tool.Tool
@@ -594,6 +596,12 @@ func run() error {
 		return err
 	}
 	streamCfg.ParentEngine = engine
+
+	// Reuse the main engine's API client for subagents so they share the same
+	// provider configuration (avoids re-resolving env vars in subagent processes
+	// which can mismatch the main agent's provider).
+	localRunner.SetClient(engine.Client())
+	asyncRunner.SetClient(engine.Client())
 
 	// Run agent (will reuse the engine we just created since ParentEngine is set)
 	engine, result, _, err := agent.RunStream(ctx, flags.Prompt, tools, cwd, &streamCfg, flags.Model, agent.WithSkillActivator(skillActivator))

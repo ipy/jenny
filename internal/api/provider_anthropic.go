@@ -345,11 +345,18 @@ func (p *anthropicProvider) buildTools(tools []ToolParam) []AnthropicTool {
 }
 
 // buildHeaders builds common Anthropic headers.
+// ANTHROPIC_API_KEY (if set) is used as x-api-key.
+// ANTHROPIC_AUTH_TOKEN (if set) is used as Authorization: Bearer.
 func (p *anthropicProvider) buildHeaders() http.Header {
 	headers := http.Header{}
-	token := os.Getenv("ANTHROPIC_AUTH_TOKEN")
-	headers.Set("x-api-key", token)
-	headers.Set("Authorization", "Bearer "+token)
+
+	if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
+		headers.Set("x-api-key", apiKey)
+	}
+	if authToken := os.Getenv("ANTHROPIC_AUTH_TOKEN"); authToken != "" {
+		headers.Set("Authorization", "Bearer "+authToken)
+	}
+
 	headers.Set("anthropic-version", "2023-06-01")
 	headers.Add("anthropic-beta", "prompt-caching-2024-07-31")
 

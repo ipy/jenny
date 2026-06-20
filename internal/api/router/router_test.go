@@ -11,6 +11,10 @@ import (
 
 // TestConfigParsing tests parsing of a valid JSON config via koanf.
 func TestConfigParsing(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+
 	jsonContent := `{
   "routes": {
     "providers": [
@@ -143,6 +147,7 @@ func TestConfigParsing_NotFound(t *testing.T) {
 // TestZeroConfigEnvSync tests that environment variables are synthesized into config.
 func TestZeroConfigEnvSync(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
 	t.Setenv("ANTHROPIC_MODEL", "claude-opus-4-5-20251101")
 	t.Setenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
 
@@ -391,6 +396,10 @@ func TestHealthRegistry_RecordSuccess(t *testing.T) {
 
 // TestLoadConfigFromKoanf tests the unified config loading path.
 func TestLoadConfigFromKoanf(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "")
+	t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+	t.Setenv("ANTHROPIC_BASE_URL", "")
+
 	tests := []struct {
 		name       string
 		setup      func(k *koanf.Koanf)

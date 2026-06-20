@@ -91,10 +91,22 @@ func NewClient() (*Client, error) {
 
 // NewClientWithModel creates a new API client with an optional model override.
 // If model is empty, reads from environment variables.
-// Provider selection order: OpenAI > GenAI (Gemini / Vertex AI) > Anthropic.
+// Provider selection order: Anthropic > OpenAI > GenAI (Gemini / Vertex AI).
 // For OpenAI, if OPENAI_WIRE_API=responses, uses the Responses API provider.
 func NewClientWithModel(model string) (*Client, error) {
-	// OpenAI provider takes precedence
+	// Anthropic provider takes precedence
+	if IsAnthropicEnvSet() {
+		provider, err := newAnthropicProvider(model)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Anthropic provider: %w", err)
+		}
+		return &Client{
+			provider:    provider,
+			retryConfig: DefaultRetryConfig(),
+		}, nil
+	}
+
+	// OpenAI provider
 	if os.Getenv("OPENAI_BASE_URL") != "" {
 		// Check wire API selection
 		wireAPI := os.Getenv("OPENAI_WIRE_API")
@@ -120,7 +132,7 @@ func NewClientWithModel(model string) (*Client, error) {
 	}
 
 	// GenAI provider (Gemini API or Vertex AI)
-	if isGenAIEnvSet() {
+	if IsGenAIEnvSet() {
 		provider, err := newGenAIProvider(model)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create GenAI provider: %w", err)
@@ -131,20 +143,30 @@ func NewClientWithModel(model string) (*Client, error) {
 		}, nil
 	}
 
-	// Default: Anthropic provider
-	provider, err := newAnthropicProvider(model)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Anthropic provider: %w", err)
-	}
-	return &Client{
-		provider:    provider,
-		retryConfig: DefaultRetryConfig(),
-	}, nil
+	return nil, errors.New("no API credentials found: set ANTHROPIC_API_KEY, OPENAI_BASE_URL, or GenAI environment variables")
 }
 
-// isGenAIEnvSet reports whether any of the genai-related environment
+// IsAnthropicEnvSet reports whether any of the anthropic-related environment
+// variables are set, which would trigger selection of the anthropic provider.
+// We check ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, or ANTHROPIC_BASE_URL
+// (the latter indicates an explicit endpoint override, e.g. for a custom
+// Anthropic-compatible server or for local testing).
+func IsAnthropicEnvSet() bool {
+	if os.Getenv("ANTHROPIC_API_KEY") != "" {
+		return true
+	}
+	if os.Getenv("ANTHROPIC_AUTH_TOKEN") != "" {
+		return true
+	}
+	if os.Getenv("ANTHROPIC_BASE_URL") != "" {
+		return true
+	}
+	return false
+}
+
+// IsGenAIEnvSet reports whether any of the genai-related environment
 // variables are set, which would trigger selection of the genai provider.
-func isGenAIEnvSet() bool {
+func IsGenAIEnvSet() bool {
 	if os.Getenv("GENAI_API_KEY") != "" {
 		return true
 	}
@@ -166,16 +188,16 @@ func isGenAIEnvSet() bool {
 
 // DetectAPIKeySource returns the name of the API provider whose env vars are
 // set, in priority order matching NewClientWithModel:
-// "openai" > "genai" > "anthropic". Returns "none" if no credentials detected.
+// "anthropic" > "openai" > "genai". Returns "none" if no credentials detected.
 func DetectAPIKeySource() string {
+	if IsAnthropicEnvSet() {
+		return "anthropic"
+	}
 	if os.Getenv("OPENAI_BASE_URL") != "" {
 		return "openai"
 	}
-	if isGenAIEnvSet() {
+	if IsGenAIEnvSet() {
 		return "genai"
-	}
-	if os.Getenv("ANTHROPIC_API_KEY") != "" {
-		return "anthropic"
 	}
 	return "none"
 }

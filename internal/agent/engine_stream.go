@@ -25,6 +25,11 @@ func (e *QueryEngine) Model() string {
 	return e.model
 }
 
+// Client returns the API client used by this engine.
+func (e *QueryEngine) Client() api.Requester {
+	return e.client
+}
+
 func (e *QueryEngine) buildModelUsage() any {
 	if e.costState == nil || e.costState.ModelUsage == nil {
 		return map[string]any{}
