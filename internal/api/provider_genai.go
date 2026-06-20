@@ -67,9 +67,9 @@ func (p *genaiProvider) SetProviderName(name string) {
 	p.providerName = name
 }
 
-// SupportsNativeSearch returns true; Gemini supports native web search via Google Search grounding.
+// SupportsNativeSearch returns true for models that support native web search.
 func (p *genaiProvider) SupportsNativeSearch() bool {
-	return true
+	return SupportsNativeSearch(p.model)
 }
 
 // SendMessage sends a non-streaming message.

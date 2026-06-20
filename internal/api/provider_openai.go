@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/ipy/jenny/internal/log"
@@ -21,6 +20,7 @@ type openAIProvider struct {
 	retryConfig    RetryConfig
 	thinkingEffort string
 	providerName   string
+	transform      RequestTransformer
 }
 
 // newOpenAIProvider creates a new OpenAI provider.
@@ -82,15 +82,19 @@ func (p *openAIProvider) SetThinkingConfig(cfg ThinkingConfig) {
 	}
 }
 
+// SetRequestTransformer sets the request transformer.
+func (p *openAIProvider) SetRequestTransformer(t RequestTransformer) {
+	p.transform = t
+}
+
 // SetProviderName sets the provider name.
 func (p *openAIProvider) SetProviderName(name string) {
 	p.providerName = name
 }
 
-// SupportsNativeSearch returns true for OpenAI models that support native web search.
-// DeepSeek models routed through the OpenAI provider do NOT support native web search.
+// SupportsNativeSearch returns true for models that support native web search.
 func (p *openAIProvider) SupportsNativeSearch() bool {
-	return !isDSModel(p.model)
+	return SupportsNativeSearch(p.model)
 }
 
 // SendMessage sends a non-streaming message.
@@ -200,13 +204,8 @@ func (p *openAIProvider) doSendMessage(ctx context.Context, messages []Message, 
 		ReasoningEffort:     p.thinkingEffort,
 	}
 
-	// AC2: Enable DeepSeek thinking mode if effort is set for DeepSeek models
-	if p.thinkingEffort != "" && isDSModel(p.model) {
-		reqBody.ExtraBody = map[string]any{
-			"thinking": map[string]any{
-				"type": "enabled",
-			},
-		}
+	if p.transform != nil {
+		p.transform(&reqBody)
 	}
 
 	url := fmt.Sprintf("%s/chat/completions", os.Getenv("OPENAI_BASE_URL"))
@@ -438,13 +437,8 @@ func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Messa
 			ReasoningEffort:     p.thinkingEffort,
 		}
 
-		// AC2: Enable DeepSeek thinking mode if effort is set for DeepSeek models
-		if p.thinkingEffort != "" && isDSModel(p.model) {
-			reqBody.ExtraBody = map[string]any{
-				"thinking": map[string]any{
-					"type": "enabled",
-				},
-			}
+		if p.transform != nil {
+			p.transform(&reqBody)
 		}
 
 		url := fmt.Sprintf("%s/chat/completions", os.Getenv("OPENAI_BASE_URL"))
@@ -963,13 +957,4 @@ func (acc *openAIStreamAccumulator) finalize() []ContentBlock {
 	}
 
 	return blocks
-}
-
-// isDSModel returns true if the model name suggests a DeepSeek model.
-func isDSModel(model string) bool {
-	m := strings.ToLower(model)
-	// Tripwire-safe detection: avoid "deepseek" literal to pass TestNormalize_NoProviderNameStringsInProduction
-	prefix := "deep"
-	suffix := "seek"
-	return strings.Contains(m, prefix+suffix)
 }

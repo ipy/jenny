@@ -200,7 +200,7 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	flags.Float64VarP(&maxBudget, "max-budget-usd", "", maxBudgetDefault, "Budget limit in USD (0.0 = no limit)")
 
 	var effort string
-	flags.StringVarP(&effort, "effort", "", effortDefault, "Reasoning effort level (low, medium, high) for OpenAI o-series and DeepSeek models")
+	flags.StringVarP(&effort, "effort", "", effortDefault, "Reasoning effort level (low, medium, high, max) for OpenAI o-series and DeepSeek models")
 
 	var thinkingBudget int
 	flags.IntVarP(&thinkingBudget, "thinking-budget", "", thinkingBudgetDefault, "Maximum thinking tokens for Anthropic (AC3)")

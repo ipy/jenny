@@ -66,7 +66,7 @@ func modelContextWindow(model string) int {
 	// so the prefix check is consistent with lookupModelCap behavior.
 	lower := strings.ToLower(normalizeModelName(model))
 	// DeepSeek V4 has a 1M context window (tripwire-safe: see normalization_tripwire_test.go)
-	if strings.HasPrefix(lower, "deep"+"seek-v4-") {
+	if strings.HasPrefix(lower, "deepseek-v4-") {
 		return 1_000_000
 	}
 	// Default context window for most modern models
@@ -102,6 +102,7 @@ func NewClientWithModel(model string) (*Client, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create Anthropic provider: %w", err)
 		}
+		applyTransformer(provider, model)
 		return &Client{
 			provider:    provider,
 			retryConfig: DefaultRetryConfig(),
@@ -117,6 +118,7 @@ func NewClientWithModel(model string) (*Client, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to create OpenAI Responses API provider: %w", err)
 			}
+			applyTransformer(provider, model)
 			return &Client{
 				provider:    provider,
 				retryConfig: DefaultRetryConfig(),
@@ -127,6 +129,7 @@ func NewClientWithModel(model string) (*Client, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OpenAI provider: %w", err)
 		}
+		applyTransformer(provider, model)
 		return &Client{
 			provider:    provider,
 			retryConfig: DefaultRetryConfig(),
@@ -139,6 +142,7 @@ func NewClientWithModel(model string) (*Client, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create GenAI provider: %w", err)
 		}
+		applyTransformer(provider, model)
 		return &Client{
 			provider:    provider,
 			retryConfig: DefaultRetryConfig(),
@@ -220,9 +224,40 @@ func (c *Client) GetModel() string {
 }
 
 // SetThinkingConfig sets the thinking configuration for the provider.
+// Normalizes effort values: xhigh → max for all providers.
+// For Anthropic: maps effort to BudgetTokens when BudgetTokens is 0.
 func (c *Client) SetThinkingConfig(cfg ThinkingConfig) {
+	cfg.Effort = normalizeEffort(cfg.Effort)
+	if cfg.Effort != "" && cfg.BudgetTokens == 0 {
+		cfg.BudgetTokens = effortToBudgetTokens(cfg.Effort)
+	}
 	if setter, ok := c.provider.(interface{ SetThinkingConfig(ThinkingConfig) }); ok {
 		setter.SetThinkingConfig(cfg)
+	}
+}
+
+// normalizeEffort normalizes effort values to the valid range.
+// xhigh maps to max; all other values pass through unchanged.
+func normalizeEffort(effort string) string {
+	if effort == "xhigh" {
+		return "max"
+	}
+	return effort
+}
+
+// effortToBudgetTokens maps effort levels to Anthropic budget_tokens.
+func effortToBudgetTokens(effort string) int {
+	switch effort {
+	case "low":
+		return 4096
+	case "medium":
+		return 16000
+	case "high":
+		return 32000
+	case "max":
+		return 64000
+	default:
+		return 0
 	}
 }
 
@@ -513,4 +548,24 @@ type ToolInputSchema struct {
 	Properties  map[string]any
 	Required    []string
 	ExtraFields map[string]any // carries $defs and other non-standard schema keys
+}
+
+// applyTransformer resolves and applies a RequestTransformer to a provider
+// that supports it. No-op for nil transformers or providers without the interface.
+func applyTransformer(provider Provider, model string) {
+	if model == "" {
+		if m, ok := provider.(interface{ GetModel() string }); ok {
+			model = m.GetModel()
+		}
+	}
+	t := resolveTransformer(model)
+	if t == nil {
+		return
+	}
+	type transformerSetter interface {
+		SetRequestTransformer(t RequestTransformer)
+	}
+	if s, ok := provider.(transformerSetter); ok {
+		s.SetRequestTransformer(t)
+	}
 }

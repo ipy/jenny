@@ -1440,7 +1440,7 @@ func TestRetest_AC4_FullRoundTrip(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestAC2_ChatAPI_ReasoningEffort_NoExtraBodyForNonDeepSeek verifies that
-// regular OpenAI models (non-DeepSeek) don't get extra_body.
+// non-DeepSeek models do NOT get extra_body (transformer only applies to DeepSeek).
 func TestAC2_ChatAPI_ReasoningEffort_NoExtraBodyForNonDeepSeek(t *testing.T) {
 	ms := mockapi.NewMockServer()
 	ms.SetPathHandler("POST /chat/completions", func(w http.ResponseWriter, r *http.Request) {
@@ -1453,7 +1453,7 @@ func TestAC2_ChatAPI_ReasoningEffort_NoExtraBodyForNonDeepSeek(t *testing.T) {
 
 		// Non-DeepSeek model: reasoning_effort should be set, but NO extra_body
 		if _, ok := req["extra_body"]; ok {
-			t.Error("extra_body should not be present for non-DeepSeek model")
+			t.Error("extra_body should NOT be present for non-DeepSeek model")
 		}
 		if req["reasoning_effort"] != "high" {
 			t.Errorf("reasoning_effort = %v, want 'high'", req["reasoning_effort"])
@@ -1563,4 +1563,223 @@ func TestAC5_BackwardCompat_NoThinkingFields(t *testing.T) {
 	}
 
 	t.Log("AC5 PASS: old-format transcripts load without error, panic, or data corruption")
+}
+
+// ---------------------------------------------------------------------------
+// AC2: DeepSeek effort normalization
+// ---------------------------------------------------------------------------
+
+// TestAC2_DeepSeekEffortNormalization verifies that the transformer adds
+// extra_body for DeepSeek models and not for others, and that xhigh → max
+// normalization happens in client.SetThinkingConfig.
+func TestAC2_DeepSeekEffortNormalization(t *testing.T) {
+	tests := []struct {
+		model     string
+		effort    string
+		want      string
+		extraBody bool
+	}{
+		// DeepSeek models — transformer adds extra_body
+		{"deepseek-v4-flash", "low", "low", true},
+		{"deepseek-v4-flash", "medium", "medium", true},
+		{"deepseek-v4-flash", "high", "high", true},
+		{"deepseek-v4-flash", "max", "max", true},
+		{"deepseek-v4-flash", "xhigh", "max", true},
+		{"deepseek-v4-pro", "low", "low", true},
+		{"deepseek-v4-pro", "max", "max", true},
+		// DeepSeek without effort — no extra_body
+		{"deepseek-v4-flash", "", "", false},
+		// Non-DeepSeek — no transformer, no extra_body
+		{"gpt-4.1", "low", "low", false},
+		{"gpt-4.1", "high", "high", false},
+		{"gpt-4.1", "medium", "medium", false},
+		{"gpt-4.1", "max", "max", false},
+		{"gpt-4.1", "xhigh", "max", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.model+"_"+tt.effort, func(t *testing.T) {
+			ms := mockapi.NewMockServer()
+			ms.SetPathHandler("POST /chat/completions", func(w http.ResponseWriter, r *http.Request) {
+				body, _ := io.ReadAll(r.Body)
+				r.Body.Close()
+				var req map[string]any
+				if err := json.Unmarshal(body, &req); err != nil {
+					t.Fatalf("failed to parse request: %v", err)
+				}
+
+				// Check extra_body
+				_, hasExtra := req["extra_body"]
+				if tt.extraBody && !hasExtra {
+					t.Error("AC2 FAIL: extra_body missing when expected")
+				}
+				if !tt.extraBody && hasExtra {
+					t.Error("AC2 FAIL: extra_body present when not expected")
+				}
+
+				// Check reasoning_effort value
+				got, _ := req["reasoning_effort"].(string)
+				if got != tt.want {
+					t.Errorf("AC2 FAIL: reasoning_effort = %q, want %q", got, tt.want)
+				}
+
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(`{"id":"x","model":"` + tt.model + `","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`))
+			})
+			defer ms.Close()
+
+			t.Setenv("OPENAI_BASE_URL", ms.URL())
+			t.Setenv("OPENAI_API_KEY", "test-key")
+			t.Setenv("OPENAI_DEFAULT_MODEL", tt.model)
+			t.Setenv("ANTHROPIC_BASE_URL", "")
+			t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+			t.Setenv("ANTHROPIC_API_KEY", "")
+
+			client, err := NewClientWithModel("")
+			if err != nil {
+				t.Fatalf("NewClientWithModel error = %v", err)
+			}
+
+			if tt.effort != "" {
+				client.SetThinkingConfig(ThinkingConfig{Effort: tt.effort})
+			}
+
+			_, err = client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Hi"}}, nil, nil, []string{}, "")
+			if err != nil {
+				t.Fatalf("SendMessage error = %v", err)
+			}
+		})
+	}
+
+	t.Log("AC2 PASS: DeepSeek effort normalization verified")
+}
+
+// ---------------------------------------------------------------------------
+// AC3: Anthropic provider output_config with effort
+// ---------------------------------------------------------------------------
+
+// TestAC3_AnthropicProvider_OutputConfigEffort verifies that the DeepSeek
+// transformer adds output_config.effort to Anthropic-format requests on
+// DeepSeek models, and that non-DeepSeek models don't get it.
+func TestAC3_AnthropicProvider_OutputConfigEffort(t *testing.T) {
+	tests := []struct {
+		name            string
+		model           string
+		cfg             ThinkingConfig
+		wantThinking    bool
+		wantOutputConfig bool
+		wantEffort      string
+		wantBudget      float64
+	}{
+		{
+			name:            "deepseek effort only",
+			model:           "deepseek-v4-pro",
+			cfg:             ThinkingConfig{Effort: "high"},
+			wantThinking:    true,
+			wantOutputConfig: true,
+			wantEffort:      "high",
+			wantBudget:      32000,
+		},
+		{
+			name:            "deepseek budget only (output_config from budget mapping)",
+			model:           "deepseek-v4-pro",
+			cfg:             ThinkingConfig{BudgetTokens: 8000},
+			wantThinking:    true,
+			wantOutputConfig: true,
+			wantEffort:      "medium", // budgetToEffort: 8000 -> medium
+			wantBudget:      8000,
+		},
+		{
+			name:            "deepseek neither set",
+			model:           "deepseek-v4-pro",
+			cfg:             ThinkingConfig{},
+			wantThinking:    false,
+			wantOutputConfig: false,
+		},
+		{
+			name:            "non-deepseek effort only (no output_config)",
+			model:           "claude-sonnet-4-20250514",
+			cfg:             ThinkingConfig{Effort: "high"},
+			wantThinking:    true,
+			wantOutputConfig: false,
+			wantBudget:      32000,
+		},
+		{
+			name:            "non-deepseek neither",
+			model:           "claude-sonnet-4-20250514",
+			cfg:             ThinkingConfig{},
+			wantThinking:    false,
+			wantOutputConfig: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ms := mockapi.NewMockServer()
+			ms.SetPathHandler("POST /v1/messages", func(w http.ResponseWriter, r *http.Request) {
+				body, _ := io.ReadAll(r.Body)
+				r.Body.Close()
+				var req map[string]any
+				if err := json.Unmarshal(body, &req); err != nil {
+					t.Fatalf("failed to parse request: %v", err)
+				}
+
+				thinking, hasThinking := req["thinking"].(map[string]any)
+				if tt.wantThinking && !hasThinking {
+					t.Error("thinking should be present in Anthropic request")
+				}
+				if !tt.wantThinking && hasThinking {
+					t.Error("thinking should NOT be present")
+				}
+				if hasThinking {
+					if thinking["type"] != "enabled" {
+						t.Errorf("thinking.type = %v, want 'enabled'", thinking["type"])
+					}
+					if bt, ok := thinking["budget_tokens"].(float64); ok {
+						if bt != tt.wantBudget {
+							t.Errorf("budget_tokens = %v, want %v", bt, tt.wantBudget)
+						}
+					}
+				}
+
+				oc, hasOC := req["output_config"].(map[string]any)
+				if tt.wantOutputConfig && !hasOC {
+					t.Error("output_config should be present")
+				}
+				if !tt.wantOutputConfig && hasOC {
+					t.Error("output_config should NOT be present")
+				}
+				if hasOC && oc["effort"] != tt.wantEffort {
+					t.Errorf("output_config.effort = %v, want %v", oc["effort"], tt.wantEffort)
+				}
+
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				resp := `{"id":"x","type":"message","role":"assistant","model":"` + tt.model + `","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`
+				w.Write([]byte(resp))
+			})
+			defer ms.Close()
+
+			t.Setenv("ANTHROPIC_BASE_URL", ms.URL())
+			t.Setenv("ANTHROPIC_API_KEY", "test-key")
+			t.Setenv("ANTHROPIC_AUTH_TOKEN", "")
+			t.Setenv("OPENAI_BASE_URL", "")
+			t.Setenv("ANTHROPIC_MODEL", tt.model)
+
+			client, err := NewClientWithModel("")
+			if err != nil {
+				t.Fatalf("NewClientWithModel error = %v", err)
+			}
+
+			client.SetThinkingConfig(tt.cfg)
+
+			_, err = client.SendMessage(context.Background(), []Message{{Role: "user", Content: "Hi"}}, nil, nil, []string{}, "")
+			if err != nil {
+				t.Fatalf("SendMessage error = %v", err)
+			}
+		})
+	}
+
+	t.Log("AC3 PASS: Anthropic provider output_config with effort working")
 }

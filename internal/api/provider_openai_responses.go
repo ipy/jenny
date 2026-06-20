@@ -85,9 +85,9 @@ func (p *openAIResponsesProvider) SetProviderName(name string) {
 	p.providerName = name
 }
 
-// SupportsNativeSearch returns true; OpenAI Responses API supports native web search.
+// SupportsNativeSearch returns true for models that support native web search.
 func (p *openAIResponsesProvider) SupportsNativeSearch() bool {
-	return true
+	return SupportsNativeSearch(p.model)
 }
 
 // SendMessage sends a non-streaming message.

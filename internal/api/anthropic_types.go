@@ -50,6 +50,13 @@ type AnthropicRequest struct {
 	TopK          *int                     `json:"top_k,omitempty"`
 	Tools         []AnthropicTool          `json:"tools,omitempty"`
 	Thinking      *AnthropicThinkingConfig `json:"thinking,omitempty"`
+	OutputConfig  *OutputConfig            `json:"output_config,omitempty"`
+}
+
+// OutputConfig represents the output_config field for Anthropic-compatible APIs
+// that support effort-based thinking (e.g. DeepSeek's Anthropic endpoint).
+type OutputConfig struct {
+	Effort string `json:"effort"`
 }
 
 // AnthropicThinkingConfig represents the thinking configuration for Anthropic.

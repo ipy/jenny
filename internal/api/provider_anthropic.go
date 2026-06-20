@@ -22,6 +22,7 @@ type anthropicProvider struct {
 	retryConfig    RetryConfig
 	isBackground   bool
 	providerName   string
+	transform      RequestTransformer
 }
 
 // newAnthropicProvider creates a new Anthropic provider.
@@ -75,14 +76,19 @@ func (p *anthropicProvider) SetThinkingConfig(cfg ThinkingConfig) {
 	p.thinkingConfig = cfg
 }
 
+// SetRequestTransformer sets the request transformer.
+func (p *anthropicProvider) SetRequestTransformer(t RequestTransformer) {
+	p.transform = t
+}
+
 // SetProviderName sets the provider name.
 func (p *anthropicProvider) SetProviderName(name string) {
 	p.providerName = name
 }
 
-// SupportsNativeSearch returns true; Anthropic supports native web search via web_search_20250305.
+// SupportsNativeSearch returns true for models that support native web search.
 func (p *anthropicProvider) SupportsNativeSearch() bool {
-	return true
+	return SupportsNativeSearch(p.model)
 }
 
 // SendMessage sends a non-streaming message.
@@ -192,11 +198,15 @@ func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Messag
 		Tools:     sdkTools,
 	}
 
-	if p.thinkingConfig.BudgetTokens > 0 {
+	if p.thinkingConfig.BudgetTokens > 0 || p.thinkingConfig.Effort != "" {
 		reqBody.Thinking = &AnthropicThinkingConfig{
 			Type:         "enabled",
 			BudgetTokens: p.thinkingConfig.BudgetTokens,
 		}
+	}
+
+	if p.transform != nil {
+		p.transform(&reqBody)
 	}
 
 	if len(systemPrompt) > 0 || systemPromptSuffix != "" {
@@ -448,11 +458,15 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 			Stream:    true,
 		}
 
-		if p.thinkingConfig.BudgetTokens > 0 {
+		if p.thinkingConfig.BudgetTokens > 0 || p.thinkingConfig.Effort != "" {
 			reqBody.Thinking = &AnthropicThinkingConfig{
 				Type:         "enabled",
 				BudgetTokens: p.thinkingConfig.BudgetTokens,
 			}
+		}
+
+		if p.transform != nil {
+			p.transform(&reqBody)
 		}
 
 		if len(systemPrompt) > 0 || systemPromptSuffix != "" {

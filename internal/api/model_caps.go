@@ -13,39 +13,39 @@ import (
 // match any entry in the capability table.
 const unknownModelMaxTokens = 16384
 
-// modelCapEntry holds a model name prefix/glob and its max output tokens.
+// modelCapEntry holds a model name prefix/glob and its capabilities.
 type modelCapEntry struct {
-	pattern   string
-	maxOut    int
-	hasVision bool // whether the model supports image/vision input
+	pattern             string
+	maxOut              int
+	hasVision           bool // whether the model supports image/vision input
+	supportsNativeSearch bool // whether the model supports native web search
 }
 
-// modelCapTable maps model name prefixes to their maximum output token limits.
-// hasVision indicates whether the model accepts image input. Unknown models
-// are assumed to support vision (conservative for multimodal APIs).
+// modelCapTable maps model name prefixes to their capabilities.
 // Patterns are matched as case-insensitive prefixes. More specific patterns
 // must appear before less specific ones (table is evaluated in order, first
 // match wins).
 var modelCapTable = []modelCapEntry{
 	// Claude models
-	{"claude-opus-4-", 128000, true},
-	{"claude-fable-5", 128000, true},
-	{"claude-sonnet-4-", 64000, true},
-	{"claude-haiku-4-", 64000, true},
+	{"claude-opus-4-", 128000, true, true},
+	{"claude-fable-5", 128000, true, true},
+	{"claude-sonnet-4-", 64000, true, true},
+	{"claude-haiku-4-", 64000, true, true},
 
 	// GPT models
-	{"gpt-5", 128000, true},
-	{"gpt-4.1", 33000, true},
-	{"gpt-4o", 16384, true},
-	{"o3", 100000, false},      // reasoning-only, no vision
-	{"o4-mini", 100000, false}, // reasoning-only, no vision
+	{"gpt-5", 128000, true, true},
+	{"gpt-4.1", 33000, true, true},
+	{"gpt-4o", 16384, true, true},
+	{"o3", 100000, false, true},
+	{"o4-mini", 100000, false, true},
 
-	// DeepSeek
-	{"deepseek-v4-", 384000, false}, // text-only in this codebase
+	// DeepSeek — no native search support
+	{"deepseek-v4-", 384000, false, false},
+	{"deepseek", 384000, false, false}, // catch-all for legacy names (deepseek-chat, deepseek-reasoner, etc.)
 
 	// Gemini
-	{"gemini-2.5-", 65536, true},
-	{"gemini-2.0-", 65536, true},
+	{"gemini-2.5-", 65536, true, true},
+	{"gemini-2.0-", 65536, true, true},
 }
 
 // ResolveMaxTokens returns the resolved max_tokens value for a given model and
@@ -213,4 +213,25 @@ func SupportsVision(model string) bool {
 // by delegating to the canonical lookupModelCap.
 func modelMaxOutputCap(model string) int {
 	return lookupModelCap(model)
+}
+
+// SupportsNativeSearch reports whether the given model supports native web search.
+// Unknown models default to true (conservative — most providers support it).
+func SupportsNativeSearch(model string) bool {
+	lower := strings.ToLower(model)
+	for _, e := range modelCapTable {
+		if strings.HasPrefix(lower, strings.ToLower(e.pattern)) {
+			return e.supportsNativeSearch
+		}
+	}
+	bare := normalizeModelName(model)
+	if bare != model {
+		lowerBare := strings.ToLower(bare)
+		for _, e := range modelCapTable {
+			if strings.HasPrefix(lowerBare, strings.ToLower(e.pattern)) {
+				return e.supportsNativeSearch
+			}
+		}
+	}
+	return true // conservative default
 }
