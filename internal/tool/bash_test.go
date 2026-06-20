@@ -782,3 +782,38 @@ func TestBashTool_ProcessGroup_Cancellation(t *testing.T) {
 	// terminates grandchildren promptly.
 	_ = err // We just verify no panic, no hang
 }
+
+// TestBashTool_TimeoutKillsChildProcesses verifies that the foreground timeout
+// kills the entire process tree, not just the shell. Regression test for the bug
+// where "pip install torch --quiet timeout=120" would run for 45+ minutes because
+// exec.CommandContext only killed bash, leaving pip orphaned and still running.
+func TestBashTool_TimeoutKillsChildProcesses(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("process groups are Unix-specific")
+	}
+
+	tool := NewBashTool(PermissionEdit)
+	cwd := t.TempDir()
+
+	// Chain of sleep commands (sleep is in the read-only allowlist).
+	// With a 2s timeout, the command must be killed before completing 5s of sleep.
+	start := time.Now()
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"command": "sleep 1 && sleep 1 && sleep 1 && sleep 1 && sleep 1",
+		"timeout": float64(2),
+	}, cwd)
+
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected timeout error")
+	}
+	if !strings.Contains(result.Content, "timed out") {
+		t.Errorf("expected timeout message, got: %s", result.Content)
+	}
+	if elapsed > 5*time.Second {
+		t.Errorf("timeout took too long: %v", elapsed)
+	}
+}

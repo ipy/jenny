@@ -297,14 +297,13 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}, nil
 	}
 
-	cmd := exec.CommandContext(cmdCtx, shellPath, "-c", command)
+	// Create command WITHOUT using CommandContext — we handle timeout manually
+	// to ensure the entire process group is killed, not just the shell process.
+	// exec.CommandContext only kills the direct child (bash), leaving grandchildren
+	// (pip, nginx, etc.) orphaned and still running.
+	cmd := exec.Command(shellPath, "-c", command)
 	cmd.Dir = t.commandCwd
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	defer func() {
-		if cmd.Process != nil {
-			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		}
-	}()
 
 	// Inject JENNY_SCRATCHPAD env var so agent can reference scratchpad in shell
 	cmd.Env = append(os.Environ(), "JENNY_SCRATCHPAD="+constants.ScratchpadDir(t.sessionID))
@@ -313,10 +312,38 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
+	if err := cmd.Start(); err != nil {
+		return &ToolResult{
+			Content: fmt.Sprintf("Error starting command: %v", err),
+			IsError: true,
+		}, nil
+	}
+
 	// Track start time for auto-background hint (AC4)
 	startTime := time.Now()
 
-	err := cmd.Run()
+	// Wait for command completion or timeout/cancellation in a goroutine.
+	// On timeout or cancellation, kill the entire process group to ensure
+	// child processes (pip, nginx, etc.) are also terminated.
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	var runErr error
+	select {
+	case runErr = <-done:
+		// Command completed normally
+	case <-cmdCtx.Done():
+		// Timeout or cancellation: kill entire process group
+		if cmd.Process != nil {
+			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		}
+		// Wait for process to actually exit after kill
+		<-done
+		runErr = cmdCtx.Err()
+	}
+
 	output := stdout.String()
 	if stderr.Len() > 0 {
 		if output != "" {
@@ -337,8 +364,8 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}, nil
 	}
 
-	if err != nil {
-		exitErr, ok := err.(*exec.ExitError)
+	if runErr != nil {
+		exitErr, ok := runErr.(*exec.ExitError)
 		if ok {
 			exitCode := exitErr.ExitCode()
 			return &ToolResult{
@@ -347,7 +374,7 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 			}, nil
 		}
 		return &ToolResult{
-			Content: fmt.Sprintf("Error executing command: %v\n%s", err, output),
+			Content: fmt.Sprintf("Error executing command: %v\n%s", runErr, output),
 			IsError: true,
 		}, nil
 	}
