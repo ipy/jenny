@@ -39,7 +39,7 @@ func newOpenAIProvider(model string) (*openAIProvider, error) {
 		model = os.Getenv("OPENAI_DEFAULT_MODEL")
 	}
 	if model == "" {
-		return nil, errors.New("OPENAI_DEFAULT_MODEL is required when using OpenAI provider")
+		model = defaultOpenAIModel
 	}
 
 	timeout := ResolveTimeout(os.Getenv("API_TIMEOUT_MS"))

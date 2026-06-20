@@ -64,7 +64,7 @@ func TestAnthropicProvider_ThinkingOutputConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := &anthropicProvider{
-				model:         "claude-sonnet-4-20250514",
+				model:          "claude-sonnet-4-20250514",
 				thinkingConfig: tt.cfg,
 			}
 

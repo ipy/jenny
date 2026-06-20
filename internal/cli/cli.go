@@ -21,6 +21,7 @@ type Flags struct {
 	Prompt                 string   // prompt: joined from k.Strings("print") after unmarshal, or from --prompt-file
 	PromptFile             []string // --prompt-file: read prompt from file(s); "-" means stdin
 	Model                  string   `koanf:"model"`
+	SubagentModel          string   `koanf:"subagent-model"`
 	OutputFormat           string   `koanf:"output-format"`
 	Verbose                bool     `koanf:"verbose"`
 	IncludePartialMessages bool     `koanf:"include-partial-messages"`
@@ -88,6 +89,7 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 
 	// Read defaults from koanf (env/json layers).
 	modelDefault := k.String("model")
+	subagentModelDefault := k.String("subagent-model")
 	outputFormatDefault := k.String("output-format")
 	verboseDefault := k.Bool("verbose")
 	includePartialDefault := k.Bool("include-partial-messages")
@@ -132,6 +134,9 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 
 	var model string
 	flags.StringVarP(&model, "model", "", modelDefault, "Model to use")
+
+	var subagentModel string
+	flags.StringVarP(&subagentModel, "subagent-model", "", subagentModelDefault, "Model for subagents (agent tool); defaults to provider-specific model")
 
 	var outputFormat string
 	flags.StringVarP(&outputFormat, "output-format", "", outputFormatDefault, "Output format (text, stream-json)")

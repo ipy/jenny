@@ -4,6 +4,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -183,10 +184,18 @@ var Verification = SubagentType{
 }
 
 // modelAliases maps model alias names to concrete model identifiers.
+// Concrete identifiers are resolved from env vars with hardcoded fallbacks.
 var modelAliases = map[string]string{
-	"sonnet": "claude-sonnet-4-20250514",
-	"opus":   "claude-opus-4-20250514",
-	"haiku":  "claude-haiku-4-20250514",
+	"sonnet": getEnvOrDefault("ANTHROPIC_DEFAULT_SONNET_MODEL", "claude-sonnet-4-6"),
+	"opus":   getEnvOrDefault("ANTHROPIC_DEFAULT_OPUS_MODEL", "claude-opus-4-7"),
+	"haiku":  getEnvOrDefault("ANTHROPIC_DEFAULT_HAIKU_MODEL", "claude-haiku-4-5-20251001"),
+}
+
+func getEnvOrDefault(envVar, defaultVal string) string {
+	if v := os.Getenv(envVar); v != "" {
+		return v
+	}
+	return defaultVal
 }
 
 // ResolveModel resolves a model alias to its concrete model identifier.
@@ -196,6 +205,35 @@ func ResolveModel(alias string) string {
 		return resolved
 	}
 	return alias
+}
+
+// resolveSubagentModel resolves the model to use for a subagent.
+// Resolution order:
+//  1. params.Model (if not empty and not "inherit") — resolved via ResolveModel
+//  2. subagentModel from config (--subagent-model / JENNY_SUBAGENT_MODEL)
+//  3. Provider-specific default (haiku for Anthropic, gpt-5.4-mini for OpenAI, etc.)
+func resolveSubagentModel(paramsModel string, configSubagentModel string, client api.Requester) string {
+	if paramsModel != "" && paramsModel != "inherit" {
+		return ResolveModel(paramsModel)
+	}
+	if configSubagentModel != "" {
+		return configSubagentModel
+	}
+	// Provider-specific defaults — check via type assertion on the Requester
+	type providerKind interface {
+		Provider() api.Provider
+	}
+	if p, ok := client.(providerKind); ok {
+		switch p.Provider().Kind() {
+		case api.ProviderAnthropic:
+			return ResolveModel("haiku")
+		case api.ProviderOpenAI, api.ProviderOpenAIResponses:
+			return "gpt-5.4-mini"
+		case api.ProviderGenAI:
+			return "gemini-3.1-flash-lite"
+		}
+	}
+	return ResolveModel("haiku")
 }
 
 // LocalSubagentRunner runs subagents in the local process.
@@ -414,7 +452,7 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 			defer r.SetProfile(prevProfile)
 		}
 	}
-	_, output, _, err := RunStream(ctx, params.Prompt, subagentTools, cwd, streamCfg, params.Model, WithClient(r.client))
+	_, output, _, err := RunStream(ctx, params.Prompt, subagentTools, cwd, streamCfg, resolveSubagentModel(params.Model, streamCfg.SubagentModel, r.client), WithClient(r.client))
 
 	// AC4: Interrupt yields partial result - capture output even on cancellation
 	if ctx.Err() != nil {

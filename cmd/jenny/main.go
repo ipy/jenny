@@ -582,6 +582,7 @@ func run() error {
 		Plugins:             pluginInfo,
 		MemoryPaths:         memoryPaths,
 		Model:               flags.Model,
+		SubagentModel:       flags.SubagentModel,
 		PermissionLevel:     permLevel,
 		TaskStore:           taskStore,
 	}

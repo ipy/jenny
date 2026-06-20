@@ -31,7 +31,7 @@ func newAnthropicProvider(model string) (*anthropicProvider, error) {
 		model = os.Getenv("ANTHROPIC_MODEL")
 	}
 	if model == "" {
-		model = defaultModel
+		model = defaultAnthropicModel
 	}
 
 	timeout := ResolveTimeout(os.Getenv("API_TIMEOUT_MS"))

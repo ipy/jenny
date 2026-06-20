@@ -27,7 +27,7 @@ func newGenAIProvider(model string) (*genaiProvider, error) {
 		model = os.Getenv("GENAI_DEFAULT_MODEL")
 	}
 	if model == "" {
-		return nil, errors.New("GENAI_DEFAULT_MODEL is required when using genai provider")
+		model = defaultGenAIModel
 	}
 
 	timeout := ResolveTimeout(os.Getenv("API_TIMEOUT_MS"))

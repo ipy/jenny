@@ -43,8 +43,8 @@ func TestNewClientWithModelEmpty(t *testing.T) {
 		t.Fatal("expected non-nil client")
 	}
 	// Should use default model when env var is not set
-	if client.GetModel() != defaultModel {
-		t.Errorf("expected model %q, got %q", defaultModel, client.GetModel())
+	if client.GetModel() != defaultAnthropicModel {
+		t.Errorf("expected model %q, got %q", defaultAnthropicModel, client.GetModel())
 	}
 }
 
@@ -66,14 +66,18 @@ func TestNewClientWithModelOverride(t *testing.T) {
 	}
 }
 
-func TestDefaultModelConstant(t *testing.T) {
-	// Verify defaultModel constant is defined and non-empty
-	if defaultModel == "" {
-		t.Error("defaultModel should not be empty")
+func TestDefaultModelConstants(t *testing.T) {
+	if defaultAnthropicModel == "" {
+		t.Error("defaultAnthropicModel should not be empty")
 	}
-	// Verify it matches the expected model string
-	if defaultModel != "claude-opus-4-5-20251101" {
-		t.Errorf("expected defaultModel 'claude-opus-4-5-20251101', got %q", defaultModel)
+	if defaultAnthropicModel != "claude-opus-4-7" {
+		t.Errorf("expected defaultAnthropicModel 'claude-opus-4-7', got %q", defaultAnthropicModel)
+	}
+	if defaultOpenAIModel != "gpt-5.4" {
+		t.Errorf("expected defaultOpenAIModel 'gpt-5.4', got %q", defaultOpenAIModel)
+	}
+	if defaultGenAIModel != "gemini-3.5-flash" {
+		t.Errorf("expected defaultGenAIModel 'gemini-3.5-flash', got %q", defaultGenAIModel)
 	}
 }
 

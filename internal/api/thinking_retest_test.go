@@ -1664,52 +1664,52 @@ func TestAC2_DeepSeekEffortNormalization(t *testing.T) {
 // DeepSeek models, and that non-DeepSeek models don't get it.
 func TestAC3_AnthropicProvider_OutputConfigEffort(t *testing.T) {
 	tests := []struct {
-		name            string
-		model           string
-		cfg             ThinkingConfig
-		wantThinking    bool
+		name             string
+		model            string
+		cfg              ThinkingConfig
+		wantThinking     bool
 		wantOutputConfig bool
-		wantEffort      string
-		wantBudget      float64
+		wantEffort       string
+		wantBudget       float64
 	}{
 		{
-			name:            "deepseek effort only",
-			model:           "deepseek-v4-pro",
-			cfg:             ThinkingConfig{Effort: "high"},
-			wantThinking:    true,
+			name:             "deepseek effort only",
+			model:            "deepseek-v4-pro",
+			cfg:              ThinkingConfig{Effort: "high"},
+			wantThinking:     true,
 			wantOutputConfig: true,
-			wantEffort:      "high",
-			wantBudget:      32000,
+			wantEffort:       "high",
+			wantBudget:       32000,
 		},
 		{
-			name:            "deepseek budget only (output_config from budget mapping)",
-			model:           "deepseek-v4-pro",
-			cfg:             ThinkingConfig{BudgetTokens: 8000},
-			wantThinking:    true,
+			name:             "deepseek budget only (output_config from budget mapping)",
+			model:            "deepseek-v4-pro",
+			cfg:              ThinkingConfig{BudgetTokens: 8000},
+			wantThinking:     true,
 			wantOutputConfig: true,
-			wantEffort:      "medium", // budgetToEffort: 8000 -> medium
-			wantBudget:      8000,
+			wantEffort:       "medium", // budgetToEffort: 8000 -> medium
+			wantBudget:       8000,
 		},
 		{
-			name:            "deepseek neither set",
-			model:           "deepseek-v4-pro",
-			cfg:             ThinkingConfig{},
-			wantThinking:    false,
+			name:             "deepseek neither set",
+			model:            "deepseek-v4-pro",
+			cfg:              ThinkingConfig{},
+			wantThinking:     false,
 			wantOutputConfig: false,
 		},
 		{
-			name:            "non-deepseek effort only (no output_config)",
-			model:           "claude-sonnet-4-20250514",
-			cfg:             ThinkingConfig{Effort: "high"},
-			wantThinking:    true,
+			name:             "non-deepseek effort only (no output_config)",
+			model:            "claude-sonnet-4-20250514",
+			cfg:              ThinkingConfig{Effort: "high"},
+			wantThinking:     true,
 			wantOutputConfig: false,
-			wantBudget:      32000,
+			wantBudget:       32000,
 		},
 		{
-			name:            "non-deepseek neither",
-			model:           "claude-sonnet-4-20250514",
-			cfg:             ThinkingConfig{},
-			wantThinking:    false,
+			name:             "non-deepseek neither",
+			model:            "claude-sonnet-4-20250514",
+			cfg:              ThinkingConfig{},
+			wantThinking:     false,
 			wantOutputConfig: false,
 		},
 	}

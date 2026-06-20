@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/ipy/jenny/internal/log"
@@ -38,7 +39,7 @@ func newOpenAIResponsesProvider(model string) (*openAIResponsesProvider, error) 
 		model = os.Getenv("OPENAI_DEFAULT_MODEL")
 	}
 	if model == "" {
-		return nil, errors.New("OPENAI_DEFAULT_MODEL is required when using OpenAI Responses API")
+		model = defaultOpenAIModel
 	}
 
 	timeout := ResolveTimeout(os.Getenv("API_TIMEOUT_MS"))
@@ -253,7 +254,7 @@ func (p *openAIResponsesProvider) buildInput(messages []Message, toolResults []T
 		}
 		input = append(input, map[string]any{
 			"type":    "message",
-			"role":    RoleSystem,
+			"role":    "developer",
 			"content": contentBlocks,
 		})
 	}
@@ -302,9 +303,14 @@ func (p *openAIResponsesProvider) buildInput(messages []Message, toolResults []T
 			// Emit function_call as top-level items (Responses API format)
 			for _, tu := range msg.ToolUse {
 				inputJSON, _ := json.Marshal(tu.Input)
+				// OpenAI Responses API requires function_call IDs to start with "fc_"
+				fcID := tu.ID
+				if !strings.HasPrefix(fcID, "fc_") {
+					fcID = "fc_" + tu.ID
+				}
 				input = append(input, map[string]any{
 					"type":      "function_call",
-					"id":        tu.ID,
+					"id":        fcID,
 					"name":      tu.Name,
 					"arguments": string(inputJSON),
 					"call_id":   tu.ID,

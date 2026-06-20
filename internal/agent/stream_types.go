@@ -54,6 +54,7 @@ type StreamConfig struct {
 	Plugins              []cli.PluginInitInfo        // Loaded plugins for init event
 	MemoryPaths          map[string]string           // Memory directory paths for init event
 	Model                string                      // Model name for ability declarations in system prompt
+	SubagentModel        string                      // Model override for subagents (agent tool); falls back to provider default if empty
 	// Non-compacted: survives context compaction.
 	PermissionDenials []string // Denied tool executions (toolName + inputKey pairs) for cross-turn caching
 	// Non-compacted: survives context compaction.
