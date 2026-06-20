@@ -44,8 +44,7 @@ func TestTaskUpdateTool_InputSchema(t *testing.T) {
 		t.Errorf("InputSchema() missing required field: task_id")
 	}
 
-	// Check all expected fields exist
-	expectedFields := []string{"task_id", "subject", "description", "active_form", "status", "metadata", "add_blocks", "add_blocked_by"}
+	expectedFields := []string{"task_id", "subject", "description", "acceptance_criteria", "constraints", "status", "metadata", "add_blocks", "add_blocked_by"}
 	for _, field := range expectedFields {
 		if _, ok := props[field]; !ok {
 			t.Errorf("InputSchema() missing property: %s", field)
@@ -101,10 +100,10 @@ func TestTaskUpdateTool_Execute(t *testing.T) {
 			},
 		},
 		{
-			name: "update active_form",
+			name: "update acceptance_criteria",
 			input: map[string]any{
-				"task_id":     createUpdateTestTask(t, store),
-				"active_form": "working on it",
+				"task_id":             createUpdateTestTask(t, store),
+				"acceptance_criteria": "all tests pass",
 			},
 			wantErr: false,
 			checkFn: func(r *ToolResult) bool {
@@ -115,7 +114,25 @@ func TestTaskUpdateTool_Execute(t *testing.T) {
 				if err := json.Unmarshal([]byte(r.Content), &result); err != nil {
 					return false
 				}
-				return result["active_form"] == "working on it"
+				return result["acceptance_criteria"] == "all tests pass"
+			},
+		},
+		{
+			name: "update constraints",
+			input: map[string]any{
+				"task_id":     createUpdateTestTask(t, store),
+				"constraints": "must use existing conventions",
+			},
+			wantErr: false,
+			checkFn: func(r *ToolResult) bool {
+				if r == nil || r.IsError {
+					return false
+				}
+				var result map[string]any
+				if err := json.Unmarshal([]byte(r.Content), &result); err != nil {
+					return false
+				}
+				return result["constraints"] == "must use existing conventions"
 			},
 		},
 		{
@@ -175,11 +192,12 @@ func TestTaskUpdateTool_Execute(t *testing.T) {
 		{
 			name: "update multiple fields at once",
 			input: map[string]any{
-				"task_id":     createUpdateTestTask(t, store),
-				"subject":     "multi-update",
-				"description": "multi-desc",
-				"active_form": "multi-form",
-				"status":      "in_progress",
+				"task_id":             createUpdateTestTask(t, store),
+				"subject":             "multi-update",
+				"description":         "multi-desc",
+				"acceptance_criteria": "multi-criteria",
+				"constraints":         "multi-constraints",
+				"status":              "in_progress",
 			},
 			wantErr: false,
 			checkFn: func(r *ToolResult) bool {
@@ -192,7 +210,8 @@ func TestTaskUpdateTool_Execute(t *testing.T) {
 				}
 				return result["subject"] == "multi-update" &&
 					result["description"] == "multi-desc" &&
-					result["active_form"] == "multi-form" &&
+					result["acceptance_criteria"] == "multi-criteria" &&
+					result["constraints"] == "multi-constraints" &&
 					result["status"] == "in_progress"
 			},
 		},
@@ -232,10 +251,10 @@ func TestTaskUpdateTool_Execute(t *testing.T) {
 				}
 				metadata := result["metadata"].(map[string]any)
 				if _, ok := metadata["todelete"]; ok {
-					return false // todelete should be gone
+					return false
 				}
 				if metadata["tokeep"] != "value" {
-					return false // tokeep should remain
+					return false
 				}
 				return true
 			},
@@ -403,20 +422,18 @@ func TestTaskUpdateTool_MetadataMergeOverwrite(t *testing.T) {
 	}
 }
 
-// createUpdateTestTask is a helper that creates a task and returns its ID.
 func createUpdateTestTask(t *testing.T, store *TaskStore) string {
 	t.Helper()
-	task, err := store.Create("update-test", "original desc", "original form", nil)
+	task, err := store.Create("update-test", "original desc", "", "", nil)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
 	return task.ID
 }
 
-// createUpdateTestTaskWithMeta creates a task with initial metadata.
 func createUpdateTestTaskWithMeta(t *testing.T, store *TaskStore, metadata map[string]any) string {
 	t.Helper()
-	task, err := store.Create("update-test-meta", "desc", "form", metadata)
+	task, err := store.Create("update-test-meta", "desc", "", "", metadata)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}

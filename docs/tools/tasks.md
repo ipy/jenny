@@ -25,7 +25,7 @@ Creates tracked tasks. Always enabled.
 
 ### Parameters
 
-subject, description, optional activeForm, metadata.
+subject, description, optional acceptance_criteria, constraints, metadata.
 
 ### Hooks
 
@@ -49,7 +49,7 @@ Return `task: null` gracefully → tool result "Task not found" (not hard error)
 ### Acceptance Criteria
 
 - **AC1:** Missing task returns null gracefully.
-- **AC2:** Found task returns full record including `id`, `subject`, `description`, `active_form`, `status`, `created_at`, `updated_at`, `metadata`, `blocks`, and `blocked_by`.
+- **AC2:** Found task returns full record including `id`, `subject`, `description`, `acceptance_criteria`, `constraints`, `status`, `created_at`, `updated_at`, `metadata`, `blocks`, and `blocked_by`.
 
 ## TaskList Tool
 
@@ -59,14 +59,14 @@ Lists tasks with optional filters.
 
 ### Behavior
 
-- Filter `_internal` metadata from output
-- Output includes `blocks` and `blocked_by` arrays for each task
+- Outputs `id`, `subject`, `status`, and `blocked_by` (only when active blockers exist)
 - Strip resolved blockers from `blocked_by` arrays
+- Use TaskGet for full details including description, acceptance criteria, and constraints
 
 ### Acceptance Criteria
 
-- **AC1:** Internal metadata not exposed.
-- **AC2:** Resolved blockers stripped from blockedBy.
+- **AC1:** Resolved blockers stripped from blockedBy.
+- **AC2:** Empty blocked_by omitted from output.
 
 ## TaskUpdate Tool
 
@@ -81,7 +81,8 @@ Updates task fields, status, and dependency graph.
 | `task_id` | Required task identifier |
 | `subject` | New subject |
 | `description` | New description |
-| `active_form` | New active form |
+| `acceptance_criteria` | Verifiable conditions for completion |
+| `constraints` | Implicit requirements or restrictions |
 | `status` | New status (`pending`, `in_progress`, `completed`, `deleted`) |
 | `metadata` | Metadata object (merge on update, null value deletes key) |
 | `add_blocks` | Array of task IDs this task blocks |

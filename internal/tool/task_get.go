@@ -3,7 +3,6 @@ package tool
 import (
 	"context"
 	"encoding/json"
-	"time"
 )
 
 // TaskGetTool retrieves a single task by ID.
@@ -23,7 +22,7 @@ func (t *TaskGetTool) Name() string {
 
 // Description returns a description of the tool.
 func (t *TaskGetTool) Description() string {
-	return "Retrieves a single task by ID from the task tracking system. Returns 'task not found' if the task does not exist."
+	return "Retrieves a single task by ID with full details including description, acceptance criteria, and constraints. Use before starting work on a task to review requirements, or after TaskList to inspect a specific task. Returns 'task not found' if the task does not exist."
 }
 
 // InputSchema returns the JSON schema for tool input.
@@ -58,18 +57,7 @@ func (t *TaskGetTool) Execute(ctx context.Context, input map[string]any, cwd str
 		}, nil
 	}
 
-	data, err := json.Marshal(map[string]any{
-		"id":          task.ID,
-		"subject":     task.Subject,
-		"description": task.Description,
-		"active_form": task.ActiveForm,
-		"status":      task.Status,
-		"created_at":  task.CreatedAt.Format(time.RFC3339),
-		"updated_at":  task.UpdatedAt.Format(time.RFC3339),
-		"metadata":    task.Metadata,
-		"blocks":      task.Blocks,
-		"blocked_by":  task.BlockedBy,
-	})
+	data, err := json.Marshal(task)
 	if err != nil {
 		return &ToolResult{
 			Content: "failed to serialize task",

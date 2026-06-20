@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"time"
 )
 
 // TaskUpdateTool updates a task's fields, metadata, and dependencies.
@@ -31,7 +30,7 @@ func (t *TaskUpdateTool) ConcurrencySafe() bool {
 
 // Description returns a description of the tool.
 func (t *TaskUpdateTool) Description() string {
-	return "Updates a task in the task tracking system. Supports field updates, metadata merge (null deletes keys), and dependency graph changes."
+	return "Updates a task's fields, status, or dependencies. Use to mark a task in_progress when starting, completed ONLY when fully done (tests pass, no errors), or to set up dependency edges (add_blocks / add_blocked_by). ONLY mark completed when fully accomplished. If blocked, create a follow-up task rather than marking the current one complete."
 }
 
 // InputSchema returns the JSON schema for tool input.
@@ -45,19 +44,23 @@ func (t *TaskUpdateTool) InputSchema() map[string]any {
 			},
 			"subject": map[string]any{
 				"type":        "string",
-				"description": "The new subject/title of the task",
+				"description": "New subject/title of the task",
 			},
 			"description": map[string]any{
 				"type":        "string",
-				"description": "The new description of the task",
+				"description": "New description of the task",
 			},
-			"active_form": map[string]any{
+			"acceptance_criteria": map[string]any{
 				"type":        "string",
-				"description": "The new active form describing current work",
+				"description": "Verifiable conditions for task completion",
+			},
+			"constraints": map[string]any{
+				"type":        "string",
+				"description": "Implicit requirements or restrictions",
 			},
 			"status": map[string]any{
 				"type":        "string",
-				"description": "The new status: pending, in_progress, completed, or deleted",
+				"description": "New status: pending, in_progress, completed, or deleted",
 			},
 			"metadata": map[string]any{
 				"type":        "object",
@@ -88,7 +91,6 @@ func (t *TaskUpdateTool) Execute(ctx context.Context, input map[string]any, cwd 
 		}, nil
 	}
 
-	// Check task exists
 	task := t.store.Get(taskID)
 	if task == nil {
 		return &ToolResult{
@@ -97,7 +99,6 @@ func (t *TaskUpdateTool) Execute(ctx context.Context, input map[string]any, cwd 
 		}, nil
 	}
 
-	// Build fields map for update
 	fields := make(map[string]any)
 
 	if subject, ok := input["subject"].(string); ok {
@@ -106,8 +107,11 @@ func (t *TaskUpdateTool) Execute(ctx context.Context, input map[string]any, cwd 
 	if description, ok := input["description"].(string); ok {
 		fields["description"] = description
 	}
-	if activeForm, ok := input["active_form"].(string); ok {
-		fields["active_form"] = activeForm
+	if acceptanceCriteria, ok := input["acceptance_criteria"].(string); ok {
+		fields["acceptance_criteria"] = acceptanceCriteria
+	}
+	if constraints, ok := input["constraints"].(string); ok {
+		fields["constraints"] = constraints
 	}
 	if status, ok := input["status"].(string); ok {
 		if !isValidStatus(status) {
@@ -119,12 +123,9 @@ func (t *TaskUpdateTool) Execute(ctx context.Context, input map[string]any, cwd 
 		fields["status"] = status
 	}
 
-	// Metadata merge: null values delete keys
 	if metadata, ok := input["metadata"].(map[string]any); ok {
 		merged := make(map[string]any)
-		// Copy existing metadata
 		maps.Copy(merged, task.Metadata)
-		// Apply new metadata (null deletes)
 		for k, v := range metadata {
 			if v == nil {
 				delete(merged, k)
@@ -135,7 +136,6 @@ func (t *TaskUpdateTool) Execute(ctx context.Context, input map[string]any, cwd 
 		fields["metadata"] = merged
 	}
 
-	// Perform update
 	updated := t.store.Update(taskID, fields)
 	if updated == nil {
 		return &ToolResult{
@@ -144,7 +144,6 @@ func (t *TaskUpdateTool) Execute(ctx context.Context, input map[string]any, cwd 
 		}, nil
 	}
 
-	// Handle dependency updates
 	var addBlocks, addBlockedBy []string
 	if blocks, ok := input["add_blocks"].([]any); ok {
 		for _, b := range blocks {
@@ -164,19 +163,7 @@ func (t *TaskUpdateTool) Execute(ctx context.Context, input map[string]any, cwd 
 		updated = t.store.AddDependencies(taskID, addBlocks, addBlockedBy)
 	}
 
-	// Serialize response
-	data, err := json.Marshal(map[string]any{
-		"id":          updated.ID,
-		"subject":     updated.Subject,
-		"description": updated.Description,
-		"active_form": updated.ActiveForm,
-		"status":      updated.Status,
-		"created_at":  updated.CreatedAt.Format(time.RFC3339),
-		"updated_at":  updated.UpdatedAt.Format(time.RFC3339),
-		"metadata":    updated.Metadata,
-		"blocks":      updated.Blocks,
-		"blocked_by":  updated.BlockedBy,
-	})
+	data, err := json.Marshal(updated)
 	if err != nil {
 		return &ToolResult{
 			Content: "failed to serialize task",

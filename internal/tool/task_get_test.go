@@ -63,7 +63,7 @@ func TestTaskGetTool_Execute(t *testing.T) {
 		{
 			name: "get existing task returns full record",
 			input: map[string]any{
-				"task_id": createTestTask(t, store, "test-task", "description", "doing stuff", map[string]any{"priority": "high"}),
+				"task_id": createTaskGetTestTask(t, store, "test-task", "description", "tests must pass", "no constraints", map[string]any{"priority": "high"}),
 			},
 			wantErr: false,
 			checkFn: func(r *ToolResult) bool {
@@ -77,7 +77,8 @@ func TestTaskGetTool_Execute(t *testing.T) {
 				return result["id"] != nil &&
 					result["subject"] == "test-task" &&
 					result["description"] == "description" &&
-					result["active_form"] == "doing stuff" &&
+					result["acceptance_criteria"] == "tests must pass" &&
+					result["constraints"] == "no constraints" &&
 					result["status"] == "pending" &&
 					result["created_at"] != nil &&
 					result["updated_at"] != nil &&
@@ -138,7 +139,7 @@ func TestTaskGetTool_Timestamps(t *testing.T) {
 	tool := NewTaskGetTool(store)
 	ctx := context.Background()
 
-	taskID := createTestTask(t, store, "timestamp-test", "", "", nil)
+	taskID := createTaskGetTestTask(t, store, "timestamp-test", "", "", "", nil)
 
 	result, err := tool.Execute(ctx, map[string]any{"task_id": taskID}, t.TempDir())
 	if err != nil {
@@ -176,10 +177,9 @@ func TestTaskGetTool_Timestamps(t *testing.T) {
 	}
 }
 
-// createTestTask is a helper that creates a task and returns its ID.
-func createTestTask(t *testing.T, store *TaskStore, subject, desc, activeForm string, metadata map[string]any) string {
+func createTaskGetTestTask(t *testing.T, store *TaskStore, subject, desc, criteria, constraints string, metadata map[string]any) string {
 	t.Helper()
-	task, err := store.Create(subject, desc, activeForm, metadata)
+	task, err := store.Create(subject, desc, criteria, constraints, metadata)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}

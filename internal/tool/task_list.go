@@ -3,7 +3,6 @@ package tool
 import (
 	"context"
 	"encoding/json"
-	"time"
 )
 
 // TaskListTool lists tasks with optional filters.
@@ -23,7 +22,7 @@ func (t *TaskListTool) Name() string {
 
 // Description returns a description of the tool.
 func (t *TaskListTool) Description() string {
-	return "Lists tasks from the task tracking system. Optionally filters by status. Internal metadata keys (prefixed with _) are stripped from output."
+	return "Lists all tasks with status and dependencies. Use to review pending work and decide what to do next, check which tasks are blocked, find newly unblocked work after completing a task, or restore awareness of task state after context compaction. Prefer working on unblocked tasks in creation order. Use TaskGet for full details including acceptance criteria and constraints."
 }
 
 // InputSchema returns the JSON schema for tool input.
@@ -48,37 +47,15 @@ func (t *TaskListTool) Execute(ctx context.Context, input map[string]any, cwd st
 
 	tasks := t.store.List(filter)
 
-	// Convert tasks to output format, filtering internal metadata
-	// and stripping resolved blockers from blockedBy arrays
 	result := make([]map[string]any, 0, len(tasks))
 	for _, task := range tasks {
-		// Build output task map
 		out := map[string]any{
-			"id":          task.ID,
-			"subject":     task.Subject,
-			"description": task.Description,
-			"active_form": task.ActiveForm,
-			"status":      task.Status,
-			"created_at":  task.CreatedAt.Format(time.RFC3339),
-			"updated_at":  task.UpdatedAt.Format(time.RFC3339),
-			"blocks":      task.Blocks,
+			"id":      task.ID,
+			"subject": task.Subject,
+			"status":  task.Status,
 		}
 
-		// Filter internal metadata keys
-		if len(task.Metadata) > 0 {
-			filteredMeta := make(map[string]any)
-			for k, v := range task.Metadata {
-				if len(k) > 0 && k[0] == '_' {
-					continue // skip _internal keys
-				}
-				filteredMeta[k] = v
-			}
-			out["metadata"] = filteredMeta
-		} else {
-			out["metadata"] = task.Metadata
-		}
-
-		// Filter resolved blockers from blockedBy
+		// Only include blocked_by if there are active blockers
 		if len(task.BlockedBy) > 0 {
 			filteredBlockers := make([]string, 0)
 			for _, blockerID := range task.BlockedBy {
@@ -87,9 +64,9 @@ func (t *TaskListTool) Execute(ctx context.Context, input map[string]any, cwd st
 					filteredBlockers = append(filteredBlockers, blockerID)
 				}
 			}
-			out["blocked_by"] = filteredBlockers
-		} else {
-			out["blocked_by"] = []string{}
+			if len(filteredBlockers) > 0 {
+				out["blocked_by"] = filteredBlockers
+			}
 		}
 
 		result = append(result, out)

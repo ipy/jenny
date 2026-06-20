@@ -19,16 +19,17 @@ const (
 
 // Task represents a tracked task record.
 type Task struct {
-	ID          string         `json:"id"`
-	Subject     string         `json:"subject"`
-	Description string         `json:"description"`
-	ActiveForm  string         `json:"active_form"`
-	Status      TaskStatus     `json:"status"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	Metadata    map[string]any `json:"metadata,omitempty"`
-	Blocks      []string       `json:"blocks,omitempty"`
-	BlockedBy   []string       `json:"blocked_by,omitempty"`
+	ID                 string         `json:"id"`
+	Subject            string         `json:"subject"`
+	Description        string         `json:"description,omitempty"`
+	Status             TaskStatus     `json:"status"`
+	AcceptanceCriteria string         `json:"acceptance_criteria,omitempty"`
+	Constraints        string         `json:"constraints,omitempty"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
+	Metadata           map[string]any `json:"metadata,omitempty"`
+	Blocks             []string       `json:"blocks,omitempty"`
+	BlockedBy          []string       `json:"blocked_by,omitempty"`
 }
 
 // TaskFilter contains optional filters for listing tasks.
@@ -104,7 +105,7 @@ func generateID() (string, error) {
 }
 
 // Create adds a new task and returns it. The ID is generated and CreatedAt is set.
-func (s *TaskStore) Create(subject, description, activeForm string, metadata map[string]any) (*Task, error) {
+func (s *TaskStore) Create(subject, description, acceptanceCriteria, constraints string, metadata map[string]any) (*Task, error) {
 	id, err := generateID()
 	if err != nil {
 		return nil, err
@@ -112,14 +113,15 @@ func (s *TaskStore) Create(subject, description, activeForm string, metadata map
 
 	now := time.Now()
 	task := &Task{
-		ID:          id,
-		Subject:     subject,
-		Description: description,
-		ActiveForm:  activeForm,
-		Status:      TaskStatusPending,
-		CreatedAt:   now,
-		UpdatedAt:   now,
-		Metadata:    metadata,
+		ID:                 id,
+		Subject:            subject,
+		Description:        description,
+		AcceptanceCriteria: acceptanceCriteria,
+		Constraints:        constraints,
+		Status:             TaskStatusPending,
+		CreatedAt:          now,
+		UpdatedAt:          now,
+		Metadata:           metadata,
 	}
 
 	s.mu.Lock()
@@ -169,8 +171,11 @@ func (s *TaskStore) Update(id string, fields map[string]any) *Task {
 	if description, ok := fields["description"].(string); ok {
 		task.Description = description
 	}
-	if activeForm, ok := fields["active_form"].(string); ok {
-		task.ActiveForm = activeForm
+	if acceptanceCriteria, ok := fields["acceptance_criteria"].(string); ok {
+		task.AcceptanceCriteria = acceptanceCriteria
+	}
+	if constraints, ok := fields["constraints"].(string); ok {
+		task.Constraints = constraints
 	}
 	if status, ok := fields["status"].(string); ok {
 		task.Status = TaskStatus(status)

@@ -47,6 +47,7 @@ func TestTaskListTool_Execute(t *testing.T) {
 		{
 			name:  "list all tasks unfiltered",
 			input: map[string]any{},
+			wantErr: false,
 			checkFn: func(r *ToolResult) bool {
 				if r == nil || r.IsError {
 					return false
@@ -55,27 +56,20 @@ func TestTaskListTool_Execute(t *testing.T) {
 				if err := json.Unmarshal([]byte(r.Content), &result); err != nil {
 					return false
 				}
-				return len(result) == 0 // empty is ok, just means no tasks
+				return len(result) == 0
 			},
 		},
 		{
-			name:  "list tasks returns all tasks when no filter",
+			name:  "list returns all tasks when no filter",
 			input: map[string]any{},
+			wantErr: false,
 			checkFn: func(r *ToolResult) bool {
 				if r == nil || r.IsError {
 					return false
 				}
-				// Create a task first
-				_, err := store.Create("list-test-1", "", "", nil)
-				if err != nil {
-					return false
-				}
-				_, err = store.Create("list-test-2", "", "", nil)
-				if err != nil {
-					return false
-				}
+				store.Create("list-test-1", "", "", "", nil)
+				store.Create("list-test-2", "", "", "", nil)
 
-				// Re-execute to get the updated list
 				result2, err := tool.Execute(ctx, map[string]any{}, t.TempDir())
 				if err != nil || result2.IsError {
 					return false
@@ -90,6 +84,7 @@ func TestTaskListTool_Execute(t *testing.T) {
 		{
 			name:  "list filters by status",
 			input: map[string]any{"status": "in_progress"},
+			wantErr: false,
 			checkFn: func(r *ToolResult) bool {
 				if r == nil || r.IsError {
 					return false
@@ -107,33 +102,9 @@ func TestTaskListTool_Execute(t *testing.T) {
 			},
 		},
 		{
-			name:  "list filters internal metadata",
-			input: map[string]any{},
-			checkFn: func(r *ToolResult) bool {
-				if r == nil || r.IsError {
-					return false
-				}
-				var result []map[string]any
-				if err := json.Unmarshal([]byte(r.Content), &result); err != nil {
-					return false
-				}
-				for _, task := range result {
-					metadata, ok := task["metadata"].(map[string]any)
-					if !ok {
-						continue
-					}
-					for k := range metadata {
-						if len(k) > 0 && k[0] == '_' {
-							return false // internal key found
-						}
-					}
-				}
-				return true
-			},
-		},
-		{
 			name:  "list strips resolved blockers from blockedBy",
 			input: map[string]any{},
+			wantErr: false,
 			checkFn: func(r *ToolResult) bool {
 				if r == nil || r.IsError {
 					return false
@@ -147,7 +118,6 @@ func TestTaskListTool_Execute(t *testing.T) {
 					if !ok {
 						continue
 					}
-					// blockedBy should only contain unresolved task IDs
 					for _, b := range blockedBy {
 						blockerID, ok := b.(string)
 						if !ok {
@@ -156,7 +126,7 @@ func TestTaskListTool_Execute(t *testing.T) {
 						blocker := store.Get(blockerID)
 						if blocker != nil {
 							if blocker.Status == TaskStatusCompleted || blocker.Status == TaskStatusDeleted {
-								return false // resolved blocker found
+								return false
 							}
 						}
 					}
@@ -165,7 +135,6 @@ func TestTaskListTool_Execute(t *testing.T) {
 			},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := tool.Execute(ctx, tt.input, t.TempDir())
@@ -189,16 +158,13 @@ func TestTaskListTool_StatusFilter(t *testing.T) {
 	tool := NewTaskListTool(store)
 	ctx := context.Background()
 
-	// Create tasks with different statuses
-	pendingTask, _ := store.Create("pending-task", "", "", nil)
-	inProgressTask, _ := store.Create("in-progress-task", "", "", nil)
-	completedTask, _ := store.Create("completed-task", "", "", nil)
+	_, _ = store.Create("pending-task", "", "", "", nil)
+	inProgressTask, _ := store.Create("in-progress-task", "", "", "", nil)
+	completedTask, _ := store.Create("completed-task", "", "", "", nil)
 
-	store.Update(pendingTask.ID, map[string]any{"status": "pending"})
 	store.Update(inProgressTask.ID, map[string]any{"status": "in_progress"})
 	store.Update(completedTask.ID, map[string]any{"status": "completed"})
 
-	// Filter by pending
 	result, err := tool.Execute(ctx, map[string]any{"status": "pending"}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -211,7 +177,6 @@ func TestTaskListTool_StatusFilter(t *testing.T) {
 		t.Errorf("pending filter returned wrong tasks: %v", pending)
 	}
 
-	// Filter by in_progress
 	result, err = tool.Execute(ctx, map[string]any{"status": "in_progress"}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -224,7 +189,6 @@ func TestTaskListTool_StatusFilter(t *testing.T) {
 		t.Errorf("in_progress filter returned wrong tasks: %v", inProgress)
 	}
 
-	// Filter by completed
 	result, err = tool.Execute(ctx, map[string]any{"status": "completed"}, t.TempDir())
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -238,70 +202,19 @@ func TestTaskListTool_StatusFilter(t *testing.T) {
 	}
 }
 
-func TestTaskListTool_InternalMetadataFilter(t *testing.T) {
-	store := NewTaskStore()
-	tool := NewTaskListTool(store)
-	ctx := context.Background()
-
-	// Create task with internal metadata
-	_, err := store.Create("meta-test", "", "", map[string]any{
-		"priority":  "high",
-		"_internal": "secret",
-		"_private":  "data",
-		"public":    "info",
-	})
-	if err != nil {
-		t.Fatalf("Create() error = %v", err)
-	}
-
-	result, err := tool.Execute(ctx, map[string]any{}, t.TempDir())
-	if err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-	var tasks []map[string]any
-	if err := json.Unmarshal([]byte(result.Content), &tasks); err != nil {
-		t.Fatalf("Failed to unmarshal: %v", err)
-	}
-
-	found := false
-	for _, task := range tasks {
-		if task["subject"] == "meta-test" {
-			found = true
-			metadata := task["metadata"].(map[string]any)
-			if _, ok := metadata["_internal"]; ok {
-				t.Errorf("Internal metadata _internal should be filtered out: %v", metadata)
-			}
-			if _, ok := metadata["_private"]; ok {
-				t.Errorf("Internal metadata _private should be filtered out: %v", metadata)
-			}
-			if metadata["priority"] != "high" {
-				t.Errorf("public metadata priority should be preserved: %v", metadata)
-			}
-			if metadata["public"] != "info" {
-				t.Errorf("public metadata public should be preserved: %v", metadata)
-			}
-		}
-	}
-	if !found {
-		t.Errorf("meta-test task not found in list")
-	}
-}
-
 func TestTaskListTool_ResolvedBlockersFiltered(t *testing.T) {
 	store := NewTaskStore()
 	tool := NewTaskListTool(store)
 	ctx := context.Background()
 
-	// Create blocker tasks
-	activeBlocker, _ := store.Create("active-blocker", "", "", nil)
-	completedBlocker, _ := store.Create("completed-blocker", "", "", nil)
-	deletedBlocker, _ := store.Create("deleted-blocker", "", "", nil)
+	activeBlocker, _ := store.Create("active-blocker", "", "", "", nil)
+	completedBlocker, _ := store.Create("completed-blocker", "", "", "", nil)
+	deletedBlocker, _ := store.Create("deleted-blocker", "", "", "", nil)
 
 	store.Update(completedBlocker.ID, map[string]any{"status": "completed"})
 	store.Update(deletedBlocker.ID, map[string]any{"status": "deleted"})
 
-	// Create task blocked by all three
-	blockedTask, _ := store.Create("blocked-task", "", "", nil)
+	blockedTask, _ := store.Create("blocked-task", "", "", "", nil)
 	store.AddDependencies(blockedTask.ID, nil, []string{activeBlocker.ID, completedBlocker.ID, deletedBlocker.ID})
 
 	result, err := tool.Execute(ctx, map[string]any{}, t.TempDir())

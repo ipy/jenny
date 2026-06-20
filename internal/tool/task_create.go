@@ -29,7 +29,7 @@ func (t *TaskCreateTool) ConcurrencySafe() bool {
 
 // Description returns a description of the tool.
 func (t *TaskCreateTool) Description() string {
-	return "Creates a tracked task. Use for organizing complex multi-step work."
+	return "Creates a tracked task for organizing complex multi-step work. Use for tasks that require 3 or more distinct steps, non-trivial work, or when the user provides multiple tasks. After creating tasks, use TaskList to review and TaskUpdate to begin work."
 }
 
 // InputSchema returns the JSON schema for tool input.
@@ -39,19 +39,23 @@ func (t *TaskCreateTool) InputSchema() map[string]any {
 		"properties": map[string]any{
 			"subject": map[string]any{
 				"type":        "string",
-				"description": "The subject/title of the task (required)",
+				"description": "A brief title for the task (required)",
 			},
 			"description": map[string]any{
 				"type":        "string",
-				"description": "Detailed description of the task",
+				"description": "What needs to be done",
 			},
-			"active_form": map[string]any{
+			"acceptance_criteria": map[string]any{
 				"type":        "string",
-				"description": "The active form describing current work (e.g., 'Implementing login')",
+				"description": "Verifiable conditions that must hold for the task to be considered done",
+			},
+			"constraints": map[string]any{
+				"type":        "string",
+				"description": "Implicit requirements or restrictions (compatibility, conventions, dependencies)",
 			},
 			"metadata": map[string]any{
 				"type":        "object",
-				"description": "Additional metadata for the task",
+				"description": "Arbitrary metadata to attach to the task",
 			},
 		},
 		"required": []string{"subject"},
@@ -60,7 +64,6 @@ func (t *TaskCreateTool) InputSchema() map[string]any {
 
 // Execute runs the TaskCreate tool.
 func (t *TaskCreateTool) Execute(ctx context.Context, input map[string]any, cwd string) (*ToolResult, error) {
-	// Get subject (required)
 	subject, ok := input["subject"].(string)
 	if !ok || subject == "" {
 		return &ToolResult{
@@ -69,25 +72,27 @@ func (t *TaskCreateTool) Execute(ctx context.Context, input map[string]any, cwd 
 		}, nil
 	}
 
-	// Get description (optional, defaults to "")
 	description := ""
 	if desc, ok := input["description"].(string); ok {
 		description = desc
 	}
 
-	// Get active_form (optional)
-	activeForm := ""
-	if af, ok := input["active_form"].(string); ok {
-		activeForm = af
+	acceptanceCriteria := ""
+	if ac, ok := input["acceptance_criteria"].(string); ok {
+		acceptanceCriteria = ac
 	}
 
-	// Get metadata (optional)
+	constraints := ""
+	if c, ok := input["constraints"].(string); ok {
+		constraints = c
+	}
+
 	var metadata map[string]any
 	if meta, ok := input["metadata"].(map[string]any); ok {
 		metadata = meta
 	}
 
-	task, err := t.store.Create(subject, description, activeForm, metadata)
+	task, err := t.store.Create(subject, description, acceptanceCriteria, constraints, metadata)
 	if err != nil {
 		return &ToolResult{
 			Content: fmt.Sprintf("failed to create task: %v", err),
@@ -95,15 +100,15 @@ func (t *TaskCreateTool) Execute(ctx context.Context, input map[string]any, cwd 
 		}, nil
 	}
 
-	// Serialize task to JSON for output
 	data, _ := json.Marshal(map[string]any{
-		"id":          task.ID,
-		"subject":     task.Subject,
-		"description": task.Description,
-		"active_form": task.ActiveForm,
-		"status":      task.Status,
-		"created_at":  task.CreatedAt,
-		"metadata":    task.Metadata,
+		"id":                  task.ID,
+		"subject":             task.Subject,
+		"description":         task.Description,
+		"acceptance_criteria": task.AcceptanceCriteria,
+		"constraints":         task.Constraints,
+		"status":              task.Status,
+		"created_at":          task.CreatedAt,
+		"metadata":            task.Metadata,
 	})
 
 	return &ToolResult{

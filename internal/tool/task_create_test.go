@@ -29,7 +29,6 @@ func TestTaskCreateTool_InputSchema(t *testing.T) {
 		t.Fatalf("InputSchema() properties not a map")
 	}
 
-	// Check required fields
 	required, ok := schema["required"].([]string)
 	if !ok {
 		t.Fatalf("InputSchema() required not a slice")
@@ -45,12 +44,14 @@ func TestTaskCreateTool_InputSchema(t *testing.T) {
 		t.Errorf("InputSchema() missing required field: subject")
 	}
 
-	// Check optional fields exist
 	if _, ok := props["description"]; !ok {
 		t.Errorf("InputSchema() missing description property")
 	}
-	if _, ok := props["active_form"]; !ok {
-		t.Errorf("InputSchema() missing active_form property")
+	if _, ok := props["acceptance_criteria"]; !ok {
+		t.Errorf("InputSchema() missing acceptance_criteria property")
+	}
+	if _, ok := props["constraints"]; !ok {
+		t.Errorf("InputSchema() missing constraints property")
 	}
 	if _, ok := props["metadata"]; !ok {
 		t.Errorf("InputSchema() missing metadata property")
@@ -88,10 +89,11 @@ func TestTaskCreateTool_Execute(t *testing.T) {
 		{
 			name: "create task with all fields",
 			input: map[string]any{
-				"subject":     "full-task",
-				"description": "A detailed description",
-				"active_form": "Implementing full task",
-				"metadata":    map[string]any{"priority": "high"},
+				"subject":             "full-task",
+				"description":         "A detailed description",
+				"acceptance_criteria": "All tests pass, no regressions",
+				"constraints":         "Must use existing conventions",
+				"metadata":            map[string]any{"priority": "high"},
 			},
 			wantErr: false,
 			checkFn: func(r *ToolResult) bool {
@@ -104,7 +106,8 @@ func TestTaskCreateTool_Execute(t *testing.T) {
 				}
 				return result["subject"] == "full-task" &&
 					result["description"] == "A detailed description" &&
-					result["active_form"] == "Implementing full task" &&
+					result["acceptance_criteria"] == "All tests pass, no regressions" &&
+					result["constraints"] == "Must use existing conventions" &&
 					result["status"] == "pending"
 			},
 		},
@@ -187,7 +190,7 @@ func TestTaskStore(t *testing.T) {
 	store := NewTaskStore()
 
 	// Create
-	task, err := store.Create("test subject", "test description", "testing", nil)
+	task, err := store.Create("test subject", "test description", "tests pass", "no constraints", nil)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -196,6 +199,12 @@ func TestTaskStore(t *testing.T) {
 	}
 	if task.Subject != "test subject" {
 		t.Errorf("Create() subject = %v, want %v", task.Subject, "test subject")
+	}
+	if task.AcceptanceCriteria != "tests pass" {
+		t.Errorf("Create() acceptance_criteria = %v, want %v", task.AcceptanceCriteria, "tests pass")
+	}
+	if task.Constraints != "no constraints" {
+		t.Errorf("Create() constraints = %v, want %v", task.Constraints, "no constraints")
 	}
 	if task.Status != TaskStatusPending {
 		t.Errorf("Create() status = %v, want %v", task.Status, TaskStatusPending)
@@ -241,13 +250,11 @@ func TestTaskStore(t *testing.T) {
 func TestTaskStore_ListFilter(t *testing.T) {
 	store := NewTaskStore()
 
-	task1, _ := store.Create("task1", "", "", nil)
-	task2, _ := store.Create("task2", "", "", nil)
+	task1, _ := store.Create("task1", "", "", "", nil)
+	task2, _ := store.Create("task2", "", "", "", nil)
 
-	// Complete task1
 	store.Update(task1.ID, map[string]any{"status": "completed"})
 
-	// Filter by pending - should return task2
 	pending := store.List(TaskFilter{Status: TaskStatusPending})
 	if len(pending) != 1 {
 		t.Errorf("List(pending) returned %v tasks, want 1", len(pending))
@@ -256,7 +263,6 @@ func TestTaskStore_ListFilter(t *testing.T) {
 		t.Errorf("List(pending)[0].ID = %v, want %v", pending[0].ID, task2.ID)
 	}
 
-	// Filter by completed - should return task1
 	completed := store.List(TaskFilter{Status: TaskStatusCompleted})
 	if len(completed) != 1 {
 		t.Errorf("List(completed) returned %v tasks, want 1", len(completed))
