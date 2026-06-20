@@ -298,8 +298,15 @@ func (t *GlobTool) globWithWalk(searchRoot, pattern string) ([]fileMatch, error)
 	var matches []fileMatch
 
 	err := filepath.Walk(searchRoot, func(path string, info os.FileInfo, err error) error {
-		relPath, err := filepath.Rel(searchRoot, path)
 		if err != nil {
+			return nil
+		}
+		if info == nil {
+			return nil
+		}
+
+		relPath, relErr := filepath.Rel(searchRoot, path)
+		if relErr != nil {
 			return nil
 		}
 
