@@ -30,7 +30,7 @@ Tools are scanned in model request order and grouped:
 |------------|----------|-----------|
 | Read, Glob, Grep (and `ConcurrencySafe()` tools) | Consecutive batch | Parallel (semaphore-limited) |
 | Bash, PowerShell (shell tools) | Consecutive batch | Serial within batch; sibling abort on failure |
-| Write, Edit, NotebookEdit, TodoWrite, TaskCreate/Update/Stop, EnterWorktree, ExitWorktree | Individual | Serial (one per group) |
+| Write, Edit, NotebookEdit, TaskCreate/Update/Stop, EnterWorktree, ExitWorktree | Individual | Serial (one per group) |
 | Unknown tool | Individual | Immediate synthetic error |
 
 When tool class changes, the current batch is flushed and a new group starts.

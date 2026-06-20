@@ -49,6 +49,7 @@ type TranscriptEntry struct {
 	// Session state fields - used for session-level state persistence
 	CompactFailCount int    `json:"compact_fail_count,omitempty"`
 	SystemPrompt     string `json:"system_prompt,omitempty"`
+	TasksJSON        string `json:"tasks_json,omitempty"`
 
 	// Worktree state fields - used for worktree isolation and resume
 	WorktreePath   string `json:"worktree_path,omitempty"`
@@ -477,6 +478,38 @@ func (m *Manager) LoadSystemPrompt(sessionID string) (string, error) {
 	for _, entry := range entries {
 		if entry.Type == EntryTypeState && entry.SystemPrompt != "" {
 			latest = entry.SystemPrompt
+		}
+	}
+	return latest, nil
+}
+
+// AppendTaskStore persists the current task store state as a state entry.
+func (m *Manager) AppendTaskStore(sessionID string, tasksJSON string) error {
+	if m.Disabled || sessionID == "" {
+		return nil
+	}
+	return m.AppendEntry(sessionID, TranscriptEntry{
+		Type:      EntryTypeState,
+		TasksJSON: tasksJSON,
+	})
+}
+
+// LoadTaskStore loads the most recent task store state from the transcript.
+// Returns empty string if no state entry with tasks_json is found.
+func (m *Manager) LoadTaskStore(sessionID string) (string, error) {
+	if sessionID == "" {
+		return "", nil
+	}
+
+	entries, err := m.LoadTranscript(sessionID)
+	if err != nil {
+		return "", err
+	}
+
+	var latest string
+	for _, entry := range entries {
+		if entry.Type == EntryTypeState && entry.TasksJSON != "" {
+			latest = entry.TasksJSON
 		}
 	}
 	return latest, nil

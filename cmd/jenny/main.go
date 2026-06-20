@@ -518,6 +518,9 @@ func run() error {
 	// Get skill activator to wire it to the engine for active skill tracking
 	skillActivator := registry.GetSkillActivator()
 
+	// Get task store for session persistence
+	taskStore := registry.GetTaskStore()
+
 	// Create subagent runners and AgentTool
 	denyRulesMap := make(map[string]bool)
 	for _, name := range flags.DeniedTools {
@@ -579,6 +582,7 @@ func run() error {
 		Plugins:             pluginInfo,
 		MemoryPaths:         memoryPaths,
 		PermissionLevel:     permLevel,
+		TaskStore:           taskStore,
 	}
 
 	// AC3-streamconfig-inheritance: Set parent config on runner for named agent inheritance

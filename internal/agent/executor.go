@@ -439,10 +439,10 @@ func isReadOnlyTool(toolName string) bool {
 	}
 }
 
-// isSerialTool returns true if the tool must run serially (write, edit, notebook_edit, todo_write, task tools that mutate).
+// isSerialTool returns true if the tool must run serially (write, edit, notebook_edit, task tools that mutate).
 func isSerialTool(toolName string) bool {
 	switch strings.ToLower(toolName) {
-	case "write", "edit", "notebook_edit", "notebook-edit", "notebookedit", "todo_write", "todowrite", "taskcreate", "task_create", "taskupdate", "task_update", "taskstop", "task_stop", "enter_worktree", "enterworktree", "exit_worktree", "exitworktree":
+	case "write", "edit", "notebook_edit", "notebook-edit", "notebookedit", "taskcreate", "task_create", "taskupdate", "task_update", "taskstop", "task_stop", "enter_worktree", "enterworktree", "exit_worktree", "exitworktree":
 		return true
 	default:
 		return false

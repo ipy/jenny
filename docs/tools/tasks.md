@@ -15,30 +15,13 @@ depends_on:
 ---
 # Tasks
 
-Task-related tool specifications for the Todo v2 system and related background task handling.
-
-## TodoWrite Tool
-
-### Overview
-
-In-session todo list for agent planning. Stored **in-memory only** per process (not persisted to disk).
-
-### Behavior
-
-- All items `completed` → store cleared to `[]`
-- Disabled when Todo v2 enabled (TaskCreate/Get/List/Update replace it)
-
-### Acceptance Criteria
-
-- **AC1:** Todos stored in-memory for the current process only.
-- **AC2:** All completed clears list.
-- **AC3:** Disabled when Todo v2 on.
+Task-related tool specifications for the task tracking system and background task handling.
 
 ## TaskCreate Tool
 
 ### Overview
 
-Creates tracked tasks in Todo v2 system. Requires Todo v2 enabled.
+Creates tracked tasks. Always enabled.
 
 ### Parameters
 
@@ -50,7 +33,7 @@ Hooks may block creation; on failure the error is returned (no task rollback).
 
 ### Acceptance Criteria
 
-- **AC1:** Only enabled with Todo v2.
+- **AC1:** Always enabled.
 - **AC2:** Hook failure returns error without creating a task.
 
 ## TaskGet Tool

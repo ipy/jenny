@@ -23,7 +23,7 @@ func (t *TaskGetTool) Name() string {
 
 // Description returns a description of the tool.
 func (t *TaskGetTool) Description() string {
-	return "Retrieves a single task by ID from the Todo v2 system. Returns 'task not found' if the task does not exist."
+	return "Retrieves a single task by ID from the task tracking system. Returns 'task not found' if the task does not exist."
 }
 
 // InputSchema returns the JSON schema for tool input.

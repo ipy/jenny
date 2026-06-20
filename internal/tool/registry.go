@@ -31,10 +31,7 @@ type Registry struct {
 	searchClientProvider   SearchClientProvider
 	skills                 []skills.Skill
 	taskStopEnabled        bool
-	todoWriteEnabled       bool
 	taskOutputEnabled      bool
-	todoV2Enabled          bool
-	taskCreateEnabled      bool
 	taskStore              *TaskStore
 	skillsFrameworkEnabled bool
 	skillActivator         SkillActivator
@@ -188,28 +185,9 @@ func (r *Registry) WithTaskStopEnabled(enabled bool) *Registry {
 	return r
 }
 
-// WithTodoWriteEnabled enables the TodoWrite tool for in-session todo tracking.
-func (r *Registry) WithTodoWriteEnabled(enabled bool) *Registry {
-	r.todoWriteEnabled = enabled
-	return r
-}
-
 // WithTaskOutputEnabled enables the TaskOutput tool for retrieving background task output.
 func (r *Registry) WithTaskOutputEnabled(enabled bool) *Registry {
 	r.taskOutputEnabled = enabled
-	return r
-}
-
-// WithTodoV2Enabled enables the Todo v2 system. When enabled, TaskCreate is available
-// and TodoWrite is disabled.
-func (r *Registry) WithTodoV2Enabled(enabled bool) *Registry {
-	r.todoV2Enabled = enabled
-	return r
-}
-
-// WithTaskCreateEnabled enables the TaskCreate tool. Requires TodoV2Enabled to be set.
-func (r *Registry) WithTaskCreateEnabled(enabled bool) *Registry {
-	r.taskCreateEnabled = enabled
 	return r
 }
 
@@ -229,6 +207,12 @@ func (r *Registry) WithExitWorktreeEnabled(enabled bool) *Registry {
 // This allows the caller to wire the activator to the QueryEngine for active skill tracking.
 func (r *Registry) GetSkillActivator() SkillActivator {
 	return r.skillActivator
+}
+
+// GetTaskStore returns the shared TaskStore created during Build().
+// Returns nil if Build() has not been called yet.
+func (r *Registry) GetTaskStore() *TaskStore {
+	return r.taskStore
 }
 
 // Build returns the final ordered tool list.
@@ -334,18 +318,12 @@ func (r *Registry) Build() []Tool {
 			}
 		}
 
-		// Add TodoWrite tool if enabled (P4). Disabled when Todo v2 is enabled.
-		if r.todoV2Enabled {
-			if r.taskCreateEnabled {
-				r.taskStore = NewTaskStore()
-				r.baseTools = append(r.baseTools, NewTaskCreateTool(r.taskStore))
-				r.baseTools = append(r.baseTools, NewTaskGetTool(r.taskStore))
-				r.baseTools = append(r.baseTools, NewTaskListTool(r.taskStore))
-				r.baseTools = append(r.baseTools, NewTaskUpdateTool(r.taskStore))
-			}
-		} else if r.todoWriteEnabled {
-			r.baseTools = append(r.baseTools, NewTodoWriteTool())
-		}
+		// Register task tracking tools (always enabled).
+		r.taskStore = NewTaskStore()
+		r.baseTools = append(r.baseTools, NewTaskCreateTool(r.taskStore))
+		r.baseTools = append(r.baseTools, NewTaskGetTool(r.taskStore))
+		r.baseTools = append(r.baseTools, NewTaskListTool(r.taskStore))
+		r.baseTools = append(r.baseTools, NewTaskUpdateTool(r.taskStore))
 
 		// Add WebFetch tool if enabled (P3).
 		if r.webFetchEnabled {

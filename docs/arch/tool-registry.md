@@ -39,7 +39,7 @@ tools := tool.NewRegistry().
 
 1. Instantiate base tools (platform-aware shell tool selection).
 2. Wire sandbox, skill activator, task manager as configured.
-3. Append optional tools (WebFetch, WebSearch, LSP, activate_skill, worktree, Todo v2, …).
+3. Append optional tools (WebFetch, WebSearch, LSP, activate_skill, worktree, task tracking, …).
 4. Filter by `WithDenyRules` and per-tool `WithEnabled`.
 5. Append MCP tools; **built-in wins** on name collision.
 
@@ -49,14 +49,10 @@ Built-ins appear first for prompt cache stability.
 
 `WithDenyRules([]string)` excludes tools by exact name. Denied tools never appear in the API tool list.
 
-## Todo v2 vs TodoWrite
+## Task tracking
 
-When `WithTodoV2Enabled(true)`:
-
-- Register: TaskCreate, TaskGet, TaskUpdate, TaskList.
-- TodoWrite is not registered even if `WithTodoWriteEnabled(true)`.
-
-TaskStop and TaskOutput are independent of Todo v2 and controlled by their own feature flags (`WithTaskStopEnabled`, `WithTaskOutputEnabled`).
+Task tracking tools (TaskCreate, TaskGet, TaskUpdate, TaskList) are always registered.
+TaskStop and TaskOutput are independent and controlled by their own feature flags (`WithTaskStopEnabled`, `WithTaskOutputEnabled`).
 
 ## Feature Flags
 
@@ -66,8 +62,7 @@ TaskStop and TaskOutput are independent of Todo v2 and controlled by their own f
 | LSP | `WithLSPEnabled(true)` + `WithLSPClient(client)` |
 | EnterWorktree / ExitWorktree | `WithEnterWorktreeEnabled` / `WithExitWorktreeEnabled` |
 | WebFetch / WebSearch | `WithWebFetchEnabled` / `WithWebSearchEnabled` |
-| TodoWrite | `WithTodoWriteEnabled(true)` |
-| TaskCreate / TaskGet / TaskUpdate / TaskList | `WithTodoV2Enabled(true)` |
+| TaskCreate / TaskGet / TaskUpdate / TaskList | Always on |
 | TaskStop | `WithTaskStopEnabled(true)` |
 | TaskOutput | `WithTaskOutputEnabled(true)` |
 | Skills framework | `WithSkillsFrameworkEnabled(true, skills)` |
@@ -89,7 +84,7 @@ Merged after built-ins via `WithMCPTools`; names prefixed `mcp__<server>__<tool>
 ## Acceptance Criteria
 
 - **AC1:** Denied tools absent from model tool list.
-- **AC2:** Todo v2 disables TodoWrite.
+- **AC2:** Task tracking tools registered unconditionally.
 - **AC3:** LSP only when enabled with client.
 - **AC4:** MCP tools appended with correct prefix.
 - **AC5:** Tool list in system prompt matches registered set.

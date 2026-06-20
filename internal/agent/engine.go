@@ -4,6 +4,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"slices"
@@ -196,6 +197,16 @@ func NewQueryEngine(cfg *StreamConfig, tools []tool.Tool, model string, opts ...
 				log.Debug("Failed to seed readFileCache from transcript", "sessionID", sessionID, "error", err)
 			}
 		}
+		// Restore task store from transcript
+		if cfg.TaskStore != nil && cfg.SessionManager != nil {
+			if tasksJSON, err := cfg.SessionManager.LoadTaskStore(sessionID); err == nil && tasksJSON != "" {
+				if err := cfg.TaskStore.LoadFromJSON([]byte(tasksJSON)); err != nil {
+					log.Debug("Failed to restore task store", "sessionID", sessionID, "error", err)
+				} else {
+					log.Debug("Task store restored", "sessionID", sessionID)
+				}
+			}
+		}
 	}
 
 	e := &QueryEngine{
@@ -215,6 +226,23 @@ func NewQueryEngine(cfg *StreamConfig, tools []tool.Tool, model string, opts ...
 	// Apply options
 	for _, opt := range opts {
 		opt(e)
+	}
+
+	// Wire task store persistence: persist on every mutation
+	if cfg.TaskStore != nil && cfg.SessionManager != nil && sessionID != "" {
+		sm := cfg.SessionManager
+		sid := sessionID
+		cfg.TaskStore.SetOnChange(func() {
+			tasks := cfg.TaskStore.AllTasks()
+			data, err := json.Marshal(tasks)
+			if err != nil {
+				log.Warn("Failed to marshal task store for persistence", "error", err)
+				return
+			}
+			if err := sm.AppendTaskStore(sid, string(data)); err != nil {
+				log.Warn("Failed to persist task store", "error", err)
+			}
+		})
 	}
 
 	// Default client if none provided

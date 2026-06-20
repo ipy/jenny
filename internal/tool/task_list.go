@@ -23,7 +23,7 @@ func (t *TaskListTool) Name() string {
 
 // Description returns a description of the tool.
 func (t *TaskListTool) Description() string {
-	return "Lists tasks from the Todo v2 system. Optionally filters by status. Internal metadata keys (prefixed with _) are stripped from output."
+	return "Lists tasks from the task tracking system. Optionally filters by status. Internal metadata keys (prefixed with _) are stripped from output."
 }
 
 // InputSchema returns the JSON schema for tool input.

@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -18,16 +19,16 @@ const (
 
 // Task represents a tracked task record.
 type Task struct {
-	ID          string
-	Subject     string
-	Description string
-	ActiveForm  string
-	Status      TaskStatus
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	Metadata    map[string]any
-	Blocks      []string // Task IDs this task blocks
-	BlockedBy   []string // Task IDs this task is blocked by
+	ID          string         `json:"id"`
+	Subject     string         `json:"subject"`
+	Description string         `json:"description"`
+	ActiveForm  string         `json:"active_form"`
+	Status      TaskStatus     `json:"status"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+	Blocks      []string       `json:"blocks,omitempty"`
+	BlockedBy   []string       `json:"blocked_by,omitempty"`
 }
 
 // TaskFilter contains optional filters for listing tasks.
@@ -37,8 +38,9 @@ type TaskFilter struct {
 
 // TaskStore is a thread-safe in-memory store for tasks.
 type TaskStore struct {
-	mu    sync.RWMutex
-	tasks map[string]*Task
+	mu       sync.RWMutex
+	tasks    map[string]*Task
+	onChange func() // Called after any mutation; used for persistence
 }
 
 // NewTaskStore creates a new TaskStore.
@@ -46,6 +48,49 @@ func NewTaskStore() *TaskStore {
 	return &TaskStore{
 		tasks: make(map[string]*Task),
 	}
+}
+
+// SetOnChange sets a callback invoked after every mutation (Create, Update, AddDependencies, Delete).
+func (s *TaskStore) SetOnChange(fn func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onChange = fn
+}
+
+func (s *TaskStore) fireChange() {
+	if s.onChange != nil {
+		s.onChange()
+	}
+}
+
+// AllTasks returns a snapshot of all tasks for serialization.
+func (s *TaskStore) AllTasks() []*Task {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]*Task, 0, len(s.tasks))
+	for _, t := range s.tasks {
+		result = append(result, t)
+	}
+	return result
+}
+
+// LoadFromJSON replaces the store contents from a JSON representation.
+// The incoming tasks are deep-copied so the caller retains ownership of the slice.
+func (s *TaskStore) LoadFromJSON(data []byte) error {
+	var tasks []*Task
+	if err := json.Unmarshal(data, &tasks); err != nil {
+		return fmt.Errorf("unmarshaling tasks: %w", err)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tasks = make(map[string]*Task, len(tasks))
+	for _, t := range tasks {
+		if t.ID == "" {
+			continue
+		}
+		s.tasks[t.ID] = t
+	}
+	return nil
 }
 
 // generateID generates a unique 16-character hex ID using crypto/rand.
@@ -80,6 +125,7 @@ func (s *TaskStore) Create(subject, description, activeForm string, metadata map
 	s.mu.Lock()
 	s.tasks[id] = task
 	s.mu.Unlock()
+	s.fireChange()
 
 	return task, nil
 }
@@ -133,6 +179,7 @@ func (s *TaskStore) Update(id string, fields map[string]any) *Task {
 		task.Metadata = metadata
 	}
 	task.UpdatedAt = time.Now()
+	s.fireChange()
 
 	return task
 }
@@ -154,6 +201,7 @@ func (s *TaskStore) AddDependencies(id string, blocks, blockedBy []string) *Task
 		task.BlockedBy = append(task.BlockedBy, blockedBy...)
 	}
 	task.UpdatedAt = time.Now()
+	s.fireChange()
 
 	return task
 }
@@ -163,4 +211,5 @@ func (s *TaskStore) Delete(id string) {
 	s.mu.Lock()
 	delete(s.tasks, id)
 	s.mu.Unlock()
+	s.fireChange()
 }

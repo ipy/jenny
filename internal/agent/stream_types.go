@@ -72,6 +72,7 @@ type StreamConfig struct {
 	DisableAutoMemory    bool                 // When true, the auto-memory directory is suppressed entirely
 	ParentEngine         *QueryEngine         // Parent engine for subagent cost merge (set before RunStream)
 	PermissionLevel      tool.PermissionLevel // AC7: Parent's permission level for subagent inheritance
+	TaskStore            *tool.TaskStore      // Shared task store for persistence across sessions
 }
 
 // SetActiveSkills sets the active skills list for the system prompt.

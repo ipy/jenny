@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-// TaskCreateTool creates tracked tasks in Todo v2.
+// TaskCreateTool creates tracked tasks. Part of the task tracking system.
 type TaskCreateTool struct {
 	store *TaskStore
 }
@@ -29,7 +29,7 @@ func (t *TaskCreateTool) ConcurrencySafe() bool {
 
 // Description returns a description of the tool.
 func (t *TaskCreateTool) Description() string {
-	return "Creates a tracked task in Todo v2 system. Requires Todo v2 to be enabled."
+	return "Creates a tracked task. Use for organizing complex multi-step work."
 }
 
 // InputSchema returns the JSON schema for tool input.

@@ -22,18 +22,19 @@ func (t *mockTool) Execute(ctx context.Context, input map[string]any, cwd string
 // baseToolCount returns the number of tools produced by WithBaseTools() on the
 // current platform. This varies because Windows adds PowerShellTool
 // unconditionally, while Unix uses BashTool. On Windows, BashTool is also added
-// if bash.exe is found in PATH. Additionally, ReadMcpResourceTool and McpPromptTool
-// are always registered, making the total 6 on Unix.
+// if bash.exe is found in PATH. Additionally, ReadMcpResourceTool, McpPromptTool,
+// and the 4 task tracking tools (TaskCreate, TaskGet, TaskList, TaskUpdate) are always
+// registered, making the total 10 on Unix.
 func baseToolCount() int {
 	if runtime.GOOS == "windows" {
-		// Read + PowerShell + Glob + Grep + ReadMcpResource + McpPrompt = 6; +1 if bash.exe is in PATH
+		// Read + PowerShell + Glob + Grep + ReadMcpResource + McpPrompt + 4 task tools = 10; +1 if bash.exe is in PATH
 		if _, err := exec.LookPath("bash.exe"); err == nil {
-			return 7
+			return 11
 		}
-		return 6
+		return 10
 	}
-	// Unix: Read + Bash + Glob + Grep + ReadMcpResource + McpPrompt = 6
-	return 6
+	// Unix: Read + Bash + Glob + Grep + ReadMcpResource + McpPrompt + 4 task tools = 10
+	return 10
 }
 
 func TestRegistry_WithBaseTools(t *testing.T) {
@@ -118,7 +119,7 @@ func TestRegistry_WithMCPTools(t *testing.T) {
 		t.Errorf("expected first tool to be 'Read', got %q", tools[0].Name())
 	}
 
-	// MCP tools should come after
+	// MCP tools should come after base tools
 	if tools[bt].Name() != "mcp__server__tool1" {
 		t.Errorf("expected tool at index %d to be 'mcp__server__tool1', got %q", bt, tools[bt].Name())
 	}
@@ -252,15 +253,18 @@ func TestRegistry_CombinedFilters(t *testing.T) {
 		WithEnabled("Bash", false).
 		Build()
 
-	// Deny Read (-1), disable Bash (-1 if present), add 2 MCP (+2) = baseToolCount - 1 - hasBash + 2
-	expected := baseToolCount() // already accounts for deny Read (-1), disable Bash (-1), +2 MCP
+	// Deny Read (-1), disable Bash (-1 if present), add 2 MCP (+2)
+	// baseToolCount already accounts for platform-specific shell and task tracking tools.
+	// We calculate: bt - 1(deny Read) - hasBash + 2(MCP)
+	hasBash := 1 // Unix always has Bash
 	if runtime.GOOS == "windows" {
-		// On Windows without bash.exe: base=6, deny Read(-1), no Bash to disable, +2 MCP = 7
-		// On Windows with bash.exe: base=7, deny Read(-1), disable Bash(-1), +2 MCP = 7
-		// In both cases: baseToolCount() gives the right answer because
-		// no-bash: 6 - 1 + 2 = 7, with-bash: 7 - 1 - 1 + 2 = 7
-		expected = baseToolCount()
+		if _, err := exec.LookPath("bash.exe"); err == nil {
+			hasBash = 1
+		} else {
+			hasBash = 0 // no Bash on Windows without bash.exe
+		}
 	}
+	expected := baseToolCount() - 1 - hasBash + 2
 	if len(tools) != expected {
 		t.Errorf("expected %d tools (Glob, Grep + 2 MCP), got %d", expected, len(tools))
 	}
@@ -371,14 +375,10 @@ func TestAC4_ReadFileCacheWireToTools(t *testing.T) {
 	t.Log("AC4 PASS: ReadTool created with ReadFileCache support")
 }
 
-// TestAC3_TaskCreateAppearsWhenTodoV2Enabled verifies that when TodoV2Enabled
-// is true and TaskCreateEnabled is true, the TaskCreate tool appears in the
-// registry.
-func TestAC3_TaskCreateAppearsWhenTodoV2Enabled(t *testing.T) {
+// TestAC3_TaskCreateAppearsByDefault verifies that TaskCreate is always registered.
+func TestAC3_TaskCreateAppearsByDefault(t *testing.T) {
 	tools := NewRegistry().
 		WithBaseTools().
-		WithTodoV2Enabled(true).
-		WithTaskCreateEnabled(true).
 		Build()
 
 	names := make(map[string]bool)
@@ -387,83 +387,17 @@ func TestAC3_TaskCreateAppearsWhenTodoV2Enabled(t *testing.T) {
 	}
 
 	if !names["TaskCreate"] {
-		t.Error("expected 'TaskCreate' tool when TodoV2Enabled and TaskCreateEnabled")
+		t.Error("expected 'TaskCreate' tool by default")
 	}
 
-	t.Log("AC3 PASS: TaskCreate tool appears when TodoV2Enabled and TaskCreateEnabled")
+	t.Log("AC3 PASS: TaskCreate tool appears by default")
 }
 
-// TestAC3_TodoWriteExcludedWhenTodoV2Enabled verifies that when TodoV2Enabled
-// is true, the TodoWrite tool is NOT included in the registry, even if
-// TodoWriteEnabled would normally be true.
-func TestAC3_TodoWriteExcludedWhenTodoV2Enabled(t *testing.T) {
+// TestAC10_TaskGetListUpdateAppearByDefault verifies that TaskGet, TaskList, and
+// TaskUpdate are always registered.
+func TestAC10_TaskGetListUpdateAppearByDefault(t *testing.T) {
 	tools := NewRegistry().
 		WithBaseTools().
-		WithTodoV2Enabled(true).
-		WithTaskCreateEnabled(true).
-		WithTodoWriteEnabled(true). // Would add TodoWrite if v2 was not enabled
-		Build()
-
-	names := make(map[string]bool)
-	for _, t := range tools {
-		names[t.Name()] = true
-	}
-
-	if names["TodoWrite"] {
-		t.Error("'TodoWrite' should not appear when TodoV2Enabled is true")
-	}
-
-	t.Log("AC3 PASS: TodoWrite excluded when TodoV2Enabled is true")
-}
-
-// TestAC3_TaskCreateNotAppearsWithoutTodoV2Enabled verifies that TaskCreate
-// does not appear when TodoV2Enabled is false.
-func TestAC3_TaskCreateNotAppearsWithoutTodoV2Enabled(t *testing.T) {
-	tools := NewRegistry().
-		WithBaseTools().
-		WithTaskCreateEnabled(true). // Enabled but TodoV2Enabled is false
-		Build()
-
-	names := make(map[string]bool)
-	for _, t := range tools {
-		names[t.Name()] = true
-	}
-
-	if names["TaskCreate"] {
-		t.Error("'TaskCreate' should not appear when TodoV2Enabled is false")
-	}
-
-	t.Log("AC3 PASS: TaskCreate does not appear without TodoV2Enabled")
-}
-
-// TestAC3_TodoWriteAppearsWithoutTodoV2Enabled verifies that TodoWrite appears
-// normally when TodoV2Enabled is false and TodoWriteEnabled is true.
-func TestAC3_TodoWriteAppearsWithoutTodoV2Enabled(t *testing.T) {
-	tools := NewRegistry().
-		WithBaseTools().
-		WithTodoWriteEnabled(true).
-		Build()
-
-	names := make(map[string]bool)
-	for _, t := range tools {
-		names[t.Name()] = true
-	}
-
-	if !names["TodoWrite"] {
-		t.Error("expected 'TodoWrite' tool when TodoV2Enabled is false and TodoWriteEnabled is true")
-	}
-
-	t.Log("AC3 PASS: TodoWrite appears normally without TodoV2Enabled")
-}
-
-// TestAC10_TaskGetListUpdateAppearWhenTodoV2Enabled verifies that when
-// TodoV2Enabled is true and TaskCreateEnabled is true, TaskGet, TaskList, and
-// TaskUpdate tools appear in the registry.
-func TestAC10_TaskGetListUpdateAppearWhenTodoV2Enabled(t *testing.T) {
-	tools := NewRegistry().
-		WithBaseTools().
-		WithTodoV2Enabled(true).
-		WithTaskCreateEnabled(true).
 		Build()
 
 	names := make(map[string]bool)
@@ -472,43 +406,16 @@ func TestAC10_TaskGetListUpdateAppearWhenTodoV2Enabled(t *testing.T) {
 	}
 
 	if !names["TaskGet"] {
-		t.Error("expected 'TaskGet' tool when TodoV2Enabled and TaskCreateEnabled")
+		t.Error("expected 'TaskGet' tool by default")
 	}
 	if !names["TaskList"] {
-		t.Error("expected 'TaskList' tool when TodoV2Enabled and TaskCreateEnabled")
+		t.Error("expected 'TaskList' tool by default")
 	}
 	if !names["TaskUpdate"] {
-		t.Error("expected 'TaskUpdate' tool when TodoV2Enabled and TaskCreateEnabled")
+		t.Error("expected 'TaskUpdate' tool by default")
 	}
 
-	t.Log("AC10 PASS: TaskGet, TaskList, TaskUpdate appear when TodoV2Enabled and TaskCreateEnabled")
-}
-
-// TestAC10_TaskGetListUpdateNotAppearsWithoutTaskCreateEnabled verifies that
-// TaskGet, TaskList, TaskUpdate do not appear when TaskCreateEnabled is false.
-func TestAC10_TaskGetListUpdateNotAppearsWithoutTaskCreateEnabled(t *testing.T) {
-	tools := NewRegistry().
-		WithBaseTools().
-		WithTodoV2Enabled(true).
-		// TaskCreateEnabled is false
-		Build()
-
-	names := make(map[string]bool)
-	for _, t := range tools {
-		names[t.Name()] = true
-	}
-
-	if names["TaskGet"] {
-		t.Error("'TaskGet' should not appear when TaskCreateEnabled is false")
-	}
-	if names["TaskList"] {
-		t.Error("'TaskList' should not appear when TaskCreateEnabled is false")
-	}
-	if names["TaskUpdate"] {
-		t.Error("'TaskUpdate' should not appear when TaskCreateEnabled is false")
-	}
-
-	t.Log("AC10 PASS: TaskGet, TaskList, TaskUpdate do not appear without TaskCreateEnabled")
+	t.Log("AC10 PASS: TaskGet, TaskList, TaskUpdate appear by default")
 }
 
 // AC3: --strict-mcp-config suppresses all built-in tools. With WithStrictMCP
