@@ -38,6 +38,27 @@ func deepSeekAnthropicTransform(body any) {
 	}
 }
 
+// deepSeekOpenAIResponsesTransform injects DeepSeek-specific fields into
+// OpenAI Responses-format requests. DeepSeek's OpenAI-compatible endpoint
+// accepts the same extra_body.thinking.type=enabled extension when
+// reasoning is requested, so when a reasoning config is present we mirror
+// the Chat path: emit extra_body.thinking.type=enabled. This is what
+// DeepSeek returns to switch the model into its native chain-of-thought
+// mode regardless of which OpenAI wire format is in use.
+func deepSeekOpenAIResponsesTransform(body any) {
+	req, ok := body.(*OpenAIResponsesRequest)
+	if !ok {
+		return
+	}
+	if req.ReasoningConfig != nil && req.ReasoningConfig.Effort != "" {
+		req.ExtraBody = map[string]any{
+			"thinking": map[string]any{
+				"type": "enabled",
+			},
+		}
+	}
+}
+
 // budgetToEffort maps budget tokens to an effort string for DeepSeek's Anthropic endpoint.
 // This is the inverse of effortToBudgetTokens.
 func budgetToEffort(tokens int) string {
@@ -67,6 +88,8 @@ func resolveTransformer(model string) RequestTransformer {
 			deepSeekOpenAITransform(body)
 		case *AnthropicRequest:
 			deepSeekAnthropicTransform(body)
+		case *OpenAIResponsesRequest:
+			deepSeekOpenAIResponsesTransform(body)
 		}
 	}
 }

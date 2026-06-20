@@ -64,13 +64,39 @@ func (s *TaskStore) fireChange() {
 	}
 }
 
+// copyTask returns a deep copy of a Task so callers cannot mutate the store's
+// internal state without going through the mutating API (which fires
+// persistence callbacks).
+func copyTask(t *Task) *Task {
+	if t == nil {
+		return nil
+	}
+	c := *t
+	if len(t.Blocks) > 0 {
+		c.Blocks = make([]string, len(t.Blocks))
+		copy(c.Blocks, t.Blocks)
+	}
+	if len(t.BlockedBy) > 0 {
+		c.BlockedBy = make([]string, len(t.BlockedBy))
+		copy(c.BlockedBy, t.BlockedBy)
+	}
+	if t.Metadata != nil {
+		c.Metadata = make(map[string]any, len(t.Metadata))
+		for k, v := range t.Metadata {
+			c.Metadata[k] = v
+		}
+	}
+	return &c
+}
+
 // AllTasks returns a snapshot of all tasks for serialization.
+// Returned tasks are deep copies — callers cannot mutate the store through them.
 func (s *TaskStore) AllTasks() []*Task {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	result := make([]*Task, 0, len(s.tasks))
 	for _, t := range s.tasks {
-		result = append(result, t)
+		result = append(result, copyTask(t))
 	}
 	return result
 }
@@ -133,14 +159,16 @@ func (s *TaskStore) Create(subject, description, acceptanceCriteria, constraints
 }
 
 // Get retrieves a task by ID. Returns nil if not found.
+// The returned task is a deep copy — callers cannot mutate the store through it.
 func (s *TaskStore) Get(id string) *Task {
 	s.mu.RLock()
 	task := s.tasks[id]
 	s.mu.RUnlock()
-	return task
+	return copyTask(task)
 }
 
 // List returns all tasks, optionally filtered.
+// Returned tasks are deep copies — callers cannot mutate the store through them.
 func (s *TaskStore) List(filter TaskFilter) []*Task {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -150,7 +178,7 @@ func (s *TaskStore) List(filter TaskFilter) []*Task {
 		if filter.Status != "" && task.Status != filter.Status {
 			continue
 		}
-		result = append(result, task)
+		result = append(result, copyTask(task))
 	}
 	return result
 }

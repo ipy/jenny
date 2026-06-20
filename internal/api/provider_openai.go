@@ -473,9 +473,10 @@ func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Messa
 			if result.ErrorCategory == CategoryContextExhausted {
 				result.ContextRejected = true
 				result.MaxTokensErr = &MaxTokensError{
-					Category:     CategoryContextExhausted,
-					Model:        p.model,
-					OutputTokens: result.Usage.OutputTokens,
+					Category:        CategoryContextExhausted,
+					Model:           p.model,
+					OutputTokens:    result.Usage.OutputTokens,
+					MaxOutputTokens: modelMaxOutputCap(p.model),
 				}
 			}
 			return
@@ -555,9 +556,10 @@ func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Messa
 
 		if (result.StopReason == StopReasonMaxTokens || result.ContextRejected) && result.MaxTokensErr == nil {
 			result.MaxTokensErr = &MaxTokensError{
-				Category:     CategoryOutputCapHit,
-				Model:        p.model,
-				OutputTokens: result.Usage.OutputTokens,
+				Category:        CategoryOutputCapHit,
+				Model:           p.model,
+				OutputTokens:    result.Usage.OutputTokens,
+				MaxOutputTokens: modelMaxOutputCap(p.model),
 			}
 			if result.ContextRejected {
 				result.MaxTokensErr.Category = CategoryContextExhausted

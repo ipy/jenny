@@ -48,13 +48,6 @@ const (
 	defaultGenAIModel     = "gemini-3.5-flash"
 )
 
-// Default subagent model per provider kind (used when no --subagent-model or tool model override).
-const (
-	defaultAnthropicSubagentModel = "claude-haiku-4-5-20251001"
-	defaultOpenAISubagentModel    = "gpt-5.4-mini"
-	defaultGenAISubagentModel     = "gemini-3.1-flash-lite"
-)
-
 // ModelParamsInfo holds model-specific parameters for context management.
 type ModelParamsInfo struct {
 	ContextWindow   int

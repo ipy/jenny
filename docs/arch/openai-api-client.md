@@ -36,7 +36,7 @@ The OpenAI provider is selected if the `OPENAI_BASE_URL` environment variable is
 When `OPENAI_WIRE_API=responses` is used, the provider optimizes system prompt placement:
 
 1.  **Instructions Field**: The first (most stable) block of the system prompt (containing identity and core tasks) is sent in the top-level `instructions` field.
-2.  **System Messages**: Subsequent blocks (CWD, Memory, Git Status, Date) are added as `role: system` messages at the start of the `input` list.
+2.  **System Messages**: Subsequent blocks (CWD, Memory, Git Status, Date) are added as `role: developer` messages at the start of the `input` list.
 
 This separation ensures that the core identity remains stable in the dedicated field while project-specific and dynamic context is provided as structured messages.
 
@@ -67,11 +67,11 @@ The OpenAI provider utilizes the `NormalizeMessages` pipeline to ensure payload 
 The `SupportsNativeSearch()` method determines whether web search tools are available:
 
 - **Chat API provider**: Returns `true` only for known OpenAI model prefixes (`gpt-`, `o3`, `o4`, `chatgpt-`). Returns `false` for third-party models routed through OpenAI-compatible APIs (DeepSeek, Moonshot, etc.).
-- **Responses API provider**: Always returns `true`.
+- **Responses API provider**: Delegates to the model capability table via `SupportsNativeSearch()`, which consults the bundled table and external registry for the mode's native-search capability. Unknown models default to `true` (conservative).
 
 ## DeepSeek Thinking Mode
 
-When thinking effort is configured and the model is detected as a DeepSeek model (via `isDSModel()`), the provider injects `extra_body: {"thinking": {"type": "enabled"}}` into both streaming and non-streaming requests. This enables DeepSeek's native chain-of-thought reasoning.
+When thinking effort is configured and the model is detected as a DeepSeek model (via `isDeepSeekModel()`), the provider injects `extra_body: {"thinking": {"type": "enabled"}}` into requests. This applies to both the Chat (`OpenAIRequest`) and Responses (`OpenAIResponsesRequest`) wire formats, dispatched through the provider's request transformer hook. For the Anthropic-compatible wire format, DeepSeek models receive `output_config.effort` mapped from the thinking budget tokens.
 
 ## Thinking Content Round-Trip
 

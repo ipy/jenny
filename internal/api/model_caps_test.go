@@ -209,12 +209,12 @@ func TestCapabilityTable_ProviderPrefixNormalization(t *testing.T) {
 		want     int
 	}{
 		// Bundled table hits via normalized bare name
-		{"deepseek-slash-prefix-bare", "deepseek/deepseek-v4-pro", 0, 384000},
-		{"deepseek-anthropic-prefix-bare", "deepseek-anthropic/deepseek-v4-flash", 0, 384000},
-		{"deepseek-colon-variant-bare", "deepseek/deepseek-v4-pro:thinking", 0, 384000},
+		{"deepseek-slash-prefix-bare", "deepseek/deepseek-v4-pro", 0, 393216},
+		{"deepseek-anthropic-prefix-bare", "deepseek-anthropic/deepseek-v4-flash", 0, 393216},
+		{"deepseek-colon-variant-bare", "deepseek/deepseek-v4-pro:thinking", 0, 393216},
 		{"workers-ai-prefixed-bare", "workers-ai/@cf/meta/llama-3.1-8b-instruct-fp8", 0, unknownModelMaxTokens}, // unknown
 		// Override with provider prefix still clamps correctly
-		{"provider-prefix-override-clamp", "deepseek/deepseek-v4-pro", 500000, 384000},
+		{"provider-prefix-override-clamp", "deepseek/deepseek-v4-pro", 500000, 393216},
 		{"provider-prefix-override-within", "deepseek-anthropic/deepseek-v4-flash", 8192, 8192},
 	}
 	for _, tt := range tests {

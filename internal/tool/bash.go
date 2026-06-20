@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/ipy/jenny/internal/constants"
@@ -303,7 +302,7 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 	// (pip, nginx, etc.) orphaned and still running.
 	cmd := exec.Command(shellPath, "-c", command)
 	cmd.Dir = t.commandCwd
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	setupProcessGroup(cmd)
 
 	// Inject JENNY_SCRATCHPAD env var so agent can reference scratchpad in shell
 	cmd.Env = append(os.Environ(), "JENNY_SCRATCHPAD="+constants.ScratchpadDir(t.sessionID))
@@ -337,7 +336,7 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 	case <-cmdCtx.Done():
 		// Timeout or cancellation: kill entire process group
 		if cmd.Process != nil {
-			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+			killProcessGroup(cmd.Process)
 		}
 		// Wait for process to actually exit after kill
 		<-done
@@ -554,10 +553,10 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 		}
 		cmd := exec.CommandContext(ctx, shellPath, "-c", command)
 		cmd.Dir = cwd
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		setupProcessGroup(cmd)
 		defer func() {
 			if cmd.Process != nil {
-				syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+				killProcessGroup(cmd.Process)
 			}
 		}()
 

@@ -65,7 +65,9 @@ In-place `sed` edits may be simulated as file edits internally:
 
 - Default timeout is 30 seconds; override with the `timeout` parameter.
 - After execution: cwd is reset if it has drifted outside the project root.
-- On context cancellation, the entire process group is terminated to catch grandchildren spawned by the shell.
+- On context cancellation or timeout, the entire process tree is terminated to catch grandchildren spawned by the shell:
+  - **Unix**: Uses process groups (`Setpgid`) and `SIGKILL` to the group leader.
+  - **Windows**: Uses `taskkill /F /T /PID` to terminate the process tree.
 
 ## Environment
 

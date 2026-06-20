@@ -209,20 +209,11 @@ func lookupModelCap(model string) int {
 		}
 	}
 
-	// Try bundled capability table with original name, then bare name
-	lower := strings.ToLower(model)
+	// Try bundled capability table with normalized bare name
+	lowerBare := strings.ToLower(bare)
 	for _, e := range modelCapTable {
-		if strings.HasPrefix(lower, strings.ToLower(e.pattern)) {
+		if strings.HasPrefix(lowerBare, strings.ToLower(e.pattern)) {
 			return e.maxOut
-		}
-	}
-
-	if bare != model {
-		lowerBare := strings.ToLower(bare)
-		for _, e := range modelCapTable {
-			if strings.HasPrefix(lowerBare, strings.ToLower(e.pattern)) {
-				return e.maxOut
-			}
 		}
 	}
 

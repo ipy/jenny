@@ -10,6 +10,7 @@ gaps: []
 depends_on:
   - universal-normalization-architecture
   - anthropic-api-client
+  - openai-api-client
 ---
 # Provider-Aware Fixes → Universal Normalization
 
@@ -47,7 +48,29 @@ The previous URL-based detection (`providerFromBaseURL()`) was fragile — it re
 - `NormalizeMessages` in `internal/api/` is the single gateway before JSON serialization
 - All existing tests pass without modification
 
+## Model-Specific Request Transformers
+
+Some backends (currently DeepSeek) require provider-specific request fields that vary by wire format. A request transformer hook is applied to outgoing requests when the resolved model is detected as DeepSeek. The transformer dispatches on the request body type and emits the appropriate field set for that backend:
+
+| Wire format | Body type | DeepSeek-specific field |
+|-------------|-----------|-------------------------|
+| Chat | `OpenAIRequest` | `extra_body.thinking.type = "enabled"` when reasoning effort is set |
+| Responses | `OpenAIResponsesRequest` | `extra_body.thinking.type = "enabled"` when `reasoning_config.effort` is set |
+| Anthropic-compatible | `AnthropicRequest` | `output_config.effort` mapped from the thinking budget tokens |
+
+The transformer is attached via `SetRequestTransformer` on the provider after the provider is constructed. Providers that do not implement the interface (e.g., the GenAI/Gemini provider) are unaffected.
+
+## Model Capability Lookup Precedence
+
+Capability resolution for max output tokens, context window, vision, and native search follows a four-step precedence:
+
+1. **External model registry** (original name) — config-loaded JSON registry takes precedence when present.
+2. **External model registry** (normalized bare name) — same registry consulted after stripping any `provider/` prefix so that `deepseek-anthropic/deepseek-v4-pro` resolves to the same entry as `deepseek-v4-pro`.
+3. **Bundled capability table** (normalized bare name only) — provider-prefixed model IDs are normalized before pattern matching against the bundled table. This prevents broad catch-all patterns (e.g., `deepseek`) from masking more specific entries (e.g., `deepseek-v4-pro`).
+4. **Conservative fallback** — unknown models receive the conservative default (16,384 max output tokens for `ResolveMaxTokens`, 200,000 context window for `modelContextWindowLookup`, vision = true, native search = true).
+
 ## References
 
 - [`universal-normalization-architecture.md`](./universal-normalization-architecture.md) — Current architecture source of truth
 - [`anthropic-api-client.md`](./anthropic-api-client.md) — Provider Compatibility section updated
+- [`openai-api-client.md`](./openai-api-client.md) — DeepSeek thinking mode and Responses API behavior

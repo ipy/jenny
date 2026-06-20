@@ -21,6 +21,7 @@ type openAIResponsesProvider struct {
 	retryConfig  RetryConfig
 	effort       string
 	providerName string
+	transform    RequestTransformer
 }
 
 // newOpenAIResponsesProvider creates a new OpenAI Responses API provider.
@@ -84,6 +85,11 @@ func (p *openAIResponsesProvider) SetThinkingConfig(cfg ThinkingConfig) {
 // SetProviderName sets the provider name.
 func (p *openAIResponsesProvider) SetProviderName(name string) {
 	p.providerName = name
+}
+
+// SetRequestTransformer sets the request transformer applied before sending.
+func (p *openAIResponsesProvider) SetRequestTransformer(t RequestTransformer) {
+	p.transform = t
 }
 
 // SupportsNativeSearch returns true for models that support native web search.
@@ -207,6 +213,10 @@ func (p *openAIResponsesProvider) doSendMessage(ctx context.Context, messages []
 		reqBody.ReasoningConfig = &OpenAIResponsesReasoningConfig{
 			Effort: p.effort,
 		}
+	}
+
+	if p.transform != nil {
+		p.transform(&reqBody)
 	}
 
 	url := fmt.Sprintf("%s/v1/responses", os.Getenv("OPENAI_BASE_URL"))
@@ -485,6 +495,10 @@ func (p *openAIResponsesProvider) SendMessageStream(ctx context.Context, message
 			}
 		}
 
+		if p.transform != nil {
+			p.transform(&reqBody)
+		}
+
 		url := fmt.Sprintf("%s/v1/responses", os.Getenv("OPENAI_BASE_URL"))
 		headers := http.Header{}
 		headers.Set("Authorization", fmt.Sprintf("Bearer %s", os.Getenv("OPENAI_API_KEY")))
@@ -512,8 +526,9 @@ func (p *openAIResponsesProvider) SendMessageStream(ctx context.Context, message
 			if result.ErrorCategory == CategoryContextExhausted {
 				result.ContextRejected = true
 				result.MaxTokensErr = &MaxTokensError{
-					Category: CategoryContextExhausted,
-					Model:    p.model,
+					Category:        CategoryContextExhausted,
+					Model:           p.model,
+					MaxOutputTokens: modelMaxOutputCap(p.model),
 				}
 			}
 			return
@@ -593,9 +608,10 @@ func (p *openAIResponsesProvider) SendMessageStream(ctx context.Context, message
 
 		if (result.StopReason == StopReasonMaxTokens || result.ContextRejected) && result.MaxTokensErr == nil {
 			result.MaxTokensErr = &MaxTokensError{
-				Category:     CategoryOutputCapHit,
-				Model:        p.model,
-				OutputTokens: result.Usage.OutputTokens,
+				Category:        CategoryOutputCapHit,
+				Model:           p.model,
+				OutputTokens:    result.Usage.OutputTokens,
+				MaxOutputTokens: modelMaxOutputCap(p.model),
 			}
 			if result.ContextRejected {
 				result.MaxTokensErr.Category = CategoryContextExhausted
@@ -781,20 +797,23 @@ func (p *openAIResponsesProvider) processResponsesStreamEvent(event *OpenAIRespo
 					}
 				}
 				// Skip the literal string "null" as arguments delta —
-				// some models emit this when arguments are absent.
+				// some models emit this when arguments are absent. Both
+				// the accumulator and the wire event are suppressed so
+				// streaming and finalized semantics stay consistent (the
+				// final args normalize to an empty map regardless).
 				if event.Delta != "" && event.Delta != "null" {
 					item.args += event.Delta
-				}
-				blocksChan <- StreamContentBlock{
-					Type: "stream_event",
-					RawEvent: AnthropicStreamEvent{
-						Type:  EventContentBlockDelta,
-						Index: item.toolBlockIndex,
-						Delta: &AnthropicStreamDelta{
-							Type:        DeltaTypeInputJSON,
-							PartialJSON: event.Delta,
+					blocksChan <- StreamContentBlock{
+						Type: "stream_event",
+						RawEvent: AnthropicStreamEvent{
+							Type:  EventContentBlockDelta,
+							Index: item.toolBlockIndex,
+							Delta: &AnthropicStreamDelta{
+								Type:        DeltaTypeInputJSON,
+								PartialJSON: event.Delta,
+							},
 						},
-					},
+					}
 				}
 			}
 		}

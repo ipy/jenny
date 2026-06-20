@@ -10,6 +10,7 @@ type OpenAIResponsesRequest struct {
 	ReasoningConfig *OpenAIResponsesReasoningConfig `json:"reasoning_config,omitempty"`
 	Stream          bool                            `json:"stream,omitempty"`
 	StreamOptions   *OpenAIStreamOptions            `json:"stream_options,omitempty"`
+	ExtraBody       map[string]any                  `json:"extra_body,omitempty"`
 }
 
 // OpenAIResponsesReasoningConfig represents the reasoning configuration for the Responses API.
