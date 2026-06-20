@@ -177,6 +177,15 @@ All three request sites (streaming, non-streaming, and the streaming-fallback pa
 3. If `override <= 0`, return the model's full capability as the default (a negative override is treated as 0 and logged with reason `negative_override`).
 4. For unknown models, return the conservative fallback of 16384 and emit a WARN log with reason `unknown_model_capability_default`.
 
+### Provider-Prefix Normalization
+
+Model identifiers from multi-provider endpoints (e.g. OpenRouter, Cloudflare Workers AI) may carry provider prefixes such as `workers-ai/@cf/meta/llama-3.1-8b-instruct-fp8`, `deepseek/deepseek-v4-pro`, or `deepseek/deepseek-v4-pro:thinking`. Resolution uses a two-pass strategy:
+
+1. **Original name first** — try the full model ID against the external registry and the bundled capability table.
+2. **Normalized bare name** — if step 1 fails, strip the last `/`-segment (everything up to and including the final `/`) to obtain the bare model name, then retry both the registry and the bundled table.
+
+This preserves model-specific registry entries that include provider prefixes (e.g. `openrouter/gpt-4o`) while also matching bare model names embedded in a prefixed identifier.
+
 ### Capability Table
 
 The bundled table (in `internal/api/model_caps.go`) maps model name prefixes to maximum output tokens. It is the single source of truth — providers do not maintain their own defaults. The table covers all known model families (Claude, GPT, Gemini, DeepSeek, o-series) with current values verified as of June 2026. Unknown models receive the conservative fallback of 16384 tokens.

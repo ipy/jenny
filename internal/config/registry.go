@@ -587,6 +587,11 @@ func (r *ModelRegistry) parseFromBytes(data []byte) error {
 	return r.parseFromBytesLocked(data)
 }
 
+// ParseFromBytes parses registry JSON from bytes. Exported for cross-package testing.
+func (r *ModelRegistry) ParseFromBytes(data []byte) error {
+	return r.parseFromBytes(data)
+}
+
 func (r *ModelRegistry) parseFromBytesLocked(data []byte) error {
 	models, err := parseBodyToModels(data)
 	if err != nil {
@@ -713,4 +718,10 @@ func GlobalRegistry() *ModelRegistry {
 func ResetGlobalRegistry() {
 	registryOnce = sync.Once{}
 	globalRegistry = nil
+}
+
+// SetGlobalRegistryForTest injects a pre-built registry for testing.
+func SetGlobalRegistryForTest(r *ModelRegistry) {
+	registryOnce = sync.Once{}
+	globalRegistry = r
 }

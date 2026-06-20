@@ -84,12 +84,28 @@ func ResolveMaxTokens(model string, override int) int {
 	return cap
 }
 
+// normalizeModelName strips provider prefixes from model identifiers such as
+// workers-ai/@cf/meta/llama-3.1-8b-instruct-fp8 and deepseek-anthropic/deepseek-v4-pro,
+// returning the bare model name.
+func normalizeModelName(model string) string {
+	// Split on the last '/' — providers may use multi-level IDs like
+	// workers-ai/@cf/meta/llama-3.1-8b-instruct-fp8.
+	if idx := strings.LastIndex(model, "/"); idx >= 0 {
+		return model[idx+1:]
+	}
+	return model
+}
+
 // lookupModelCap finds the max output tokens for a model by consulting the
 // external model registry first, then falling back to the bundled capability table.
+// For model names with provider prefixes (e.g. deepseek/deepseek-v4-pro), it
+// first tries the original name, then retries with the normalized bare name.
 // Returns unknownModelMaxTokens for unrecognized models.
 func lookupModelCap(model string) int {
-	// Consult external model registry first
-	if reg := config.GlobalRegistry(); reg != nil {
+	reg := config.GlobalRegistry()
+
+	// Consult external model registry first (original name)
+	if reg != nil {
 		if cap, ok := reg.Capability(model); ok {
 			log.Debug("max_tokens: using registry capability",
 				"model", model,
@@ -99,12 +115,37 @@ func lookupModelCap(model string) int {
 		}
 	}
 
+	bare := normalizeModelName(model)
+
+	// Retry registry with bare name (if different from original)
+	if bare != model && reg != nil {
+		if cap, ok := reg.Capability(bare); ok {
+			log.Debug("max_tokens: using registry capability (normalized)",
+				"model", model,
+				"normalized", bare,
+				"capability", cap,
+			)
+			return cap
+		}
+	}
+
+	// Try bundled capability table with original name, then bare name
 	lower := strings.ToLower(model)
 	for _, e := range modelCapTable {
 		if strings.HasPrefix(lower, strings.ToLower(e.pattern)) {
 			return e.maxOut
 		}
 	}
+
+	if bare != model {
+		lowerBare := strings.ToLower(bare)
+		for _, e := range modelCapTable {
+			if strings.HasPrefix(lowerBare, strings.ToLower(e.pattern)) {
+				return e.maxOut
+			}
+		}
+	}
+
 	log.Warn("max_tokens: unknown model, using conservative default",
 		"model", model,
 		"default_max_output_tokens", unknownModelMaxTokens,

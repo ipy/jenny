@@ -1,8 +1,19 @@
 package api
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/ipy/jenny/internal/config"
+	"github.com/ipy/jenny/internal/log"
 )
+
+func resetGlobalRegistryForTest() {
+	config.ResetGlobalRegistry()
+}
+
+// --- Existing tests below, now with global registry reset where needed ---
 
 // TestResolveMaxTokens_OverrideWithinCapability verifies that when the override
 // is within the model's capability, it is returned unchanged.
@@ -99,6 +110,8 @@ func TestResolveMaxTokens_NegativeOverride(t *testing.T) {
 
 // TestResolveMaxTokens_UnknownModel verifies conservative fallback for unknown models.
 func TestResolveMaxTokens_UnknownModel(t *testing.T) {
+	log.ResetForTest()
+	resetGlobalRegistryForTest()
 	got := ResolveMaxTokens("unknown-model-v42", 0)
 	want := 16384
 	if got != want {
@@ -181,4 +194,108 @@ func TestCapabilityTable_CaseInsensitive(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestCapabilityTable_ProviderPrefixNormalization verifies that model names with
+// provider prefixes resolve correctly via both the bundled table and the registry.
+func TestCapabilityTable_ProviderPrefixNormalization(t *testing.T) {
+	tests := []struct {
+		name     string
+		model    string
+		override int
+		want     int
+	}{
+		// Bundled table hits via normalized bare name
+		{"deepseek-slash-prefix-bare", "deepseek/deepseek-v4-pro", 0, 384000},
+		{"deepseek-anthropic-prefix-bare", "deepseek-anthropic/deepseek-v4-flash", 0, 384000},
+		{"deepseek-colon-variant-bare", "deepseek/deepseek-v4-pro:thinking", 0, 384000},
+		{"workers-ai-prefixed-bare", "workers-ai/@cf/meta/llama-3.1-8b-instruct-fp8", 0, unknownModelMaxTokens}, // unknown
+		// Override with provider prefix still clamps correctly
+		{"provider-prefix-override-clamp", "deepseek/deepseek-v4-pro", 500000, 384000},
+		{"provider-prefix-override-within", "deepseek-anthropic/deepseek-v4-flash", 8192, 8192},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ResolveMaxTokens(tt.model, tt.override)
+			if got != tt.want {
+				t.Errorf("ResolveMaxTokens(%q, %d) = %d, want %d",
+					tt.model, tt.override, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestCapabilityTable_ProviderPrefixRegistryFallback verifies provider-prefix
+// models fall back to the registry when the name matches there.
+func TestCapabilityTable_ProviderPrefixRegistryFallback(t *testing.T) {
+	log.ResetForTest()
+	resetGlobalRegistryForTest()
+
+	r := newTestRegistryForPrefix(t)
+	config.SetGlobalRegistryForTest(r)
+
+	// Model with provider prefix exists in registry under the original name
+	got := ResolveMaxTokens("deepseek-anthropic/deepseek-v4-pro", 0)
+	if got != 24000 {
+		t.Errorf("ResolveMaxTokens(deepseek-anthropic/deepseek-v4-pro, 0) = %d, want 24000", got)
+	}
+
+	// Bare name also exists in registry
+	got = ResolveMaxTokens("deepseek-v4-pro", 0)
+	if got != 384000 {
+		t.Errorf("ResolveMaxTokens(deepseek-v4-pro, 0) = %d, want 384000", got)
+	}
+
+	// Model only as provider-prefixed in registry: should hit registry via original name
+	got = ResolveMaxTokens("openrouter/gpt-4o", 0)
+	if got != 16384 {
+		t.Errorf("ResolveMaxTokens(openrouter/gpt-4o, 0) = %d, want 16384", got)
+	}
+
+	// Non-existent even after normalization → fallback
+	got = ResolveMaxTokens("some-provider/unknown-model-v99", 0)
+	if got != unknownModelMaxTokens {
+		t.Errorf("ResolveMaxTokens(some-provider/unknown-model-v99, 0) = %d, want %d", got, unknownModelMaxTokens)
+	}
+	resetGlobalRegistryForTest()
+}
+
+// newTestRegistryForPrefix builds a small in-memory registry for prefix tests.
+func newTestRegistryForPrefix(t *testing.T) *config.ModelRegistry {
+	t.Helper()
+	jsonData := `{
+		"schemaVersion": 1,
+		"lastUpdated": "2026-06-01T00:00:00Z",
+		"models": {
+			"deepseek-anthropic/deepseek-v4-pro": {
+				"id": "deepseek-anthropic/deepseek-v4-pro",
+				"provider": "deepseek-anthropic",
+				"contextWindow": 1048576,
+				"maxOutput": 24000
+			},
+			"deepseek-v4-pro": {
+				"id": "deepseek-v4-pro",
+				"provider": "deepseek",
+				"contextWindow": 1048576,
+				"maxOutput": 384000
+			},
+			"openrouter/gpt-4o": {
+				"id": "openrouter/gpt-4o",
+				"provider": "openrouter",
+				"contextWindow": 128000,
+				"maxOutput": 16384
+			}
+		}
+	}`
+	// Use parseFromBytes via a temp file-backed registry
+	tmpDir := t.TempDir()
+	cachePath := filepath.Join(tmpDir, "models.json")
+	if err := os.WriteFile(cachePath, []byte(jsonData), 0644); err != nil {
+		t.Fatal("failed to write prefix test registry:", err)
+	}
+	r := config.NewModelRegistry(cachePath)
+	if err := r.ParseFromBytes([]byte(jsonData)); err != nil {
+		t.Fatal("failed to load prefix test registry:", err)
+	}
+	return r
 }
