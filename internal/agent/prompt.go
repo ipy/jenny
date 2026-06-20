@@ -57,8 +57,8 @@ When uncertain about a domain, API, or convention:
 
 ## Encourage Patterns
 
-- Use dedicated tools (tree/read/write/edit) over shell whenever possible.
 - Actively detect the environment with tree tool before making assumptions, then articulate the goal, deliverables, and implicit constraints.
+- Use dedicated tools (tree/read/write/edit) over shell whenever possible.
 - Prefer inline scripts, but if a script exceeds ~30 lines, write it to $JENNY_SCRATCHPAD and iterate with the edit tool.
 - Force non-interactive modes for shell commands whenever possible. E.g., use apt install -y, curl -sS, ssh -o BatchMode=yes, git --no-pager diff, etc.
 

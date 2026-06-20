@@ -1473,3 +1473,35 @@ func TestSendMessageStream_SkipsFallbackOnCancelledContext(t *testing.T) {
 		t.Error("fallback should NOT be called when parent context is already cancelled")
 	}
 }
+
+// TestModelContextWindow_DeepSeekPrefixNormalization verifies that modelContextWindow
+// handles provider-prefixed DeepSeek V4 model names the same way lookupModelCap does.
+// Regression test for: prefixed names like deepseek-anthropic/deepseek-v4-flash
+// returned the default 200K instead of 1M, causing effectiveContextWindow to go
+// negative and the entire compaction system to fail silently.
+func TestModelContextWindow_DeepSeekPrefixNormalization(t *testing.T) {
+	tests := []struct {
+		model string
+		want  int
+	}{
+		// Bare names — should return 1M
+		{"deepseek-v4-flash", 1_000_000},
+		{"deepseek-v4-pro", 1_000_000},
+		{"DEEPSEEK-V4-FLASH", 1_000_000},
+		// Provider-prefixed names — should also return 1M (the bug case)
+		{"deepseek-anthropic/deepseek-v4-flash", 1_000_000},
+		{"deepseek-anthropic/deepseek-v4-pro", 1_000_000},
+		{"openrouter/deepseek/deepseek-v4-flash", 1_000_000},
+		// Non-DeepSeek V4 — should return default 200K
+		{"claude-sonnet-4-20250514", 200_000},
+		{"claude-3-5-sonnet-20241022", 200_000},
+		{"unknown-model", 200_000},
+		{"", 200_000},
+	}
+	for _, tt := range tests {
+		got := modelContextWindow(tt.model)
+		if got != tt.want {
+			t.Errorf("modelContextWindow(%q) = %d, want %d", tt.model, got, tt.want)
+		}
+	}
+}

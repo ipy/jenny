@@ -62,7 +62,9 @@ func ModelParams(model string) ModelParamsInfo {
 // modelContextWindow returns the context window size for a given model.
 // This is conservative and may be overridden by AUTO_COMPACT_WINDOW.
 func modelContextWindow(model string) int {
-	lower := strings.ToLower(model)
+	// Strip provider prefixes (e.g. deepseek-anthropic/deepseek-v4-flash → deepseek-v4-flash)
+	// so the prefix check is consistent with lookupModelCap behavior.
+	lower := strings.ToLower(normalizeModelName(model))
 	// DeepSeek V4 has a 1M context window (tripwire-safe: see normalization_tripwire_test.go)
 	if strings.HasPrefix(lower, "deep"+"seek-v4-") {
 		return 1_000_000

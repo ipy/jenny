@@ -29,7 +29,7 @@ func (t *TaskCreateTool) ConcurrencySafe() bool {
 
 // Description returns a description of the tool.
 func (t *TaskCreateTool) Description() string {
-	return "Creates a tracked task for organizing complex multi-step work. Use for tasks that require 3 or more distinct steps, non-trivial work, or when the user provides multiple tasks. After creating tasks, use TaskList to review and TaskUpdate to begin work."
+	return "Creates a tracked task for organizing complex multi-step work. Always use it if user provides multiple tasks, or the task is non-trivial or require 3 or more distinct steps. After creating tasks, use TaskList/TaskGet to review and TaskUpdate to begin/finish work."
 }
 
 // InputSchema returns the JSON schema for tool input.
