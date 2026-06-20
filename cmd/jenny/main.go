@@ -581,6 +581,7 @@ func run() error {
 		DisableAutoMemory:   flags.DisableAutoMemory,
 		Plugins:             pluginInfo,
 		MemoryPaths:         memoryPaths,
+		Model:              flags.Model,
 		PermissionLevel:     permLevel,
 		TaskStore:           taskStore,
 	}

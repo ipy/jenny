@@ -61,6 +61,7 @@ Supported formats: PNG, JPEG, GIF, WebP (detected by extension).
 
 - Files up to 10 MB are read and returned as `data:<mime>;base64,<encoded>` data URIs.
 - Files exceeding 10 MB are rejected with an error.
+- If the model does not support image/vision input (see `api.SupportsVision`), the tool returns an error result instead of base64 data.
 - The model can process these as vision inputs.
 
 ## PDFs (Not Implemented — P3)

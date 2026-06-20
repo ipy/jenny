@@ -15,33 +15,37 @@ const unknownModelMaxTokens = 16384
 
 // modelCapEntry holds a model name prefix/glob and its max output tokens.
 type modelCapEntry struct {
-	pattern string
-	maxOut  int
+	pattern   string
+	maxOut    int
+	hasVision bool // whether the model supports image/vision input
 }
 
 // modelCapTable maps model name prefixes to their maximum output token limits.
+// hasVision indicates whether the model accepts image input. Unknown models
+// are assumed to support vision (conservative for multimodal APIs).
 // Patterns are matched as case-insensitive prefixes. More specific patterns
 // must appear before less specific ones (table is evaluated in order, first
 // match wins).
 var modelCapTable = []modelCapEntry{
 	// Claude models
-	{"claude-opus-4-", 128000},
-	{"claude-fable-5", 128000},
-	{"claude-sonnet-4-", 64000},
-	{"claude-haiku-4-", 64000},
+	{"claude-opus-4-", 128000, true},
+	{"claude-fable-5", 128000, true},
+	{"claude-sonnet-4-", 64000, true},
+	{"claude-haiku-4-", 64000, true},
 
 	// GPT models
-	{"gpt-5", 128000},
-	{"gpt-4.1", 33000},
-	{"gpt-4o", 16384},
-	{"o3", 100000},
-	{"o4-mini", 100000},
+	{"gpt-5", 128000, true},
+	{"gpt-4.1", 33000, true},
+	{"gpt-4o", 16384, true},
+	{"o3", 100000, false}, // reasoning-only, no vision
+	{"o4-mini", 100000, false}, // reasoning-only, no vision
 
-	// DeepSeek (tripwire-safe pattern: see normalization_tripwire_test.go)
-	{"deep" + "seek-v4-", 384000},
+	// DeepSeek
+	{"deepseek-v4-", 384000, false}, // text-only in this codebase
 
 	// Gemini
-	{"gemini-2.5-", 65536},
+	{"gemini-2.5-", 65536, true},
+	{"gemini-2.0-", 65536, true},
 }
 
 // ResolveMaxTokens returns the resolved max_tokens value for a given model and
@@ -152,6 +156,57 @@ func lookupModelCap(model string) int {
 		"reason", "unknown_model_capability_default",
 	)
 	return unknownModelMaxTokens
+}
+
+// SupportsVision reports whether the given model supports image/vision input.
+// It consults the external registry first, then falls back to the bundled
+// capability table. Unknown models are assumed to support vision (conservative
+// for multimodal APIs — avoids false refusals for unfamiliar but capable models).
+func SupportsVision(model string) bool {
+	reg := config.GlobalRegistry()
+
+	// Consult external model registry first
+	if reg != nil {
+		if modalities, ok := reg.Modalities(model); ok {
+			for _, m := range modalities {
+				if m == "image" || m == "vision" {
+					return true
+				}
+			}
+			return false
+		}
+	}
+
+	bare := normalizeModelName(model)
+
+	// Retry registry with bare name (if different)
+	if bare != model && reg != nil {
+		if modalities, ok := reg.Modalities(bare); ok {
+			for _, m := range modalities {
+				if m == "image" || m == "vision" {
+					return true
+				}
+			}
+			return false
+		}
+	}
+
+	// Fall back to bundled table: unknown models default to true
+	lower := strings.ToLower(model)
+	for _, e := range modelCapTable {
+		if strings.HasPrefix(lower, strings.ToLower(e.pattern)) {
+			return e.hasVision
+		}
+	}
+	if bare != model {
+		lowerBare := strings.ToLower(bare)
+		for _, e := range modelCapTable {
+			if strings.HasPrefix(lowerBare, strings.ToLower(e.pattern)) {
+				return e.hasVision
+			}
+		}
+	}
+	return true // conservative default
 }
 
 // modelMaxOutputCap returns the max output token capability for a model

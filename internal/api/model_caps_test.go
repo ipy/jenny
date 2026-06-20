@@ -260,6 +260,71 @@ func TestCapabilityTable_ProviderPrefixRegistryFallback(t *testing.T) {
 	resetGlobalRegistryForTest()
 }
 
+// TestSupportsVision_BundledTable verifies vision support from the bundled capability table.
+func TestSupportsVision_BundledTable(t *testing.T) {
+	tests := []struct {
+		model string
+		want  bool
+	}{
+		// Vision-capable models
+		{"claude-opus-4-5-20251101", true},
+		{"claude-sonnet-4-20250514", true},
+		{"claude-haiku-4-5-20251101", true},
+		{"claude-fable-5-1", true},
+		{"gpt-4o", true},
+		{"gpt-5.1", true},
+		{"gemini-2.5-pro", true},
+		{"gemini-2.0-flash", true},
+		// Text-only models
+		{"o3", false},
+		{"o4-mini", false},
+		{"deepseek-v4-flash", false},
+		{"deepseek-v4-pro", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.model, func(t *testing.T) {
+			got := SupportsVision(tt.model)
+			if got != tt.want {
+				t.Errorf("SupportsVision(%q) = %v, want %v", tt.model, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSupportsVision_RegistryOverrides verifies registry modalities override the bundled table.
+func TestSupportsVision_RegistryOverrides(t *testing.T) {
+	log.ResetForTest()
+	resetGlobalRegistryForTest()
+
+	r := newTestRegistryForPrefix(t)
+	config.SetGlobalRegistryForTest(r)
+
+	// Registry entry with "image" modality → true
+	got := SupportsVision("deepseek-anthropic/deepseek-v4-pro")
+	if !got {
+		t.Errorf("SupportsVision(deepseek-anthropic/deepseek-v4-pro) = %v, want true (registry has image)", got)
+	}
+
+	// Registry entry with only text → false
+	got = SupportsVision("openrouter/gpt-4o")
+	if got {
+		t.Errorf("SupportsVision(openrouter/gpt-4o) = %v, want false (registry text-only)", got)
+	}
+
+	resetGlobalRegistryForTest()
+}
+
+// TestSupportsVision_UnknownModelDefaultsToTrue verifies the conservative default.
+func TestSupportsVision_UnknownModelDefaultsToTrue(t *testing.T) {
+	log.ResetForTest()
+	resetGlobalRegistryForTest()
+
+	got := SupportsVision("unknown-model-xyz")
+	if !got {
+		t.Errorf("SupportsVision(unknown-model-xyz) = %v, want true (conservative default)", got)
+	}
+}
+
 // newTestRegistryForPrefix builds a small in-memory registry for prefix tests.
 func newTestRegistryForPrefix(t *testing.T) *config.ModelRegistry {
 	t.Helper()
@@ -271,19 +336,22 @@ func newTestRegistryForPrefix(t *testing.T) *config.ModelRegistry {
 				"id": "deepseek-anthropic/deepseek-v4-pro",
 				"provider": "deepseek-anthropic",
 				"contextWindow": 1048576,
-				"maxOutput": 24000
+				"maxOutput": 24000,
+				"modalities": ["text", "image"]
 			},
 			"deepseek-v4-pro": {
 				"id": "deepseek-v4-pro",
 				"provider": "deepseek",
 				"contextWindow": 1048576,
-				"maxOutput": 384000
+				"maxOutput": 384000,
+				"modalities": ["text"]
 			},
 			"openrouter/gpt-4o": {
 				"id": "openrouter/gpt-4o",
 				"provider": "openrouter",
 				"contextWindow": 128000,
-				"maxOutput": 16384
+				"maxOutput": 16384,
+				"modalities": ["text"]
 			}
 		}
 	}`

@@ -11,6 +11,37 @@ import (
 	"github.com/ipy/jenny/internal/tool"
 )
 
+func TestBuildSystemPrompt_ModelAbilities(t *testing.T) {
+	tests := []struct {
+		model    string
+		wantText string
+	}{
+		{"claude-sonnet-4-20250514", "Vision: supported"},
+		{"deepseek-v4-flash", "Vision: unsupported"},
+		{"o3", "Vision: unsupported"},
+		{"gemini-2.5-pro", "Vision: supported"},
+		{"", ""}, // empty model: no abilities section
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.model, func(t *testing.T) {
+			cfg := &StreamConfig{Model: tt.model}
+			blocks := buildSystemPrompt(cfg, nil, t.TempDir())
+			prompt := strings.Join(blocks, "\n\n")
+
+			if tt.wantText == "" {
+				if strings.Contains(prompt, "Vision:") {
+					t.Errorf("did not expect Vision line for empty model, got: %s", prompt)
+				}
+				return
+			}
+			if !strings.Contains(prompt, tt.wantText) {
+				t.Errorf("expected %q in prompt, got: %s", tt.wantText, prompt)
+			}
+		})
+	}
+}
+
 func initTestGitRepo(t *testing.T, dir string) {
 	t.Helper()
 	cmd := exec.Command("git", "init")

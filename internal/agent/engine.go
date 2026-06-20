@@ -308,6 +308,7 @@ func (e *QueryEngine) WireTools() {
 				t.WithSessionID(sessionID)
 			case *tool.ReadTool:
 				t.WithSessionID(sessionID)
+				t.WithModelName(e.model)
 			case *tool.WriteTool:
 				t.WithSessionID(sessionID)
 			case *tool.EditTool:

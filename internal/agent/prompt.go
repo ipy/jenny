@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ipy/jenny/internal/api"
 	"github.com/ipy/jenny/internal/git"
 	"github.com/ipy/jenny/internal/mcp"
 	"github.com/ipy/jenny/internal/redact"
@@ -145,6 +146,18 @@ func getGitStatusShort(cwd string) (string, error) {
 	return string(out), nil
 }
 
+// modelAbilitiesSection returns a section declaring the model's abilities.
+func modelAbilitiesSection(model string) (string, bool) {
+	if model == "" {
+		return "", false
+	}
+	vision := "unsupported"
+	if api.SupportsVision(model) {
+		vision = "supported"
+	}
+	return fmt.Sprintf("Vision: %s.\nIf a REQUIRED ability to accomplish the task is missing, stop and tell the user.", vision), true
+}
+
 // platformSection returns a section with OS/Arch platform context.
 func platformSection() (string, bool) {
 	platform := fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH)
@@ -262,6 +275,11 @@ func buildSystemPrompt(cfg *StreamConfig, tools []tool.Tool, cwd string) []strin
 	// --- Block 2: Runtime Platform & Skills (Global-ish / Machine-stable) ---
 	{
 		var sections []string
+		// Model abilities (vision)
+		if abilities, ok := modelAbilitiesSection(cfg.Model); ok {
+			sections = append(sections, abilities)
+		}
+
 		// AC4: Platform context (OS/Arch)
 		if platform, ok := platformSection(); ok {
 			sections = append(sections, platform)

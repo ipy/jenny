@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf16"
 
+	"github.com/ipy/jenny/internal/api"
 	"github.com/ipy/jenny/internal/constants"
 )
 
@@ -30,6 +31,7 @@ type ReadTool struct {
 	readCache       *ReadFileCache
 	activator       SkillActivator
 	sessionID       string
+	modelName       string
 }
 
 // NewReadTool creates a new ReadTool with the given PermissionLevel.
@@ -68,6 +70,12 @@ func (t *ReadTool) WithSkillActivator(activator SkillActivator) *ReadTool {
 // GetReadFileCache returns the read cache. Used for testing wiring verification.
 func (t *ReadTool) GetReadFileCache() *ReadFileCache {
 	return t.readCache
+}
+
+// WithModelName sets the model name for vision capability checking.
+func (t *ReadTool) WithModelName(model string) *ReadTool {
+	t.modelName = model
+	return t
 }
 
 // Description returns a description of the tool.
@@ -419,6 +427,14 @@ func (t *ReadTool) readImage(path string, info os.FileInfo) (*ToolResult, error)
 	if info.Size() > maxImageSize {
 		return &ToolResult{
 			Content: fmt.Sprintf("Image file too large (%d bytes, max %d bytes)", info.Size(), maxImageSize),
+			IsError: true,
+		}, nil
+	}
+
+	// Fail fast if the model does not support vision
+	if t.modelName != "" && !api.SupportsVision(t.modelName) {
+		return &ToolResult{
+			Content: fmt.Sprintf("[Error: model %q does not support image/vision input — cannot read image file %s]", t.modelName, filepath.Base(path)),
 			IsError: true,
 		}, nil
 	}
