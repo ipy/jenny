@@ -450,13 +450,13 @@ func TestBuildCompactedChain(t *testing.T) {
 // ============================================================
 
 func TestAC6_ModelAwareCompactConfig(t *testing.T) {
-	// DeepSeek models have 1M context window and 384K max output (from capability table)
+	// DeepSeek V4 models have 1048576 context window and 393216 max output
 	cfg := newCompactConfigForModel("deepseek-v4-flash", nil)
-	if cfg.ModelContextWindow != 1_000_000 {
-		t.Errorf("deepseek-v4-flash context window = %d, want 1000000", cfg.ModelContextWindow)
+	if cfg.ModelContextWindow != 1_048_576 {
+		t.Errorf("deepseek-v4-flash context window = %d, want 1048576", cfg.ModelContextWindow)
 	}
-	if cfg.ModelMaxOutputTokens != 384_000 {
-		t.Errorf("deepseek-v4-flash max output = %d, want 384000", cfg.ModelMaxOutputTokens)
+	if cfg.ModelMaxOutputTokens != 393_216 {
+		t.Errorf("deepseek-v4-flash max output = %d, want 393216", cfg.ModelMaxOutputTokens)
 	}
 
 	// Claude Opus 4 uses 200K context window and 128K max output (from capability table)
@@ -498,29 +498,61 @@ func TestNewCompactConfigFromStreamConfig(t *testing.T) {
 func TestAC6_DeepSeekThresholdMath(t *testing.T) {
 	cfg := newCompactConfigForModel("deepseek-v4-flash", nil)
 
-	// effectiveContextWindow = 1M - 384000 = 616,000
+	// effectiveContextWindow = 1048576 - 393216 = 655360
 	effectiveWindow := cfg.effectiveContextWindow()
-	expectedEffective := 1_000_000 - 384_000
+	expectedEffective := 1_048_576 - 393_216
 	if effectiveWindow != expectedEffective {
 		t.Errorf("effectiveContextWindow = %d, want %d", effectiveWindow, expectedEffective)
 	}
 
-	// Auto-compact should trigger at 616K - the threshold is lower now since max output is larger
-	// With 384K max output, autoCompactBuffer = max(384000+5000, 13000) = 389000
-	// threshold = 616000 - 389000 = 227000
-	// 648K should trigger auto-compact (since 648K > 227K)
-	if !cfg.checkCompactThreshold(648_000, "user") {
-		t.Log("648K tokens triggers auto-compact with 1M context window and 384K max output (expected)")
+	// autoCompactBuffer = max(393216+5000, 13000) = 398216, capped at 655360/2 = 327680
+	// threshold = 655360 - 327680 = 327680
+	threshold := cfg.autoCompactThreshold()
+	if threshold != 327_680 {
+		t.Errorf("autoCompactThreshold = %d, want 327680 (buffer capped at 50%% of effective window)", threshold)
 	}
 
-	// Should trigger near the actual threshold
-	threshold := cfg.autoCompactThreshold()
+	// Should trigger at threshold
 	if !cfg.checkCompactThreshold(threshold, "user") {
 		t.Errorf("should trigger at threshold %d", threshold)
 	}
 	if cfg.checkCompactThreshold(threshold-1, "user") {
 		t.Error("should NOT trigger below threshold")
 	}
+	t.Logf("DeepSeek threshold math: effective=%d threshold=%d", effectiveWindow, threshold)
+}
+
+// TestAC6_HighOutputModelThresholdFloor verifies that models with large output
+// relative to context window (e.g. gpt-5.5: 200k context, 128k max output)
+// don't produce negative thresholds. The buffer is capped at 50% of effective
+// context, so the threshold floors at effective/2.
+func TestAC6_HighOutputModelThresholdFloor(t *testing.T) {
+	cfg := CompactConfig{
+		ModelContextWindow:   200_000,
+		ModelMaxOutputTokens: 128_000,
+	}
+
+	// effectiveContextWindow = 200k - 128k = 72k
+	if cfg.effectiveContextWindow() != 72_000 {
+		t.Errorf("effectiveContextWindow = %d, want 72000", cfg.effectiveContextWindow())
+	}
+
+	// autoCompactBuffer = max(128k+5k, 13k) = 133k, capped at 72k/2 = 36k
+	// threshold = 72k - 36k = 36k (positive, not negative)
+	threshold := cfg.autoCompactThreshold()
+	if threshold < 0 {
+		t.Errorf("autoCompactThreshold = %d, should never be negative", threshold)
+	}
+	if threshold != 36_000 {
+		t.Errorf("autoCompactThreshold = %d, want 36000", threshold)
+	}
+
+	// First few turns with tiny context should NOT trigger compaction
+	if cfg.checkCompactThreshold(37, "user") {
+		t.Error("37 tokens should NOT trigger compaction (threshold is 36000)")
+	}
+
+	t.Log("High-output model threshold correctly floored")
 }
 
 // ============================================================

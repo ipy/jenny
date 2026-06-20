@@ -1474,34 +1474,35 @@ func TestSendMessageStream_SkipsFallbackOnCancelledContext(t *testing.T) {
 	}
 }
 
-// TestModelContextWindow_DeepSeekPrefixNormalization verifies that modelContextWindow
-// handles provider-prefixed DeepSeek V4 model names the same way lookupModelCap does.
+// TestModelContextWindow_DeepSeekPrefixNormalization verifies that the context
+// window lookup handles provider-prefixed model names correctly.
 // Regression test for: prefixed names like deepseek-anthropic/deepseek-v4-flash
-// returned the default 200K instead of 1M, causing effectiveContextWindow to go
-// negative and the entire compaction system to fail silently.
+// returned the default 200K instead of the actual value, causing negative
+// effectiveContextWindow and compaction failure.
 func TestModelContextWindow_DeepSeekPrefixNormalization(t *testing.T) {
 	tests := []struct {
 		model string
 		want  int
 	}{
-		// Bare names — should return 1M
-		{"deepseek-v4-flash", 1_000_000},
-		{"deepseek-v4-pro", 1_000_000},
-		{"DEEPSEEK-V4-FLASH", 1_000_000},
-		// Provider-prefixed names — should also return 1M (the bug case)
-		{"deepseek-anthropic/deepseek-v4-flash", 1_000_000},
-		{"deepseek-anthropic/deepseek-v4-pro", 1_000_000},
-		{"openrouter/deepseek/deepseek-v4-flash", 1_000_000},
-		// Non-DeepSeek V4 — should return default 200K
-		{"claude-sonnet-4-20250514", 200_000},
-		{"claude-3-5-sonnet-20241022", 200_000},
-		{"unknown-model", 200_000},
-		{"", 200_000},
+		// DeepSeek V4 — 1048576 context window
+		{"deepseek-v4-flash", 1048576},
+		{"deepseek-v4-pro", 1048576},
+		{"DEEPSEEK-V4-FLASH", 1048576},
+		// Provider-prefixed names — should return same value (the bug case)
+		{"deepseek-anthropic/deepseek-v4-flash", 1048576},
+		{"deepseek-anthropic/deepseek-v4-pro", 1048576},
+		{"openrouter/deepseek/deepseek-v4-flash", 1048576},
+		// Non-DeepSeek V4 — should return their actual context windows
+		{"claude-sonnet-4-6", 1000000},
+		{"claude-sonnet-4-20250514", 200000},
+		{"claude-3-5-sonnet-20241022", 200000},
+		{"unknown-model", 200000},
+		{"", 200000},
 	}
 	for _, tt := range tests {
-		got := modelContextWindow(tt.model)
+		got := modelContextWindowLookup(tt.model)
 		if got != tt.want {
-			t.Errorf("modelContextWindow(%q) = %d, want %d", tt.model, got, tt.want)
+			t.Errorf("modelContextWindowLookup(%q) = %d, want %d", tt.model, got, tt.want)
 		}
 	}
 }

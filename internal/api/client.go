@@ -51,26 +51,12 @@ type ModelParamsInfo struct {
 }
 
 // ModelParams returns the context window and max output tokens for a model.
-// Uses the centralized capability table for max output tokens.
+// Uses the centralized capability table for both values.
 func ModelParams(model string) ModelParamsInfo {
 	return ModelParamsInfo{
-		ContextWindow:   modelContextWindow(model),
+		ContextWindow:   modelContextWindowLookup(model),
 		MaxOutputTokens: modelMaxOutputCap(model),
 	}
-}
-
-// modelContextWindow returns the context window size for a given model.
-// This is conservative and may be overridden by AUTO_COMPACT_WINDOW.
-func modelContextWindow(model string) int {
-	// Strip provider prefixes (e.g. deepseek-anthropic/deepseek-v4-flash → deepseek-v4-flash)
-	// so the prefix check is consistent with lookupModelCap behavior.
-	lower := strings.ToLower(normalizeModelName(model))
-	// DeepSeek V4 has a 1M context window (tripwire-safe: see normalization_tripwire_test.go)
-	if strings.HasPrefix(lower, "deepseek-v4-") {
-		return 1_000_000
-	}
-	// Default context window for most modern models
-	return 200_000
 }
 
 // ResolveTimeout parses API_TIMEOUT_MS env var and returns a time.Duration.

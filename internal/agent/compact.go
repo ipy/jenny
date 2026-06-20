@@ -66,13 +66,25 @@ func (c CompactConfig) effectiveContextWindow() int {
 
 // autoCompactBuffer returns the buffer for auto-compact threshold, scaled to
 // the model's max output tokens: max(modelMaxOutputTokens + 5000, minAutoCompactBuffer).
+// Capped at 50% of effective context window so threshold never goes negative
+// for models with large output relative to context window.
 func (c CompactConfig) autoCompactBuffer() int {
-	return max(c.ModelMaxOutputTokens+5_000, minAutoCompactBuffer)
+	raw := max(c.ModelMaxOutputTokens+5_000, minAutoCompactBuffer)
+	effectiveWindow := c.effectiveContextWindow()
+	if maxBuf := effectiveWindow / 2; maxBuf > 0 && raw > maxBuf {
+		return maxBuf
+	}
+	return raw
 }
 
 // autoCompactThreshold returns the token count at which auto-compact triggers.
+// Returns 0 if the effective context window is too small for a positive threshold.
 func (c CompactConfig) autoCompactThreshold() int {
-	return c.effectiveContextWindow() - c.autoCompactBuffer()
+	t := c.effectiveContextWindow() - c.autoCompactBuffer()
+	if t < 0 {
+		return 0
+	}
+	return t
 }
 
 // warningThreshold returns the token count at which to emit a warning event.

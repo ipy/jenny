@@ -41,7 +41,8 @@ func TestNormalize_NoProviderNameStringsInProduction(t *testing.T) {
 			continue
 		}
 		// Skip model name strings in data/config (pricing tables, capability maps)
-		if strings.Contains(line, `"deepseek`) || strings.Contains(line, `"minimax`) {
+		if strings.Contains(line, `"deepseek`) || strings.Contains(line, `"minimax`) ||
+			strings.Contains(line, `"MiniMax`) || strings.Contains(line, `"DeepSeek`) {
 			continue
 		}
 		violations = append(violations, line)

@@ -83,8 +83,8 @@ func TestResolveMaxTokens_DefaultCase(t *testing.T) {
 		{"gpt-4o", 16384},
 		{"o3", 100000},
 		{"o4-mini", 100000},
-		{"deepseek-v4-flash", 384000},
-		{"deepseek-v4-pro", 384000},
+		{"deepseek-v4-flash", 393216},
+		{"deepseek-v4-pro", 393216},
 		{"gemini-2.5-pro", 65536},
 		{"gemini-2.5-flash", 65536},
 	}
@@ -127,14 +127,17 @@ func TestResolveMaxTokens_UnknownModel(t *testing.T) {
 }
 
 // TestCapabilityTable_AllValuesInRange verifies that all capability table values
-// are between 1024 and 400000 inclusive.
+// are within reasonable bounds. gpt-image-2 has maxOut 0 (image generation model).
 func TestCapabilityTable_AllValuesInRange(t *testing.T) {
 	for _, e := range modelCapTable {
+		if e.pattern == "gpt-image-2" {
+			continue // image generation model, no text output
+		}
 		if e.maxOut < 1024 {
 			t.Errorf("model pattern %q has maxOut %d < 1024", e.pattern, e.maxOut)
 		}
-		if e.maxOut > 400000 {
-			t.Errorf("model pattern %q has maxOut %d > 400000", e.pattern, e.maxOut)
+		if e.maxOut > 600000 {
+			t.Errorf("model pattern %q has maxOut %d > 600000", e.pattern, e.maxOut)
 		}
 	}
 	if unknownModelMaxTokens < 1024 {
@@ -146,16 +149,16 @@ func TestCapabilityTable_AllValuesInRange(t *testing.T) {
 }
 
 // TestCapabilityTable_DeepSeekRegressionGuard verifies DeepSeek V4 models
-// return 384000, not the stale 8192.
+// return the correct max output from models.json (393216), not a stale value.
 func TestCapabilityTable_DeepSeekRegressionGuard(t *testing.T) {
 	got := modelMaxOutputCap("deepseek-v4-flash")
-	if got != 384000 {
-		t.Errorf("modelMaxOutputCap(deepseek-v4-flash) = %d, want 384000", got)
+	if got != 393216 {
+		t.Errorf("modelMaxOutputCap(deepseek-v4-flash) = %d, want 393216", got)
 	}
 
 	got = ResolveMaxTokens("deepseek-v4-pro", 0)
-	if got != 384000 {
-		t.Errorf("ResolveMaxTokens(deepseek-v4-pro, 0) = %d, want 384000", got)
+	if got != 393216 {
+		t.Errorf("ResolveMaxTokens(deepseek-v4-pro, 0) = %d, want 393216", got)
 	}
 
 	got = ResolveMaxTokens("deepseek-v4-flash", 8192)

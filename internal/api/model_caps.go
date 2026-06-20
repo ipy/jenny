@@ -15,37 +15,113 @@ const unknownModelMaxTokens = 16384
 
 // modelCapEntry holds a model name prefix/glob and its capabilities.
 type modelCapEntry struct {
-	pattern             string
-	maxOut              int
-	hasVision           bool // whether the model supports image/vision input
+	pattern              string
+	contextWindow        int
+	maxOut               int
+	hasVision            bool // whether the model supports image/vision input
 	supportsNativeSearch bool // whether the model supports native web search
 }
 
-// modelCapTable maps model name prefixes to their capabilities.
+// defaultContextWindow is the fallback context window for unknown models.
+const defaultContextWindow = 200_000
+
+// modelCapTable maps model name patterns to their capabilities.
 // Patterns are matched as case-insensitive prefixes. More specific patterns
 // must appear before less specific ones (table is evaluated in order, first
 // match wins).
+//
+// Source: https://github.com/ImSingee/aidy-models (2026-06-21 snapshot)
 var modelCapTable = []modelCapEntry{
-	// Claude models
-	{"claude-opus-4-", 128000, true, true},
-	{"claude-fable-5", 128000, true, true},
-	{"claude-sonnet-4-", 64000, true, true},
-	{"claude-haiku-4-", 64000, true, true},
+	// Anthropic
+	{"claude-fable-5", 1000000, 128000, true, true},
+	{"claude-opus-4-6", 1000000, 128000, true, true},
+	{"claude-opus-4-7", 1000000, 128000, true, true},
+	{"claude-opus-4-8", 1000000, 128000, true, true},
+	{"claude-sonnet-4-6", 1000000, 64000, true, true},
+	// Catch-all for older Claude models
+	{"claude-opus-4-", 200000, 128000, true, true},
+	{"claude-sonnet-4-", 200000, 64000, true, true},
+	{"claude-haiku-4-", 200000, 64000, true, true},
 
-	// GPT models
-	{"gpt-5", 128000, true, true},
-	{"gpt-4.1", 33000, true, true},
-	{"gpt-4o", 16384, true, true},
-	{"o3", 100000, false, true},
-	{"o4-mini", 100000, false, true},
+	// OpenAI
+	{"gpt-5.5-pro", 1050000, 128000, true, true},
+	{"gpt-5.5", 1050000, 128000, true, true},
+	{"gpt-5.4-pro", 1050000, 128000, true, true},
+	{"gpt-5.4", 1050000, 128000, true, true},
+	{"gpt-5.4-mini", 400000, 128000, true, true},
+	{"gpt-5.4-nano", 400000, 128000, true, true},
+	{"gpt-5.3-codex", 400000, 128000, true, true},
+	{"gpt-image-2", 0, 0, true, false},
+	// Catch-all for older GPT-5 variants
+	{"gpt-5", 200000, 128000, true, true},
+	{"gpt-4.1", 200000, 33000, true, true},
+	{"gpt-4o", 200000, 16384, true, true},
+	{"o3", 200000, 100000, false, true},
+	{"o4-mini", 200000, 100000, false, true},
 
-	// DeepSeek — no native search support
-	{"deepseek-v4-", 384000, false, false},
-	{"deepseek", 384000, false, false}, // catch-all for legacy names (deepseek-chat, deepseek-reasoner, etc.)
+	// DeepSeek
+	{"deepseek-v4-pro", 1048576, 393216, false, false},
+	{"deepseek-v4-flash", 1048576, 393216, false, false},
+	{"deepseek-chat", 1000000, 384000, false, false},
+	// Catch-all for other DeepSeek model names
+	{"deepseek", 1000000, 384000, false, false},
 
-	// Gemini
-	{"gemini-2.5-", 65536, true, true},
-	{"gemini-2.0-", 65536, true, true},
+	// Google
+	{"gemini-3.5-flash", 1114112, 65536, true, true},
+	{"gemini-3.1-pro-preview-customtools", 1048576, 65536, true, false},
+	{"gemini-3.1-pro-preview", 1114112, 65536, true, true},
+	{"gemini-3.1-flash-lite-preview", 1048576, 65536, true, true},
+	{"gemini-3.1-flash-lite", 1114112, 65536, true, true},
+	{"gemini-3.1-flash-image-preview", 163840, 32768, true, true},
+	{"gemma-4-31b-it", 294912, 32768, true, true},
+	{"gemma-4-26b-a4b-it", 294912, 32768, true, true},
+	// Catch-all for older Gemini models
+	{"gemini-2.5-", 200000, 65536, true, true},
+	{"gemini-2.0-", 200000, 65536, true, true},
+
+	// Alibaba
+	{"qwen3.7-max", 1000000, 65536, false, false},
+	{"qwen3.7-plus", 1000000, 65536, true, false},
+	{"qwen3.6-plus", 1000000, 65536, true, false},
+	{"qwen3.6-flash", 1000000, 65536, true, false},
+	{"qwen3.6-35b-a3b", 262144, 65536, true, false},
+	{"qwen3.6-27b", 262144, 65536, true, false},
+	{"qwen3.5-397b-a17b", 262144, 65536, true, false},
+	{"qwen3.5-122b-a10b", 262144, 65536, true, false},
+
+	// Moonshot / Kimi
+	{"kimi-k2.7-code", 262144, 262144, true, false},
+	{"kimi-k2.6", 262144, 32768, true, false},
+	{"kimi-k2.5", 262144, 32768, true, false},
+
+	// MiniMax
+	{"MiniMax-M3", 1000000, 524288, true, false},
+	{"MiniMax-M2.7-highspeed", 204800, 131072, false, false},
+	{"MiniMax-M2.7", 204800, 131072, false, false},
+	{"MiniMax-M2.5-highspeed", 204800, 131072, false, false},
+	{"MiniMax-M2.5", 204800, 131072, false, false},
+
+	// ZhipuAI
+	{"glm-5.2", 1000000, 131072, false, false},
+	{"glm-5.1", 200000, 131072, false, true},
+	{"glm-5v-turbo", 200000, 131072, true, true},
+	{"glm-5-turbo", 200000, 131072, false, true},
+	{"glm-5", 200000, 131072, false, true},
+	{"glm-4.7-flash", 200000, 131072, false, true},
+
+	// Xiaomi
+	{"mimo-v2.5-pro", 1000000, 131072, false, true},
+	{"mimo-v2.5", 1000000, 131072, true, true},
+	{"mimo-v2-pro", 1048576, 131072, false, false},
+	{"mimo-v2-omni", 262144, 131072, true, false},
+	{"mimo-v2-flash", 262144, 65536, false, true},
+
+	// xAI
+	{"grok-4.3", 1000000, 30000, true, true},
+	{"grok-build-0.1", 256000, 256000, true, false},
+
+	// StepFun
+	{"step-3.5-flash", 256000, 256000, false, true},
 }
 
 // ResolveMaxTokens returns the resolved max_tokens value for a given model and
@@ -213,6 +289,36 @@ func SupportsVision(model string) bool {
 // by delegating to the canonical lookupModelCap.
 func modelMaxOutputCap(model string) int {
 	return lookupModelCap(model)
+}
+
+// modelContextWindowLookup returns the context window size for a given model.
+// Consults the external model registry first, then falls back to the bundled
+// capability table. Returns defaultContextWindow for unrecognized models.
+func modelContextWindowLookup(model string) int {
+	reg := config.GlobalRegistry()
+	if reg != nil {
+		if cw, ok := reg.ContextWindow(model); ok {
+			return cw
+		}
+	}
+
+	bare := normalizeModelName(model)
+
+	// Retry registry with bare name (if different from original)
+	if bare != model && reg != nil {
+		if cw, ok := reg.ContextWindow(bare); ok {
+			return cw
+		}
+	}
+
+	lowerBare := strings.ToLower(bare)
+	for _, e := range modelCapTable {
+		if strings.HasPrefix(lowerBare, strings.ToLower(e.pattern)) {
+			return e.contextWindow
+		}
+	}
+
+	return defaultContextWindow
 }
 
 // SupportsNativeSearch reports whether the given model supports native web search.
