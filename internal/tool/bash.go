@@ -24,6 +24,21 @@ const (
 	maxInlineSize = 30720
 )
 
+// resolveShell returns the full path to a usable shell executable.
+// Tries bash first, then sh. Returns an error if neither is found.
+func resolveShell() (string, error) {
+	for _, name := range []string{"bash", "sh"} {
+		path, err := exec.LookPath(name)
+		if err != nil {
+			continue
+		}
+		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("no shell executable found: bash and sh not available in PATH")
+}
+
 // BashTool executes shell commands.
 type BashTool struct {
 	permissionLevel PermissionLevel
@@ -274,7 +289,15 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 	cmdCtx, cmdCancel := context.WithTimeout(derivedCtx, time.Duration(timeout)*time.Second)
 	defer cmdCancel()
 
-	cmd := exec.CommandContext(cmdCtx, "sh", "-c", command)
+	shellPath, shellErr := resolveShell()
+	if shellErr != nil {
+		return &ToolResult{
+			Content: fmt.Sprintf("Shell error: %v", shellErr),
+			IsError: true,
+		}, nil
+	}
+
+	cmd := exec.CommandContext(cmdCtx, shellPath, "-c", command)
 	cmd.Dir = t.commandCwd
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	defer func() {
@@ -493,7 +516,16 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 
 	// Spawn goroutine
 	go func() {
-		cmd := exec.CommandContext(ctx, "sh", "-c", command)
+		shellPath, shellErr := resolveShell()
+		if shellErr != nil {
+			outputMu.Lock()
+			output.WriteString(fmt.Sprintf("Shell error: %v", shellErr))
+			outputMu.Unlock()
+			atomic.StoreInt32(&cmdDone, 1)
+			close(done)
+			return
+		}
+		cmd := exec.CommandContext(ctx, shellPath, "-c", command)
 		cmd.Dir = cwd
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		defer func() {
