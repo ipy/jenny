@@ -32,6 +32,7 @@ Glob finds files matching a pattern. Read-only, concurrency-safe.
 - Sort by modification time (newest first) unless specified otherwise.
 - Max traversal depth: 64 directories.
 - Honors `.gitignore` and `.jennyignore` filtering.
+- **Backend**: ripgrep `--files --glob` when inside a git repository (fast, honors `.gitignore`); falls back to `filepath.Walk` + `ignore.Match()` otherwise or when ripgrep is unavailable. Subdirectory glob patterns (`path="sub" pattern="*.txt"`) always use the walk-based fallback.
 
 ## Validation
 

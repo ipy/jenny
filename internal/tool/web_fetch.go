@@ -22,7 +22,7 @@ import (
 
 // WebFetch limits.
 const (
-	webFetchMaxBodyBytes     = 10 * 1024 * 1024 // 10 MB (AC1)
+	webFetchMaxBodyBytes     = 1 * 1024 * 1024 // 1 MB (AC1)
 	webFetchMaxMarkdownChars = 100000           // 100K chars (AC2)
 	webFetchTimeout          = 60 * time.Second // request timeout
 	webFetchMaxRedirects     = 10               // max redirect hops

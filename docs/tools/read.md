@@ -47,7 +47,7 @@ Read returns file contents with line numbers, or structured blocks for images/PD
 |-------|---------|--------------|-----------|
 | `maxSizeBytes` | 256 KB | stat before read (full reads only) | Throw pre-read |
 | `maxSizeHardLimit` | 1 GiB | stat before read | Throw pre-read |
-| `maxTokens` | 25,000 | after read | Throw post-read (not silent truncate) |
+| `maxTokens` | 25,000 | after read | Returns content with `Truncated: true` |
 
 Partial reads (`offset`/`limit`): file is read in full, then offset/limit slice the lines in memory. Partial reads skip the `maxSizeBytes` pre-read check.
 

@@ -259,7 +259,7 @@ func (r *Registry) Build() []Tool {
 			r.baseTools = append(r.baseTools, NewBashTool(r.permissionLevel).WithSessionID(r.sessionID))
 		}
 
-		r.baseTools = append(r.baseTools, NewGlobTool(), NewGrepTool())
+		r.baseTools = append(r.baseTools, NewGlobTool(), NewGrepTool(), NewTreeTool(r.permissionLevel))
 		// Add MCP interaction tools
 		r.baseTools = append(r.baseTools, NewReadMcpResourceTool().WithSessionID(r.sessionID), NewMcpPromptTool())
 		// Add WriteTool and EditTool if readCache is configured

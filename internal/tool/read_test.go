@@ -319,13 +319,12 @@ func TestReadTool_SizeLimits(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "huge file content exceeds default maxTokens rejected post-read",
+			name: "huge file content exceeds default maxTokens returns truncated content",
 			input: map[string]any{
 				"file_path": hugeFile,
 			},
-			cwd:         tmpDir,
-			wantErr:     true,
-			errContains: "maxTokens",
+			cwd:     tmpDir,
+			wantErr: false,
 		},
 		{
 			name: "huge file with high max_tokens succeeds",

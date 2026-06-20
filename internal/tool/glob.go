@@ -1,15 +1,33 @@
 package tool
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/ipy/jenny/internal/tool/ignore"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
 )
+
+// isGitRepo returns true if searchRoot is inside a git repository.
+func isGitRepo(searchRoot string) bool {
+	dir := searchRoot
+	for {
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			return true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return false
+}
 
 const (
 	maxResults = 100
@@ -198,24 +216,93 @@ func (t *GlobTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}
 	}
 
-	// AC7: Load ignore patterns once for the search root and skip any entry
-	// (file or directory) that matches. The match is computed on the path
-	// relative to searchRoot so the patterns are search-root-portable.
-	ignorePatterns := ignore.LoadPatterns(searchRoot)
+	// Try ripgrep --files first (fast, honors .gitignore in git repos).
+	// ripgrep only respects .gitignore when it detects a .git directory.
+	// We check for .git presence to ensure we don't accidentally bypass
+	// .gitignore filtering. Use ripgrep only when inside a git repo.
+	matches, err := t.globWithRipgrep(searchRoot, pattern)
+	if err == nil && len(matches) > 0 && isGitRepo(searchRoot) {
+		return t.buildResult(matches, searchRoot, cwd)
+	}
 
-	// Walk the directory tree and collect matching files
+	// Fallback: manual filepath.Walk (always respects .gitignore/.jennyignore)
+	matches, err = t.globWithWalk(searchRoot, pattern)
+	if err != nil {
+		return nil, fmt.Errorf("glob error: %v", err)
+	}
+	return t.buildResult(matches, searchRoot, cwd)
+}
+
+// globWithRipgrep uses ripgrep --files --glob to find matching files.
+// Returns nil if ripgrep is not available.
+func (t *GlobTool) globWithRipgrep(searchRoot, pattern string) ([]fileMatch, error) {
+	rgPath, err := exec.LookPath("rg")
+	if err != nil {
+		return nil, fmt.Errorf("ripgrep not found")
+	}
+
+	args := []string{
+		"--files",
+		"--glob", pattern,
+		"--sortr", "modified",
+		"--max-count", fmt.Sprintf("%d", maxResults+1),
+		"--", searchRoot,
+	}
+
+	cmd := exec.Command(rgPath, args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	output, err := cmd.Output()
+	// ripgrep exit 1 means no matches found — fall through to walk.
+	// Any other error (crash, bad flag) should surface.
+	if err != nil {
+		if ee, ok := err.(*exec.ExitError); ok && ee.ExitCode() == 1 {
+			// No matches from ripgrep — return nil matches so caller falls back
+			return nil, nil
+		}
+		return nil, fmt.Errorf("ripgrep failed: %s", strings.TrimSpace(stderr.String()))
+	}
+
 	var matches []fileMatch
-	var depth int
+	absRoot, _ := filepath.Abs(searchRoot)
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if line == "" {
+			continue
+		}
+		// ripgrep returns absolute paths; relativize against searchRoot
+		relPath := line
+		if filepath.IsAbs(line) {
+			relPath, _ = filepath.Rel(absRoot, line)
+		}
+		// Filter by depth (same as walk-based approach)
+		depth := 1 + strings.Count(relPath, string(filepath.Separator))
+		if depth > maxDepth {
+			continue
+		}
+		// Stat for mtime to enable proper sorting
+		var mtime int64
+		if info, err := os.Stat(line); err == nil {
+			mtime = info.ModTime().UnixNano()
+		}
+		matches = append(matches, fileMatch{path: relPath, mtime: mtime})
+	}
+	return matches, nil
+}
+
+// globWithWalk is the fallback when ripgrep is not available.
+// It walks the directory tree and matches files manually.
+func (t *GlobTool) globWithWalk(searchRoot, pattern string) ([]fileMatch, error) {
+	ignorePatterns := ignore.LoadPatterns(searchRoot)
+	var matches []fileMatch
 
 	err := filepath.Walk(searchRoot, func(path string, info os.FileInfo, err error) error {
-		// Get relative path from search root
 		relPath, err := filepath.Rel(searchRoot, path)
 		if err != nil {
 			return nil
 		}
 
-		// AC8: compute depth from relPath separator count (root=depth 1).
-		depth = 1 + strings.Count(relPath, string(filepath.Separator))
+		depth := 1 + strings.Count(relPath, string(filepath.Separator))
 		if depth > maxDepth {
 			if info.IsDir() {
 				return filepath.SkipDir
@@ -223,7 +310,6 @@ func (t *GlobTool) Execute(ctx context.Context, input map[string]any, cwd string
 			return nil
 		}
 
-		// Skip ignored entries (and their contents when it's a directory)
 		if relPath != "." && ignore.Match(relPath, ignorePatterns) {
 			if info.IsDir() {
 				return filepath.SkipDir
@@ -231,7 +317,6 @@ func (t *GlobTool) Execute(ctx context.Context, input map[string]any, cwd string
 			return nil
 		}
 
-		// Check if this path matches the pattern
 		if matchGlob(pattern, relPath) {
 			if !info.IsDir() {
 				mtime := info.ModTime().UnixNano()
@@ -242,8 +327,23 @@ func (t *GlobTool) Execute(ctx context.Context, input map[string]any, cwd string
 		return nil
 	})
 
-	if err != nil {
-		return nil, fmt.Errorf("error walking directory: %v", err)
+	return matches, err
+}
+
+// buildResult sorts, truncates, and formats the matches for output.
+func (t *GlobTool) buildResult(matches []fileMatch, searchRoot, cwd string) (*ToolResult, error) {
+	// Sort by mtime descending (newest first), but only if mtimes are populated
+	hasMtime := false
+	for _, m := range matches {
+		if m.mtime != 0 {
+			hasMtime = true
+			break
+		}
+	}
+	if hasMtime {
+		sort.Slice(matches, func(i, j int) bool {
+			return matches[i].mtime > matches[j].mtime
+		})
 	}
 
 	// Empty result
@@ -254,24 +354,17 @@ func (t *GlobTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}, nil
 	}
 
-	// Sort by modification time (newest first)
-	sort.Slice(matches, func(i, j int) bool {
-		return matches[i].mtime > matches[j].mtime
-	})
-
-	// Cap at 100 results
+	// Cap at maxResults
 	truncated := len(matches) > maxResults
 	if truncated {
 		matches = matches[:maxResults]
 	}
 
-	// Build result content - list of paths relative to cwd
 	var content strings.Builder
 	for i, m := range matches {
 		if i > 0 {
 			content.WriteString("\n")
 		}
-		// Convert from searchRoot-relative to cwd-relative
 		var path string
 		if searchRoot == cwd {
 			path = m.path
@@ -279,7 +372,7 @@ func (t *GlobTool) Execute(ctx context.Context, input map[string]any, cwd string
 			absPath := filepath.Join(searchRoot, m.path)
 			relToCwd, err := filepath.Rel(cwd, absPath)
 			if err != nil {
-				path = m.path // fallback to searchRoot-relative
+				path = m.path
 			} else {
 				path = relToCwd
 			}

@@ -122,6 +122,7 @@ Specifications for individual tool implementations.
 | [read.md](./tools/read.md) | File content reading |
 | [sleep-await.md](./tools/sleep-await.md) | Sleep and await primitives |
 | [tasks.md](./tools/tasks.md) | Task/subagent and todo tools (merged) |
+| [tree.md](./tools/tree.md) | Recursive directory tree listing |
 | [web-fetch.md](./tools/web-fetch.md) | HTTP content fetching |
 | [web-search.md](./tools/web-search.md) | Web search integration |
 | [write.md](./tools/write.md) | File writing |

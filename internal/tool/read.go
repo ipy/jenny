@@ -312,19 +312,12 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 		readLines++
 	}
 
-	// maxTokens check (post-read)
-	{
-		maxTokens := defaultMaxTokens
-		if maxTokensVal, ok := input["max_tokens"].(float64); ok {
-			maxTokens = int(maxTokensVal)
-		}
-		// Estimate tokens: ~4 characters per token
+	// maxTokens check: if exceeded, set Truncated instead of erroring
+	var truncated bool
+	if maxTokensVal, ok := input["max_tokens"].(float64); ok && int(maxTokensVal) > 0 {
 		estimatedTokens := len(strings.Join(resultLines, "\n")) / 4
-		if estimatedTokens > maxTokens {
-			return &ToolResult{
-				Content: fmt.Sprintf("content exceeds maxTokens limit (estimated %d tokens)", estimatedTokens),
-				IsError: true,
-			}, nil
+		if estimatedTokens > int(maxTokensVal) {
+			truncated = true
 		}
 	}
 
@@ -374,8 +367,9 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 		readLines, offset, totalLines)
 
 	return &ToolResult{
-		Content: output.String(),
-		IsError: false,
+		Content:  output.String(),
+		IsError:  false,
+		Truncated: truncated,
 	}, nil
 }
 

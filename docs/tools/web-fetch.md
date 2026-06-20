@@ -27,7 +27,7 @@ Fetches URL content and converts HTML to markdown.
 
 | Limit | Value |
 |-------|-------|
-| Response body | 10 MB |
+| Response body | 1 MB |
 | Timeout | 60s |
 | Redirect hops | 10 |
 | Result markdown | 100K chars |
