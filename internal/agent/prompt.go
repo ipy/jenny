@@ -155,7 +155,7 @@ func modelAbilitiesSection(model string) (string, bool) {
 	if api.SupportsVision(model) {
 		vision = "supported"
 	}
-	return fmt.Sprintf("Vision: %s.\nIf a REQUIRED ability to accomplish the task is missing, stop and tell the user.", vision), true
+	return fmt.Sprintf("\nLLM Abilities:\nVision: %s.\nIf a REQUIRED model ability to accomplish the task is missing, stop and tell the user.", vision), true
 }
 
 // platformSection returns a section with OS/Arch platform context.

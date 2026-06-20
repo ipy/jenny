@@ -217,16 +217,17 @@ func (t *GlobTool) Execute(ctx context.Context, input map[string]any, cwd string
 	}
 
 	// Try ripgrep --files first (fast, honors .gitignore in git repos).
-	// ripgrep only respects .gitignore when it detects a .git directory.
-	// We check for .git presence to ensure we don't accidentally bypass
-	// .gitignore filtering. Use ripgrep only when inside a git repo.
-	matches, err := t.globWithRipgrep(searchRoot, pattern)
-	if err == nil && len(matches) > 0 && isGitRepo(searchRoot) {
-		return t.buildResult(matches, searchRoot, cwd)
+	// Only attempt ripgrep when inside a git repo, since ripgrep relies on
+	// .git presence for .gitignore filtering.
+	if isGitRepo(searchRoot) {
+		matches, err := t.globWithRipgrep(searchRoot, pattern)
+		if err == nil && len(matches) > 0 {
+			return t.buildResult(matches, searchRoot, cwd)
+		}
 	}
 
 	// Fallback: manual filepath.Walk (always respects .gitignore/.jennyignore)
-	matches, err = t.globWithWalk(searchRoot, pattern)
+	matches, err := t.globWithWalk(searchRoot, pattern)
 	if err != nil {
 		return nil, fmt.Errorf("glob error: %v", err)
 	}
