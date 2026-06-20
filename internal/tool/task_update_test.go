@@ -422,6 +422,47 @@ func TestTaskUpdateTool_MetadataMergeOverwrite(t *testing.T) {
 	}
 }
 
+func TestTaskUpdateTool_NoDeadlockWithOnChange(t *testing.T) {
+	store := NewTaskStore()
+	store.SetOnChange(func() {
+		// Simulate engine.go's persistence callback which calls AllTasks()
+		// This would deadlock if fireChange() is called while holding the write lock.
+		_ = store.AllTasks()
+	})
+	tool := NewTaskUpdateTool(store)
+	ctx := context.Background()
+
+	taskID := createUpdateTestTask(t, store)
+
+	result, err := tool.Execute(ctx, map[string]any{
+		"task_id": taskID,
+		"status":  "in_progress",
+	}, t.TempDir())
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("Execute() result.IsError = true: %s", result.Content)
+	}
+}
+
+func TestTaskStore_AddDependenciesNoDeadlockWithOnChange(t *testing.T) {
+	store := NewTaskStore()
+	store.SetOnChange(func() {
+		_ = store.AllTasks()
+	})
+
+	taskID := createUpdateTestTask(t, store)
+
+	result := store.AddDependencies(taskID, []string{"block-1"}, []string{"blocked-by-1"})
+	if result == nil {
+		t.Fatal("AddDependencies() returned nil")
+	}
+	if len(result.Blocks) != 1 || result.Blocks[0] != "block-1" {
+		t.Errorf("Unexpected blocks: %v", result.Blocks)
+	}
+}
+
 func createUpdateTestTask(t *testing.T, store *TaskStore) string {
 	t.Helper()
 	task, err := store.Create("update-test", "original desc", "", "", nil)

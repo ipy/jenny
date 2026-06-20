@@ -467,11 +467,6 @@ func dropOrphanedThinkingMessages(messages []Message, logs *[]NormalizationLog) 
 	return result
 }
 
-
-
-
-
-
 // isThinkingOnlyContent checks if content consists solely of thinking blocks.
 // Uses the package-level thinkingPattern (compiled once at package init).
 func isThinkingOnlyContent(content string) bool {
@@ -548,4 +543,3 @@ func stripTrailingThinking(content string) string {
 
 	return result
 }
-

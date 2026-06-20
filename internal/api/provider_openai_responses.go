@@ -774,11 +774,11 @@ func (p *openAIResponsesProvider) processResponsesStreamEvent(event *OpenAIRespo
 						},
 					}
 				}
-			// Skip the literal string "null" as arguments delta —
-			// some models emit this when arguments are absent.
-			if event.Delta != "" && event.Delta != "null" {
-				item.args += event.Delta
-			}
+				// Skip the literal string "null" as arguments delta —
+				// some models emit this when arguments are absent.
+				if event.Delta != "" && event.Delta != "null" {
+					item.args += event.Delta
+				}
 				blocksChan <- StreamContentBlock{
 					Type: "stream_event",
 					RawEvent: AnthropicStreamEvent{

@@ -375,8 +375,8 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 		readLines, offset, totalLines)
 
 	return &ToolResult{
-		Content:  output.String(),
-		IsError:  false,
+		Content:   output.String(),
+		IsError:   false,
 		Truncated: truncated,
 	}, nil
 }

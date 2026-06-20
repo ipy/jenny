@@ -45,8 +45,8 @@ func TestTaskListTool_Execute(t *testing.T) {
 		checkFn func(*ToolResult) bool
 	}{
 		{
-			name:  "list all tasks unfiltered",
-			input: map[string]any{},
+			name:    "list all tasks unfiltered",
+			input:   map[string]any{},
 			wantErr: false,
 			checkFn: func(r *ToolResult) bool {
 				if r == nil || r.IsError {
@@ -60,8 +60,8 @@ func TestTaskListTool_Execute(t *testing.T) {
 			},
 		},
 		{
-			name:  "list returns all tasks when no filter",
-			input: map[string]any{},
+			name:    "list returns all tasks when no filter",
+			input:   map[string]any{},
 			wantErr: false,
 			checkFn: func(r *ToolResult) bool {
 				if r == nil || r.IsError {
@@ -82,8 +82,8 @@ func TestTaskListTool_Execute(t *testing.T) {
 			},
 		},
 		{
-			name:  "list filters by status",
-			input: map[string]any{"status": "in_progress"},
+			name:    "list filters by status",
+			input:   map[string]any{"status": "in_progress"},
 			wantErr: false,
 			checkFn: func(r *ToolResult) bool {
 				if r == nil || r.IsError {
@@ -102,8 +102,8 @@ func TestTaskListTool_Execute(t *testing.T) {
 			},
 		},
 		{
-			name:  "list strips resolved blockers from blockedBy",
-			input: map[string]any{},
+			name:    "list strips resolved blockers from blockedBy",
+			input:   map[string]any{},
 			wantErr: false,
 			checkFn: func(r *ToolResult) bool {
 				if r == nil || r.IsError {

@@ -37,7 +37,7 @@ var modelCapTable = []modelCapEntry{
 	{"gpt-5", 128000, true},
 	{"gpt-4.1", 33000, true},
 	{"gpt-4o", 16384, true},
-	{"o3", 100000, false}, // reasoning-only, no vision
+	{"o3", 100000, false},      // reasoning-only, no vision
 	{"o4-mini", 100000, false}, // reasoning-only, no vision
 
 	// DeepSeek

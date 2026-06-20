@@ -158,10 +158,10 @@ func (s *TaskStore) List(filter TaskFilter) []*Task {
 // Update updates specified fields on a task. Returns the updated task or nil if not found.
 func (s *TaskStore) Update(id string, fields map[string]any) *Task {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	task, ok := s.tasks[id]
 	if !ok {
+		s.mu.Unlock()
 		return nil
 	}
 
@@ -184,6 +184,7 @@ func (s *TaskStore) Update(id string, fields map[string]any) *Task {
 		task.Metadata = metadata
 	}
 	task.UpdatedAt = time.Now()
+	s.mu.Unlock()
 	s.fireChange()
 
 	return task
@@ -192,10 +193,10 @@ func (s *TaskStore) Update(id string, fields map[string]any) *Task {
 // AddDependencies adds blocks/blockedBy relationships to a task.
 func (s *TaskStore) AddDependencies(id string, blocks, blockedBy []string) *Task {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	task, ok := s.tasks[id]
 	if !ok {
+		s.mu.Unlock()
 		return nil
 	}
 
@@ -206,6 +207,7 @@ func (s *TaskStore) AddDependencies(id string, blocks, blockedBy []string) *Task
 		task.BlockedBy = append(task.BlockedBy, blockedBy...)
 	}
 	task.UpdatedAt = time.Now()
+	s.mu.Unlock()
 	s.fireChange()
 
 	return task
