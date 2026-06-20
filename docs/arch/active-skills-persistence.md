@@ -30,12 +30,12 @@ Reading, writing, or editing a file whose path matches a skill's `activation_glo
 ### AC3: syncActiveSkills wiring
 Active skills are synchronized at two points in the engine loop:
 1. **Inner sync** (`executeAndProcessTools`): runs after tool execution completes, picking up tool-triggered activations immediately.
-2. **Outer sync** (loop level): runs after all tool results are collected. If the active skill count changed, a `[system]: Active Skills: ...` virtual user message is injected as a cross-turn reminder so the model sees updated skills in the next API request.
+2. **Outer sync** (loop level): runs after all tool results are collected. If the active skill count changed, a `<system-reminder>` virtual user message is injected as a cross-turn reminder so the model sees updated skills in the next API request.
 
 Skills framework activation entries are converted to agent-level entries and stored in StreamConfig. If the activator is nil, both sync points are a no-op.
 
 ### AC4: Active skills in message chain
-Active skills are communicated to the model via `[system]: Active Skills: ...` virtual user messages injected into the message chain (not the system prompt). This is done at two injection points:
+Active skills are communicated to the model via `<system-reminder>` virtual user messages injected into the message chain (not the system prompt). This is done at two injection points:
 1. **Compaction re-injection**: after context compaction, a virtual user message is appended so the model retains awareness of active skills even when prior activation tool results are summarized away.
 2. **Cross-turn change detection**: at the loop level (AC3 outer sync), when the active skill count changes, a virtual user message is appended.
 
@@ -67,7 +67,7 @@ Active skills are injected as virtual user messages in the message chain, not in
 ### Active Skills Sync Point
 Active skills are synchronized at two points per loop iteration:
 1. **Inner** (inside `executeAndProcessTools`): picks up both explicit (tool call) and implicit (path-triggered) activations immediately after tool execution.
-2. **Outer** (loop level): detects cross-turn changes and injects a `[system]: Active Skills: ...` virtual user message reminder when the skill count changes. This ensures the model sees updated skills context even if no new tool calls trigger activation.
+2. **Outer** (loop level): detects cross-turn changes and injects a `<system-reminder>` virtual user message reminder when the skill count changes. This ensures the model sees updated skills context even if no new tool calls trigger activation.
 
 ### Registry Wiring
 When the skills framework is enabled, the registry creates a path-based skill activator and wires it into Read/Write/Edit/NotebookEdit tools and the Skill tool. The activator is exposed for the main entry point engine wiring.

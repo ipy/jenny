@@ -94,7 +94,7 @@ func (e *QueryEngine) SubmitMessage(ctx context.Context, prompt string) (string,
 			if len(reminders) > 0 {
 				// Store bare reminders joined by newlines (no <system-reminder> wrapper),
 				// consistent with compact path and cross-turn skill-change path.
-				// The restore code prepends "[system]: " so the model sees the full block.
+				// The restore code wraps with <system-reminder> so the model sees the full block.
 				bareContent := strings.Join(reminders, "\n")
 				messages = append(messages, api.Message{
 					Role:      api.RoleUser,
@@ -303,7 +303,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					if reminder := activeSkillsSection(e.streamCfg.ActiveSkills); reminder != "" {
 						messages = append(messages, api.Message{
 							Role:      api.RoleUser,
-							Content:   "[system]: " + reminder,
+							Content:   "<system-reminder>\n" + reminder + "\n</system-reminder>",
 							IsVirtual: true,
 						})
 						e.persistSystemReminder(sessionID, reminder)
@@ -838,7 +838,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			if reminder := activeSkillsSection(e.streamCfg.ActiveSkills); reminder != "" {
 				reminderMsg := api.Message{
 					Role:      api.RoleUser,
-					Content:   "[system]: " + reminder,
+					Content:   "<system-reminder>\n" + reminder + "\n</system-reminder>",
 					IsVirtual: true,
 				}
 				messages = append(messages, reminderMsg)

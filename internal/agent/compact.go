@@ -492,7 +492,7 @@ func buildCompactedChain(originalMessages []api.Message, summary string) []api.M
 	var result []api.Message
 	result = append(result, api.Message{
 		Role:    api.RoleUser,
-		Content: "[system]: " + compactSummaryPrefix + summary,
+		Content: "<system-reminder>\n" + compactSummaryPrefix + summary + "\n</system-reminder>",
 	})
 	result = append(result, originalMessages...)
 	return result
@@ -508,6 +508,14 @@ func extractCompactSummary(compacted []api.Message) string {
 		return ""
 	}
 	content := compacted[0].Content
+	// Strip <system-reminder> wrapper if present.
+	const (
+		wrapperOpen  = "<system-reminder>\n"
+		wrapperClose = "\n</system-reminder>"
+	)
+	if strings.HasPrefix(content, wrapperOpen) && strings.HasSuffix(content, wrapperClose) {
+		content = content[len(wrapperOpen) : len(content)-len(wrapperClose)]
+	}
 	if strings.HasPrefix(content, compactSummaryPrefix) {
 		return content[len(compactSummaryPrefix):]
 	}

@@ -126,7 +126,7 @@ func RebuildMessages(entries []session.TranscriptEntry) []api.Message {
 				// in the message chain identically to when it was first injected.
 				messages = append(messages, api.Message{
 					Role:      api.RoleUser,
-					Content:   "[system]: " + entry.Content,
+					Content:   "<system-reminder>\n" + entry.Content + "\n</system-reminder>",
 					IsVirtual: true,
 				})
 			case entry.Content != "":

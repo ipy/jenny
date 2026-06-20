@@ -70,7 +70,7 @@ Skills use relative paths (e.g., `scripts/deploy.sh`).
 
 ### 4. Tracking Active Skills
 Active skills are tracked in `StreamConfig.ActiveSkills` and survive context compaction:
-- Active skills are communicated via virtual user messages (`[system]: Active Skills:\n- name: path`), not the system prompt. This preserves prompt cache integrity.
+- Active skills are communicated via virtual user messages (`<system-reminder>`), not the system prompt. This preserves prompt cache integrity.
 - `DiscoveredSkillNames` provides thread-safe cross-turn persistence of skill names, surviving context compaction.
 - The engine syncs activated skills from the `SkillActivator` after each tool execution via the optional `GetActivatedSkills()` interface on the concrete `PathSkillActivator`.
 

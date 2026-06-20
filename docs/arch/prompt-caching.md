@@ -68,7 +68,7 @@ Instead of a dynamic system prompt suffix, environment changes are injected as v
 
 ### Mid-session skill activation
 
-When `syncActiveSkills()` detects new skills, a `[system]: Active Skills: ...` virtual message is appended to the chain and persisted as a `system_reminder` transcript entry.
+When `syncActiveSkills()` detects new skills, a `<system-reminder>` virtual message is appended to the chain and persisted as a `system_reminder` transcript entry.
 
 ### Post-compaction skill re-injection
 

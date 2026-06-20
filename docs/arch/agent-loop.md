@@ -307,7 +307,7 @@ Context compaction is triggered when the total token count exceeds a threshold (
 
 1. **Summarizing** earlier turns into a condensed summary message.
 2. **Preserving** the last N turns (including the pending tool results) unchanged.
-3. **Persisting** a compaction boundary entry to the session transcript. On session resume, this boundary is restored as a `[system]:` prefixed user message.
+3. **Persisting** a compaction boundary entry to the session transcript. On session resume, this boundary is restored as a `<system-reminder>` user message.
 
 Compaction is only triggered between turns (not mid-stream). See [context-compaction.md](./context-compaction.md) for details.
 

@@ -74,7 +74,7 @@ Three-step strategy (first success wins):
 2. **Session-memory compaction** (when enabled): currently a stub — returns `"session memory compaction not implemented"`.
 3. **Fork summary agent**: `querySource=compact`, tools disabled, max 1 turn. Strips images/documents from summarizer input (replace with `[image]` / `[document]` markers). On prompt-too-long during summarize: retry up to 3× dropping oldest API-round groups from head.
 
-After successful compaction, active skills are re-injected as a `[system]: Active Skills: ...` virtual user message to ensure skill activations survive compaction.
+After successful compaction, active skills are re-injected as a `<system-reminder>` virtual user message to ensure skill activations survive compaction.
 
 Post-compact chain order: `boundaryMarker → summaryMessages → messagesToKeep (10) → attachments → hookResults`.
 

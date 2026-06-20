@@ -447,7 +447,7 @@ func TestRebuildMessages(t *testing.T) {
 				if !reminder.IsVirtual {
 					t.Error("system_reminder should be restored as IsVirtual=true")
 				}
-				if reminder.Content != "[system]: Active Skills:\n- go-dev: /path/to/go-dev" {
+				if reminder.Content != "<system-reminder>\nActive Skills:\n- go-dev: /path/to/go-dev\n</system-reminder>" {
 					t.Errorf("system_reminder content mismatch: %q", reminder.Content)
 				}
 			},
