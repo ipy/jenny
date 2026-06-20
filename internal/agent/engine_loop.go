@@ -241,25 +241,27 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			}
 		}
 
-		// AC3: Inject pending task completions as synthetic tool_results
-		// before each API iteration so the model can process them
+		// AC3: Inject pending task completions as a virtual user message
+		// with Content (not ToolResults) to avoid violating API protocol:
+		// tool_result blocks require their tool_use_id to reference an
+		// actual tool_use in a preceding assistant message.
 		completions := e.drainTaskCompletions()
 		if len(completions) > 0 {
-			userMsg := api.Message{
-				Role:        api.RoleUser,
-				ToolResults: make([]api.ToolResultBlock, 0, len(completions)),
-			}
+			var sb strings.Builder
 			for _, c := range completions {
-				userMsg.ToolResults = append(userMsg.ToolResults, api.ToolResultBlock{
-					ToolUseID: "task_completed_" + c.TaskID,
-					Content: fmt.Sprintf(
-						`<task_completed task_id="%s" duration_seconds="%.1f" exit_code="%d"/>`,
-						c.TaskID, c.DurationSeconds, c.ExitCode,
-					),
-					IsError: false,
-				})
+				if sb.Len() > 0 {
+					sb.WriteString("\n")
+				}
+				sb.WriteString(fmt.Sprintf(
+					`<task_completed task_id="%s" duration_seconds="%.1f" exit_code="%d"/>`,
+					c.TaskID, c.DurationSeconds, c.ExitCode,
+				))
 			}
-			messages = append(messages, userMsg)
+			messages = append(messages, api.Message{
+				Role:      api.RoleUser,
+				Content:   sb.String(),
+				IsVirtual: true,
+			})
 		}
 
 		// AC1: Check compaction threshold before API request

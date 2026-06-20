@@ -56,7 +56,10 @@ func (e *QueryEngine) Drain(ctx context.Context) {
 }
 
 // drainTaskCompletions drains pending task completions from the TaskManager.
-// AC3: Completions are injected as synthetic tool_results in the message chain.
+// AC3: Completions are injected as a virtual user message with Content
+// (not ToolResults) to avoid violating API protocol: tool_result blocks
+// require their tool_use_id to reference an actual tool_use in a preceding
+// assistant message.
 func (e *QueryEngine) drainTaskCompletions() []tool.TaskCompletion {
 	tm := e.getTaskManager()
 	if tm == nil {

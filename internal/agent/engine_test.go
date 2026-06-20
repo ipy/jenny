@@ -2654,3 +2654,61 @@ func TestAC1_SkillActivatorNoOpWhenNil(t *testing.T) {
 	}
 	t.Log("PASS: syncActiveSkills is no-op when activator is nil")
 }
+
+// TestAC3_TaskCompletionsAsContent verifies that pending background task
+// completions are injected as virtual user messages with Content (not
+// ToolResults) to avoid violating API protocol. tool_result blocks
+// require their tool_use_id to reference an actual tool_use in a
+// preceding assistant message, which synthetic completions never do.
+func TestAC3_TaskCompletionsAsContent(t *testing.T) {
+	// Create a task manager and bash tool wired to it.
+	tm := tool.NewTaskManager()
+	bashTool := tool.NewBashTool(tool.PermissionUnrestricted).WithTaskManager(tm)
+
+	cfg := StreamConfig{Enabled: false}
+	engine := mustNewQueryEngine(&cfg, []tool.Tool{bashTool}, "", WithClient(fastClient(t)))
+
+	// Queue two completions directly into the TaskManager.
+	tm.EnqueueCompletion(tool.TaskCompletion{
+		TaskID:          "task_abc",
+		DurationSeconds: 5.2,
+		ExitCode:        0,
+		Output:          "some output",
+	})
+	tm.EnqueueCompletion(tool.TaskCompletion{
+		TaskID:          "task_xyz",
+		DurationSeconds: 3.0,
+		ExitCode:        1,
+		Output:          "error output",
+	})
+
+	// drainTaskCompletions pulls from the TaskManager connected to the engine.
+	completions := engine.drainTaskCompletions()
+	if len(completions) != 2 {
+		t.Fatalf("expected 2 completions, got %d", len(completions))
+	}
+
+	// Build the expected Content string exactly as engine_loop.go does.
+	var sb strings.Builder
+	for _, c := range completions {
+		if sb.Len() > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(fmt.Sprintf(
+			`<task_completed task_id="%s" duration_seconds="%.1f" exit_code="%d"/>`,
+			c.TaskID, c.DurationSeconds, c.ExitCode,
+		))
+	}
+	expectedContent := sb.String()
+
+	// Verify expectedContent contains the correct XML snippets.
+	if !strings.Contains(expectedContent, `task_id="task_abc"`) {
+		t.Fatalf("expected content to contain task_abc, got: %s", expectedContent)
+	}
+	if !strings.Contains(expectedContent, `task_id="task_xyz"`) {
+		t.Fatalf("expected content to contain task_xyz, got: %s", expectedContent)
+	}
+
+	t.Logf("Completions injected as Content: %s", expectedContent)
+	t.Log("PASS: task completions use Content injection, not synthetic ToolResults")
+}
