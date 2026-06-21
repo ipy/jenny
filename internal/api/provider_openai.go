@@ -15,12 +15,13 @@ import (
 
 // openAIProvider implements the Provider interface using a lightweight HTTP client.
 type openAIProvider struct {
-	client         *HTTPClient
-	model          string
-	retryConfig    RetryConfig
-	thinkingEffort string
-	providerName   string
-	transform      RequestTransformer
+	client            *HTTPClient
+	model             string
+	retryConfig       RetryConfig
+	thinkingEffort    string
+	providerName      string
+	transform         RequestTransformer
+	maxTokensOverride int
 }
 
 // newOpenAIProvider creates a new OpenAI provider.
@@ -90,6 +91,11 @@ func (p *openAIProvider) SetRequestTransformer(t RequestTransformer) {
 // SetProviderName sets the provider name.
 func (p *openAIProvider) SetProviderName(name string) {
 	p.providerName = name
+}
+
+// SetMaxTokensOverride sets a per-call max_tokens override.
+func (p *openAIProvider) SetMaxTokensOverride(n int) {
+	p.maxTokensOverride = n
 }
 
 // SupportsNativeSearch returns true for models that support native web search.
@@ -194,7 +200,7 @@ func (p *openAIProvider) doSendMessage(ctx context.Context, messages []Message, 
 		sdkTools = p.buildTools(tools)
 	}
 
-	maxTokens := int64(ResolveMaxTokens(p.model, 0))
+	maxTokens := int64(ResolveMaxTokens(p.model, p.maxTokensOverride))
 
 	reqBody := OpenAIRequest{
 		Model:               p.model,
@@ -425,7 +431,7 @@ func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Messa
 			sdkTools = p.buildTools(tools)
 		}
 
-		maxTokens := int64(ResolveMaxTokens(p.model, 0))
+		maxTokens := int64(ResolveMaxTokens(p.model, p.maxTokensOverride))
 
 		reqBody := OpenAIRequest{
 			Model:               p.model,

@@ -194,6 +194,24 @@ func (s *StickyClient) SetThinkingConfig(cfg api.ThinkingConfig) {
 	}
 }
 
+// SetProviderName implements api.Requester.
+func (s *StickyClient) SetProviderName(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.client != nil {
+		s.client.SetProviderName(name)
+	}
+}
+
+// SetMaxTokensOverride implements api.Requester.
+func (s *StickyClient) SetMaxTokensOverride(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.client != nil {
+		s.client.SetMaxTokensOverride(n)
+	}
+}
+
 func (s *StickyClient) selectEndpoint() error {
 	if s.endpoint != nil {
 		return nil

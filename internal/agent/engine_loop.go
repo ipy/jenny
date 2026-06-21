@@ -264,6 +264,14 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			})
 		}
 
+		// Progress monitor: check escalation level and inject reminders
+		if msg, terminate := e.progressMonitor.CheckAndInject(); terminate {
+			return e.terminateProgressMonitor(sessionID)
+		} else if msg != nil {
+			messages = append(messages, *msg)
+			e.persistSystemReminder(sessionID, msg.Content)
+		}
+
 		// AC1: Check compaction threshold before API request
 		// Estimate tokens and check if auto-compact should trigger
 		estimatedTokens := estimateTokens(messages)
@@ -333,6 +341,9 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		fallbackFn := func(fallbackCtx context.Context) (*api.Response, error) {
 			return e.client.SendMessage(fallbackCtx, messages, e.toolParams, nil, systemPrompt, "")
 		}
+
+		// Dynamic max_tokens: set override before each API call
+		e.client.SetMaxTokensOverride(e.maxTokensCtrl.ComputeEffective(e.turnCount))
 
 		// Use streaming API (AC1)
 		// Track API call duration (AC3: duration_api_ms)
@@ -829,6 +840,32 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			return "", fmt.Errorf("executing tools: %w", execErr)
 		}
 		toolResults = append(toolResults, execToolResults...)
+
+		// Progress monitor: record turn and update max_tokens level
+		e.progressMonitor.RecordTurn(toolUseBlocks, execToolResults)
+		e.maxTokensCtrl.SetProgressLevel(e.progressMonitor.Level())
+
+		// Complexity fork: fire after 3rd tool result
+		e.toolResultCount += len(execToolResults)
+		if e.toolResultCount >= 3 && e.maxTokensCtrl.ShouldFork() {
+			forkMessages := make([]api.Message, len(messages))
+			copy(forkMessages, messages)
+			forkModel := e.model
+			go func() {
+				forkClient, err := api.NewClientWithModel(forkModel)
+				if err != nil {
+					log.Debug("Complexity eval fork client creation failed", "error", err)
+					return
+				}
+				forkClient.SetMaxTokensOverride(200)
+				cr, err := forkComplexityEval(ctx, forkClient, forkMessages, systemPrompt)
+				if err != nil {
+					log.Debug("Complexity eval fork failed", "error", err)
+					return
+				}
+				e.maxTokensCtrl.SetComplexityResult(cr)
+			}()
+		}
 
 		// Sync active skills and inject a reminder message if they changed.
 		// (The executeAndProcessTools function also calls syncActiveSkills, but this

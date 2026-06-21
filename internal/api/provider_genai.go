@@ -15,10 +15,11 @@ import (
 
 // genaiProvider implements the Provider interface using a lightweight HTTP client.
 type genaiProvider struct {
-	client       *HTTPClient
-	model        string
-	retryConfig  RetryConfig
-	providerName string
+	client            *HTTPClient
+	model             string
+	retryConfig       RetryConfig
+	providerName      string
+	maxTokensOverride int
 }
 
 // newGenAIProvider creates a new GenAI provider.
@@ -65,6 +66,11 @@ func (p *genaiProvider) SetRetryConfig(cfg RetryConfig) {
 // SetProviderName sets the provider name.
 func (p *genaiProvider) SetProviderName(name string) {
 	p.providerName = name
+}
+
+// SetMaxTokensOverride sets a per-call max_tokens override.
+func (p *genaiProvider) SetMaxTokensOverride(n int) {
+	p.maxTokensOverride = n
 }
 
 // SupportsNativeSearch returns true for models that support native web search.
@@ -166,7 +172,7 @@ func (p *genaiProvider) doSendMessage(ctx context.Context, messages []Message, t
 
 	messages, tools, _ = NormalizeMessages(messages, tools, Capabilities{SupportsPromptCaching: false})
 
-	mt := ResolveMaxTokens(p.model, 0)
+	mt := ResolveMaxTokens(p.model, p.maxTokensOverride)
 	reqBody := GenAIRequest{
 		Contents: p.buildContents(messages, toolResults),
 		GenerationConfig: &GenAIGenerationConfig{
@@ -241,7 +247,7 @@ func (p *genaiProvider) SendMessageStream(ctx context.Context, messages []Messag
 
 		messages, tools, _ = NormalizeMessages(messages, tools, Capabilities{SupportsPromptCaching: false})
 
-		mt := ResolveMaxTokens(p.model, 0)
+		mt := ResolveMaxTokens(p.model, p.maxTokensOverride)
 		reqBody := GenAIRequest{
 			Contents: p.buildContents(messages, toolResults),
 			GenerationConfig: &GenAIGenerationConfig{

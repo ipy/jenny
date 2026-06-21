@@ -74,6 +74,15 @@ type QueryEngine struct {
 
 	// Skill activator for tracking active skills in system prompt
 	skillActivator tool.SkillActivator
+
+	// Dynamic max_tokens controller
+	maxTokensCtrl *MaxTokensController
+
+	// Progress monitor (circuit breaker)
+	progressMonitor *ProgressMonitor
+
+	// Tool result counter for complexity fork trigger
+	toolResultCount int
 }
 
 // thinkingBlockState tracks the accumulated thinking tokens for a single thinking block.
@@ -271,6 +280,10 @@ func NewQueryEngine(cfg *StreamConfig, tools []tool.Tool, model string, opts ...
 		}
 	}
 	e.compactConfig = newCompactConfigForModel(e.model, e.streamCfg)
+
+	// Initialize dynamic max_tokens and progress monitor
+	e.maxTokensCtrl = NewMaxTokensController(e.model)
+	e.progressMonitor = NewProgressMonitor()
 
 	// Wire context into tools
 	e.WireTools()

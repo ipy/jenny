@@ -16,13 +16,14 @@ import (
 
 // anthropicProvider implements the Provider interface using a lightweight HTTP client.
 type anthropicProvider struct {
-	client         *HTTPClient
-	model          string
-	thinkingConfig ThinkingConfig
-	retryConfig    RetryConfig
-	isBackground   bool
-	providerName   string
-	transform      RequestTransformer
+	client            *HTTPClient
+	model             string
+	thinkingConfig    ThinkingConfig
+	retryConfig       RetryConfig
+	isBackground      bool
+	providerName      string
+	transform         RequestTransformer
+	maxTokensOverride int
 }
 
 // newAnthropicProvider creates a new Anthropic provider.
@@ -84,6 +85,11 @@ func (p *anthropicProvider) SetRequestTransformer(t RequestTransformer) {
 // SetProviderName sets the provider name.
 func (p *anthropicProvider) SetProviderName(name string) {
 	p.providerName = name
+}
+
+// SetMaxTokensOverride sets a per-call max_tokens override.
+func (p *anthropicProvider) SetMaxTokensOverride(n int) {
+	p.maxTokensOverride = n
 }
 
 // SupportsNativeSearch returns true for models that support native web search.
@@ -189,7 +195,7 @@ func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Messag
 	sdkMessages := p.buildMessages(messages, toolResults)
 	sdkTools := p.buildTools(tools)
 
-	maxTokens := ResolveMaxTokens(p.model, 0)
+	maxTokens := ResolveMaxTokens(p.model, p.maxTokensOverride)
 
 	reqBody := AnthropicRequest{
 		Model:     p.model,
@@ -448,7 +454,7 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 		sdkMessages := p.buildMessages(messages, toolResults)
 		sdkTools := p.buildTools(tools)
 
-		maxTokens := ResolveMaxTokens(p.model, 0)
+		maxTokens := ResolveMaxTokens(p.model, p.maxTokensOverride)
 
 		reqBody := AnthropicRequest{
 			Model:     p.model,

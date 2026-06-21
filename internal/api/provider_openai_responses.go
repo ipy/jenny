@@ -16,12 +16,13 @@ import (
 
 // openAIResponsesProvider implements the Provider interface using the OpenAI Responses API.
 type openAIResponsesProvider struct {
-	client       *HTTPClient
-	model        string
-	retryConfig  RetryConfig
-	effort       string
-	providerName string
-	transform    RequestTransformer
+	client            *HTTPClient
+	model             string
+	retryConfig       RetryConfig
+	effort            string
+	providerName      string
+	transform         RequestTransformer
+	maxTokensOverride int
 }
 
 // newOpenAIResponsesProvider creates a new OpenAI Responses API provider.
@@ -85,6 +86,11 @@ func (p *openAIResponsesProvider) SetThinkingConfig(cfg ThinkingConfig) {
 // SetProviderName sets the provider name.
 func (p *openAIResponsesProvider) SetProviderName(name string) {
 	p.providerName = name
+}
+
+// SetMaxTokensOverride sets a per-call max_tokens override.
+func (p *openAIResponsesProvider) SetMaxTokensOverride(n int) {
+	p.maxTokensOverride = n
 }
 
 // SetRequestTransformer sets the request transformer applied before sending.
@@ -194,7 +200,7 @@ func (p *openAIResponsesProvider) doSendMessage(ctx context.Context, messages []
 		sdkTools = p.buildTools(tools)
 	}
 
-	maxTokens := int64(ResolveMaxTokens(p.model, 0))
+	maxTokens := int64(ResolveMaxTokens(p.model, p.maxTokensOverride))
 
 	reqBody := OpenAIResponsesRequest{
 		Model:           p.model,
@@ -474,7 +480,7 @@ func (p *openAIResponsesProvider) SendMessageStream(ctx context.Context, message
 			sdkTools = p.buildTools(tools)
 		}
 
-		maxTokens := int64(ResolveMaxTokens(p.model, 0))
+		maxTokens := int64(ResolveMaxTokens(p.model, p.maxTokensOverride))
 
 		reqBody := OpenAIResponsesRequest{
 			Model:           p.model,

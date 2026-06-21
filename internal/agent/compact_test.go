@@ -810,6 +810,9 @@ func (m *mockCompactClient) SetThinkingConfig(cfg api.ThinkingConfig) {}
 // SetProviderName implements api.Requester.
 func (m *mockCompactClient) SetProviderName(name string) {}
 
+// SetMaxTokensOverride implements api.Requester.
+func (m *mockCompactClient) SetMaxTokensOverride(n int) {}
+
 // TestAC1_InSessionCompact_Behavior_WithLargeMessages verifies that when
 // estimated tokens exceed effectiveContextWindow - MIN_SAFETY_OVERHEAD - SUMMARY_MAX_TOKENS,
 // compactMessages succeeds via forkSummaryAgent fallback (proving inSessionCompact was skipped).

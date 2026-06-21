@@ -149,7 +149,7 @@ func TestResolveModel(t *testing.T) {
 		{alias: "opus", expected: "claude-opus-4-7"},
 		{alias: "haiku", expected: "claude-haiku-4-5-20251001"},
 		{alias: "SONNET", expected: "claude-sonnet-4-6"}, // case insensitive
-		{alias: "claude-4", expected: "claude-4"},               // unknown passes through
+		{alias: "claude-4", expected: "claude-4"},        // unknown passes through
 		{alias: "unknown", expected: "unknown"},
 	}
 

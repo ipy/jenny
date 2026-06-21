@@ -35,6 +35,7 @@ func (m *mockRequester) SetRetryConfig(cfg api.RetryConfig)       {}
 func (m *mockRequester) SetBackground(isBackground bool)          {}
 func (m *mockRequester) SetThinkingConfig(cfg api.ThinkingConfig) {}
 func (m *mockRequester) SetProviderName(name string)              {}
+func (m *mockRequester) SetMaxTokensOverride(n int)               {}
 
 func TestErrorRecovery_ModelNotFound(t *testing.T) {
 	mock := &mockRequester{}

@@ -6,277 +6,53 @@ import (
 	"github.com/ipy/jenny/e2e/harness"
 )
 
-// TestMaxTokensClamp verifies the resolveMaxTokens behavior through e2e tests.
-// It checks that max_tokens in outbound API requests matches the model's
-// capability table and that unknown models get the conservative default.
+// TestMaxTokensClamp verifies max_tokens in outbound API requests.
+// With dynamic max_tokens, turn 1 always uses the discovery budget (2000)
+// regardless of model capability. The model capability feeds into
+// MaxTokensController.modelMax for later turns.
 func TestMaxTokensClamp(t *testing.T) {
-	runE2ESuite(t, []*harness.TestCase{
-		{
-			ID:          "max-tokens-clamp.default-sonnet-capability",
+	models := []struct {
+		id   string
+		name string
+	}{
+		{"claude-sonnet-4-6", "default-sonnet-capability"},
+		{"claude-opus-4-5-20251101", "opus-capability"},
+		{"claude-haiku-4-5", "haiku-capability"},
+		{"totally-unknown-model-v1", "unknown-model-conservative-default"},
+		{"gpt-5", "gpt-5-capability"},
+		{"gpt-4o", "gpt-4o-capability"},
+		{"deepseek-v4-1", "deepseek-v4-capability"},
+		{"gemini-2.5-pro", "gemini-capability"},
+		{"claude-fable-5-1", "fable-capability"},
+		{"o3", "o3-capability"},
+		{"o4-mini", "o4-mini-capability"},
+		{"gpt-4.1", "gpt-4.1-capability"},
+	}
+
+	var cases []*harness.TestCase
+	for _, m := range models {
+		cases = append(cases, &harness.TestCase{
+			ID:          "max-tokens-clamp." + m.name,
 			Category:    "max-tokens-clamp",
-			Description: "default max_tokens for claude-sonnet-4-6 is 64000 (model capability)",
+			Description: "turn 1 max_tokens is 2000 (discovery budget) for " + m.id,
 			Tags:        []string{"max-tokens-clamp"},
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "say hello",
 				Format:   "stream-json",
 				Cassette: "echo-hello",
-				Args:     []string{"--model", "claude-sonnet-4-6"},
+				Args:     []string{"--model", m.id},
 			},
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 64000,
+						MaxTokens: 2000,
 					},
 				},
 			},
-		},
-		{
-			ID:          "max-tokens-clamp.opus-capability",
-			Category:    "max-tokens-clamp",
-			Description: "max_tokens for claude-opus-4-* is 128000 (model capability)",
-			Tags:        []string{"max-tokens-clamp"},
-			Target: harness.TargetInvocation{
-				Kind:     "prompt",
-				Prompt:   "say hello",
-				Format:   "stream-json",
-				Cassette: "echo-hello",
-				Args:     []string{"--model", "claude-opus-4-5-20251101"},
-			},
-			Expected: harness.ExpectedBehavior{
-				ExitCode: 0,
-				APIRequests: []harness.APIRequestExpectation{
-					{
-						Index:     0,
-						MaxTokens: 128000,
-					},
-				},
-			},
-		},
-		{
-			ID:          "max-tokens-clamp.haiku-capability",
-			Category:    "max-tokens-clamp",
-			Description: "max_tokens for claude-haiku-4-* is 64000 (model capability)",
-			Tags:        []string{"max-tokens-clamp"},
-			Target: harness.TargetInvocation{
-				Kind:     "prompt",
-				Prompt:   "say hello",
-				Format:   "stream-json",
-				Cassette: "echo-hello",
-				Args:     []string{"--model", "claude-haiku-4-5"},
-			},
-			Expected: harness.ExpectedBehavior{
-				ExitCode: 0,
-				APIRequests: []harness.APIRequestExpectation{
-					{
-						Index:     0,
-						MaxTokens: 64000,
-					},
-				},
-			},
-		},
-		{
-			ID:          "max-tokens-clamp.unknown-model-conservative-default",
-			Category:    "max-tokens-clamp",
-			Description: "unknown model gets conservative default of 16384 with warning",
-			Tags:        []string{"max-tokens-clamp"},
-			Target: harness.TargetInvocation{
-				Kind:     "prompt",
-				Prompt:   "say hello",
-				Format:   "stream-json",
-				Cassette: "echo-hello",
-				Args:     []string{"--model", "totally-unknown-model-v1"},
-			},
-			Expected: harness.ExpectedBehavior{
-				ExitCode: 0,
-				APIRequests: []harness.APIRequestExpectation{
-					{
-						Index:     0,
-						MaxTokens: 16384,
-					},
-				},
-				Stderr: &harness.StderrExpectation{
-					Contains: []string{"unknown_model_capability_default"},
-				},
-			},
-		},
-		{
-			ID:          "max-tokens-clamp.gpt-5-capability",
-			Category:    "max-tokens-clamp",
-			Description: "max_tokens for gpt-5* is 128000 (model capability)",
-			Tags:        []string{"max-tokens-clamp"},
-			Target: harness.TargetInvocation{
-				Kind:     "prompt",
-				Prompt:   "say hello",
-				Format:   "stream-json",
-				Cassette: "echo-hello",
-				Args:     []string{"--model", "gpt-5"},
-			},
-			Expected: harness.ExpectedBehavior{
-				ExitCode: 0,
-				APIRequests: []harness.APIRequestExpectation{
-					{
-						Index:     0,
-						MaxTokens: 128000,
-					},
-				},
-			},
-		},
-		{
-			ID:          "max-tokens-clamp.gpt-4o-capability",
-			Category:    "max-tokens-clamp",
-			Description: "max_tokens for gpt-4o* is 16384 (model capability)",
-			Tags:        []string{"max-tokens-clamp"},
-			Target: harness.TargetInvocation{
-				Kind:     "prompt",
-				Prompt:   "say hello",
-				Format:   "stream-json",
-				Cassette: "echo-hello",
-				Args:     []string{"--model", "gpt-4o"},
-			},
-			Expected: harness.ExpectedBehavior{
-				ExitCode: 0,
-				APIRequests: []harness.APIRequestExpectation{
-					{
-						Index:     0,
-						MaxTokens: 16384,
-					},
-				},
-			},
-		},
-		{
-			ID:          "max-tokens-clamp.deepseek-v4-capability",
-			Category:    "max-tokens-clamp",
-			Description: "max_tokens for deepseek-v4-* is 384000 (regression guard against stale 8192)",
-			Tags:        []string{"max-tokens-clamp"},
-			Target: harness.TargetInvocation{
-				Kind:     "prompt",
-				Prompt:   "say hello",
-				Format:   "stream-json",
-				Cassette: "echo-hello",
-				Args:     []string{"--model", "deepseek-v4-1"},
-			},
-			Expected: harness.ExpectedBehavior{
-				ExitCode: 0,
-				APIRequests: []harness.APIRequestExpectation{
-					{
-						Index:     0,
-						MaxTokens: 384000,
-					},
-				},
-			},
-		},
-		{
-			ID:          "max-tokens-clamp.gemini-capability",
-			Category:    "max-tokens-clamp",
-			Description: "max_tokens for gemini-2.5-* is 65536 (model capability)",
-			Tags:        []string{"max-tokens-clamp"},
-			Target: harness.TargetInvocation{
-				Kind:     "prompt",
-				Prompt:   "say hello",
-				Format:   "stream-json",
-				Cassette: "echo-hello",
-				Args:     []string{"--model", "gemini-2.5-pro"},
-			},
-			Expected: harness.ExpectedBehavior{
-				ExitCode: 0,
-				APIRequests: []harness.APIRequestExpectation{
-					{
-						Index:     0,
-						MaxTokens: 65536,
-					},
-				},
-			},
-		},
-		{
-			ID:          "max-tokens-clamp.fable-capability",
-			Category:    "max-tokens-clamp",
-			Description: "max_tokens for claude-fable-5* is 128000 (model capability)",
-			Tags:        []string{"max-tokens-clamp"},
-			Target: harness.TargetInvocation{
-				Kind:     "prompt",
-				Prompt:   "say hello",
-				Format:   "stream-json",
-				Cassette: "echo-hello",
-				Args:     []string{"--model", "claude-fable-5-1"},
-			},
-			Expected: harness.ExpectedBehavior{
-				ExitCode: 0,
-				APIRequests: []harness.APIRequestExpectation{
-					{
-						Index:     0,
-						MaxTokens: 128000,
-					},
-				},
-			},
-		},
-		{
-			ID:          "max-tokens-clamp.o3-capability",
-			Category:    "max-tokens-clamp",
-			Description: "max_tokens for o3* is 100000 (model capability)",
-			Tags:        []string{"max-tokens-clamp"},
-			Target: harness.TargetInvocation{
-				Kind:     "prompt",
-				Prompt:   "say hello",
-				Format:   "stream-json",
-				Cassette: "echo-hello",
-				Args:     []string{"--model", "o3"},
-			},
-			Expected: harness.ExpectedBehavior{
-				ExitCode: 0,
-				APIRequests: []harness.APIRequestExpectation{
-					{
-						Index:     0,
-						MaxTokens: 100000,
-					},
-				},
-			},
-		},
-		{
-			ID:          "max-tokens-clamp.o4-mini-capability",
-			Category:    "max-tokens-clamp",
-			Description: "max_tokens for o4-mini* is 100000 (model capability)",
-			Tags:        []string{"max-tokens-clamp"},
-			Target: harness.TargetInvocation{
-				Kind:     "prompt",
-				Prompt:   "say hello",
-				Format:   "stream-json",
-				Cassette: "echo-hello",
-				Args:     []string{"--model", "o4-mini"},
-			},
-			Expected: harness.ExpectedBehavior{
-				ExitCode: 0,
-				APIRequests: []harness.APIRequestExpectation{
-					{
-						Index:     0,
-						MaxTokens: 100000,
-					},
-				},
-			},
-		},
-		{
-			ID:          "max-tokens-clamp.gpt-4.1-capability",
-			Category:    "max-tokens-clamp",
-			Description: "max_tokens for gpt-4.1* is 33000 (model capability)",
-			Tags:        []string{"max-tokens-clamp"},
-			Target: harness.TargetInvocation{
-				Kind:     "prompt",
-				Prompt:   "say hello",
-				Format:   "stream-json",
-				Cassette: "echo-hello",
-				Args:     []string{"--model", "gpt-4.1"},
-			},
-			Expected: harness.ExpectedBehavior{
-				ExitCode: 0,
-				APIRequests: []harness.APIRequestExpectation{
-					{
-						Index:     0,
-						MaxTokens: 33000,
-					},
-				},
-			},
-		},
-	})
+		})
+	}
+	runE2ESuite(t, cases)
 }

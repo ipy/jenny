@@ -32,6 +32,7 @@ type Requester interface {
 	SetBackground(isBackground bool)
 	SetThinkingConfig(cfg ThinkingConfig)
 	SetProviderName(name string)
+	SetMaxTokensOverride(n int)
 }
 
 // Client wraps an API provider.
@@ -248,6 +249,14 @@ func effortToBudgetTokens(effort string) int {
 		return 64000
 	default:
 		return 0
+	}
+}
+
+// SetMaxTokensOverride sets the per-call max_tokens override for the provider.
+// Pass 0 to use the model default.
+func (c *Client) SetMaxTokensOverride(n int) {
+	if setter, ok := c.provider.(interface{ SetMaxTokensOverride(int) }); ok {
+		setter.SetMaxTokensOverride(n)
 	}
 }
 
