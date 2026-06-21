@@ -85,6 +85,45 @@ Every command (foreground and background) gets `JENNY_SCRATCHPAD` injected into 
 
 Non-zero exit codes are returned as-is in tool output; the agent interprets them from stdout/stderr context.
 
+## ExecTool Architecture
+
+BashTool uses `ExecTool` (`internal/tool/exec.go`) for all process execution. Both foreground and background paths go through `ExecTool.Start` + `handle.Wait`.
+
+ExecTool owns: process group setup, env injection, kill escalation, and exit code mapping.
+
+Kill escalation:
+
+- **Unix:** SIGTERM → 5s wait → SIGKILL to the process group (cancellable goroutine).
+- **Windows:** single `taskkill /F /T`.
+
+## Simple-Command Fallback
+
+When no shell is available (`resolveShell()` fails), BashTool falls back to `parseSimpleCommand`.
+
+The parser tokenizes the command with a quote-aware state machine, checks for shell operators, builtins, and shell binaries. If the command is a simple argv (no operators, no always-reject builtins, executable found in PATH), it runs directly via ExecTool. If not parseable, it returns a structured error with `shell_unavailable` category.
+
+Shell resolution tries, in priority order: bash, sh, dash, ash, zsh, ksh.
+
+When the sandbox is active and no shell is available, the fallback refuses execution with `sandbox_violation` — it cannot honor string-rewriting sandbox in shell-less mode.
+
+## Error Format
+
+All tool errors use a structured format:
+
+```
+error: <category>
+reason: <one-line cause>
+input: <echoed input>
+unsupported: <features list>
+hint: <corrective action>
+```
+
+Categories: `permission_denied`, `unsupported_feature`, `shell_unavailable`, `path_out_of_scope`, `timeout`, `sandbox_violation`, `executable_not_found`, `execution_failed`.
+
+## PowerShell
+
+PowerShellTool follows the same ExecTool architecture and has its own simple-command fallback with PowerShell-specific operator tables. See `powershell.go`.
+
 ## Edge Cases
 
 | Case | Expected behavior |
@@ -93,6 +132,9 @@ Non-zero exit codes are returned as-is in tool output; the agent interprets them
 | Sandbox unavailable | Command executes without sandbox (no error if sandbox not configured) |
 | Output spill disk full | Error with truncated inline output |
 | Heredoc / substitution | Blocked by dangerous-command gate |
+| No shell, simple argv | Runs via fallback through ExecTool |
+| No shell, complex input | Structured `shell_unavailable` error |
+| Sandbox active + no shell | `sandbox_violation` error |
 
 ## Acceptance Criteria
 

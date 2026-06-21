@@ -81,6 +81,11 @@ func (c *MaxTokensController) ComputeEffective(turn int) int {
 	}
 
 	switch level {
+	case ProgressLevelL3:
+		cap := c.progressCap(2048)
+		if base > cap {
+			base = cap
+		}
 	case ProgressLevelL2:
 		cap := c.progressCap(4096)
 		if base > cap {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -11,6 +12,21 @@ import (
 	"sync/atomic"
 	"time"
 )
+
+// resolvePowerShellHook, when set by tests, overrides PowerShell resolution.
+var resolvePowerShellHook func() (string, error)
+
+// resolvePowerShell returns the full path to powershell.exe.
+func resolvePowerShell() (string, error) {
+	if resolvePowerShellHook != nil {
+		return resolvePowerShellHook()
+	}
+	path, err := exec.LookPath("powershell.exe")
+	if err != nil {
+		return "", fmt.Errorf("powershell.exe not found in PATH")
+	}
+	return path, nil
+}
 
 // PowerShellTool executes PowerShell commands.
 type PowerShellTool struct {
@@ -21,6 +37,7 @@ type PowerShellTool struct {
 	backgroundTasks sync.Map
 	taskManager     *TaskManager
 	sessionID       string
+	exec            *ExecTool
 }
 
 // NewPowerShellTool creates a new PowerShellTool with the given PermissionLevel.
@@ -43,8 +60,30 @@ func (t *PowerShellTool) WithTaskManager(tm *TaskManager) *PowerShellTool {
 
 // WithSessionID sets the session ID for the PowerShellTool.
 func (t *PowerShellTool) WithSessionID(id string) *PowerShellTool {
+	t.mu.Lock()
 	t.sessionID = id
+	if t.exec != nil {
+		t.exec.WithSessionID(id)
+	}
+	t.mu.Unlock()
 	return t
+}
+
+// WithExecTool sets the ExecTool used for process execution.
+func (t *PowerShellTool) WithExecTool(e *ExecTool) *PowerShellTool {
+	t.mu.Lock()
+	t.exec = e
+	t.mu.Unlock()
+	return t
+}
+
+func (t *PowerShellTool) ensureExec() *ExecTool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.exec == nil {
+		t.exec = NewExecTool(t.projectRoot, t.sessionID)
+	}
+	return t.exec
 }
 
 // Name returns the tool name.
@@ -127,42 +166,145 @@ func (t *PowerShellTool) Execute(ctx context.Context, input map[string]any, cwd 
 	cmdCtx, cmdCancel := context.WithTimeout(derivedCtx, time.Duration(timeout)*time.Second)
 	defer cmdCancel()
 
-	// Prepend UTF-8 encoding command
-	fullCommand := "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); " + command
-
-	cmd := exec.CommandContext(cmdCtx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", fullCommand)
-	cmd.Dir = t.commandCwd
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-	output := stdout.String()
-	if stderr.Len() > 0 {
-		if output != "" {
-			output += "\n"
-		}
-		output += "stderr: " + stderr.String()
+	shellPath, shellErr := resolvePowerShell()
+	if shellErr != nil {
+		return t.executeShellFallback(cmdCtx, command, timeout)
 	}
 
-	if cmdCtx.Err() == context.DeadlineExceeded {
+	return t.runForegroundPowerShell(cmdCtx, shellPath, command, timeout)
+}
+
+func (t *PowerShellTool) wrapPowerShellCommand(command string) string {
+	return "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); " + command
+}
+
+func (t *PowerShellTool) runForegroundPowerShell(ctx context.Context, shellPath, command string, timeout int) (*ToolResult, error) {
+	fullCommand := t.wrapPowerShellCommand(command)
+
+	var stdout, stderr bytes.Buffer
+	handle, err := t.ensureExec().Start(ctx, ExecRequest{
+		Path:   shellPath,
+		Args:   []string{"-NoProfile", "-NonInteractive", "-Command", fullCommand},
+		Dir:    t.commandCwd,
+		Stdout: &stdout,
+		Stderr: &stderr,
+	}, ExecOptions{Timeout: time.Duration(timeout) * time.Second})
+	if err != nil {
+		return &ToolResult{
+			Content: fmt.Sprintf("Error starting command: %v", err),
+			IsError: true,
+		}, nil
+	}
+
+	result, waitErr := handle.Wait()
+	output := combineExecOutput(stdout.String(), stderr.String())
+
+	if result != nil && result.TimedOut {
 		return &ToolResult{
 			Content: fmt.Sprintf("Command timed out after %d seconds", timeout),
 			IsError: true,
 		}, nil
 	}
 
-	if err != nil {
-		exitErr, ok := err.(*exec.ExitError)
-		if ok {
-			return &ToolResult{
-				Content: fmt.Sprintf("%s\n(exit code: %d)", output, exitErr.ExitCode()),
-				IsError: true,
-			}, nil
+	if waitErr != nil {
+		return &ToolResult{
+			Content: fmt.Sprintf("Error executing command: %v\n%s", waitErr, output),
+			IsError: true,
+		}, nil
+	}
+
+	if result != nil && result.ExitCode != 0 {
+		return &ToolResult{
+			Content: fmt.Sprintf("%s\n(exit code: %d)", output, result.ExitCode),
+			IsError: true,
+		}, nil
+	}
+
+	return &ToolResult{
+		Content: output,
+		IsError: false,
+	}, nil
+}
+
+func (t *PowerShellTool) executeShellFallback(ctx context.Context, command string, timeout int) (*ToolResult, error) {
+	parsed := parseSimpleCommand(command, ShellFlavorPowerShell)
+	if !parsed.OK {
+		hint := "split into separate calls"
+		for _, issue := range parsed.Issues {
+			if strings.Contains(issue, "builtin") {
+				hint = "use a different tool, or run on a host with PowerShell"
+				break
+			}
 		}
 		return &ToolResult{
-			Content: fmt.Sprintf("Error executing command: %v\n%s", err, output),
+			Content: formatToolError(
+				"shell_unavailable",
+				"powershell.exe not found; input not runnable as simple argv",
+				command,
+				strings.Join(parsed.Issues, ", "),
+				hint,
+			),
+			IsError: true,
+		}, nil
+	}
+
+	return t.runForegroundExec(ctx, parsed.Argv[0], parsed.Argv[1:], timeout)
+}
+
+func (t *PowerShellTool) runForegroundExec(ctx context.Context, path string, args []string, timeout int) (*ToolResult, error) {
+	var stdout, stderr bytes.Buffer
+	handle, err := t.ensureExec().Start(ctx, ExecRequest{
+		Path:   path,
+		Args:   args,
+		Dir:    t.commandCwd,
+		Stdout: &stdout,
+		Stderr: &stderr,
+	}, ExecOptions{Timeout: time.Duration(timeout) * time.Second})
+	if err != nil {
+		return &ToolResult{
+			Content: formatToolError(
+				"execution_failed",
+				fmt.Sprintf("failed to start executable: %v", err),
+				strings.Join(append([]string{path}, args...), " "),
+				"",
+				"",
+			),
+			IsError: true,
+		}, nil
+	}
+
+	result, waitErr := handle.Wait()
+	output := combineExecOutput(stdout.String(), stderr.String())
+
+	if result != nil && result.TimedOut {
+		return &ToolResult{
+			Content: formatToolError(
+				"timeout",
+				fmt.Sprintf("command timed out after %d seconds", timeout),
+				strings.Join(append([]string{path}, args...), " "),
+				"",
+				"set run_in_background: true",
+			),
+			IsError: true,
+		}, nil
+	}
+
+	if waitErr != nil {
+		return &ToolResult{
+			Content: formatToolError(
+				"execution_failed",
+				waitErr.Error(),
+				strings.Join(append([]string{path}, args...), " "),
+				"",
+				"",
+			),
+			IsError: true,
+		}, nil
+	}
+
+	if result != nil && result.ExitCode != 0 {
+		return &ToolResult{
+			Content: fmt.Sprintf("%s\n(exit code: %d)", output, result.ExitCode),
 			IsError: true,
 		}, nil
 	}
@@ -179,19 +321,23 @@ func (t *PowerShellTool) executeBackground(command string, cwd string, input map
 		timeout = int(timeoutVal)
 	}
 
+	tm := t.taskManager
+	projRoot := t.projectRoot
+
 	ctx := context.Background()
 	resultCh := make(chan *ToolResult, 1)
 	taskID := fmt.Sprintf("task_ps_%d", time.Now().UnixNano())
 
-	if t.taskManager == nil {
-		t.taskManager = NewTaskManager()
+	if tm == nil {
+		tm = NewTaskManager()
+		t.taskManager = tm
 	}
-	if t.projectRoot != "" {
-		t.taskManager.WithProjectRoot(t.projectRoot)
+	if projRoot != "" {
+		tm.WithProjectRoot(projRoot)
 	}
 
-	outputFile, _ := t.taskManager.TaskOutputPath(taskID)
-	t.taskManager.Store(taskID, &TaskInfo{
+	outputFile, _ := tm.TaskOutputPath(taskID)
+	tm.Store(taskID, &TaskInfo{
 		TaskID:     taskID,
 		State:      TaskStateRunning,
 		OutputFile: outputFile,
@@ -207,94 +353,154 @@ func (t *PowerShellTool) executeBackground(command string, cwd string, input map
 	var output strings.Builder
 
 	go func() {
-		fullCommand := "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); " + command
-		cmd := exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", fullCommand)
-		cmd.Dir = cwd
-
-		var stdout, stderr bytes.Buffer
-		cmd.Stdout = &stdout
-		cmd.Stderr = &stderr
-
-		go func() {
-			err := cmd.Start()
-			if err != nil {
-				outputMu.Lock()
-				output.WriteString(fmt.Sprintf("failed to start command: %v", err))
-				outputMu.Unlock()
-				atomic.StoreInt32(&cmdDone, 1)
-				close(done)
-				return
-			}
-
-			if t.taskManager != nil && cmd.Process != nil {
-				t.taskManager.UpdateProcess(taskID, cmd.Process)
-			}
-
-			err = cmd.Wait()
-			outputMu.Lock()
-			output.WriteString(stdout.String())
-			if stderr.Len() > 0 {
-				if output.Len() > 0 {
-					output.WriteString("\n")
-				}
-				output.WriteString("stderr: " + stderr.String())
-			}
-			outputMu.Unlock()
-
-			exitCode := 0
-			if err != nil {
-				if exitErr, ok := err.(*exec.ExitError); ok {
-					exitCode = exitErr.ExitCode()
-				} else {
-					exitCode = -1
-				}
-			}
-
-			duration := time.Since(startTime).Seconds()
-			outputMu.Lock()
-			outputSnapshot := output.String()
-			outputMu.Unlock()
-
-			if t.taskManager != nil {
-				_ = t.taskManager.WriteTaskResult(taskID, outputSnapshot, exitCode, duration)
-				t.taskManager.CancelKillTimer(taskID)
-				t.taskManager.UpdateState(taskID, TaskStateCompleted)
-				t.taskManager.EnqueueCompletion(TaskCompletion{
+		execPath, execArgs, shellErr := t.resolveExecArgv(command)
+		if shellErr != nil {
+			errContent := shellErr.Error()
+			if tm != nil {
+				_ = tm.WriteTaskResult(taskID, errContent, 1, time.Since(startTime).Seconds())
+				tm.CancelKillTimer(taskID)
+				tm.UpdateState(taskID, TaskStateCompleted)
+				tm.EnqueueCompletion(TaskCompletion{
 					TaskID:          taskID,
-					DurationSeconds: duration,
-					ExitCode:        exitCode,
-					Output:          outputSnapshot,
+					DurationSeconds: time.Since(startTime).Seconds(),
+					ExitCode:        1,
+					Output:          errContent,
 				})
 			}
-
-			result := &ToolResult{
-				Content: outputSnapshot,
-				IsError: exitCode != 0,
+			resultCh <- &ToolResult{
+				Content: errContent,
+				IsError: true,
 			}
-			resultCh <- result
 			atomic.StoreInt32(&cmdDone, 1)
 			close(done)
+			return
+		}
+
+		var stdoutBuf, stderrBuf bytes.Buffer
+		execTool := t.ensureExec()
+
+		waitDone := make(chan struct {
+			result *ExecResult
+			err    error
+		}, 1)
+
+		handle, startErr := execTool.Start(ctx, ExecRequest{
+			Path:   execPath,
+			Args:   execArgs,
+			Dir:    cwd,
+			Stdout: &stdoutBuf,
+			Stderr: &stderrBuf,
+		}, ExecOptions{
+			Timeout: time.Duration(timeout) * time.Second,
+			OnStart: func(p *os.Process) {
+				if tm != nil && p != nil {
+					tm.UpdateProcess(taskID, p)
+				}
+			},
+		})
+		if startErr != nil {
+			outputMu.Lock()
+			output.WriteString(fmt.Sprintf("failed to start command: %v", startErr))
+			outputMu.Unlock()
+			atomic.StoreInt32(&cmdDone, 1)
+			close(done)
+			return
+		}
+
+		go func() {
+			r, err := handle.Wait()
+			waitDone <- struct {
+				result *ExecResult
+				err    error
+			}{r, err}
 		}()
 
-		timeoutChan := time.After(time.Duration(timeout) * time.Second)
-	outer:
+		progressTimer := time.NewTimer(2 * time.Second)
+		flushTicker := time.NewTicker(5 * time.Second)
+		defer progressTimer.Stop()
+		defer flushTicker.Stop()
+
+	waitLoop:
 		for {
 			select {
-			case <-done:
-				break outer
-			case <-timeoutChan:
-				if cmd.Process != nil {
-					_ = signalProcess(cmd.Process, true)
+			case <-progressTimer.C:
+				outputMu.Lock()
+				snapshot := combineExecOutput(stdoutBuf.String(), stderrBuf.String())
+				outputMu.Unlock()
+				if tm != nil {
+					EmitTaskProgress(taskID, 2.0, snapshot)
 				}
-				break outer
+			case <-flushTicker.C:
+				outputMu.Lock()
+				snapshot := combineExecOutput(stdoutBuf.String(), stderrBuf.String())
+				outputMu.Unlock()
+				if tm != nil {
+					duration := time.Since(startTime).Seconds()
+					_ = tm.FlushPartialOutput(taskID, snapshot, duration)
+				}
+			case wr := <-waitDone:
+				outputMu.Lock()
+				outputSnapshot := combineExecOutput(stdoutBuf.String(), stderrBuf.String())
+				output.WriteString(outputSnapshot)
+				outputMu.Unlock()
+
+				exitCode := 0
+				if wr.result != nil {
+					exitCode = wr.result.ExitCode
+				}
+				if wr.err != nil && exitCode == 0 {
+					exitCode = -1
+				}
+
+				duration := time.Since(startTime).Seconds()
+
+				if tm != nil {
+					_ = tm.WriteTaskResult(taskID, outputSnapshot, exitCode, duration)
+					tm.CancelKillTimer(taskID)
+					tm.UpdateState(taskID, TaskStateCompleted)
+					tm.EnqueueCompletion(TaskCompletion{
+						TaskID:          taskID,
+						DurationSeconds: duration,
+						ExitCode:        exitCode,
+						Output:          outputSnapshot,
+					})
+				}
+
+				var result *ToolResult
+				if wr.result != nil && wr.result.Signal != "" {
+					result = &ToolResult{
+						Content: fmt.Sprintf("%s\n(exit code: %d, signal: %s)", outputSnapshot, exitCode, wr.result.Signal),
+						IsError: true,
+					}
+				} else if exitCode != 0 {
+					result = &ToolResult{
+						Content: fmt.Sprintf("%s\n(exit code: %d)", outputSnapshot, exitCode),
+						IsError: true,
+					}
+				} else {
+					result = &ToolResult{
+						Content: outputSnapshot,
+						IsError: false,
+					}
+				}
+
+				resultCh <- result
+				atomic.StoreInt32(&cmdDone, 1)
+				close(done)
+				break waitLoop
 			}
 		}
 
 		for atomic.LoadInt32(&cmdDone) == 0 {
 			time.Sleep(10 * time.Millisecond)
 		}
+
 		close(resultCh)
 		t.backgroundTasks.Delete(taskID)
+
+		if tm != nil {
+			tm.Delete(taskID)
+		}
 	}()
 
 	return &ToolResult{
@@ -302,4 +508,32 @@ func (t *PowerShellTool) executeBackground(command string, cwd string, input map
 		OutputFile: outputFile,
 		IsError:    false,
 	}, nil
+}
+
+func (t *PowerShellTool) resolveExecArgv(command string) (string, []string, error) {
+	shellPath, shellErr := resolvePowerShell()
+	if shellErr == nil {
+		fullCommand := t.wrapPowerShellCommand(command)
+		return shellPath, []string{"-NoProfile", "-NonInteractive", "-Command", fullCommand}, nil
+	}
+
+	parsed := parseSimpleCommand(command, ShellFlavorPowerShell)
+	if !parsed.OK {
+		hint := "split into separate calls"
+		for _, issue := range parsed.Issues {
+			if strings.Contains(issue, "builtin") {
+				hint = "use a different tool, or run on a host with PowerShell"
+				break
+			}
+		}
+		return "", nil, fmt.Errorf("%s", formatToolError(
+			"shell_unavailable",
+			"powershell.exe not found; input not runnable as simple argv",
+			command,
+			strings.Join(parsed.Issues, ", "),
+			hint,
+		))
+	}
+
+	return parsed.Argv[0], parsed.Argv[1:], nil
 }

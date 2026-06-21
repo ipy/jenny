@@ -23,10 +23,16 @@ const (
 	maxInlineSize = 30720
 )
 
+// resolveShellHook, when set by tests, overrides shell resolution.
+var resolveShellHook func() (string, error)
+
 // resolveShell returns the full path to a usable shell executable.
-// Tries bash first, then sh. Returns an error if neither is found.
+// Tries bash, sh, dash, ash, zsh, and ksh in priority order.
 func resolveShell() (string, error) {
-	for _, name := range []string{"bash", "sh"} {
+	if resolveShellHook != nil {
+		return resolveShellHook()
+	}
+	for _, name := range []string{"bash", "sh", "dash", "ash", "zsh", "ksh"} {
 		path, err := exec.LookPath(name)
 		if err != nil {
 			continue
@@ -35,7 +41,7 @@ func resolveShell() (string, error) {
 			return path, nil
 		}
 	}
-	return "", fmt.Errorf("no shell executable found: bash and sh not available in PATH")
+	return "", fmt.Errorf("no shell executable found: no usable shell in PATH")
 }
 
 // BashTool executes shell commands.
@@ -48,6 +54,7 @@ type BashTool struct {
 	sessionID       string
 	backgroundTasks sync.Map
 	taskManager     *TaskManager
+	exec            *ExecTool
 }
 
 // NewBashTool creates a new BashTool with the given PermissionLevel.
@@ -66,6 +73,9 @@ func (t *BashTool) effectiveLevel() PermissionLevel {
 func (t *BashTool) WithSessionID(id string) *BashTool {
 	t.mu.Lock()
 	t.sessionID = id
+	if t.exec != nil {
+		t.exec.WithSessionID(id)
+	}
 	t.mu.Unlock()
 	return t
 }
@@ -84,6 +94,23 @@ func (t *BashTool) WithTaskManager(tm *TaskManager) *BashTool {
 	t.taskManager = tm
 	t.mu.Unlock()
 	return t
+}
+
+// WithExecTool sets the ExecTool used for process execution.
+func (t *BashTool) WithExecTool(e *ExecTool) *BashTool {
+	t.mu.Lock()
+	t.exec = e
+	t.mu.Unlock()
+	return t
+}
+
+func (t *BashTool) ensureExec() *ExecTool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.exec == nil {
+		t.exec = NewExecTool(t.projectRoot, t.sessionID)
+	}
+	return t.exec
 }
 
 // GetTaskManager returns the task manager for sharing with other tools.
@@ -290,102 +317,174 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 
 	shellPath, shellErr := resolveShell()
 	if shellErr != nil {
-		return &ToolResult{
-			Content: fmt.Sprintf("Shell error: %v", shellErr),
-			IsError: true,
-		}, nil
+		return t.executeShellFallback(cmdCtx, command, timeout)
 	}
 
-	// Create command WITHOUT using CommandContext — we handle timeout manually
-	// to ensure the entire process group is killed, not just the shell process.
-	// exec.CommandContext only kills the direct child (bash), leaving grandchildren
-	// (pip, nginx, etc.) orphaned and still running.
-	cmd := exec.Command(shellPath, "-c", command)
-	cmd.Dir = t.commandCwd
-	setupProcessGroup(cmd)
+	return t.runForegroundShell(cmdCtx, shellPath, command, timeout)
+}
 
-	// Inject JENNY_SCRATCHPAD env var so agent can reference scratchpad in shell
-	cmd.Env = append(os.Environ(), "JENNY_SCRATCHPAD="+constants.ScratchpadDir(t.sessionID))
+func (t *BashTool) runForegroundShell(ctx context.Context, shellPath, command string, timeout int) (*ToolResult, error) {
+	startTime := time.Now()
 
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Start(); err != nil {
+	handle, err := t.ensureExec().Start(ctx, ExecRequest{
+		Path:   shellPath,
+		Args:   []string{"-c", command},
+		Dir:    t.commandCwd,
+		Stdout: &stdout,
+		Stderr: &stderr,
+	}, ExecOptions{Timeout: time.Duration(timeout) * time.Second})
+	if err != nil {
 		return &ToolResult{
 			Content: fmt.Sprintf("Error starting command: %v", err),
 			IsError: true,
 		}, nil
 	}
 
-	// Track start time for auto-background hint (AC4)
-	startTime := time.Now()
+	result, waitErr := handle.Wait()
+	output := combineExecOutput(stdout.String(), stderr.String())
 
-	// Wait for command completion or timeout/cancellation in a goroutine.
-	// On timeout or cancellation, kill the entire process group to ensure
-	// child processes (pip, nginx, etc.) are also terminated.
-	done := make(chan error, 1)
-	go func() {
-		done <- cmd.Wait()
-	}()
-
-	var runErr error
-	select {
-	case runErr = <-done:
-		// Command completed normally
-	case <-cmdCtx.Done():
-		// Timeout or cancellation: kill entire process group
-		if cmd.Process != nil {
-			killProcessGroup(cmd.Process)
-		}
-		// Wait for process to actually exit after kill
-		<-done
-		runErr = cmdCtx.Err()
-	}
-
-	output := stdout.String()
-	if stderr.Len() > 0 {
-		if output != "" {
-			output += "\n"
-		}
-		output += "stderr: " + stderr.String()
-	}
-
-	// Handle cwd reset (AC4) - check if command changed directory outside project
 	t.mu.Lock()
 	t.resetCwdIfOutsideProject(command)
 	t.mu.Unlock()
 
-	if cmdCtx.Err() == context.DeadlineExceeded {
+	if result != nil && result.TimedOut {
 		return &ToolResult{
 			Content: fmt.Sprintf("Command timed out after %d seconds", timeout),
 			IsError: true,
 		}, nil
 	}
 
-	if runErr != nil {
-		exitErr, ok := runErr.(*exec.ExitError)
-		if ok {
-			exitCode := exitErr.ExitCode()
-			return &ToolResult{
-				Content: fmt.Sprintf("%s\n(exit code: %d)", output, exitCode),
-				IsError: true,
-			}, nil
-		}
+	if waitErr != nil {
 		return &ToolResult{
-			Content: fmt.Sprintf("Error executing command: %v\n%s", runErr, output),
+			Content: fmt.Sprintf("Error executing command: %v\n%s", waitErr, output),
 			IsError: true,
 		}, nil
 	}
 
-	// AC4: Auto-background hint for long-running commands (>120s)
+	if result != nil && result.ExitCode != 0 {
+		return &ToolResult{
+			Content: fmt.Sprintf("%s\n(exit code: %d)", output, result.ExitCode),
+			IsError: true,
+		}, nil
+	}
+
 	duration := time.Since(startTime)
 	if duration > 120*time.Second {
 		output += "\n(Tip: long-running commands work better with run_in_background: true)"
 	}
 
-	// Handle output spill (AC2)
 	return t.handleOutput(output)
+}
+
+func (t *BashTool) executeShellFallback(ctx context.Context, command string, timeout int) (*ToolResult, error) {
+	if t.sandbox != nil && t.sandbox.IsActive() {
+		return &ToolResult{
+			Content: formatToolError(
+				"sandbox_violation",
+				"sandbox active; simple-exec fallback cannot honor sandbox",
+				command,
+				"",
+				"run on a host with a shell",
+			),
+			IsError: true,
+		}, nil
+	}
+
+	parsed := parseSimpleCommand(command, ShellFlavorBash)
+	if !parsed.OK {
+		hint := "split into separate calls"
+		for _, issue := range parsed.Issues {
+			if strings.Contains(issue, "builtin") {
+				hint = "use a different tool, or run on a host with a shell"
+				break
+			}
+		}
+		return &ToolResult{
+			Content: formatToolError(
+				"shell_unavailable",
+				"shell not found; input not runnable as simple argv",
+				command,
+				strings.Join(parsed.Issues, ", "),
+				hint,
+			),
+			IsError: true,
+		}, nil
+	}
+
+	return t.runForegroundExec(ctx, parsed.Argv[0], parsed.Argv[1:], timeout)
+}
+
+func (t *BashTool) runForegroundExec(ctx context.Context, path string, args []string, timeout int) (*ToolResult, error) {
+	var stdout, stderr bytes.Buffer
+	handle, err := t.ensureExec().Start(ctx, ExecRequest{
+		Path:   path,
+		Args:   args,
+		Dir:    t.commandCwd,
+		Stdout: &stdout,
+		Stderr: &stderr,
+	}, ExecOptions{Timeout: time.Duration(timeout) * time.Second})
+	if err != nil {
+		return &ToolResult{
+			Content: formatToolError(
+				"execution_failed",
+				fmt.Sprintf("failed to start executable: %v", err),
+				strings.Join(append([]string{path}, args...), " "),
+				"",
+				"",
+			),
+			IsError: true,
+		}, nil
+	}
+
+	result, waitErr := handle.Wait()
+	output := combineExecOutput(stdout.String(), stderr.String())
+
+	if result != nil && result.TimedOut {
+		return &ToolResult{
+			Content: formatToolError(
+				"timeout",
+				fmt.Sprintf("command timed out after %d seconds", timeout),
+				strings.Join(append([]string{path}, args...), " "),
+				"",
+				"set run_in_background: true",
+			),
+			IsError: true,
+		}, nil
+	}
+
+	if waitErr != nil {
+		return &ToolResult{
+			Content: formatToolError(
+				"execution_failed",
+				waitErr.Error(),
+				strings.Join(append([]string{path}, args...), " "),
+				"",
+				"",
+			),
+			IsError: true,
+		}, nil
+	}
+
+	if result != nil && result.ExitCode != 0 {
+		return &ToolResult{
+			Content: fmt.Sprintf("%s\n(exit code: %d)", output, result.ExitCode),
+			IsError: true,
+		}, nil
+	}
+
+	return t.handleOutput(output)
+}
+
+func combineExecOutput(stdout, stderr string) string {
+	output := stdout
+	if stderr != "" {
+		if output != "" {
+			output += "\n"
+		}
+		output += "stderr: " + stderr
+	}
+	return output
 }
 
 // handleOutput checks output size and spills to disk if > maxInlineSize
@@ -483,7 +582,6 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 	}
 
 	// Snapshot shared fields under lock before spawning goroutines.
-	sessionID := t.sessionID
 	tm := t.taskManager
 	projRoot := t.projectRoot
 
@@ -542,200 +640,144 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 
 	// Spawn goroutine
 	go func() {
-		shellPath, shellErr := resolveShell()
+		execPath, execArgs, shellErr := t.resolveExecArgv(command)
 		if shellErr != nil {
+			errContent := shellErr.Error()
+			if tm != nil {
+				_ = tm.WriteTaskResult(taskID, errContent, 1, time.Since(startTime).Seconds())
+				tm.CancelKillTimer(taskID)
+				tm.UpdateState(taskID, TaskStateCompleted)
+				tm.EnqueueCompletion(TaskCompletion{
+					TaskID:          taskID,
+					DurationSeconds: time.Since(startTime).Seconds(),
+					ExitCode:        1,
+					Output:          errContent,
+				})
+			}
+			resultCh <- &ToolResult{
+				Content: errContent,
+				IsError: true,
+			}
+			atomic.StoreInt32(&cmdDone, 1)
+			close(done)
+			return
+		}
+
+		var stdoutBuf, stderrBuf bytes.Buffer
+		execTool := t.ensureExec()
+
+		waitDone := make(chan struct {
+			result *ExecResult
+			err    error
+		}, 1)
+
+		handle, startErr := execTool.Start(ctx, ExecRequest{
+			Path:   execPath,
+			Args:   execArgs,
+			Dir:    cwd,
+			Stdout: &stdoutBuf,
+			Stderr: &stderrBuf,
+		}, ExecOptions{
+			Timeout: time.Duration(timeout) * time.Second,
+			OnStart: func(p *os.Process) {
+				if tm != nil && p != nil {
+					tm.UpdateProcess(taskID, p)
+				}
+			},
+		})
+		if startErr != nil {
 			outputMu.Lock()
-			output.WriteString(fmt.Sprintf("Shell error: %v", shellErr))
+			output.WriteString(fmt.Sprintf("failed to start command: %v", startErr))
 			outputMu.Unlock()
 			atomic.StoreInt32(&cmdDone, 1)
 			close(done)
 			return
 		}
-		cmd := exec.CommandContext(ctx, shellPath, "-c", command)
-		cmd.Dir = cwd
-		setupProcessGroup(cmd)
-		defer func() {
-			if cmd.Process != nil {
-				killProcessGroup(cmd.Process)
-			}
-		}()
 
-		// Inject JENNY_SCRATCHPAD env var so agent can reference scratchpad in shell
-		cmd.Env = append(os.Environ(), "JENNY_SCRATCHPAD="+constants.ScratchpadDir(sessionID))
-
-		var stdout, stderr bytes.Buffer
-		cmd.Stdout = &stdout
-		cmd.Stderr = &stderr
-
-		// Inner goroutine runs the command
 		go func() {
-			err := cmd.Start()
-			if err != nil {
-				// Command failed to start
-				outputMu.Lock()
-				output.WriteString(fmt.Sprintf("failed to start command: %v", err))
-				outputMu.Unlock()
-				atomic.StoreInt32(&cmdDone, 1)
-				close(done)
-				return
-			}
-
-			// Store process reference for TaskStop (AC5)
-			if tm != nil && cmd.Process != nil {
-				tm.UpdateProcess(taskID, cmd.Process)
-			}
-
-			// Wait for command completion
-			err = cmd.Wait()
-
-			// Capture output
-			outputMu.Lock()
-			output.WriteString(stdout.String())
-			if stderr.Len() > 0 {
-				if output.Len() > 0 {
-					output.WriteString("\n")
-				}
-				output.WriteString("stderr: " + stderr.String())
-			}
-			outputMu.Unlock()
-
-			// Determine exit code
-			exitCode := 0
-			if err != nil {
-				if exitErr, ok := err.(*exec.ExitError); ok {
-					exitCode = exitErr.ExitCode()
-				} else {
-					exitCode = -1
-				}
-			}
-
-			// Calculate duration
-			duration := time.Since(startTime).Seconds()
-
-			// Get output snapshot for file writing
-			outputMu.Lock()
-			outputSnapshot := output.String()
-			outputMu.Unlock()
-
-			// Write final result to output file (AC1)
-			if tm != nil {
-				_ = tm.WriteTaskResult(taskID, outputSnapshot, exitCode, duration)
-
-				// Cancel any pending SIGKILL timer since task completed gracefully
-				tm.CancelKillTimer(taskID)
-
-				// Update task state
-				tm.UpdateState(taskID, TaskStateCompleted)
-
-				// Queue completion notification (AC3)
-				tm.EnqueueCompletion(TaskCompletion{
-					TaskID:          taskID,
-					DurationSeconds: duration,
-					ExitCode:        exitCode,
-					Output:          outputSnapshot,
-				})
-			}
-
-			// Store result for parent
-			cmdOutput := outputSnapshot
-			var result *ToolResult
-			if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-				resultExitCode := cmd.ProcessState.ExitCode()
-				result = &ToolResult{
-					Content: fmt.Sprintf("%s\n(exit code: %d)", cmdOutput, resultExitCode),
-					IsError: resultExitCode != 0,
-				}
-			} else if cmd.ProcessState != nil {
-				// Process was killed by a signal (e.g., SIGTERM from TaskStop or timeout)
-				// AC3: Extract signal information for meaningful exit code
-				if exitCode, sigName, signaled := getSignalInfo(cmd.ProcessState); signaled {
-					result = &ToolResult{
-						Content: fmt.Sprintf("%s\n(exit code: %d, signal: %s)", cmdOutput, exitCode, sigName),
-						IsError: true,
-					}
-				} else {
-					result = &ToolResult{
-						Content: cmdOutput,
-						IsError: false,
-					}
-				}
-			} else {
-				result = &ToolResult{
-					Content: cmdOutput,
-					IsError: false,
-				}
-			}
-
-			// AC4: Race-free channel ordering - send result BEFORE signaling completion.
-			// This establishes Go memory model happens-before: resultCh send happens-before
-			// atomic store, which happens-before outer loop reads cmdDone, which happens-before
-			// outer loop closes resultCh.
-			resultCh <- result
-			atomic.StoreInt32(&cmdDone, 1)
-			close(done)
+			r, err := handle.Wait()
+			waitDone <- struct {
+				result *ExecResult
+				err    error
+			}{r, err}
 		}()
 
-		// AC2: Progress timer created BEFORE cmd.Start() so it fires concurrently with command
 		progressTimer := time.NewTimer(2 * time.Second)
 		flushTicker := time.NewTicker(5 * time.Second)
 		defer progressTimer.Stop()
 		defer flushTicker.Stop()
 
-		// AC5: Manual timeout handling with SIGTERM then SIGKILL (not context timeout)
-		timeoutChan := time.After(time.Duration(timeout) * time.Second)
-		var killSent bool
-		var killMu sync.Mutex
-
-		// AC1: Loop to allow periodic flushes while waiting for command completion
-	outer:
+	waitLoop:
 		for {
 			select {
 			case <-progressTimer.C:
-				// Task ran for more than 2 seconds - emit progress
-				// Fix ac2-progress-always-emits: emit progress only if still running
 				outputMu.Lock()
-				outputSnapshot := output.String()
+				snapshot := combineExecOutput(stdoutBuf.String(), stderrBuf.String())
 				outputMu.Unlock()
 				if tm != nil {
-					EmitTaskProgress(taskID, 2.0, outputSnapshot)
+					EmitTaskProgress(taskID, 2.0, snapshot)
 				}
-				// Continue waiting - don't re-arm timer, progress is one-shot
-				continue
 			case <-flushTicker.C:
-				// Periodic flush of partial output (AC1)
 				outputMu.Lock()
-				outputSnapshot := output.String()
+				snapshot := combineExecOutput(stdoutBuf.String(), stderrBuf.String())
 				outputMu.Unlock()
 				if tm != nil {
 					duration := time.Since(startTime).Seconds()
-					_ = tm.FlushPartialOutput(taskID, outputSnapshot, duration)
+					_ = tm.FlushPartialOutput(taskID, snapshot, duration)
 				}
-			case <-done:
-				// Command completed before either timer fired - no progress event
-				break outer
-			case <-timeoutChan:
-				// Timeout - use platform-aware signal handling
-				killMu.Lock()
-				if !killSent {
-					killSent = true
-					if cmd.Process != nil {
-						_ = signalProcess(cmd.Process, runtime.GOOS == "windows")
+			case wr := <-waitDone:
+				outputMu.Lock()
+				outputSnapshot := combineExecOutput(stdoutBuf.String(), stderrBuf.String())
+				output.WriteString(outputSnapshot)
+				outputMu.Unlock()
+
+				exitCode := 0
+				if wr.result != nil {
+					exitCode = wr.result.ExitCode
+				}
+				if wr.err != nil && exitCode == 0 {
+					exitCode = -1
+				}
+
+				duration := time.Since(startTime).Seconds()
+
+				if tm != nil {
+					_ = tm.WriteTaskResult(taskID, outputSnapshot, exitCode, duration)
+					tm.CancelKillTimer(taskID)
+					tm.UpdateState(taskID, TaskStateCompleted)
+					tm.EnqueueCompletion(TaskCompletion{
+						TaskID:          taskID,
+						DurationSeconds: duration,
+						ExitCode:        exitCode,
+						Output:          outputSnapshot,
+					})
+				}
+
+				var result *ToolResult
+				if wr.result != nil && wr.result.Signal != "" {
+					result = &ToolResult{
+						Content: fmt.Sprintf("%s\n(exit code: %d, signal: %s)", outputSnapshot, exitCode, wr.result.Signal),
+						IsError: true,
 					}
-					// Schedule escalation after 5s if process doesn't exit
-					go func() {
-						time.Sleep(5 * time.Second)
-						killMu.Lock()
-						defer killMu.Unlock()
-						if cmd.Process != nil {
-							_ = escalateProcessKill(cmd.Process, runtime.GOOS == "windows")
-						}
-					}()
+				} else if exitCode != 0 {
+					result = &ToolResult{
+						Content: fmt.Sprintf("%s\n(exit code: %d)", outputSnapshot, exitCode),
+						IsError: true,
+					}
+				} else {
+					result = &ToolResult{
+						Content: outputSnapshot,
+						IsError: false,
+					}
 				}
-				killMu.Unlock()
+
+				resultCh <- result
+				atomic.StoreInt32(&cmdDone, 1)
+				close(done)
+				break waitLoop
 			}
 		}
 
-		// Wait for inner goroutine to finish sending result before closing
 		for atomic.LoadInt32(&cmdDone) == 0 {
 			time.Sleep(10 * time.Millisecond)
 		}
@@ -743,7 +785,6 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 		close(resultCh)
 		t.backgroundTasks.Delete(taskID)
 
-		// Clean up task from manager
 		if tm != nil {
 			tm.Delete(taskID)
 		}
@@ -754,6 +795,44 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 		OutputFile: outputFile,
 		IsError:    false,
 	}, nil
+}
+
+// resolveExecArgv returns the executable path and args for shell or fallback execution.
+func (t *BashTool) resolveExecArgv(command string) (string, []string, error) {
+	shellPath, shellErr := resolveShell()
+	if shellErr == nil {
+		return shellPath, []string{"-c", command}, nil
+	}
+
+	if t.sandbox != nil && t.sandbox.IsActive() {
+		return "", nil, fmt.Errorf("%s", formatToolError(
+			"sandbox_violation",
+			"sandbox active; simple-exec fallback cannot honor sandbox",
+			command,
+			"",
+			"run on a host with a shell",
+		))
+	}
+
+	parsed := parseSimpleCommand(command, ShellFlavorBash)
+	if !parsed.OK {
+		hint := "split into separate calls"
+		for _, issue := range parsed.Issues {
+			if strings.Contains(issue, "builtin") {
+				hint = "use a different tool, or run on a host with a shell"
+				break
+			}
+		}
+		return "", nil, fmt.Errorf("%s", formatToolError(
+			"shell_unavailable",
+			"shell not found; input not runnable as simple argv",
+			command,
+			strings.Join(parsed.Issues, ", "),
+			hint,
+		))
+	}
+
+	return parsed.Argv[0], parsed.Argv[1:], nil
 }
 
 // maybeWrapWithSandbox wraps the command with sandbox if available and not bypassed.

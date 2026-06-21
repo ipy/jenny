@@ -1237,11 +1237,11 @@ func TestAC5_ForkRetriesExhaustedReturnsUnderlyingError(t *testing.T) {
 	if !strings.Contains(errStr, "context window") {
 		t.Errorf("AC5 FAIL: error should contain underlying error 'context window', got: %q", errStr)
 	}
-	if !strings.Contains(errStr, "3 attempts") && !strings.Contains(errStr, "retries") {
+	if !strings.Contains(errStr, "5 attempts") && !strings.Contains(errStr, "retries") {
 		t.Errorf("AC5 FAIL: error should indicate retries exhausted (got: %q)", errStr)
 	}
 	if mock.calls < 3 {
-		t.Errorf("AC5 FAIL: expected at least 3 API calls (3 retry attempts), got %d", mock.calls)
+		t.Errorf("AC5 FAIL: expected at least 3 API calls (retry attempts), got %d", mock.calls)
 	}
 
 	t.Logf("AC5 PASS: compactMessages returned underlying error %q (calls=%d)", errStr, mock.calls)

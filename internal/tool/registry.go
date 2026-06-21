@@ -258,14 +258,16 @@ func (r *Registry) Build() []Tool {
 
 		// On Windows, register PowerShellTool; on Unix, register BashTool
 		if runtime.GOOS == "windows" {
-			r.baseTools = append(r.baseTools, NewPowerShellTool(r.permissionLevel).WithSessionID(r.sessionID))
+			execTool := NewExecTool("", r.sessionID)
+			r.baseTools = append(r.baseTools, NewPowerShellTool(r.permissionLevel).WithSessionID(r.sessionID).WithExecTool(execTool))
 			// Only register BashTool if bash.exe is found in PATH
 			if _, err := exec.LookPath("bash.exe"); err == nil {
-				r.baseTools = append(r.baseTools, NewBashTool(r.permissionLevel).WithSessionID(r.sessionID))
+				r.baseTools = append(r.baseTools, NewBashTool(r.permissionLevel).WithSessionID(r.sessionID).WithExecTool(execTool))
 			}
 		} else {
 			// On Unix, always register BashTool
-			r.baseTools = append(r.baseTools, NewBashTool(r.permissionLevel).WithSessionID(r.sessionID))
+			execTool := NewExecTool("", r.sessionID)
+			r.baseTools = append(r.baseTools, NewBashTool(r.permissionLevel).WithSessionID(r.sessionID).WithExecTool(execTool))
 		}
 
 		r.baseTools = append(r.baseTools, NewGlobTool(), NewGrepTool(), NewTreeTool(r.permissionLevel))

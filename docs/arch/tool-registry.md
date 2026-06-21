@@ -35,6 +35,8 @@ tools := tool.NewRegistry().
 
 `WithBaseTools()` registers Read, Bash (or PowerShell on Windows), Glob, Grep, ReadMcpResource, McpPrompt, and — when `WithReadFileCache` is set — Write, Edit, NotebookEdit. Optional tools are added by their respective `With*` methods.
 
+BashTool and PowerShellTool are always registered regardless of shell availability. The shell-presence check is internal to each tool. A shared ExecTool instance is created per registry and passed to both tools.
+
 ## Build Order
 
 1. Instantiate base tools (platform-aware shell tool selection).

@@ -22,12 +22,16 @@ const (
 )
 
 const (
-	l1Threshold        = 10
-	l2Threshold        = 20
-	l3Threshold        = 25
-	l2MaxToolCalls     = 5
-	slidingWindowSize  = 10
+	l1FirstThreshold  = 10
+	l1SecondThreshold = 20
+	l2Threshold       = 25
+	l3Threshold       = 30
+	l2MaxTurns        = 5
+	slidingWindowSize = 10
+	// Sliding window can only trigger L1 (not L2/L3).
 	slidingWindowFloor = -10
+	// Cap for previouslyReadPaths to prevent unbounded growth.
+	maxTrackedReadPaths = 200
 )
 
 // TurnScore holds the computed score for a single turn.
@@ -41,7 +45,8 @@ type ProgressMonitor struct {
 	consecutiveNoProgress int
 	totalNoProgress       int
 	level                 ProgressLevel
-	l1Fired               bool
+	l1FirstFired          bool
+	l1SecondFired         bool
 	l2Fired               bool
 	l2TurnCount           int
 
@@ -51,6 +56,7 @@ type ProgressMonitor struct {
 	slidingL1Fired   bool
 
 	previouslyReadPaths map[string]bool
+	readPathOrder       []string // FIFO insertion order for eviction
 	lastCommandHash     string
 	lastErrorText       string
 }
@@ -83,7 +89,8 @@ func (pm *ProgressMonitor) RecordTurn(toolUseBlocks []api.ToolUseBlock, toolResu
 	if score.Score > 0 {
 		pm.consecutiveNoProgress = 0
 		pm.level = ProgressLevelNone
-		pm.l1Fired = false
+		pm.l1FirstFired = false
+		pm.l1SecondFired = false
 		pm.l2Fired = false
 		pm.l2TurnCount = 0
 	} else {
@@ -113,6 +120,104 @@ func (pm *ProgressMonitor) RecordTurn(toolUseBlocks []api.ToolUseBlock, toolResu
 	return score
 }
 
+// Known test runner command prefixes. The command (lowered, trimmed) is checked
+// against these prefixes with word-boundary enforcement. When a match is found
+// AND IsError == false (exit 0), the turn is scored as test_pass (+3).
+var testRunnerPrefixes = []string{
+	"go test",
+	"cargo test",
+	"cargo nextest",
+	"pytest",
+	"python -m pytest",
+	"python3 -m pytest",
+	"python -m unittest",
+	"python3 -m unittest",
+	"npm test",
+	"npm run test",
+	"npx jest",
+	"npx vitest",
+	"npx mocha",
+	"yarn test",
+	"pnpm test",
+	"make test",
+	"make check",
+	"ctest",
+	"dotnet test",
+	"mvn test",
+	"mvn verify",
+	"gradle test",
+	"gradlew test",
+	"./gradlew test",
+	"rspec",
+	"mix test",
+	"bats",
+	"phpunit",
+	"./vendor/bin/phpunit",
+	"tox",
+	"nose2",
+}
+
+// Known build command prefixes. Exit 0 → build_success (+2).
+// Word-boundary enforcement prevents "makefile" from matching "make".
+var buildRunnerPrefixes = []string{
+	"make",
+	"go build",
+	"cargo build",
+	"gcc",
+	"g++",
+	"cc",
+	"c++",
+	"clang",
+	"clang++",
+	"cmake --build",
+	"ninja",
+	"dotnet build",
+	"dotnet publish",
+	"mvn compile",
+	"mvn package",
+	"gradle build",
+	"gradlew build",
+	"./gradlew build",
+	"javac",
+	"rustc",
+	"./configure",
+	"bazel build",
+	"buck build",
+	"msbuild",
+	"xcodebuild",
+	"sbt compile",
+	"sbt package",
+}
+
+// Known package install prefixes. Exit 0 → package_install (+1).
+var packageInstallPrefixes = []string{
+	"apt-get install",
+	"apt install",
+	"apt-get update",
+	"pip install",
+	"pip3 install",
+	"python -m pip install",
+	"python3 -m pip install",
+	"npm install",
+	"npm ci",
+	"yarn install",
+	"yarn add",
+	"pnpm install",
+	"pnpm add",
+	"cargo install",
+	"go install",
+	"go get",
+	"gem install",
+	"bundle install",
+	"brew install",
+	"dnf install",
+	"yum install",
+	"pacman -s",
+	"apk add",
+	"conda install",
+	"pipx install",
+}
+
 func (pm *ProgressMonitor) scoreTurn(toolUseBlocks []api.ToolUseBlock, toolResults []api.ToolResult) TurnScore {
 	ts := TurnScore{}
 
@@ -136,7 +241,11 @@ func (pm *ProgressMonitor) scoreTurn(toolUseBlocks []api.ToolUseBlock, toolResul
 		case "Read":
 			path := extractStringField(tb.Input, "file_path")
 			if path != "" && !pm.previouslyReadPaths[path] {
+				for len(pm.previouslyReadPaths) >= maxTrackedReadPaths {
+					pm.evictOldestReadPath()
+				}
 				pm.previouslyReadPaths[path] = true
+				pm.readPathOrder = append(pm.readPathOrder, path)
 				ts.Score += 1
 				ts.Signals = append(ts.Signals, fmt.Sprintf("new_read:%s", path))
 			}
@@ -144,6 +253,7 @@ func (pm *ProgressMonitor) scoreTurn(toolUseBlocks []api.ToolUseBlock, toolResul
 		case "Bash":
 			cmd := extractStringField(tb.Input, "command")
 			cmdHash := simpleHash(cmd)
+			cmdLower := strings.ToLower(strings.TrimSpace(cmd))
 
 			if result.IsError {
 				ts.Score -= 1
@@ -157,16 +267,19 @@ func (pm *ProgressMonitor) scoreTurn(toolUseBlocks []api.ToolUseBlock, toolResul
 					pm.lastErrorText = extractErrorLine(result.Content)
 				}
 			} else {
-				lower := strings.ToLower(result.Content)
-				if containsTestPass(lower) {
+				// Structured signal: exit code 0 + known runner prefix.
+				if matchesPrefix(cmdLower, testRunnerPrefixes) {
 					ts.Score += 3
 					ts.Signals = append(ts.Signals, "test_pass")
-				} else if containsBuildSuccess(lower) {
+				} else if matchesPrefix(cmdLower, buildRunnerPrefixes) {
 					ts.Score += 2
 					ts.Signals = append(ts.Signals, "build_success")
-				} else if strings.Contains(lower, "successfully installed") {
+				} else if matchesPrefix(cmdLower, packageInstallPrefixes) {
 					ts.Score += 1
 					ts.Signals = append(ts.Signals, "package_install")
+				} else if hasPackageInstallOutput(result.Content) {
+					ts.Score += 1
+					ts.Signals = append(ts.Signals, "package_install_detected")
 				}
 			}
 
@@ -181,16 +294,63 @@ func (pm *ProgressMonitor) scoreTurn(toolUseBlocks []api.ToolUseBlock, toolResul
 	return ts
 }
 
+// matchesPrefix checks if cmd starts with any of the given prefixes,
+// requiring a word boundary after the prefix (space, end of string, or
+// path/flag separator). This prevents false positives like "makefile"
+// matching "make" or "go testify" matching "go test".
+func matchesPrefix(cmdLower string, prefixes []string) bool {
+	for _, p := range prefixes {
+		if !strings.HasPrefix(cmdLower, p) {
+			continue
+		}
+		if len(cmdLower) == len(p) {
+			return true
+		}
+		next := cmdLower[len(p)]
+		if next == ' ' || next == '\t' || next == '/' || next == '=' {
+			return true
+		}
+	}
+	return false
+}
+
+// hasPackageInstallOutput detects package installation via output patterns.
+// Used as fallback when the command itself isn't a known installer prefix
+// (e.g., piped or wrapped install commands).
+func hasPackageInstallOutput(output string) bool {
+	lines := strings.Split(output, "\n")
+	signals := 0
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(trimmed, "Setting up "):
+			signals++
+		case strings.HasPrefix(trimmed, "Successfully installed "):
+			return true
+		case strings.Contains(trimmed, "added") && strings.Contains(trimmed, "packages"):
+			return true
+		case strings.HasPrefix(trimmed, "Compiling ") && strings.Contains(trimmed, " v"):
+			signals++
+		}
+		if signals >= 3 {
+			return true
+		}
+	}
+	return false
+}
+
 func (pm *ProgressMonitor) updateLevel() {
+	// Consecutive no-progress counter drives L1 → L2 → L3 escalation.
 	switch {
 	case pm.consecutiveNoProgress >= l3Threshold:
 		pm.level = ProgressLevelL3
 	case pm.consecutiveNoProgress >= l2Threshold:
 		pm.level = ProgressLevelL2
-	case pm.consecutiveNoProgress >= l1Threshold:
+	case pm.consecutiveNoProgress >= l1FirstThreshold:
 		pm.level = ProgressLevelL1
 	}
 
+	// Sliding window can only trigger L1, never L2 or L3.
 	if pm.slidingWindowSum() <= slidingWindowFloor && !pm.slidingL1Fired {
 		if pm.level < ProgressLevelL1 {
 			pm.level = ProgressLevelL1
@@ -200,17 +360,29 @@ func (pm *ProgressMonitor) updateLevel() {
 
 // CheckAndInject checks the current level and returns a virtual user message
 // to inject (if any), plus whether the session should terminate.
+//
+// L1 fires twice: once at l1FirstThreshold (10) and again at l1SecondThreshold (20).
+// L2 fires at l2Threshold (25) as a soft terminate with l2MaxTurns (5) grace.
+// L3 fires at l3Threshold (30) as a hard terminate.
 func (pm *ProgressMonitor) CheckAndInject() (msg *api.Message, terminate bool) {
 	switch pm.level {
 	case ProgressLevelL1:
-		if !pm.l1Fired {
-			pm.l1Fired = true
+		if pm.consecutiveNoProgress >= l1SecondThreshold && !pm.l1SecondFired {
+			pm.l1SecondFired = true
+			return &api.Message{
+				Role:      api.RoleUser,
+				Content:   l1SecondReminderText,
+				IsVirtual: true,
+			}, false
+		}
+		if !pm.l1FirstFired {
+			pm.l1FirstFired = true
 			if pm.slidingWindowSum() <= slidingWindowFloor {
 				pm.slidingL1Fired = true
 			}
 			return &api.Message{
 				Role:      api.RoleUser,
-				Content:   l1ReminderText,
+				Content:   l1FirstReminderText,
 				IsVirtual: true,
 			}, false
 		}
@@ -226,7 +398,7 @@ func (pm *ProgressMonitor) CheckAndInject() (msg *api.Message, terminate bool) {
 			}, false
 		}
 		pm.l2TurnCount++
-		if pm.l2TurnCount > l2MaxToolCalls {
+		if pm.l2TurnCount > l2MaxTurns {
 			pm.level = ProgressLevelL3
 			return nil, true
 		}
@@ -238,21 +410,28 @@ func (pm *ProgressMonitor) CheckAndInject() (msg *api.Message, terminate bool) {
 	return nil, false
 }
 
-const l1ReminderText = `<system-reminder>
-PROGRESS CHECK: No meaningful progress in the last 10 turns. Before continuing, you MUST perform a self-assessment:
+const l1FirstReminderText = `<system-reminder>
+PROGRESS CHECK: No meaningful progress in the last 10 turns. Before continuing, perform a self-assessment:
 
-1. CAPABILITY: Does this task require abilities you lack (vision, specific language runtime, network access, etc.)? If yes, stop immediately with your best-effort output.
-2. KNOWLEDGE: Are you missing domain knowledge that repeated attempts cannot compensate for? If yes, stop immediately.
-3. STRATEGY: Is your current approach fundamentally flawed? If so, describe an alternative strategy before your next action.
+1. CAPABILITY: Does this task require abilities you lack (vision, specific language runtime, network access, etc.)? If yes, write your best-effort output and stop.
+2. STRATEGY: Is your current approach fundamentally flawed? If so, describe an alternative strategy before your next action.
 
 After this assessment:
-- If blocked by missing capability or knowledge: write your best-effort result and stop.
-- If a strategy pivot is viable: describe it briefly, then execute the NEW strategy. Do NOT repeat failed approaches.
+- If blocked by missing capability: write your best-effort result and stop.
+- If a strategy pivot is viable: execute the NEW strategy. Do NOT repeat failed approaches.
 - Keep responses concise. Focus on actions, not analysis.
 </system-reminder>`
 
+const l1SecondReminderText = `<system-reminder>
+PROGRESS CHECK (2nd): 20 turns without progress. You should seriously consider stopping.
+
+If you have a viable strategy remaining, execute it now — but be aware that continued lack of progress will result in session termination.
+
+If you are stuck, write your BEST-EFFORT result to the expected output location NOW and stop.
+</system-reminder>`
+
 const l2ReminderText = `<system-reminder>
-FINAL WARNING: 20 turns without progress. You have at most 5 more tool calls.
+FINAL WARNING: 25 turns without progress. You have at most 5 more turns before termination.
 
 Write your BEST-EFFORT result to the expected output location NOW, even if incomplete. A partial answer is better than no answer. Then stop.
 
@@ -305,6 +484,17 @@ func (pm *ProgressMonitor) isScratchpad(path string) bool {
 	return strings.Contains(path, "JENNY_SCRATCHPAD") || strings.Contains(path, "jenny_scratchpad")
 }
 
+// evictOldestReadPath removes the oldest entry (FIFO) from previouslyReadPaths.
+func (pm *ProgressMonitor) evictOldestReadPath() {
+	if len(pm.readPathOrder) == 0 {
+		return
+	}
+	oldest := pm.readPathOrder[0]
+	copy(pm.readPathOrder, pm.readPathOrder[1:])
+	pm.readPathOrder = pm.readPathOrder[:len(pm.readPathOrder)-1]
+	delete(pm.previouslyReadPaths, oldest)
+}
+
 func extractStringField(input map[string]any, key string) string {
 	if v, ok := input[key]; ok {
 		if s, ok := v.(string); ok {
@@ -339,16 +529,6 @@ func extractErrorLine(content string) string {
 	return content
 }
 
-func containsTestPass(lower string) bool {
-	patterns := []string{" pass ", " pass:", " passed ", " ok ", " success ", " success:", "tests passed", "pass\n", "success\n"}
-	for _, p := range patterns {
-		if strings.Contains(lower, p) {
-			return true
-		}
-	}
-	return false
-}
-
 // terminateProgressMonitor handles L3 hard termination.
 func (e *QueryEngine) terminateProgressMonitor(sessionID string) (string, error) {
 	state := e.progressMonitor.State()
@@ -374,14 +554,4 @@ func (e *QueryEngine) terminateProgressMonitor(sessionID string) (string, error)
 	}
 
 	return "", fmt.Errorf("error_progress_terminated: %s", result)
-}
-
-func containsBuildSuccess(lower string) bool {
-	patterns := []string{"build successful", "compiled", "compilation succeeded"}
-	for _, p := range patterns {
-		if strings.Contains(lower, p) {
-			return true
-		}
-	}
-	return false
 }

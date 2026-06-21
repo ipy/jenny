@@ -276,8 +276,9 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		// AC1: Check compaction threshold before API request
 		// Estimate tokens and check if auto-compact should trigger
 		var estimatedTokens int
+		var preAPICharCount int // cached for EWMA Observe after API response
 		if e.tokenEstimator != nil {
-			estimatedTokens = e.tokenEstimator.EstimateMessages(messages, e.model)
+			estimatedTokens, preAPICharCount = e.tokenEstimator.EstimateMessagesWithChars(messages, e.model)
 		} else {
 			estimatedTokens = estimateTokens(messages)
 		}
@@ -613,8 +614,21 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 
 			// Check if this is a context_exhausted error from HTTP 400 rejection
 			if streamResult.MaxTokensErr != nil && streamResult.MaxTokensErr.Category == api.CategoryContextExhausted {
+				// Attempt emergency compaction before giving up
+				if !e.compactConfig.DisableCompact {
+					log.Warn("Context exhausted (pre-stream), attempting emergency compaction",
+						"messageCount", len(messages),
+					)
+					compacted, err := e.emergencyCompact(ctx, messages, systemPrompt)
+					if err == nil {
+						messages = compacted
+						log.Info("Emergency compaction succeeded on pre-stream error, retrying")
+						continue
+					}
+					log.Error("Emergency compaction failed on pre-stream error", "error", err)
+				}
+
 				mte := streamResult.MaxTokensErr
-				// Emit structured error_max_tokens result event for context_exhausted
 				threshold := e.compactConfig.autoCompactThreshold()
 				errMsg := fmt.Sprintf("max tokens reached: %s", mte.Category)
 				msg := StreamMessage{
@@ -637,7 +651,6 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					DurationAPIMs: e.totalAPIDurationMs,
 					TotalCostUSD:  e.costState.TotalCostUSD,
 					ModelUsage:    e.buildModelUsage(),
-					// Additional fields for error_max_tokens
 					ErrorMaxTokens: &ErrorMaxTokensDetail{
 						Category:        string(mte.Category),
 						OutputTokens:    mte.OutputTokens,
@@ -781,12 +794,21 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		// Accumulate cost for this turn
 		if resp.Model != "" {
 			AccumulateUsage(e.costState, resp.Model, resp.Usage)
-			// Feed actual output token count back into the estimator for EWMA calibration
-			if e.tokenEstimator != nil && resp.Usage.OutputTokens > 0 {
-				outputChars := len(textOutput.String()) + totalThinkingChars(thinkingBlocks)
-				e.tokenEstimator.ObserveOutput(resp.Model, outputChars, resp.Usage.OutputTokens)
-				if resp.Model != e.model && e.model != "" {
-					e.tokenEstimator.ObserveOutput(e.model, outputChars, resp.Usage.OutputTokens)
+			// Feed actual token counts back into the estimator for EWMA calibration
+			if e.tokenEstimator != nil {
+				if resp.Usage.OutputTokens > 0 {
+					outputChars := len(textOutput.String()) + totalThinkingChars(thinkingBlocks)
+					e.tokenEstimator.ObserveOutput(resp.Model, outputChars, resp.Usage.OutputTokens)
+					if resp.Model != e.model && e.model != "" {
+						e.tokenEstimator.ObserveOutput(e.model, outputChars, resp.Usage.OutputTokens)
+					}
+				}
+				// Feed input token observations for EWMA calibration of the
+				// token estimator. Uses the pre-API char count to avoid
+				// redundant re-marshaling of the entire message chain.
+				actualInputTokens := resp.Usage.InputTokens + resp.Usage.CacheReadInputTokens + resp.Usage.CacheCreationInputTokens
+				if actualInputTokens > 0 && preAPICharCount > 0 {
+					e.tokenEstimator.Observe(e.model, preAPICharCount, actualInputTokens, false)
 				}
 			}
 		}
@@ -859,39 +881,6 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		e.progressMonitor.RecordTurn(toolUseBlocks, execToolResults)
 		e.maxTokensCtrl.SetProgressLevel(e.progressMonitor.Level())
 
-		// Complexity fork: fire after 3rd tool result
-		e.toolResultCount += len(execToolResults)
-		if e.toolResultCount >= 3 && e.maxTokensCtrl.ShouldFork() {
-			forkMessages := make([]api.Message, len(messages))
-			copy(forkMessages, messages)
-			forkModel := e.model
-			go func() {
-				forkClient, err := api.NewClientWithModel(forkModel)
-				if err != nil {
-					log.Debug("Complexity eval fork client creation failed", "error", err)
-					return
-				}
-				forkClient.SetMaxTokensOverride(200)
-				cr, err := forkComplexityEval(ctx, forkClient, forkMessages, systemPrompt)
-				if err != nil {
-					log.Warn("Complexity eval fork failed", "error", err)
-					return
-				}
-				e.maxTokensCtrl.SetComplexityResult(cr)
-				log.Info("Complexity eval result", "complexity", cr.Complexity, "is_coding", cr.IsCoding)
-				if e.streamCfg.Enabled {
-					msg := StreamMessage{
-						Type:    "system",
-						Subtype: "complexity_eval",
-						Result:  fmt.Sprintf(`{"complexity":%d,"is_coding":%v}`, cr.Complexity, cr.IsCoding),
-						Uuid:    GenerateUUID(),
-					}
-					data, _ := json.Marshal(msg)
-					fmt.Fprintln(os.Stdout, string(data))
-				}
-			}()
-		}
-
 		// Sync active skills and inject a reminder message if they changed.
 		// (The executeAndProcessTools function also calls syncActiveSkills, but this
 		// is the additional cross-turn reminder injection that must happen at loop level)
@@ -935,6 +924,48 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		// Delegate to extracted handler
 		result, err, shouldContinue := e.handleStopReason(ctx, resp, *streamResult, textOutput, sessionID, toolResults, toolUseBlocks, thinkingBlocks, &assistantMsg, &messages)
 		if shouldContinue {
+			// Complexity fork: fire after 3rd tool result, AFTER tool_results
+			// are appended to messages by handleStopReason so the fork sees
+			// a valid tool_use/tool_result sequence.
+			e.toolResultCount += len(execToolResults)
+			if e.toolResultCount >= 3 && e.maxTokensCtrl.ShouldFork() {
+				forkMessages := make([]api.Message, len(messages))
+				copy(forkMessages, messages)
+				forkModel := e.model
+				parentCtx := ctx
+				go func() {
+					forkCtx, forkCancel := context.WithTimeout(context.WithoutCancel(parentCtx), 30*time.Second)
+					defer forkCancel()
+					forkClient, err := api.NewClientWithModel(forkModel)
+					if err != nil {
+						log.Debug("Complexity eval fork client creation failed", "error", err)
+						return
+					}
+					forkClient.SetMaxTokensOverride(200)
+					cr, err := forkComplexityEval(forkCtx, forkClient, forkMessages, systemPrompt)
+					if err != nil {
+						log.Debug("Complexity eval fork failed", "error", err)
+						return
+					}
+					// Check if parent session was cancelled while we were evaluating
+					if parentCtx.Err() != nil {
+						log.Debug("Complexity eval completed but session already ended, discarding result")
+						return
+					}
+					e.maxTokensCtrl.SetComplexityResult(cr)
+					log.Info("Complexity eval result", "complexity", cr.Complexity, "is_coding", cr.IsCoding)
+					if e.streamCfg.Enabled {
+						msg := StreamMessage{
+							Type:    "system",
+							Subtype: "complexity_eval",
+							Result:  fmt.Sprintf(`{"complexity":%d,"is_coding":%v}`, cr.Complexity, cr.IsCoding),
+							Uuid:    GenerateUUID(),
+						}
+						data, _ := json.Marshal(msg)
+						fmt.Fprintln(os.Stdout, string(data))
+					}
+				}()
+			}
 			continue
 		}
 		if err != nil {

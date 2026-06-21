@@ -34,6 +34,10 @@ Platforms: macOS, Linux, WSL2 (not WSL1). `none` backend represents sandbox disa
 - `sandbox.allowUnsandboxedCommands`: config field exists but is not consumed by any backend in production.
 - Bash `dangerouslyDisableSandbox` per call.
 
+## Shell-less fallback policy
+
+When the sandbox is active and no shell is available, the simple-command fallback refuses execution with `sandbox_violation`. The fallback cannot honor string-rewriting sandbox in shell-less mode. Future work: ExecRequest-based sandbox backend.
+
 ## Network Policy
 
 | Mode | Behavior |

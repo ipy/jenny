@@ -356,25 +356,48 @@ func (e *QueryEngine) trySessionMemoryCompact(ctx context.Context, messages []ap
 }
 
 // forkSummaryAgent forks a single-turn API call to generate a summary of the
-// conversation history.
+// conversation history. Uses proportional dropping: on each retry, drops 25%
+// of remaining messages from the head instead of a single API-round group.
 func (e *QueryEngine) forkSummaryAgent(ctx context.Context, messages []api.Message, cfg CompactConfig, systemPrompt []string) ([]api.Message, error) {
 	// Prepare messages for summary call (strip images/documents)
 	summaryMessages := prepareSummaryMessages(messages)
 
-	// Create a summary system prompt
+	// Truncate large tool results before sending to summary agent
+	summaryMessages = truncateLargeToolResults(summaryMessages, 2000)
+
 	summarySystemPrompt := []string{"You are a helpful assistant that summarizes conversations concisely. Provide a brief summary of the key points from the conversation above. Focus on the initial goal, essential information, decisions made, and any outstanding tasks or questions."}
 
-	// Make the summary API call with retries
 	var lastErr error
-	maxRetries := 3
+	maxRetries := 5
 
 	for attempt := range maxRetries {
 		if attempt > 0 {
-			log.Debug("Retrying summary agent", "attempt", attempt+1)
-			// Drop oldest API-round group from head
-			summaryMessages = dropOldestAPIRoundGroup(summaryMessages)
-			if len(summaryMessages) == 0 {
-				return nil, fmt.Errorf("cannot retry summary: no messages remaining after dropping oldest group")
+			log.Debug("Retrying summary agent", "attempt", attempt+1, "messageCount", len(summaryMessages))
+			dropCount := len(summaryMessages) / 4
+			if dropCount < 1 {
+				dropCount = 1
+			}
+			if len(summaryMessages)-dropCount < 4 {
+				return nil, fmt.Errorf("cannot retry summary: too few messages remaining (%d)", len(summaryMessages))
+			}
+			summaryMessages = summaryMessages[dropCount:]
+			// Advance past any orphaned tool_result message (user msg with
+			// ToolResults but no preceding assistant tool_use) to maintain
+			// the tool_use/tool_result pairing invariant.
+			for len(summaryMessages) > 0 {
+				m := summaryMessages[0]
+				if m.Role == api.RoleUser && len(m.ToolResults) > 0 {
+					summaryMessages = summaryMessages[1:]
+					continue
+				}
+				break
+			}
+			// Ensure first remaining message is a user message for valid API request
+			for len(summaryMessages) > 0 && summaryMessages[0].Role != api.RoleUser {
+				summaryMessages = summaryMessages[1:]
+			}
+			if len(summaryMessages) < 2 {
+				return nil, fmt.Errorf("cannot retry summary: too few messages remaining after alignment (%d)", len(summaryMessages))
 			}
 		}
 
@@ -387,7 +410,6 @@ func (e *QueryEngine) forkSummaryAgent(ctx context.Context, messages []api.Messa
 			return nil, err
 		}
 
-		// Track compaction cost
 		e.mu.Lock()
 		AccumulateUsage(e.costState, e.model, resp.Usage)
 		e.mu.Unlock()
@@ -408,6 +430,41 @@ func (e *QueryEngine) forkSummaryAgent(ctx context.Context, messages []api.Messa
 	}
 
 	return nil, fmt.Errorf("summary agent failed after %d attempts: %w", maxRetries, lastErr)
+}
+
+// truncateLargeToolResults truncates tool result content that exceeds maxLen
+// characters, replacing the middle with a truncation marker.
+// Allocates new slices only when truncation is actually needed.
+func truncateLargeToolResults(messages []api.Message, maxLen int) []api.Message {
+	var result []api.Message // nil until first mutation
+	for i, msg := range messages {
+		if len(msg.ToolResults) == 0 {
+			continue
+		}
+		mutatedIdx := -1
+		for j, tr := range msg.ToolResults {
+			if len(tr.Content) > maxLen {
+				if result == nil {
+					result = make([]api.Message, len(messages))
+					copy(result, messages)
+				}
+				if mutatedIdx != i {
+					newResults := make([]api.ToolResultBlock, len(msg.ToolResults))
+					copy(newResults, msg.ToolResults)
+					result[i].ToolResults = newResults
+					mutatedIdx = i
+				}
+				half := maxLen / 2
+				result[i].ToolResults[j].Content = tr.Content[:half] +
+					"\n... [truncated for compaction] ...\n" +
+					tr.Content[len(tr.Content)-half:]
+			}
+		}
+	}
+	if result == nil {
+		return messages
+	}
+	return result
 }
 
 // isPromptTooLongError checks if an error indicates a prompt-too-long condition.
@@ -563,6 +620,78 @@ func extractCompactSummary(compacted []api.Message) string {
 		return content[len(compactSummaryPrefix):]
 	}
 	return content
+}
+
+// emergencyCompact is a last-resort compaction triggered when the API rejects
+// a request with context_exhausted. It aggressively truncates the message chain
+// before attempting a summary, dropping up to 75% of older messages to bring
+// the context within bounds.
+func (e *QueryEngine) emergencyCompact(ctx context.Context, messages []api.Message, systemPrompt []string) ([]api.Message, error) {
+	log.Warn("Emergency compaction: aggressively truncating message chain",
+		"originalMessageCount", len(messages),
+	)
+
+	// Strategy: keep the first message (user prompt) and the last 10 messages,
+	// discard everything in between. Then summarize what was discarded.
+	if len(messages) <= 12 {
+		return nil, fmt.Errorf("emergency compact: too few messages (%d) to compact", len(messages))
+	}
+
+	// Keep first message + last 10
+	kept := 10
+	head := messages[:1]
+	tail := messages[len(messages)-kept:]
+
+	// Ensure tail doesn't start mid-tool-use/result pair
+	if tail[0].Role == api.RoleUser && len(tail[0].ToolResults) > 0 && len(messages) > kept+1 {
+		// Include the preceding assistant message
+		tail = messages[len(messages)-kept-1:]
+	}
+
+	// Build a minimal summary of the dropped middle section
+	droppedCount := len(messages) - len(head) - len(tail)
+	summaryText := fmt.Sprintf(
+		"[Emergency context recovery: %d messages were dropped to fit within the context window. "+
+			"The conversation started with the initial task prompt. Recent context has been preserved. "+
+			"Continue working on the task based on the remaining context.]",
+		droppedCount,
+	)
+
+	// Attempt in-session compact with the truncated chain for a better summary
+	truncated := make([]api.Message, 0, len(head)+len(tail))
+	truncated = append(truncated, head...)
+	truncated = append(truncated, tail...)
+
+	compactMsg := api.Message{
+		Role:    api.RoleUser,
+		Content: inSessionCompactPrompt,
+	}
+	messagesForSummary := make([]api.Message, len(truncated), len(truncated)+1)
+	copy(messagesForSummary, truncated)
+	messagesForSummary = append(messagesForSummary, compactMsg)
+
+	resp, err := e.client.SendMessage(ctx, messagesForSummary, e.toolParams, nil, systemPrompt, "")
+	if err == nil {
+		e.mu.Lock()
+		AccumulateUsage(e.costState, e.model, resp.Usage)
+		e.mu.Unlock()
+
+		var summary strings.Builder
+		for _, block := range resp.Content {
+			if block.Type == api.BlockTypeText {
+				summary.WriteString(block.Text)
+			}
+		}
+		if summary.Len() > 0 {
+			summaryText = summary.String()
+		}
+	} else {
+		log.Warn("Emergency in-session summary failed, using mechanical summary", "error", err)
+	}
+
+	result := normalizeCompactedChain(buildCompactedChain(truncated, summaryText))
+	log.Info("Emergency compaction completed", "newMessageCount", len(result))
+	return result, nil
 }
 
 // normalizeCompactedChain applies post-compact normalization to ensure

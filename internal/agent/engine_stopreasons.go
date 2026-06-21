@@ -52,7 +52,7 @@ func (e *QueryEngine) handleStopReason(
 		return e.handleStopToolUse(toolResults, messages)
 
 	case api.StopReasonMaxTokens:
-		return e.handleStopMaxTokens(resp, streamResult, textOutput, sessionID, toolResults, toolUseBlocks, messages)
+		return e.handleStopMaxTokens(ctx, resp, streamResult, textOutput, sessionID, toolResults, toolUseBlocks, messages)
 
 	case api.StopReasonStopSeq:
 		return e.handleStopStopSeq(ctx, resp, textOutput, sessionID, assistantMsg, messages)
@@ -151,8 +151,10 @@ const maxOutputCapHitRetries = 3
 
 // handleStopMaxTokens processes the max_tokens stop reason.
 // For output_cap_hit: truncates and continues (up to maxOutputCapHitRetries).
-// For context_exhausted or after too many retries: terminates the session.
+// For context_exhausted: attempts emergency compaction before terminating.
+// For other cases or after too many retries: terminates the session.
 func (e *QueryEngine) handleStopMaxTokens(
+	ctx context.Context,
 	resp *api.Response,
 	streamResult api.StreamResult,
 	textOutput strings.Builder,
@@ -201,6 +203,29 @@ func (e *QueryEngine) handleStopMaxTokens(
 
 	// Reset the counter if we reach here (terminal path)
 	e.outputCapHitCount = 0
+
+	// For context_exhausted: attempt emergency compaction before giving up.
+	// This handles the case where auto-compact failed or was skipped due to
+	// token estimator underestimation.
+	if category == api.CategoryContextExhausted && !e.compactConfig.DisableCompact {
+		log.Warn("Context exhausted, attempting emergency compaction",
+			"messageCount", len(*messages),
+		)
+
+		systemPromptBlocks := e.streamCfg.CachedSystemPrompt
+		compacted, err := e.emergencyCompact(context.WithoutCancel(ctx), *messages, systemPromptBlocks)
+		if err == nil {
+			*messages = compacted
+			log.Info("Emergency compaction succeeded, continuing", "newMessageCount", len(*messages))
+			// Append tool results if any
+			if len(toolResults) > 0 {
+				userMsg := buildToolResultUserMsg(toolResults)
+				*messages = append(*messages, userMsg)
+			}
+			return "", nil, true
+		}
+		log.Error("Emergency compaction failed", "error", err)
+	}
 
 	// Terminal: emit structured error_max_tokens result event
 	if e.streamCfg.Enabled && streamResult.MaxTokensErr != nil {
