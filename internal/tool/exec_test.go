@@ -38,8 +38,8 @@ func TestExecTool_ExitCodeNonZero(t *testing.T) {
 	ctx := context.Background()
 
 	handle, err := et.Start(ctx, ExecRequest{
-		Path:   shellForTest(t),
-		Args:   shellArgsForTest("-c", "exit 42"),
+		Path: shellForTest(t),
+		Args: shellArgsForTest("-c", "exit 42"),
 	}, ExecOptions{Timeout: 5 * time.Second})
 	if err != nil {
 		t.Fatalf("Start failed: %v", err)

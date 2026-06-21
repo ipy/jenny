@@ -16,12 +16,12 @@ func TestParseSimpleCommand(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		input   string
-		flavor  ShellFlavor
-		wantOK  bool
-		check   func(t *testing.T, r simpleParseResult)
-		issues  []string
+		name   string
+		input  string
+		flavor ShellFlavor
+		wantOK bool
+		check  func(t *testing.T, r simpleParseResult)
+		issues []string
 	}{
 		{
 			name:   "simple ls",

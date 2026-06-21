@@ -296,19 +296,30 @@ func (e *QueryEngine) compactMessages(ctx context.Context, messages []api.Messag
 // inSessionCompactPrompt is the instruction appended to the message chain
 // for in-session compaction. It reuses the session's system prompt and tools
 // so the entire prefix is a cache hit.
+//
+// The summary is the only preserved context from dropped messages. Each item
+// below ensures the model can continue correctly after compaction. For every
+// claim in the summary, distinguish confidence level:
+//
+//	[CONFIRMED] — observed, measured, or explicitly stated
+//	[SPECULATIVE] — reasoned but not yet verified
+//	[UNVERIFIED] — stated intent or assumption, not yet acted on
+//	[EXCLUDED] — tried and rejected, or ruled out by analysis
 const inSessionCompactPrompt = `<system-reminder>
 The context window is approaching its limit. This is a separate compaction request. Do not continue any prior conversation or call any tools.
 </system-reminder>
-Provide a comprehensive summary of the entire conversation so far.
+Provide a comprehensive summary of the entire conversation so far. Output ONLY the summary text.
 
-Include:
-- Explicit goal of the initial request
-- All key decisions and conclusions
-- Code changes made with file paths
-- Outstanding tasks or unresolved questions
-- Important technical details and constraints
+For every claim, tag it with a confidence level: [CONFIRMED] for observed facts, [SPECULATIVE] for reasoned but unverified judgments, [UNVERIFIED] for stated intent not yet acted on, [EXCLUDED] for approaches tried and rejected or ruled out.
 
-Output ONLY the summary text.`
+1. Primary request and user intent — the explicit goal, plus any implicit or evolving intent (what the user really wants, not just what they said)
+2. Key decisions and rationale — each decision point, why it was made, alternatives considered
+3. Excluded paths — approaches that were tried and failed, or analyzed and ruled out. Include why each was rejected, so they are not re-attempted
+4. Errors and fixes — specific error messages, root causes, and the fix that resolved each
+5. Files and code sections — every file modified or created, with concrete identifiers (function names, type names, constants) and what changed
+6. Key technical concepts — APIs, libraries, patterns, constraints, or domain knowledge relevant to the task
+7. Current work — exactly what was being done when compaction triggered (the last few turns)
+8. Next steps — actionable outstanding tasks, unresolved questions, or explicit next actions the user requested`
 
 // inSessionCompact performs compaction by appending a summary instruction to the
 // existing message chain, sharing the cached system prompt + tools + message
@@ -368,7 +379,7 @@ func (e *QueryEngine) forkSummaryAgent(ctx context.Context, messages []api.Messa
 	// Truncate large tool results before sending to summary agent
 	summaryMessages = truncateLargeToolResults(summaryMessages, 2000)
 
-	summarySystemPrompt := []string{"You are a helpful assistant that summarizes conversations concisely. Provide a brief summary of the key points from the conversation above. Focus on the initial goal, essential information, decisions made, and any outstanding tasks or questions."}
+	summarySystemPrompt := []string{"You are a helpful assistant that summarizes conversations concisely. For every claim, tag confidence: [CONFIRMED] observed fact, [SPECULATIVE] reasoned but unverified, [UNVERIFIED] stated intent not yet acted on, [EXCLUDED] tried and rejected or ruled out. Cover: (1) primary request and user intent — explicit and implicit, (2) key decisions and rationale, (3) excluded paths — approaches tried and rejected or ruled out, with reasons, (4) errors and fixes, (5) files modified with specific identifiers (function names, type names), (6) key technical concepts, (7) current work when compaction triggered, (8) actionable next steps."}
 
 	var lastErr error
 	maxRetries := 5
