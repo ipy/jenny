@@ -154,7 +154,7 @@ The judge prompt asks the model to evaluate the conversation on three dimensions
 
 | Dimension | Question | Weight |
 |-----------|----------|--------|
-| **Task alignment** | Is the agent doing what the user explicitly asked for, even if the tools and outputs are not typical coding actions (tests, builds, file writes)? | 50% |
+| **Task progress** | Is the agent's approach actually advancing the user's goal, or is it stuck performing actions that won't converge? "Working hard" on a task the agent lacks the capability to complete is LOW. Genuinely moving toward a deliverable is HIGH. | 50% |
 | **Outcome momentum** | Is the agent's work product growing or converging toward a solution? Are intermediate results narrowing the problem space? | 35% |
 | **Fresh exploration** | Is each turn exploring new ground rather than revisiting known territory? Is the agent systematically probing rather than looping? | 15% |
 
@@ -187,7 +187,7 @@ Each dimension is scored 1–5. The aggregate is a weighted average.
 The fork follows the same pattern as the complexity evaluation fork, with a channel-based handoff to eliminate data races:
 
 - Copies the full conversation history and appends the judge prompt as a final user message, preserving the shared prefix for prompt cache hits
-- Uses a separate API client with `max_tokens` overridden to 200
+- Uses a separate API client with `max_tokens` overridden to a constant (`forkMaxTokens`, 1024), shared with the complexity eval fork and set high enough for thinking models that share the output budget
 - Runs with a 30-second timeout via `context.WithTimeout`
 - Does not block the main loop — the fork runs in a goroutine and sends the result to the main loop via a buffered channel (`forkResultCh`, capacity 1, non-blocking send with drop-if-full)
 - The main loop drains the channel via `DrainForkResult()` before each `CheckAndInject()` call, ensuring the result is applied on the main goroutine

@@ -18,6 +18,12 @@ import (
 	"github.com/ipy/jenny/internal/utils"
 )
 
+// forkMaxTokens is the max_tokens override for side-query forks (complexity eval,
+// progress eval). Set high enough that thinking models don't starve the JSON output:
+// the prompt + expected response is ~200 tokens, but thinking models share the output
+// budget between thinking blocks and visible text, so a larger headroom is needed.
+const forkMaxTokens = 1024
+
 // SubmitMessage runs a single query turn: persist message, run agent loop,
 // flush state on completion. Returns the text result and error.
 func (e *QueryEngine) SubmitMessage(ctx context.Context, prompt string) (string, error) {
@@ -280,7 +286,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					log.Debug("Progress eval fork client creation failed", "error", err)
 					return
 				}
-				forkClient.SetMaxTokensOverride(200)
+				forkClient.SetMaxTokensOverride(forkMaxTokens)
 				result, err := forkProgressEval(forkCtx, forkClient, forkMessages, systemPrompt)
 				if err != nil {
 					log.Debug("Progress eval fork failed", "error", err)
@@ -991,7 +997,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 						log.Debug("Complexity eval fork client creation failed", "error", err)
 						return
 					}
-					forkClient.SetMaxTokensOverride(200)
+					forkClient.SetMaxTokensOverride(forkMaxTokens)
 					cr, err := forkComplexityEval(forkCtx, forkClient, forkMessages, systemPrompt)
 					if err != nil {
 						log.Debug("Complexity eval fork failed", "error", err)

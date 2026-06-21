@@ -28,7 +28,10 @@ const (
 	// before the circuit breaker trips and skips all further auto-compact attempts.
 	MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES = 3
 
-	// SUMMARY_MAX_TOKENS is the maximum output tokens allocated for summary.
+	// SUMMARY_MAX_TOKENS is the maximum output tokens allocated for summary
+	// generation during compaction. Used both for budget calculation and as the
+	// actual max_tokens override sent to the API. Set high enough for thinking
+	// models where the output budget is shared between thinking blocks and text.
 	SUMMARY_MAX_TOKENS = 20_000
 
 	// minAutoCompactBuffer is the floor for the auto-compact buffer.
@@ -333,6 +336,7 @@ func (e *QueryEngine) inSessionCompact(ctx context.Context, messages []api.Messa
 	copy(messagesWithInstruction, messages)
 	messagesWithInstruction = append(messagesWithInstruction, compactMsg)
 
+	e.client.SetMaxTokensOverride(SUMMARY_MAX_TOKENS)
 	resp, err := e.client.SendMessage(ctx, messagesWithInstruction, e.toolParams, nil, systemPrompt, "")
 	if err != nil {
 		return nil, fmt.Errorf("in-session compaction API call: %w", err)
@@ -415,6 +419,7 @@ func (e *QueryEngine) forkSummaryAgent(ctx context.Context, messages []api.Messa
 			}
 		}
 
+		e.client.SetMaxTokensOverride(SUMMARY_MAX_TOKENS)
 		resp, err := e.client.SendMessage(ctx, summaryMessages, nil, nil, summarySystemPrompt, "")
 		if err != nil {
 			lastErr = err

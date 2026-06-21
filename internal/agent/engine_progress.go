@@ -385,6 +385,10 @@ func (pm *ProgressMonitor) CheckAndInject() (msg *api.Message, terminate bool) {
 	switch pm.level {
 	case ProgressLevelL1:
 		if pm.consecutiveNoProgress >= l1SecondThreshold && !pm.l1SecondFired {
+			// If a fork is in flight, defer the L1.2 reminder until the result arrives.
+			if pm.forkDispatched {
+				return nil, false
+			}
 			pm.l1SecondFired = true
 			return &api.Message{
 				Role:      api.RoleUser,
@@ -478,7 +482,9 @@ func (pm *ProgressMonitor) MarkForkDispatched() {
 
 // ApplyProgressEvalResult applies the judge result. If meaningful progress is found,
 // all counters and escalation state reset to 0. Otherwise the L1-second flow continues.
+// Always clears forkDispatched — the fork has completed and delivered its result.
 func (pm *ProgressMonitor) ApplyProgressEvalResult(result *ProgressEvalResult) {
+	pm.forkDispatched = false
 	if result.MeaningfulProgress {
 		pm.consecutiveNoProgress = 0
 		pm.level = ProgressLevelNone
@@ -615,13 +621,17 @@ func (e *QueryEngine) terminateProgressMonitor(sessionID string) (string, error)
 const progressEvalPrompt = `<system-reminder>
 This is a separate meta-evaluation request. Do not continue any prior conversation or call any tools.
 
-Evaluate whether the previous conversation is making genuine progress. Rate the efforts above on these three dimensions:
-1. TASK_ALIGNMENT (1-5): Is the agent doing what the user explicitly asked for? Score high if the agent's actions clearly serve the user's stated goal, even without typical coding signals (SQL queries, kubectl, curl, git, jq, custom scripts, etc.).
-2. OUTCOME_MOMENTUM (1-5): Is the work converging toward a solution? Are errors being resolved? Are results narrowing the problem space? Score high if there are clear incremental gains.
-3. FRESH_EXPLORATION (1-5): Is the agent exploring new ground each turn rather than revisiting known territory or looping?
+Evaluate whether the previous conversation is making genuine forward progress. Score 1-5 on each dimension:
+
+1. TASK_PROGRESS (1-5): Is the agent's approach actually advancing the user's goal, or is it stuck performing repeated actions that won't converge to a solution? "Working hard" on a task the agent lacks the capability to complete (wrong domain, missing data, blocked by an external dependency) is LOW. Genuinely moving toward a deliverable is HIGH. Mere execution of commands without resolution is LOW.
+
+2. OUTCOME_MOMENTUM (1-5): Are the agent's intermediate outputs converging? Are errors being resolved over time? Are the latest results closer to the goal than earlier ones? Score HIGH for clear incremental gains, LOW for stagnant or oscillating outputs.
+
+3. FRESH_EXPLORATION (1-5): Is each turn probing something new, or is the agent cycling through the same approaches, files, or commands? Score LOW if the agent keeps retrying failed approaches.
 
 Respond ONLY with a JSON object, no other text, comments, or fences:
 {"task_alignment": <1-5>, "outcome_momentum": <1-5>, "fresh_exploration": <1-5>, "overall": <weighted average, 2 decimal places>, "meaningful_progress": <true if overall >= 3.0, false otherwise>, "reasoning": "<one sentence>"}
+
 Weights: task_alignment 50%%, outcome_momentum 35%%, fresh_exploration 15%%.
 </system-reminder>`
 

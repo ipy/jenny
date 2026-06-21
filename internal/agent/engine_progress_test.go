@@ -737,3 +737,151 @@ func TestProgressMonitor_ForkDispatchedResetsOnProgress(t *testing.T) {
 		t.Errorf("expected 0 consecutive after progress, got %d", pm.ConsecutiveNoProgress())
 	}
 }
+
+func TestProgressMonitor_NegativeForkThenL2Escalates(t *testing.T) {
+	pm := NewProgressMonitor()
+	failBlock := []api.ToolUseBlock{{Name: "Bash", Input: map[string]any{"command": "x"}}}
+	failResult := []api.ToolResult{{Content: "error", IsError: true}}
+
+	// Drive to L1-second (20 turns) where fork fires
+	for i := 0; i < l1SecondThreshold; i++ {
+		failBlock[0].Input["command"] = fmt.Sprintf("cmd_%d", i)
+		pm.RecordTurn(failBlock, failResult)
+		if i == l1FirstThreshold-1 {
+			pm.CheckAndInject() // consume first L1
+		}
+	}
+
+	// Fork judge returns negative
+	pm.forkResultCh <- &ProgressEvalResult{
+		TaskAlignment:      1,
+		OutcomeMomentum:    2,
+		FreshExploration:   1,
+		Overall:            1.35,
+		MeaningfulProgress: false,
+		Reasoning:          "Agent is looping.",
+	}
+	pm.DrainForkResult()
+
+	// L1 second reminder fires
+	msg, terminate := pm.CheckAndInject()
+	if terminate {
+		t.Fatal("L1 second should not terminate")
+	}
+	if msg == nil {
+		t.Fatal("L1 second reminder should fire after negative fork")
+	}
+
+	// Continue to L2 (25 turns)
+	for i := l1SecondThreshold; i < l2Threshold; i++ {
+		failBlock[0].Input["command"] = fmt.Sprintf("cmd2_%d", i)
+		pm.RecordTurn(failBlock, failResult)
+	}
+
+	if pm.Level() != ProgressLevelL2 {
+		t.Fatalf("expected L2 after %d turns, got level %d", l2Threshold, pm.Level())
+	}
+
+	// L2 reminder fires (escalation proceeds normally)
+	msg2, terminate2 := pm.CheckAndInject()
+	if terminate2 {
+		t.Fatal("L2 first check should not terminate")
+	}
+	if msg2 == nil {
+		t.Fatal("L2 should inject FINAL WARNING")
+	}
+}
+
+func TestProgressMonitor_L1SecondDeferredDuringFork(t *testing.T) {
+	pm := NewProgressMonitor()
+	failBlock := []api.ToolUseBlock{{Name: "Bash", Input: map[string]any{"command": "x"}}}
+	failResult := []api.ToolResult{{Content: "error", IsError: true}}
+
+	for i := 0; i < l1SecondThreshold; i++ {
+		failBlock[0].Input["command"] = fmt.Sprintf("cmd_%d", i)
+		pm.RecordTurn(failBlock, failResult)
+		if i == l1FirstThreshold-1 {
+			pm.CheckAndInject() // consume first L1
+		}
+	}
+
+	// Simulate the fork being dispatched (but result not yet returned)
+	pm.MarkForkDispatched()
+
+	// L1.2 reminder should NOT fire while fork is in flight
+	msg, terminate := pm.CheckAndInject()
+	if terminate {
+		t.Fatal("L1 should not terminate while fork is in flight")
+	}
+	if msg != nil {
+		t.Fatal("L1.2 reminder should be deferred while fork is in flight")
+	}
+
+	// Fork returns positive — DrainForkResult applies it and resets everything
+	pm.forkResultCh <- &ProgressEvalResult{
+		TaskAlignment:      4,
+		OutcomeMomentum:    3,
+		FreshExploration:   4,
+		Overall:            3.65,
+		MeaningfulProgress: true,
+		Reasoning:          "progressing.",
+	}
+	pm.DrainForkResult()
+
+	if pm.ConsecutiveNoProgress() != 0 {
+		t.Errorf("expected 0 consecutive after positive judge, got %d", pm.ConsecutiveNoProgress())
+	}
+	if pm.Level() != ProgressLevelNone {
+		t.Errorf("expected level 0 after positive judge, got %d", pm.Level())
+	}
+
+	// Now L1.2 should NOT fire because counter was reset
+	msg2, terminate2 := pm.CheckAndInject()
+	if terminate2 {
+		t.Fatal("L1 should not terminate after positive judge")
+	}
+	if msg2 != nil {
+		t.Fatal("L1.2 reminder should not fire after positive judge reset")
+	}
+}
+
+func TestProgressMonitor_L1SecondFiresAfterNegativeFork(t *testing.T) {
+	pm := NewProgressMonitor()
+	failBlock := []api.ToolUseBlock{{Name: "Bash", Input: map[string]any{"command": "x"}}}
+	failResult := []api.ToolResult{{Content: "error", IsError: true}}
+
+	for i := 0; i < l1SecondThreshold; i++ {
+		failBlock[0].Input["command"] = fmt.Sprintf("cmd_%d", i)
+		pm.RecordTurn(failBlock, failResult)
+		if i == l1FirstThreshold-1 {
+			pm.CheckAndInject()
+		}
+	}
+
+	// Fork dispatched but not yet returned → L1.2 deferred
+	pm.MarkForkDispatched()
+	msg, _ := pm.CheckAndInject()
+	if msg != nil {
+		t.Fatal("L1.2 should be deferred while fork in flight")
+	}
+
+	// Fork returns negative → no reset
+	pm.forkResultCh <- &ProgressEvalResult{
+		TaskAlignment:      1,
+		OutcomeMomentum:    2,
+		FreshExploration:   1,
+		Overall:            1.35,
+		MeaningfulProgress: false,
+		Reasoning:          "looping.",
+	}
+	pm.DrainForkResult()
+
+	// Now L1.2 should fire (deferred then resolved with negative)
+	msg2, terminate2 := pm.CheckAndInject()
+	if terminate2 {
+		t.Fatal("L1.2 should not terminate")
+	}
+	if msg2 == nil {
+		t.Fatal("L1.2 reminder should fire after negative fork resolves")
+	}
+}
