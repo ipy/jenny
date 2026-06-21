@@ -265,7 +265,52 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			})
 		}
 
-		// Progress monitor: check escalation level and inject reminders
+		// Progress monitor: dispatch L2 fork-judge if needed, then check escalation
+		if e.progressMonitor.ShouldForkProgressEval() {
+			e.progressMonitor.MarkForkDispatched()
+			forkMessages := make([]api.Message, len(messages))
+			copy(forkMessages, messages)
+			forkModel := e.model
+			parentCtx := ctx
+			go func() {
+				forkCtx, forkCancel := context.WithTimeout(context.WithoutCancel(parentCtx), 30*time.Second)
+				defer forkCancel()
+				forkClient, err := api.NewClientWithModel(forkModel)
+				if err != nil {
+					log.Debug("Progress eval fork client creation failed", "error", err)
+					return
+				}
+				forkClient.SetMaxTokensOverride(200)
+				result, err := forkProgressEval(forkCtx, forkClient, forkMessages, systemPrompt)
+				if err != nil {
+					log.Debug("Progress eval fork failed", "error", err)
+					return
+				}
+				if parentCtx.Err() != nil {
+					log.Debug("Progress eval completed but session already ended, discarding result")
+					return
+				}
+				e.progressMonitor.ApplyProgressEvalResult(result)
+				log.Info("Progress eval result",
+					"overall", result.Overall,
+					"meaningful_progress", result.MeaningfulProgress,
+					"reasoning", result.Reasoning,
+				)
+				if e.streamCfg.Enabled {
+					msg := StreamMessage{
+						Type:    "system",
+						Subtype: "progress_eval",
+						Result: fmt.Sprintf(`{"task_alignment":%d,"outcome_momentum":%d,"fresh_exploration":%d,"overall":%.2f,"meaningful_progress":%v,"reasoning":%q}`,
+							result.TaskAlignment, result.OutcomeMomentum, result.FreshExploration,
+							result.Overall, result.MeaningfulProgress, result.Reasoning),
+						Uuid: GenerateUUID(),
+					}
+					data, _ := json.Marshal(msg)
+					fmt.Fprintln(os.Stdout, string(data))
+				}
+			}()
+		}
+
 		if msg, terminate := e.progressMonitor.CheckAndInject(); terminate {
 			return e.terminateProgressMonitor(sessionID)
 		} else if msg != nil {

@@ -531,3 +531,175 @@ func TestProgressMonitor_WeakSignalCannotOvercomeFail(t *testing.T) {
 		t.Errorf("weak signal should not make overall score positive, got %d", ts.Score)
 	}
 }
+
+func TestParseProgressEvalResponse_MeaningfulProgress(t *testing.T) {
+	raw := `{"task_alignment":4,"outcome_momentum":3,"fresh_exploration":4,"overall":3.65,"meaningful_progress":true,"reasoning":"Agent is systematically profiling each slow query."}`
+	result, err := parseProgressEvalResponse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.MeaningfulProgress {
+		t.Error("expected meaningful_progress=true")
+	}
+	if result.TaskAlignment != 4 {
+		t.Errorf("expected task_alignment=4, got %d", result.TaskAlignment)
+	}
+	if result.OutcomeMomentum != 3 {
+		t.Errorf("expected outcome_momentum=3, got %d", result.OutcomeMomentum)
+	}
+	if result.FreshExploration != 4 {
+		t.Errorf("expected fresh_exploration=4, got %d", result.FreshExploration)
+	}
+}
+
+func TestParseProgressEvalResponse_NoProgress(t *testing.T) {
+	raw := `{"task_alignment":1,"outcome_momentum":2,"fresh_exploration":1,"overall":1.35,"meaningful_progress":false,"reasoning":"Agent is looping through the same error without changing approach."}`
+	result, err := parseProgressEvalResponse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.MeaningfulProgress {
+		t.Error("expected meaningful_progress=false")
+	}
+}
+
+func TestParseProgressEvalResponse_WithFences(t *testing.T) {
+	raw := "```json\n{\"task_alignment\":5,\"outcome_momentum\":4,\"fresh_exploration\":5,\"overall\":4.65,\"meaningful_progress\":true,\"reasoning\":\"Agent is following user instructions exactly.\"}\n```"
+	result, err := parseProgressEvalResponse(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.MeaningfulProgress {
+		t.Error("expected meaningful_progress=true with fences")
+	}
+}
+
+func TestParseProgressEvalResponse_InvalidJSON(t *testing.T) {
+	_, err := parseProgressEvalResponse("not json at all")
+	if err == nil {
+		t.Error("expected error for invalid JSON")
+	}
+}
+
+func TestProgressMonitor_L2ForkJudge_MeaningfulProgressResets(t *testing.T) {
+	pm := NewProgressMonitor()
+	failBlock := []api.ToolUseBlock{{Name: "Bash", Input: map[string]any{"command": "x"}}}
+	failResult := []api.ToolResult{{Content: "error", IsError: true}}
+
+	for i := 0; i < l2Threshold; i++ {
+		failBlock[0].Input["command"] = fmt.Sprintf("cmd_%d", i)
+		pm.RecordTurn(failBlock, failResult)
+		if i == l1FirstThreshold-1 || i == l1SecondThreshold-1 {
+			pm.CheckAndInject()
+		}
+	}
+
+	if pm.Level() != ProgressLevelL2 {
+		t.Fatalf("expected L2 after %d no-progress turns, got level %d", l2Threshold, pm.Level())
+	}
+
+	// Simulate fork judge returning meaningful progress
+	pm.ApplyProgressEvalResult(&ProgressEvalResult{
+		TaskAlignment:      4,
+		OutcomeMomentum:    3,
+		FreshExploration:   4,
+		Overall:            3.65,
+		MeaningfulProgress: true,
+		Reasoning:          "Agent is systematically profiling queries as user requested.",
+	})
+
+	if pm.ConsecutiveNoProgress() != 0 {
+		t.Errorf("expected 0 consecutive after positive judge, got %d", pm.ConsecutiveNoProgress())
+	}
+	if pm.Level() != ProgressLevelNone {
+		t.Errorf("expected level 0 after positive judge, got %d", pm.Level())
+	}
+	// Full reset: L1 flags cleared so they can fire again on a new streak
+	if pm.l1FirstFired {
+		t.Error("l1FirstFired should be false after full reset")
+	}
+}
+
+func TestProgressMonitor_L2ForkJudge_NoProgressFallsThrough(t *testing.T) {
+	pm := NewProgressMonitor()
+	failBlock := []api.ToolUseBlock{{Name: "Bash", Input: map[string]any{"command": "x"}}}
+	failResult := []api.ToolResult{{Content: "error", IsError: true}}
+
+	for i := 0; i < l2Threshold; i++ {
+		failBlock[0].Input["command"] = fmt.Sprintf("cmd_%d", i)
+		pm.RecordTurn(failBlock, failResult)
+		if i == l1FirstThreshold-1 || i == l1SecondThreshold-1 {
+			pm.CheckAndInject()
+		}
+	}
+
+	// Simulate fork judge returning no progress
+	pm.ApplyProgressEvalResult(&ProgressEvalResult{
+		TaskAlignment:      1,
+		OutcomeMomentum:    2,
+		FreshExploration:   1,
+		Overall:            1.35,
+		MeaningfulProgress: false,
+		Reasoning:          "Agent is looping through the same error.",
+	})
+
+	// Counter should NOT be reset
+	if pm.ConsecutiveNoProgress() < l2Threshold {
+		t.Errorf("expected at least %d consecutive after negative judge, got %d", l2Threshold, pm.ConsecutiveNoProgress())
+	}
+	// Level should remain L2
+	if pm.Level() != ProgressLevelL2 {
+		t.Errorf("expected level L2 after negative judge, got %d", pm.Level())
+	}
+	// L2 message should still fire
+	msg, terminate := pm.CheckAndInject()
+	if terminate {
+		t.Error("L2 should not terminate immediately after negative judge")
+	}
+	if msg == nil {
+		t.Fatal("L2 should inject FINAL WARNING after negative judge")
+	}
+}
+
+func TestProgressMonitor_L2ForkJudge_OnlyFiresOnce(t *testing.T) {
+	pm := NewProgressMonitor()
+	failBlock := []api.ToolUseBlock{{Name: "Bash", Input: map[string]any{"command": "x"}}}
+	failResult := []api.ToolResult{{Content: "error", IsError: true}}
+
+	for i := 0; i < l2Threshold; i++ {
+		failBlock[0].Input["command"] = fmt.Sprintf("cmd_%d", i)
+		pm.RecordTurn(failBlock, failResult)
+		if i == l1FirstThreshold-1 || i == l1SecondThreshold-1 {
+			pm.CheckAndInject()
+		}
+	}
+
+	// First fork fires
+	if !pm.ShouldForkProgressEval() {
+		t.Fatal("first L2 trigger should request fork")
+	}
+
+	// Consume the fork opportunity
+	pm.MarkForkDispatched()
+
+	// Should not request again
+	if pm.ShouldForkProgressEval() {
+		t.Error("fork should not be requested twice")
+	}
+}
+
+func TestProgressMonitor_L2ForkJudge_NotAtL1(t *testing.T) {
+	pm := NewProgressMonitor()
+	failBlock := []api.ToolUseBlock{{Name: "Bash", Input: map[string]any{"command": "x"}}}
+	failResult := []api.ToolResult{{Content: "error", IsError: true}}
+
+	for i := 0; i < l1FirstThreshold; i++ {
+		failBlock[0].Input["command"] = fmt.Sprintf("cmd_%d", i)
+		pm.RecordTurn(failBlock, failResult)
+	}
+
+	// At L1, should not request fork
+	if pm.ShouldForkProgressEval() {
+		t.Error("L1 should not request fork judge")
+	}
+}

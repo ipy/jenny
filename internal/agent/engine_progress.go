@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -59,6 +60,20 @@ type ProgressMonitor struct {
 	readPathOrder       []string // FIFO insertion order for eviction
 	lastCommandHash     string
 	lastErrorText       string
+
+	// L2 fork-judge state
+	forkDispatched bool
+	forkResultCh   chan *ProgressEvalResult
+}
+
+// ProgressEvalResult holds the LLM judge's evaluation of agent progress.
+type ProgressEvalResult struct {
+	TaskAlignment      int     `json:"task_alignment"`
+	OutcomeMomentum    int     `json:"outcome_momentum"`
+	FreshExploration   int     `json:"fresh_exploration"`
+	Overall            float64 `json:"overall"`
+	MeaningfulProgress bool    `json:"meaningful_progress"`
+	Reasoning          string  `json:"reasoning"`
 }
 
 // NewProgressMonitor creates a new ProgressMonitor for tracking agent progress.
@@ -447,6 +462,35 @@ func (pm *ProgressMonitor) State() map[string]any {
 	}
 }
 
+// ShouldForkProgressEval returns true when the L2 fork-judge should be dispatched.
+// It fires exactly once per L2 trigger — when level is L2 and neither L2 message has
+// been injected yet nor a fork has been dispatched.
+func (pm *ProgressMonitor) ShouldForkProgressEval() bool {
+	return pm.level == ProgressLevelL2 && !pm.l2Fired && !pm.forkDispatched
+}
+
+// MarkForkDispatched records that the fork has been launched.
+func (pm *ProgressMonitor) MarkForkDispatched() {
+	pm.forkDispatched = true
+}
+
+// ApplyProgressEvalResult applies the judge result. If meaningful progress is found,
+// all counters and escalation state reset to 0. Otherwise the L2 flow continues.
+func (pm *ProgressMonitor) ApplyProgressEvalResult(result *ProgressEvalResult) {
+	if result.MeaningfulProgress {
+		pm.consecutiveNoProgress = 0
+		pm.level = ProgressLevelNone
+		pm.l1FirstFired = false
+		pm.l1SecondFired = false
+		pm.l2Fired = false
+		pm.l2TurnCount = 0
+		pm.slidingL1Fired = false
+		return
+	}
+	// Negative result: let the L2 flow continue normally.
+	// l2Fired remains false so CheckAndInject can still fire.
+}
+
 func (pm *ProgressMonitor) pushSlidingWindow(score int) {
 	pm.slidingWindow[pm.slidingWindowPos] = score
 	pm.slidingWindowPos = (pm.slidingWindowPos + 1) % slidingWindowSize
@@ -554,4 +598,84 @@ func (e *QueryEngine) terminateProgressMonitor(sessionID string) (string, error)
 	}
 
 	return "", fmt.Errorf("error_progress_terminated: %s", result)
+}
+
+const progressEvalPrompt = `<system-reminder>
+This is a separate meta-evaluation request. Do not continue any prior conversation or call any tools.
+
+Evaluate whether the previous conversation is making genuine progress. Rate the efforts above on these three dimensions:
+1. TASK_ALIGNMENT (1-5): Is the agent doing what the user explicitly asked for? Score high if the agent's actions clearly serve the user's stated goal, even without typical coding signals (SQL queries, kubectl, curl, git, jq, custom scripts, etc.).
+2. OUTCOME_MOMENTUM (1-5): Is the work converging toward a solution? Are errors being resolved? Are results narrowing the problem space? Score high if there are clear incremental gains.
+3. FRESH_EXPLORATION (1-5): Is the agent exploring new ground each turn rather than revisiting known territory or looping?
+
+Respond ONLY with a JSON object, no other text, comments, or fences:
+{"task_alignment": <1-5>, "outcome_momentum": <1-5>, "fresh_exploration": <1-5>, "overall": <weighted average, 2 decimal places>, "meaningful_progress": <true if overall >= 3.0, false otherwise>, "reasoning": "<one sentence>"}
+Weights: task_alignment 50%%, outcome_momentum 35%%, fresh_exploration 15%%.
+</system-reminder>`
+
+// forkProgressEval sends a side request appending the judge prompt to a copy
+// of the conversation history. The shared prefix (system prompt + prior messages)
+// enables prompt cache hits.
+func forkProgressEval(ctx context.Context, client api.Requester, messages []api.Message, systemPrompt []string) (*ProgressEvalResult, error) {
+	evalMsg := api.Message{
+		Role:    api.RoleUser,
+		Content: progressEvalPrompt,
+	}
+	forkMessages := make([]api.Message, len(messages), len(messages)+1)
+	copy(forkMessages, messages)
+	forkMessages = append(forkMessages, evalMsg)
+
+	resp, err := client.SendMessage(ctx, forkMessages, nil, nil, systemPrompt, "")
+	if err != nil {
+		return nil, err
+	}
+
+	var text string
+	for _, block := range resp.Content {
+		if block.Type == "text" || block.Text != "" {
+			text += block.Text
+		}
+	}
+
+	result, err := parseProgressEvalResponse(text)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debug("Progress eval result",
+		"task_alignment", result.TaskAlignment,
+		"outcome_momentum", result.OutcomeMomentum,
+		"fresh_exploration", result.FreshExploration,
+		"overall", result.Overall,
+		"meaningful_progress", result.MeaningfulProgress,
+	)
+
+	return result, nil
+}
+
+// parseProgressEvalResponse extracts and parses the JSON response from the judge.
+func parseProgressEvalResponse(text string) (*ProgressEvalResult, error) {
+	text = extractJSON(text)
+
+	var result ProgressEvalResult
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		return nil, err
+	}
+
+	if result.TaskAlignment < 1 || result.TaskAlignment > 5 {
+		return nil, fmt.Errorf("task_alignment out of range: %d", result.TaskAlignment)
+	}
+	if result.OutcomeMomentum < 1 || result.OutcomeMomentum > 5 {
+		return nil, fmt.Errorf("outcome_momentum out of range: %d", result.OutcomeMomentum)
+	}
+	if result.FreshExploration < 1 || result.FreshExploration > 5 {
+		return nil, fmt.Errorf("fresh_exploration out of range: %d", result.FreshExploration)
+	}
+
+	// Compute overall from weighted average (ignore the model's overall to avoid gaming)
+	overall := float64(result.TaskAlignment)*0.50 + float64(result.OutcomeMomentum)*0.35 + float64(result.FreshExploration)*0.15
+	result.Overall = overall
+	result.MeaningfulProgress = overall >= 3.0
+
+	return &result, nil
 }

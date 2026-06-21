@@ -127,10 +127,83 @@ Allows at most 5 additional **API turns** (tracked by `l2TurnCount`, incremented
 
 Engine terminates the session and emits a `result` event with `subtype: "progress_terminated"`, including the monitor state (consecutive count, total count, level).
 
+## L2 Fork-Judge Evaluation
+
+Before injecting the L2 FINAL WARNING, the engine fires a non-blocking side query ("fork") to evaluate whether the agent is making genuine progress that the heuristic scoring missed. This prevents false-positive terminations for task categories invisible to lexical scoring.
+
+### Motivation
+
+Heuristic scoring (`scoreTurn`) only rewards a fixed set of signals: file writes, known test/build/install commands, and first-time reads. Many legitimate workflows produce none of these:
+
+- **SQL tuning / data analysis**: commands are `SELECT`, `EXPLAIN`, etc. — never in the scoring prefix lists
+- **Infrastructure / DevOps**: `kubectl`, `terraform`, `docker`, `helm`, `git` operations
+- **Monitoring / debugging**: `curl`, `grep` through logs, `journalctl`
+- **Text exploration**: `jq`, `awk`, `sed`, `sort | uniq -c` pipelines
+- **User-requested repetition**: "check all 50 configs for X", "run this benchmark 10 times"
+- **Stochastic tasks**: fuzzing, hyperparameter search, A/B testing — inherently no convergent output
+
+### Timing
+
+The fork fires when the consecutive no-progress counter reaches the L2 threshold (`l2Threshold`, currently 25). L1 (10/20 turns) is too early — exploration is still expected. Waiting until L2 gives the judge enough history while still having 5 grace turns left.
+
+### Judge Prompt
+
+The fork copies the full conversation history and appends the judge prompt as a final user message. This preserves the shared prefix (system prompt + prior messages) for prompt cache hits.
+
+The judge prompt asks the model to evaluate the conversation on three dimensions:
+
+| Dimension | Question | Weight |
+|-----------|----------|--------|
+| **Task alignment** | Is the agent doing what the user explicitly asked for, even if the tools and outputs are not typical coding actions (tests, builds, file writes)? | 50% |
+| **Outcome momentum** | Is the agent's work product growing or converging toward a solution? Are intermediate results narrowing the problem space? | 35% |
+| **Fresh exploration** | Is each turn exploring new ground rather than revisiting known territory? Is the agent systematically probing rather than looping? | 15% |
+
+Each dimension is scored 1–5. The aggregate is a weighted average.
+
+### Response Format
+
+```json
+{
+  "task_alignment": 3,
+  "outcome_momentum": 4,
+  "fresh_exploration": 2,
+  "overall": 3.0,
+  "meaningful_progress": true,
+  "reasoning": "Agent is systematically profiling each slow query with EXPLAIN ANALYZE..."
+}
+```
+
+`meaningful_progress` is true when the weighted average ≥ 3.0. The `overall` field in the model response is ignored — the server recomputes the weighted average to prevent gaming.
+
+### Action on Result
+
+| Result | Action |
+|--------|--------|
+| `meaningful_progress == true` | Reset `consecutiveNoProgress` to 0, reset all L1/L2 flags, set level back to `ProgressLevelNone`. Agent continues normally. Emit a `system` stream event with `subtype: "progress_eval"` and the judge result. |
+| `meaningful_progress == false` | Fall through to the existing L2 flow: inject the FINAL WARNING and begin the 5-turn grace countdown. |
+
+### Fork Implementation
+
+The fork follows the same pattern as the complexity evaluation fork:
+
+- Copies the full conversation history and appends the judge prompt as a final user message, preserving the shared prefix for prompt cache hits
+- Uses a separate API client with `max_tokens` overridden to 200
+- Runs with a 30-second timeout via `context.WithTimeout`
+- Does not block the main loop — the fork runs in a goroutine and applies the result directly to the progress monitor via `ApplyProgressEvalResult`
+- If the fork fails (timeout, API error, invalid response), the goroutine exits silently and the existing L2 flow proceeds (safe default: assume no progress)
+
+### Invariants
+
+- The judge fork fires at most once per L2 trigger (guarded by `ShouldForkProgressEval` which checks `level == L2 && !l2Fired && !forkDispatched`)
+- A positive judge result always resets the counter, regardless of the heuristic score
+- A negative judge result does not alter the existing L2 → L3 escalation path
+- Fork failures (network, timeout, parse error) never prevent termination — safe default is "no progress"
+
 ## Integration Points
 
-- **Pre-API check:** Before compaction and normalization, before each API call. Calls `CheckAndInject()` to inject L1/L2 reminders or trigger L3 termination.
+- **Pre-API check:** Before compaction and normalization, before each API call. Dispatches the L2 fork-judge if `ShouldForkProgressEval()` returns true, then calls `CheckAndInject()` to inject L1/L2 reminders or trigger L3 termination.
 - **Post-tool scoring:** After `executeAndProcessTools`. Calls `RecordTurn()` to score the turn and update escalation state, then `SetProgressLevel()` to sync the level to the max_tokens controller.
+- **Fork-judge callback:** The fork goroutine calls `ApplyProgressEvalResult()` on completion, which either resets the progress monitor (meaningful progress) or lets the L2 flow continue (no progress).
 - **max_tokens coupling:** L1 caps at 8192, L2 caps at 4096, L3 caps at 2048 (via `dynamic-max-tokens`), all with a floor of 2048.
 
 ## Invariants
@@ -138,6 +211,7 @@ Engine terminates the session and emits a `result` event with `subtype: "progres
 - System prompt is never modified. All injections are virtual user messages.
 - L1/L2 reminder text is structured but concise — L1 includes a self-assessment framework, L2 demands best-effort delivery.
 - All counters reset on progress (score > 0), including `consecutiveNoProgress`, `level`, `l1FirstFired`, `l1SecondFired`, `l2Fired`, `l2TurnCount`, and `slidingL1Fired`.
+- All counters also reset on a positive L2 fork-judge result (`meaningful_progress == true`), regardless of the heuristic score.
 - L3 is irreversible once triggered.
 - L2 allows at most 5 extra API turns (tracked by `l2TurnCount`, incremented once per `CheckAndInject` call) before escalating to L3.
 - Sliding window L1 trigger is guarded by `slidingL1Fired` to prevent repeated firing; resets on positive score.
