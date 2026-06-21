@@ -79,12 +79,23 @@ func (c CompactConfig) autoCompactBuffer() int {
 
 // autoCompactThreshold returns the token count at which auto-compact triggers.
 // Returns 0 if the effective context window is too small for a positive threshold.
+//
+// Threshold strategy depends on context window size:
+//   - ≤ 256K: original formula (effectiveContextWindow - autoCompactBuffer)
+//   - > 256K and ≤ 512K: 50% of context window
+//   - > 512K: 512K (fixed cap)
 func (c CompactConfig) autoCompactThreshold() int {
-	t := c.effectiveContextWindow() - c.autoCompactBuffer()
-	if t < 0 {
-		return 0
+	if c.ModelContextWindow <= 256_000 {
+		t := c.effectiveContextWindow() - c.autoCompactBuffer()
+		if t < 0 {
+			return 0
+		}
+		return t
 	}
-	return t
+	if c.ModelContextWindow <= 512_000 {
+		return c.ModelContextWindow / 2
+	}
+	return 512_000
 }
 
 // warningThreshold returns the token count at which to emit a warning event.
@@ -151,6 +162,8 @@ func estimateTokens(messages []api.Message) int {
 	total := 0
 	for _, msg := range messages {
 		total += estimateStringTokens(msg.Content)
+		total += estimateStringTokens(msg.Thinking)
+		total += estimateStringTokens(msg.Signature)
 		for _, tu := range msg.ToolUse {
 			total += len(tu.Name) + 50
 			inputBytes, _ := json.Marshal(tu.Input)
@@ -243,9 +256,9 @@ func (e *QueryEngine) compactMessages(ctx context.Context, messages []api.Messag
 		if err == nil {
 			return compacted, nil
 		}
-		log.Debug("In-session compaction failed, trying fallback", "error", err)
+		log.Warn("In-session compaction failed, trying fallback", "error", err)
 	} else {
-		log.Debug("In-session compaction skipped: messages too large for context window",
+		log.Warn("In-session compaction skipped: messages too large for context window",
 			"estimatedTokens", estimated, "maxMessagesTokens", maxMessagesTokens)
 	}
 

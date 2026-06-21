@@ -33,18 +33,25 @@ Thresholds are derived from per-model parameters via `api.ModelParams(model)`:
 
 ## Threshold Math
 
+Threshold strategy depends on model context window size:
+
+| Context Window | Threshold |
+|---|---|
+| ≤ 256K | `effectiveContextWindow - autoCompactBuffer` (original formula) |
+| > 256K, ≤ 512K | 50% of context window |
+| > 512K | Fixed 512K cap |
+
+Where:
+
 ```
 effectiveContextWindow = modelContextWindow - modelMaxOutputTokens
-autoCompactThreshold   = effectiveContextWindow - AUTOCOMPACT_BUFFER_TOKENS
+autoCompactBuffer      = max(modelMaxOutputTokens + 5_000, 13_000)
+                        Capped at 50% of effectiveContextWindow (for tier 1 only)
 warningThreshold       = autoCompactThreshold - WARNING_BUFFER_TOKENS
 blockingLimit          = effectiveContextWindow - BLOCKING_BUFFER_TOKENS  (when auto-compact off)
 ```
 
-Buffer constants scale with model output cap:
-
-```
-AUTOCOMPACT_BUFFER_TOKENS = max(modelMaxOutputTokens + 5_000, 13_000)
-```
+The tiered approach prevents compaction from triggering too late for large-context models. For a 1M-window model like `deepseek-v4-flash`, the threshold is 512K instead of the original ~327K, ensuring compaction fires well before the context limit is reached.
 
 ## Trigger
 
@@ -137,6 +144,8 @@ Before next API call:
 
 - ASCII/Latin bytes: ~4 chars per token.
 - Multi-byte (CJK, emoji, etc.): ~1.5 chars per token.
+
+Counts all message fields: `Content`, `Thinking`, `Signature`, `ToolUse` (name + input), and `ToolResults` (content + 50-char overhead).
 
 Target accuracy: within 10% for English, within 30% for CJK-heavy content.
 

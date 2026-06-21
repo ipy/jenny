@@ -505,11 +505,10 @@ func TestAC6_DeepSeekThresholdMath(t *testing.T) {
 		t.Errorf("effectiveContextWindow = %d, want %d", effectiveWindow, expectedEffective)
 	}
 
-	// autoCompactBuffer = max(393216+5000, 13000) = 398216, capped at 655360/2 = 327680
-	// threshold = 655360 - 327680 = 327680
+	// Context window > 512K → threshold capped at 512K
 	threshold := cfg.autoCompactThreshold()
-	if threshold != 327_680 {
-		t.Errorf("autoCompactThreshold = %d, want 327680 (buffer capped at 50%% of effective window)", threshold)
+	if threshold != 512_000 {
+		t.Errorf("autoCompactThreshold = %d, want 512000 (context window > 512K, capped)", threshold)
 	}
 
 	// Should trigger at threshold
@@ -520,6 +519,52 @@ func TestAC6_DeepSeekThresholdMath(t *testing.T) {
 		t.Error("should NOT trigger below threshold")
 	}
 	t.Logf("DeepSeek threshold math: effective=%d threshold=%d", effectiveWindow, threshold)
+}
+
+// TestAC6_MidRangeThreshold verifies that models with context window > 256K
+// and ≤ 512K use 50% of context window as the threshold.
+func TestAC6_MidRangeThreshold(t *testing.T) {
+	cfg := CompactConfig{
+		ModelContextWindow:   300_000,
+		ModelMaxOutputTokens: 20_000,
+	}
+
+	// Context window > 256K and ≤ 512K → threshold = 300K / 2 = 150K
+	threshold := cfg.autoCompactThreshold()
+	if threshold != 150_000 {
+		t.Errorf("autoCompactThreshold = %d, want 150000 (50%% of context window)", threshold)
+	}
+
+	if !cfg.checkCompactThreshold(threshold, "user") {
+		t.Errorf("should trigger at 150K")
+	}
+	if cfg.checkCompactThreshold(threshold-1, "user") {
+		t.Error("should NOT trigger below 150K")
+	}
+}
+
+// TestAC6_256KBoundaryThreshold verifies the boundary between tier 1 and tier 2.
+// At exactly 256K, the original formula should be used.
+func TestAC6_256KBoundaryThreshold(t *testing.T) {
+	cfg := CompactConfig{
+		ModelContextWindow:   256_000,
+		ModelMaxOutputTokens: 20_000,
+	}
+
+	// ≤ 256K: original formula. effectiveWindow = 256K - 20K = 236K
+	// autoCompactBuffer = max(20K+5K, 13K) = 25K
+	// threshold = 236K - 25K = 211K
+	threshold := cfg.autoCompactThreshold()
+	if threshold != 211_000 {
+		t.Errorf("autoCompactThreshold = %d, want 211000 (original formula at boundary)", threshold)
+	}
+
+	// 256_001 should fall into tier 2 (50% of context)
+	cfg.ModelContextWindow = 256_001
+	threshold = cfg.autoCompactThreshold()
+	if threshold != 128_000 {
+		t.Errorf("autoCompactThreshold = %d, want 128000 (above boundary, 50%% of 256001 = 128000)", threshold)
+	}
 }
 
 // TestAC6_HighOutputModelThresholdFloor verifies that models with large output
@@ -626,6 +671,38 @@ func TestEstimateTokens_CharsetAware(t *testing.T) {
 	if cjkEst < 200 || cjkEst > 800 {
 		t.Errorf("CJK estimation %d seems unreasonable for 600 CJK chars (expected ~400)", cjkEst)
 	}
+}
+
+// TestEstimateTokens_Thinking verifies that Thinking and Signature fields
+// are included in the token estimate.
+func TestEstimateTokens_Thinking(t *testing.T) {
+	// Helper for readability: create a single thinking message
+	messages := []api.Message{
+		{
+			Role:      "assistant",
+			Content:   "visible text",
+			Thinking:  "this is thinking content that should be counted",
+			Signature: "sig-abc123",
+		},
+	}
+
+	est := estimateTokens(messages)
+
+	// Content only: "visible text" = 12 chars / 4 = ~3 tokens
+	// The thinking and signature fields should add meaningful tokens
+	if est < 10 {
+		t.Errorf("estimateTokens with thinking = %d, want >= 10 (thinking should be counted)", est)
+	}
+
+	// Verify that removing thinking+signature gives a lower count
+	messagesNoThinking := []api.Message{
+		{Role: "assistant", Content: "visible text"},
+	}
+	estNoThinking := estimateTokens(messagesNoThinking)
+	if est <= estNoThinking {
+		t.Errorf("estimate with thinking (%d) should be > without thinking (%d)", est, estNoThinking)
+	}
+	t.Logf("thinking adds %d tokens to estimate", est-estNoThinking)
 }
 
 // TestDropOldestAPIRoundGroup verifies oldest API round group is dropped.
