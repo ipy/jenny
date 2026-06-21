@@ -567,6 +567,44 @@ func TestAC6_256KBoundaryThreshold(t *testing.T) {
 	}
 }
 
+// TestAC6_AutoCompactWindowOverride verifies that when AUTO_COMPACT_WINDOW
+// is explicitly set, the original formula is used regardless of context window
+// size, bypassing the tiered logic.
+func TestAC6_AutoCompactWindowOverride(t *testing.T) {
+	// Simulate user setting AUTO_COMPACT_WINDOW=200000 on deepseek-v4-flash
+	// (which has a 1M context window, normally triggering the 512K cap)
+	cfg := CompactConfig{
+		ModelContextWindow:   200_000, // After env override
+		ModelMaxOutputTokens: 393_216,
+		AutoCompactWindow:    200_000,
+	}
+
+	// effectiveWindow = 200K - 393K → negative
+	// autoCompactBuffer = max(393K+5K, 13K) = 398K, capped at effective/2 (which is negative)
+	// Without override, tier 3 would apply (cap = 512K)
+	// With override, original formula is used
+	// Since effectiveWindow is negative, threshold = 0
+	threshold := cfg.autoCompactThreshold()
+	if threshold != 0 {
+		t.Errorf("autoCompactThreshold = %d, want 0 (negative effective window with override)", threshold)
+	}
+
+	// With a workable override: AUTO_COMPACT_WINDOW=300000
+	cfg.ModelContextWindow = 300_000
+	cfg.AutoCompactWindow = 300_000
+	cfg.ModelMaxOutputTokens = 20_000
+
+	// effectiveWindow = 300K - 20K = 280K
+	// autoCompactBuffer = max(20K+5K, 13K) = 25K
+	// threshold = 280K - 25K = 255K
+	// Without override, this would be tier 2 → 150K
+	// With override, original formula → 255K
+	threshold = cfg.autoCompactThreshold()
+	if threshold != 255_000 {
+		t.Errorf("autoCompactThreshold = %d, want 255000 (override uses original formula)", threshold)
+	}
+}
+
 // TestAC6_HighOutputModelThresholdFloor verifies that models with large output
 // relative to context window (e.g. gpt-5.5: 200k context, 128k max output)
 // don't produce negative thresholds. The buffer is capped at 50% of effective

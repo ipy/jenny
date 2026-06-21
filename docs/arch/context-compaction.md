@@ -37,6 +37,7 @@ Threshold strategy depends on model context window size:
 
 | Context Window | Threshold |
 |---|---|
+| `AUTO_COMPACT_WINDOW` set | `effectiveContextWindow - autoCompactBuffer` (original formula, user override) |
 | ≤ 256K | `effectiveContextWindow - autoCompactBuffer` (original formula) |
 | > 256K, ≤ 512K | 50% of context window |
 | > 512K | Fixed 512K cap |
@@ -46,12 +47,12 @@ Where:
 ```
 effectiveContextWindow = modelContextWindow - modelMaxOutputTokens
 autoCompactBuffer      = max(modelMaxOutputTokens + 5_000, 13_000)
-                        Capped at 50% of effectiveContextWindow (for tier 1 only)
+                        Capped at 50% of effectiveContextWindow (for tier 1 and user override only)
 warningThreshold       = autoCompactThreshold - WARNING_BUFFER_TOKENS
 blockingLimit          = effectiveContextWindow - BLOCKING_BUFFER_TOKENS  (when auto-compact off)
 ```
 
-The tiered approach prevents compaction from triggering too late for large-context models. For a 1M-window model like `deepseek-v4-flash`, the threshold is 512K instead of the original ~327K, ensuring compaction fires well before the context limit is reached.
+When `AUTO_COMPACT_WINDOW` is explicitly set, the user has taken manual control of the context window size, so the original formula is always used regardless of window size. The tiered approach only applies when using the model's default context window.
 
 ## Trigger
 

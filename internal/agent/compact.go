@@ -80,11 +80,23 @@ func (c CompactConfig) autoCompactBuffer() int {
 // autoCompactThreshold returns the token count at which auto-compact triggers.
 // Returns 0 if the effective context window is too small for a positive threshold.
 //
-// Threshold strategy depends on context window size:
+// When AUTO_COMPACT_WINDOW is explicitly set, the original formula is always used
+// regardless of context window size (user has taken manual control).
+//
+// Otherwise, strategy depends on context window size:
 //   - ≤ 256K: original formula (effectiveContextWindow - autoCompactBuffer)
 //   - > 256K and ≤ 512K: 50% of context window
 //   - > 512K: 512K (fixed cap)
 func (c CompactConfig) autoCompactThreshold() int {
+	// User override: always use original formula
+	if c.AutoCompactWindow > 0 {
+		t := c.effectiveContextWindow() - c.autoCompactBuffer()
+		if t < 0 {
+			return 0
+		}
+		return t
+	}
+
 	if c.ModelContextWindow <= 256_000 {
 		t := c.effectiveContextWindow() - c.autoCompactBuffer()
 		if t < 0 {
@@ -218,6 +230,7 @@ func newCompactConfigForModel(model string, streamCfg *StreamConfig) CompactConf
 	}
 
 	if envWindow := readEnvInt("AUTO_COMPACT_WINDOW", 0); envWindow > 0 {
+		cfg.AutoCompactWindow = envWindow
 		cfg.ModelContextWindow = envWindow
 	}
 
