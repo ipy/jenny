@@ -42,7 +42,7 @@ The Portal operates as a **Sidecar Observer** that interacts with the filesystem
 ### 1. Sidecar Observer Model
 The Portal is decoupled from the agent. It derives state by observing the filesystem and the system's process table.
 - **No Database:** To maintain a small binary footprint, the Portal uses the existing `~/.jenny/sessions` structure.
-- **UUID v4 Indexing:** Sessions are identified by UUID v4 (random). The Portal lists sessions sorted by modification time (`mtimeNano` from directory stat), avoiding the need for a separate index or database.
+- **UUID v7 Indexing:** Sessions are identified by UUID v7 (time-ordered). The Portal lists sessions sorted by modification time (`mtimeNano` from directory stat), avoiding the need for a separate index or database.
 - **Liveness Detection:** The Portal determines if a session is "Running" or "Exited" by reading the `pid` file in the session directory and checking the process status (e.g., via `os.FindProcess(pid).Signal(0)` on Unix).
 
 ### 2. Headless Interaction Flow

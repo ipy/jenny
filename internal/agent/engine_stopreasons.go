@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/api"
+	"github.com/ipy/jenny/internal/log"
 )
 
 // mapTerminalReason maps the API stop_reason to the terminal_reason field.
@@ -51,7 +52,7 @@ func (e *QueryEngine) handleStopReason(
 		return e.handleStopToolUse(toolResults, messages)
 
 	case api.StopReasonMaxTokens:
-		return e.handleStopMaxTokens(resp, streamResult, textOutput, sessionID)
+		return e.handleStopMaxTokens(resp, streamResult, textOutput, sessionID, toolResults, toolUseBlocks, messages)
 
 	case api.StopReasonStopSeq:
 		return e.handleStopStopSeq(ctx, resp, textOutput, sessionID, assistantMsg, messages)
@@ -136,7 +137,7 @@ func (e *QueryEngine) handleStopEndTurn(
 // handleStopToolUse processes the tool_use stop reason: appends tool results
 // as a user message and signals the loop to continue.
 func (e *QueryEngine) handleStopToolUse(toolResults []api.ToolResult, messages *[]api.Message) (string, error, bool) {
-	// Continue the loop to let the model process tool results
+	e.outputCapHitCount = 0
 	if len(toolResults) > 0 {
 		userMsg := buildToolResultUserMsg(toolResults)
 		*messages = append(*messages, userMsg)
@@ -144,50 +145,123 @@ func (e *QueryEngine) handleStopToolUse(toolResults []api.ToolResult, messages *
 	return "", nil, true
 }
 
-// handleStopMaxTokens processes the max_tokens stop reason: emits structured
-// error_max_tokens result and returns the error.
-func (e *QueryEngine) handleStopMaxTokens(resp *api.Response, streamResult api.StreamResult, textOutput strings.Builder, sessionID string) (string, error, bool) {
-	// AC1: Emit structured error_max_tokens result event
-	if e.streamCfg.Enabled && streamResult.MaxTokensErr != nil {
-		mte := streamResult.MaxTokensErr
-		threshold := e.compactConfig.autoCompactThreshold()
-		errMsg := fmt.Sprintf("max tokens reached: %s", mte.Category)
-		msg := StreamMessage{
-			Type:            "result",
-			Subtype:         "error_max_tokens",
-			Result:          errMsg,
-			SessionID:       sessionID,
-			ParentToolUseID: nil,
-			Uuid:            GenerateUUID(),
-			Model:           mte.Model,
-			IsError:         true,
-			Usage: &Usage{
-				InputTokens:              resp.Usage.InputTokens,
-				OutputTokens:             mte.OutputTokens,
-				CacheReadInputTokens:     resp.Usage.CacheReadInputTokens,
-				CacheCreationInputTokens: resp.Usage.CacheCreationInputTokens,
-			},
-			StopReason:    string(resp.StopReason),
-			DurationMs:    time.Since(e.startTime).Milliseconds(),
-			DurationAPIMs: e.totalAPIDurationMs,
-			TotalCostUSD:  e.costState.TotalCostUSD,
-			ModelUsage:    e.buildModelUsage(),
-			ErrorMaxTokens: &ErrorMaxTokensDetail{
-				Category:        string(mte.Category),
-				OutputTokens:    mte.OutputTokens,
-				MaxOutputTokens: mte.MaxOutputTokens,
-				InputTokens:     resp.Usage.InputTokens,
-				Threshold:       threshold,
-			},
-		}
-		data, _ := json.Marshal(msg)
-		fmt.Fprintln(os.Stdout, string(data))
-	}
+// maxOutputCapHitRetries is the maximum number of consecutive output_cap_hit
+// events before the session is terminated. Prevents infinite retry loops.
+const maxOutputCapHitRetries = 3
+
+// handleStopMaxTokens processes the max_tokens stop reason.
+// For output_cap_hit: truncates and continues (up to maxOutputCapHitRetries).
+// For context_exhausted or after too many retries: terminates the session.
+func (e *QueryEngine) handleStopMaxTokens(
+	resp *api.Response,
+	streamResult api.StreamResult,
+	textOutput strings.Builder,
+	sessionID string,
+	toolResults []api.ToolResult,
+	toolUseBlocks []api.ToolUseBlock,
+	messages *[]api.Message,
+) (string, error, bool) {
 	category := api.CategoryUnknown
 	if streamResult.MaxTokensErr != nil {
 		category = streamResult.MaxTokensErr.Category
 	}
+
+	// For output_cap_hit (per-turn cap, not context exhaustion),
+	// truncate and continue if we haven't exceeded retry limit.
+	if category == api.CategoryOutputCapHit && e.outputCapHitCount < maxOutputCapHitRetries {
+		e.outputCapHitCount++
+
+		log.Warn("Output cap hit, truncating and continuing",
+			"count", e.outputCapHitCount,
+			"turn", e.turnCount,
+			"output_tokens", streamResult.MaxTokensErr.OutputTokens,
+		)
+
+		// Emit a warning event (not a terminal result)
+		if e.streamCfg.Enabled {
+			e.emitOutputCapWarning(resp, streamResult, sessionID)
+		}
+
+		// If there are tool results (even from truncated calls), send them back
+		if len(toolResults) > 0 {
+			userMsg := buildToolResultUserMsg(toolResults)
+			*messages = append(*messages, userMsg)
+		}
+
+		// Inject a truncation warning as a virtual user message
+		warningMsg := api.Message{
+			Role:      api.RoleUser,
+			Content:   "<system-reminder>\nYour last response was truncated because it exceeded the output limit. Be more concise: reduce thinking, write shorter code blocks, or split large outputs across multiple tool calls.\n</system-reminder>",
+			IsVirtual: true,
+		}
+		*messages = append(*messages, warningMsg)
+
+		return "", nil, true
+	}
+
+	// Reset the counter if we reach here (terminal path)
+	e.outputCapHitCount = 0
+
+	// Terminal: emit structured error_max_tokens result event
+	if e.streamCfg.Enabled && streamResult.MaxTokensErr != nil {
+		e.emitMaxTokensError(resp, streamResult, sessionID)
+	}
+
 	return textOutput.String(), fmt.Errorf("max tokens reached: %s", category), false
+}
+
+// emitOutputCapWarning emits a non-terminal warning event for output_cap_hit.
+func (e *QueryEngine) emitOutputCapWarning(resp *api.Response, streamResult api.StreamResult, sessionID string) {
+	mte := streamResult.MaxTokensErr
+	msg := StreamMessage{
+		Type:       "system",
+		Subtype:    "output_cap_warning",
+		Result:     fmt.Sprintf("output truncated at %d tokens (attempt %d/%d), continuing", mte.OutputTokens, e.outputCapHitCount, maxOutputCapHitRetries),
+		SessionID:  sessionID,
+		Uuid:       GenerateUUID(),
+		Model:      mte.Model,
+		IsError:    false,
+		DurationMs: time.Since(e.startTime).Milliseconds(),
+	}
+	data, _ := json.Marshal(msg)
+	fmt.Fprintln(os.Stdout, string(data))
+}
+
+// emitMaxTokensError emits the terminal error_max_tokens result event.
+func (e *QueryEngine) emitMaxTokensError(resp *api.Response, streamResult api.StreamResult, sessionID string) {
+	mte := streamResult.MaxTokensErr
+	threshold := e.compactConfig.autoCompactThreshold()
+	errMsg := fmt.Sprintf("max tokens reached: %s", mte.Category)
+	msg := StreamMessage{
+		Type:            "result",
+		Subtype:         "error_max_tokens",
+		Result:          errMsg,
+		SessionID:       sessionID,
+		ParentToolUseID: nil,
+		Uuid:            GenerateUUID(),
+		Model:           mte.Model,
+		IsError:         true,
+		Usage: &Usage{
+			InputTokens:              resp.Usage.InputTokens,
+			OutputTokens:             mte.OutputTokens,
+			CacheReadInputTokens:     resp.Usage.CacheReadInputTokens,
+			CacheCreationInputTokens: resp.Usage.CacheCreationInputTokens,
+		},
+		StopReason:    string(resp.StopReason),
+		DurationMs:    time.Since(e.startTime).Milliseconds(),
+		DurationAPIMs: e.totalAPIDurationMs,
+		TotalCostUSD:  e.costState.TotalCostUSD,
+		ModelUsage:    e.buildModelUsage(),
+		ErrorMaxTokens: &ErrorMaxTokensDetail{
+			Category:        string(mte.Category),
+			OutputTokens:    mte.OutputTokens,
+			MaxOutputTokens: mte.MaxOutputTokens,
+			InputTokens:     resp.Usage.InputTokens,
+			Threshold:       threshold,
+		},
+	}
+	data, _ := json.Marshal(msg)
+	fmt.Fprintln(os.Stdout, string(data))
 }
 
 // handleStopStopSeq processes the stop_sequence stop reason: emits success

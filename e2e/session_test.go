@@ -32,7 +32,7 @@ func TestSessionPersistence(t *testing.T) {
 		{
 			ID:          "session.persistence.session-id-is-uuid",
 			Category:    "session",
-			Description: "session_id is a lowercase UUID v4",
+			Description: "session_id is a lowercase UUID v7",
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "say hi",

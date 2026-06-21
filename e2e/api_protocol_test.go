@@ -12,7 +12,7 @@ func TestAPIMaxTokens(t *testing.T) {
 		{
 			ID:          "api.max-tokens.default",
 			Category:    "api-protocol",
-			Description: "turn 1 max_tokens is capped to discovery budget (dynamic max_tokens)",
+			Description: "turn 1 max_tokens uses earlyTurnCap (16384 for large models, 4096 for small)",
 			Tags:        []string{"api"},
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
@@ -27,7 +27,7 @@ func TestAPIMaxTokens(t *testing.T) {
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 2000,
+						MaxTokens: 16384,
 					},
 				},
 			},

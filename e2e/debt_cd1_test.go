@@ -56,7 +56,6 @@ func TestDebtCD1_OverridePreservedWithRefresh(t *testing.T) {
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 2000,
 					},
 				},
 			},
@@ -134,7 +133,6 @@ func TestDebtCD1_OverridePreservedWithRefresh(t *testing.T) {
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 2000,
 					},
 				},
 			},
@@ -175,7 +173,6 @@ func TestDebtCD1_OverridePreservedWithRefresh(t *testing.T) {
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 2000,
 					},
 				},
 			},
@@ -226,7 +223,6 @@ func TestDebtCD1_OverridePriority(t *testing.T) {
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 2000,
 					},
 				},
 			},
@@ -282,7 +278,6 @@ func TestDebtCD1_MalformedOverridesAreSafe(t *testing.T) {
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 2000,
 					},
 				},
 			},

@@ -38,6 +38,7 @@ type Registry struct {
 	enterWorktreeEnabled   bool
 	exitWorktreeEnabled    bool
 	sessionID              string
+	hasMCPServers          bool
 }
 
 // NewRegistry creates a new Registry.
@@ -203,6 +204,14 @@ func (r *Registry) WithExitWorktreeEnabled(enabled bool) *Registry {
 	return r
 }
 
+// WithHasMCPServers marks whether any MCP servers are configured.
+// When false, MCP interaction tools (read_mcp_resource, McpPrompt) are omitted
+// from the tool list to avoid wasting model context and turns.
+func (r *Registry) WithHasMCPServers(has bool) *Registry {
+	r.hasMCPServers = has
+	return r
+}
+
 // GetSkillActivator returns the skill activator if skills framework is enabled.
 // This allows the caller to wire the activator to the QueryEngine for active skill tracking.
 func (r *Registry) GetSkillActivator() SkillActivator {
@@ -260,8 +269,10 @@ func (r *Registry) Build() []Tool {
 		}
 
 		r.baseTools = append(r.baseTools, NewGlobTool(), NewGrepTool(), NewTreeTool(r.permissionLevel))
-		// Add MCP interaction tools
-		r.baseTools = append(r.baseTools, NewReadMcpResourceTool().WithSessionID(r.sessionID), NewMcpPromptTool())
+		// Add MCP interaction tools only when MCP servers are configured
+		if r.hasMCPServers {
+			r.baseTools = append(r.baseTools, NewReadMcpResourceTool().WithSessionID(r.sessionID), NewMcpPromptTool())
+		}
 		// Add WriteTool and EditTool if readCache is configured
 		if r.readCache != nil {
 			r.baseTools = append(r.baseTools,

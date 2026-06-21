@@ -86,6 +86,9 @@ type QueryEngine struct {
 
 	// Tool result counter for complexity fork trigger
 	toolResultCount int
+
+	// Counter for consecutive output_cap_hit events (for truncate-and-continue)
+	outputCapHitCount int
 }
 
 // thinkingBlockState tracks the accumulated thinking tokens for a single thinking block.

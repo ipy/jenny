@@ -73,7 +73,7 @@ func (c *MaxTokensController) ComputeEffective(turn int) int {
 
 	var base int
 	if turn <= 3 {
-		base = 2000
+		base = c.earlyTurnCap()
 	} else if cr != nil {
 		base = computeMaxTokens(cr.Complexity, cr.IsCoding, c.modelMax)
 	} else {
@@ -82,16 +82,41 @@ func (c *MaxTokensController) ComputeEffective(turn int) int {
 
 	switch level {
 	case ProgressLevelL2:
-		if base > 1000 {
-			base = 1000
+		cap := c.progressCap(4096)
+		if base > cap {
+			base = cap
 		}
 	case ProgressLevelL1:
-		if base > 2000 {
-			base = 2000
+		cap := c.progressCap(8192)
+		if base > cap {
+			base = cap
 		}
 	}
 
+	log.Debug("MaxTokens computed", "turn", turn, "base", base, "level", level, "hasComplexity", cr != nil)
 	return base
+}
+
+// earlyTurnCap returns the max_tokens cap for the first 3 discovery turns.
+// For models with large output capacity (thinking models where thinking tokens
+// share the output budget), a higher cap prevents thinking from starving tool calls.
+func (c *MaxTokensController) earlyTurnCap() int {
+	if c.modelMax >= 100_000 {
+		return min(16384, c.modelMax)
+	}
+	return min(4096, c.modelMax)
+}
+
+// progressCap returns the max_tokens cap for a given progress level,
+// scaled to the model's capacity. Never returns below 2048.
+func (c *MaxTokensController) progressCap(desired int) int {
+	if desired > c.modelMax {
+		return c.modelMax
+	}
+	if desired < 2048 {
+		return 2048
+	}
+	return desired
 }
 
 // computeMaxTokens calculates max_tokens from complexity and coding flag.
@@ -116,16 +141,21 @@ func computeMaxTokens(complexity int, isCoding bool, modelMax int) int {
 }
 
 // turnBasedMaxTokens returns the schedule-based default for a given turn.
+// Uses a generous initial budget that tapers gradually, with a floor that
+// accommodates thinking tokens on models where they share the output budget.
 func turnBasedMaxTokens(turn int, modelMax int) int {
 	switch {
 	case turn <= 3:
-		return 2000
+		if modelMax >= 100_000 {
+			return min(16384, modelMax)
+		}
+		return min(4096, modelMax)
 	case turn <= 10:
-		return min(8000, modelMax)
+		return min(16384, modelMax)
 	default:
-		v := 8000 - (turn-10)*200
-		if v < 2000 {
-			v = 2000
+		v := 16384 - (turn-10)*400
+		if v < 4096 {
+			v = 4096
 		}
 		return min(v, modelMax)
 	}

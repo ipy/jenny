@@ -27,14 +27,21 @@ func (t *mockTool) Execute(ctx context.Context, input map[string]any, cwd string
 // registered, making the total 11 on Unix.
 func baseToolCount() int {
 	if runtime.GOOS == "windows" {
-		// Read + PowerShell + Glob + Grep + Tree + ReadMcpResource + McpPrompt + 4 task tools = 11; +1 if bash.exe is in PATH
+		// Read + PowerShell + Glob + Grep + Tree + 4 task tools = 9; +1 if bash.exe is in PATH
+		// (MCP tools excluded unless hasMCPServers=true)
 		if _, err := exec.LookPath("bash.exe"); err == nil {
-			return 12
+			return 10
 		}
-		return 11
+		return 9
 	}
-	// Unix: Read + Bash + Glob + Grep + Tree + ReadMcpResource + McpPrompt + 4 task tools = 11
-	return 11
+	// Unix: Read + Bash + Glob + Grep + Tree + 4 task tools = 9
+	// (MCP tools excluded unless hasMCPServers=true)
+	return 9
+}
+
+// baseToolCountWithMCP returns the expected number of base tools including MCP interaction tools.
+func baseToolCountWithMCP() int {
+	return baseToolCount() + 2
 }
 
 func TestRegistry_WithBaseTools(t *testing.T) {
@@ -105,10 +112,11 @@ func TestRegistry_WithMCPTools(t *testing.T) {
 
 	tools := NewRegistry().
 		WithBaseTools().
+		WithHasMCPServers(true).
 		WithMCPTools(mcpTools).
 		Build()
 
-	bt := baseToolCount()
+	bt := baseToolCountWithMCP()
 	expected := bt + 2
 	if len(tools) != expected {
 		t.Errorf("expected %d tools (%d base + 2 MCP), got %d", expected, bt, len(tools))

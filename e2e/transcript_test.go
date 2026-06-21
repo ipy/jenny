@@ -133,7 +133,7 @@ func TestTranscriptEntriesHaveUUID(t *testing.T) {
 		{
 			ID:          "transcript.entries.have-uuid",
 			Category:    "transcript",
-			Description: "every transcript entry has a valid uuid v4",
+			Description: "every transcript entry has a valid uuid v7",
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "say hi",

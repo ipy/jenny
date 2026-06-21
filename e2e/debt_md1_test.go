@@ -28,14 +28,14 @@ func findRepoRoot(t *testing.T) string {
 }
 
 // TestDebtMD1RemoveMaxTokensOverride verifies that max_tokens is correctly
-// applied in API requests. With dynamic max_tokens, turn 1 uses the discovery
-// budget (2000) regardless of model capability.
+// applied in API requests. With dynamic max_tokens, turn 1 uses earlyTurnCap
+// which is 16384 for large models (maxOut >= 100K) and 4096 for others.
 func TestDebtMD1RemoveMaxTokensOverride(t *testing.T) {
 	runE2ESuite(t, []*harness.TestCase{
 		{
 			ID:          "debt-md1.max-tokens.default-64000",
 			Category:    "debt-md1",
-			Description: "turn 1 max_tokens is 2000 (discovery budget) for claude-sonnet-4-6",
+			Description: "turn 1 max_tokens uses earlyTurnCap for claude-sonnet-4-6",
 			Tags:        []string{"debt"},
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
@@ -49,7 +49,7 @@ func TestDebtMD1RemoveMaxTokensOverride(t *testing.T) {
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 2000,
+						MaxTokens: 16384,
 					},
 				},
 			},
@@ -57,7 +57,7 @@ func TestDebtMD1RemoveMaxTokensOverride(t *testing.T) {
 		{
 			ID:          "debt-md1.max-tokens.opus-default",
 			Category:    "debt-md1",
-			Description: "turn 1 max_tokens is 2000 (discovery budget) for claude-opus-4-6",
+			Description: "turn 1 max_tokens uses earlyTurnCap for claude-opus-4-6",
 			Tags:        []string{"debt"},
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
@@ -71,7 +71,7 @@ func TestDebtMD1RemoveMaxTokensOverride(t *testing.T) {
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 2000,
+						MaxTokens: 16384,
 					},
 				},
 			},
@@ -79,7 +79,7 @@ func TestDebtMD1RemoveMaxTokensOverride(t *testing.T) {
 		{
 			ID:          "debt-md1.max-tokens.haiku-default",
 			Category:    "debt-md1",
-			Description: "turn 1 max_tokens is 2000 (discovery budget) for claude-haiku-4-6",
+			Description: "turn 1 max_tokens uses earlyTurnCap for claude-haiku-4-6",
 			Tags:        []string{"debt"},
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
@@ -93,7 +93,7 @@ func TestDebtMD1RemoveMaxTokensOverride(t *testing.T) {
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 2000,
+						MaxTokens: 16384,
 					},
 				},
 			},

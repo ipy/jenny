@@ -28,7 +28,7 @@ func TestDebtMD8ModelCapConsolidation(t *testing.T) {
 		{
 			ID:          "debt-MD-8.max-tokens.claude-sonnet-4-6",
 			Category:    "debt-MD-8",
-			Description: "turn 1 max_tokens is 2000 (discovery budget) for claude-sonnet-4-6",
+			Description: "turn 1 max_tokens uses earlyTurnCap (16384) for claude-sonnet-4-6",
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "say hello",
@@ -41,7 +41,7 @@ func TestDebtMD8ModelCapConsolidation(t *testing.T) {
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 2000,
+						MaxTokens: 16384,
 					},
 				},
 			},
@@ -49,7 +49,7 @@ func TestDebtMD8ModelCapConsolidation(t *testing.T) {
 		{
 			ID:          "debt-MD-8.max-tokens.claude-opus-4-5",
 			Category:    "debt-MD-8",
-			Description: "turn 1 max_tokens is 2000 (discovery budget) for claude-opus-4-5-20251101",
+			Description: "turn 1 max_tokens uses earlyTurnCap (16384) for claude-opus-4-5-20251101",
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "say hello",
@@ -62,7 +62,7 @@ func TestDebtMD8ModelCapConsolidation(t *testing.T) {
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 2000,
+						MaxTokens: 16384,
 					},
 				},
 			},
@@ -70,7 +70,7 @@ func TestDebtMD8ModelCapConsolidation(t *testing.T) {
 		{
 			ID:          "debt-MD-8.max-tokens.claude-haiku-4-5",
 			Category:    "debt-MD-8",
-			Description: "turn 1 max_tokens is 2000 (discovery budget) for claude-haiku-4-5-20251001",
+			Description: "turn 1 max_tokens uses earlyTurnCap (16384) for claude-haiku-4-5-20251001",
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "say hello",
@@ -83,7 +83,7 @@ func TestDebtMD8ModelCapConsolidation(t *testing.T) {
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 2000,
+						MaxTokens: 16384,
 					},
 				},
 			},
@@ -112,7 +112,7 @@ func TestDebtMD8ModelCapConsolidation(t *testing.T) {
 		{
 			ID:          "debt-MD-8.max-tokens.unknown-model-fallback",
 			Category:    "debt-MD-8",
-			Description: "turn 1 max_tokens is 2000 (discovery budget) for unknown model",
+			Description: "turn 1 max_tokens uses earlyTurnCap (4096) for unknown model (maxOut=16384 < 100K)",
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "say hello",
@@ -125,7 +125,7 @@ func TestDebtMD8ModelCapConsolidation(t *testing.T) {
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 2000,
+						MaxTokens: 4096,
 					},
 				},
 			},

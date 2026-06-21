@@ -873,10 +873,21 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				forkClient.SetMaxTokensOverride(200)
 				cr, err := forkComplexityEval(ctx, forkClient, forkMessages, systemPrompt)
 				if err != nil {
-					log.Debug("Complexity eval fork failed", "error", err)
+					log.Warn("Complexity eval fork failed", "error", err)
 					return
 				}
 				e.maxTokensCtrl.SetComplexityResult(cr)
+				log.Info("Complexity eval result", "complexity", cr.Complexity, "is_coding", cr.IsCoding)
+				if e.streamCfg.Enabled {
+					msg := StreamMessage{
+						Type:    "system",
+						Subtype: "complexity_eval",
+						Result:  fmt.Sprintf(`{"complexity":%d,"is_coding":%v}`, cr.Complexity, cr.IsCoding),
+						Uuid:    GenerateUUID(),
+					}
+					data, _ := json.Marshal(msg)
+					fmt.Fprintln(os.Stdout, string(data))
+				}
 			}()
 		}
 

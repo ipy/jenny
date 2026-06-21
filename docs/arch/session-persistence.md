@@ -24,8 +24,8 @@ Every line in a transcript JSONL file carries two mandatory envelope fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `session_id` | string | Session ID; a lowercase UUID v4 string, equal to the JSONL filename stem (filename without `.jsonl`) |
-| `uuid` | string | Lowercase UUID v4 matching `^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$` |
+| `session_id` | string | Session ID; a lowercase UUID v7 string, equal to the JSONL filename stem (filename without `.jsonl`) |
+| `uuid` | string | Lowercase UUID v7 matching `^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$` |
 | `cwd` | string | Absolute path of the working directory at session start |
 
 All three fields must be non-empty on every line. The `session_id` and `cwd` values are consistent across all lines within one session run.

@@ -60,20 +60,21 @@ func TestComputeMaxTokens_ClampComplexity(t *testing.T) {
 }
 
 func TestTurnBasedMaxTokens(t *testing.T) {
+	// Large model (>100K maxOut) — uses higher caps
 	modelMax := 384000
-
 	tests := []struct {
 		turn     int
 		expected int
 	}{
-		{1, 2000},
-		{3, 2000},
-		{4, 8000},
-		{10, 8000},
-		{11, 7800},
-		{20, 6000},
-		{40, 2000}, // Tapers to minimum
-		{100, 2000},
+		{1, 16384},  // early turn: high cap for thinking models
+		{3, 16384},  // still early
+		{4, 16384},  // mid schedule
+		{10, 16384}, // end of mid
+		{11, 15984}, // taper starts: 16384 - 1*400
+		{20, 12384}, // 16384 - 10*400
+		{40, 4384},  // 16384 - 30*400 = 4384
+		{41, 4096},  // floor
+		{100, 4096}, // floor
 	}
 
 	for _, tt := range tests {
@@ -83,15 +84,46 @@ func TestTurnBasedMaxTokens(t *testing.T) {
 				tt.turn, modelMax, got, tt.expected)
 		}
 	}
+
+	// Small model (<100K maxOut) — uses lower caps
+	smallMax := 8192
+	smallTests := []struct {
+		turn     int
+		expected int
+	}{
+		{1, 4096}, // min(4096, 8192)
+		{3, 4096},
+		{4, 8192}, // min(16384, 8192) = 8192
+		{10, 8192},
+	}
+	for _, tt := range smallTests {
+		got := turnBasedMaxTokens(tt.turn, smallMax)
+		if got != tt.expected {
+			t.Errorf("turnBasedMaxTokens(%d, %d) = %d, want %d",
+				tt.turn, smallMax, got, tt.expected)
+		}
+	}
 }
 
 func TestMaxTokensController_Discovery(t *testing.T) {
+	// deepseek-chat has modelMax > 100K, so earlyTurnCap = 16384
 	c := NewMaxTokensController("deepseek-chat")
 
 	for turn := 1; turn <= 3; turn++ {
 		got := c.ComputeEffective(turn)
-		if got != 2000 {
-			t.Errorf("turn %d: expected 2000 during discovery, got %d", turn, got)
+		if got != 16384 {
+			t.Errorf("turn %d: expected 16384 during discovery, got %d", turn, got)
+		}
+	}
+}
+
+func TestMaxTokensController_Discovery_SmallModel(t *testing.T) {
+	c := &MaxTokensController{modelMax: 8192}
+
+	for turn := 1; turn <= 3; turn++ {
+		got := c.ComputeEffective(turn)
+		if got != 4096 {
+			t.Errorf("turn %d: expected 4096 during discovery for small model, got %d", turn, got)
 		}
 	}
 }
@@ -100,8 +132,8 @@ func TestMaxTokensController_TurnBased_BeforeFork(t *testing.T) {
 	c := NewMaxTokensController("deepseek-chat")
 
 	got := c.ComputeEffective(5)
-	if got != 8000 {
-		t.Errorf("turn 5 without fork: expected 8000, got %d", got)
+	if got != 16384 {
+		t.Errorf("turn 5 without fork: expected 16384, got %d", got)
 	}
 }
 
@@ -122,8 +154,8 @@ func TestMaxTokensController_DiscoveryIgnoresFork(t *testing.T) {
 
 	for turn := 1; turn <= 3; turn++ {
 		got := c.ComputeEffective(turn)
-		if got != 2000 {
-			t.Errorf("turn %d: discovery should ignore fork, expected 2000, got %d", turn, got)
+		if got != 16384 {
+			t.Errorf("turn %d: discovery should use earlyTurnCap, expected 16384, got %d", turn, got)
 		}
 	}
 }
@@ -134,14 +166,30 @@ func TestMaxTokensController_ProgressLevelCaps(t *testing.T) {
 
 	c.SetProgressLevel(ProgressLevelL1)
 	got := c.ComputeEffective(5)
-	if got != 2000 {
-		t.Errorf("L1 should cap at 2000, got %d", got)
+	if got != 8192 {
+		t.Errorf("L1 should cap at 8192, got %d", got)
 	}
 
 	c.SetProgressLevel(ProgressLevelL2)
 	got = c.ComputeEffective(5)
-	if got != 1000 {
-		t.Errorf("L2 should cap at 1000, got %d", got)
+	if got != 4096 {
+		t.Errorf("L2 should cap at 4096, got %d", got)
+	}
+}
+
+func TestMaxTokensController_ProgressLevel_SmallModel(t *testing.T) {
+	c := &MaxTokensController{modelMax: 4096}
+
+	c.SetProgressLevel(ProgressLevelL1)
+	got := c.ComputeEffective(5)
+	if got > 4096 {
+		t.Errorf("L1 on small model should not exceed modelMax, got %d", got)
+	}
+
+	c.SetProgressLevel(ProgressLevelL2)
+	got = c.ComputeEffective(5)
+	if got > 4096 {
+		t.Errorf("L2 on small model should not exceed modelMax, got %d", got)
 	}
 }
 

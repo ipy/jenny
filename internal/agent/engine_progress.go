@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/api"
+	"github.com/ipy/jenny/internal/log"
 )
 
 // ProgressLevel represents the current escalation level.
@@ -90,7 +91,25 @@ func (pm *ProgressMonitor) RecordTurn(toolUseBlocks []api.ToolUseBlock, toolResu
 		pm.totalNoProgress++
 	}
 
+	prevLevel := pm.level
 	pm.updateLevel()
+
+	log.Debug("Progress monitor turn",
+		"score", score.Score,
+		"signals", strings.Join(score.Signals, ","),
+		"consecutive_no_progress", pm.consecutiveNoProgress,
+		"level", int(pm.level),
+		"sliding_sum", pm.slidingWindowSum(),
+	)
+
+	if pm.level != prevLevel {
+		log.Info("Progress monitor level changed",
+			"from", int(prevLevel),
+			"to", int(pm.level),
+			"consecutive_no_progress", pm.consecutiveNoProgress,
+		)
+	}
+
 	return score
 }
 
@@ -191,7 +210,7 @@ func (pm *ProgressMonitor) CheckAndInject() (msg *api.Message, terminate bool) {
 			}
 			return &api.Message{
 				Role:      api.RoleUser,
-				Content:   "<system-reminder>\nPROGRESS CHECK: No progress in the last 10 turns. Reassess your approach or stop if blocked.\n</system-reminder>",
+				Content:   l1ReminderText,
 				IsVirtual: true,
 			}, false
 		}
@@ -202,7 +221,7 @@ func (pm *ProgressMonitor) CheckAndInject() (msg *api.Message, terminate bool) {
 			pm.l2TurnCount = 0
 			return &api.Message{
 				Role:      api.RoleUser,
-				Content:   "<system-reminder>\nFINAL: 20 turns without progress. Write your best-effort result now and stop.\n</system-reminder>",
+				Content:   l2ReminderText,
 				IsVirtual: true,
 			}, false
 		}
@@ -218,6 +237,27 @@ func (pm *ProgressMonitor) CheckAndInject() (msg *api.Message, terminate bool) {
 
 	return nil, false
 }
+
+const l1ReminderText = `<system-reminder>
+PROGRESS CHECK: No meaningful progress in the last 10 turns. Before continuing, you MUST perform a self-assessment:
+
+1. CAPABILITY: Does this task require abilities you lack (vision, specific language runtime, network access, etc.)? If yes, stop immediately with your best-effort output.
+2. KNOWLEDGE: Are you missing domain knowledge that repeated attempts cannot compensate for? If yes, stop immediately.
+3. STRATEGY: Is your current approach fundamentally flawed? If so, describe an alternative strategy before your next action.
+
+After this assessment:
+- If blocked by missing capability or knowledge: write your best-effort result and stop.
+- If a strategy pivot is viable: describe it briefly, then execute the NEW strategy. Do NOT repeat failed approaches.
+- Keep responses concise. Focus on actions, not analysis.
+</system-reminder>`
+
+const l2ReminderText = `<system-reminder>
+FINAL WARNING: 20 turns without progress. You have at most 5 more tool calls.
+
+Write your BEST-EFFORT result to the expected output location NOW, even if incomplete. A partial answer is better than no answer. Then stop.
+
+Do NOT continue exploring or debugging. Deliver what you have.
+</system-reminder>`
 
 // State returns the monitor state for inclusion in result events.
 func (pm *ProgressMonitor) State() map[string]any {

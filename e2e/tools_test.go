@@ -524,12 +524,14 @@ func TestToolAgent(t *testing.T) {
 }
 
 // TestToolListMCPResources verifies list_mcp_resources tool registration.
+// When no MCP servers are configured, list_mcp_resources is NOT registered
+// (to avoid wasting model context). It only appears when MCP config exists.
 func TestToolListMCPResources(t *testing.T) {
 	runE2ESuite(t, []*harness.TestCase{
 		{
 			ID:          "tool.list-mcp-resources.tool-in-init",
 			Category:    "tools",
-			Description: "list_mcp_resources tool appears in system/init tools array",
+			Description: "list_mcp_resources tool does NOT appear when no MCP servers configured",
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "hi",
@@ -539,7 +541,7 @@ func TestToolListMCPResources(t *testing.T) {
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,
 				Stdout: &harness.StdoutExpectation{
-					Contains: []string{`"list_mcp_resources"`},
+					NotContains: []string{`"list_mcp_resources"`},
 				},
 			},
 		},

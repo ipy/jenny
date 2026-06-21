@@ -360,8 +360,7 @@ func run() error {
 	var mcpConfig map[string]mcp.MCPServerDef
 	var mcpTools []tool.Tool
 
-	// Always add ListMcpResourcesTool - it handles the case of no MCP servers connected
-	mcpTools = append(mcpTools, mcp.NewListMcpResourcesTool())
+	// ListMcpResourcesTool is added after MCP config loading, only when servers exist
 
 	// Phase 0: Auto-load default MCP configs (~/.agents/mcp.json, ~/.jenny/mcp.json)
 	// if not bare and not strict. These are loaded automatically (no CLI flag required).
@@ -411,6 +410,8 @@ func run() error {
 
 	// Phase 3: Connect and discover tools if we have any MCP servers
 	if len(mcpConfig) > 0 {
+		mcpTools = append(mcpTools, mcp.NewListMcpResourcesTool())
+
 		if err := mcp.ConnectAll(mcpConfig); err != nil {
 			return fmt.Errorf("connecting to MCP servers: %w", err)
 		}
@@ -496,6 +497,7 @@ func run() error {
 		WithWebFetchEnabled(true).
 		WithWebSearchEnabled(true).
 		WithReadFileCache(readFileCache).
+		WithHasMCPServers(len(mcpConfig) > 0).
 		WithMCPTools(mcpTools).
 		WithDenyRules(flags.DeniedTools).
 		WithPermissionLevel(permLevel).
