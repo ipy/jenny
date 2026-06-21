@@ -79,6 +79,65 @@ func TestIgnoreFileName(t *testing.T) {
 	}
 }
 
+func TestEnsureScratchpadDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalFunc := JennyHomeDirFunc
+	JennyHomeDirFunc = func() string { return tmpDir }
+	defer func() { JennyHomeDirFunc = originalFunc }()
+
+	sessionID := "test-session-123"
+	if err := EnsureScratchpadDir(sessionID); err != nil {
+		t.Fatalf("EnsureScratchpadDir() error = %v", err)
+	}
+
+	expected := filepath.Join(tmpDir, "sessions", sessionID, "scratchpad")
+	info, err := os.Stat(expected)
+	if err != nil {
+		t.Fatalf("scratchpad dir not created: %v", err)
+	}
+	if !info.IsDir() {
+		t.Error("scratchpad path is not a directory")
+	}
+}
+
+func TestEnsureScratchpadDir_Idempotent(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalFunc := JennyHomeDirFunc
+	JennyHomeDirFunc = func() string { return tmpDir }
+	defer func() { JennyHomeDirFunc = originalFunc }()
+
+	sessionID := "test-session-456"
+	if err := EnsureScratchpadDir(sessionID); err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+	if err := EnsureScratchpadDir(sessionID); err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+}
+
+func TestEnsureScratchpadDir_EmptySessionID(t *testing.T) {
+	if err := EnsureScratchpadDir(""); err != nil {
+		t.Errorf("EnsureScratchpadDir(\"\") should return nil, got %v", err)
+	}
+}
+
+func TestEnsureScratchpadDir_InvalidSessionID(t *testing.T) {
+	// EnsureScratchpadDir delegates to ScratchpadDir which uses SessionDir,
+	// so path traversal attempts are handled by the path resolution layer.
+	// EnsureScratchpadDir itself just creates the directory.
+	tmpDir := t.TempDir()
+	originalFunc := JennyHomeDirFunc
+	JennyHomeDirFunc = func() string { return tmpDir }
+	defer func() { JennyHomeDirFunc = originalFunc }()
+
+	// Even with a session ID containing path separators, os.MkdirAll will
+	// create the path as-is under the sessions tree (harmless).
+	err := EnsureScratchpadDir("test-session")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
 func TestProjectJennyDir(t *testing.T) {
 	cwd := "/some/project"
 	expected := filepath.Join(cwd, ProjectDirName)

@@ -351,6 +351,11 @@ func run() error {
 
 	log.Info("jenny starting", "session_id", sessionID)
 
+	// Pre-create the scratchpad directory so it exists before any tool execution.
+	if err := constants.EnsureScratchpadDir(sessionID); err != nil {
+		return fmt.Errorf("creating scratchpad directory: %w", err)
+	}
+
 	// Load MCP configuration
 	var mcpConfig map[string]mcp.MCPServerDef
 	var mcpTools []tool.Tool

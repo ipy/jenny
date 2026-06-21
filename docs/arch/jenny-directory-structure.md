@@ -55,6 +55,7 @@ Each session has a dedicated folder to prevent file "sprawl" and ensure all data
     *   Files follow the pattern `spill-*`.
     *   Used when tool output exceeds the inline protocol limit (30KB).
 *   **`scratchpad/`**: A "safe" temporary workspace for the agent.
+    *   Created eagerly at session startup so the `$JENNY_SCRATCHPAD` env var and path prefix always resolve to an existing directory.
     *   Tools like `Read`, `Write`, and `Edit` can access this directory even if they are restricted from accessing the broader filesystem.
 *   **`mcp-resources/`**: Stores binary blobs or large resources fetched via MCP (Model Context Protocol).
     *   Files are typically saved as `.bin` or structured resource exports.

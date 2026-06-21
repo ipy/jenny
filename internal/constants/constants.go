@@ -88,6 +88,17 @@ func ScratchpadDir(sessionID ...string) string {
 	return filepath.Join(JennyHomeDir(), "scratchpad")
 }
 
+// EnsureScratchpadDir creates the scratchpad directory for a session if it
+// does not already exist. It is called at session startup so that the
+// $JENNY_SCRATCHPAD env var and $JENNY_SCRATCHPAD/ path prefix always
+// resolve to an existing directory before any tool execution.
+func EnsureScratchpadDir(sessionID string) error {
+	if sessionID == "" {
+		return nil
+	}
+	return os.MkdirAll(ScratchpadDir(sessionID), 0755)
+}
+
 // SpillsDir returns the spills directory path.
 // If sessionID is provided, it returns a session-specific spills directory (~/.jenny/sessions/<sessionID>/spills).
 func SpillsDir(sessionID ...string) string {
