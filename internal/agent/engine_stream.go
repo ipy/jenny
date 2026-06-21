@@ -186,6 +186,15 @@ type thinkingBlock struct {
 	Signature string
 }
 
+// totalThinkingChars returns the total character count of all thinking blocks.
+func totalThinkingChars(blocks []thinkingBlock) int {
+	total := 0
+	for _, b := range blocks {
+		total += len(b.Text) + len(b.Signature)
+	}
+	return total
+}
+
 // emitConsolidatedAssistant writes ONE `type: "assistant"` envelope to stdout
 // containing every collected block for the current API turn, in spec order:
 // thinking blocks first (with omitempty signature), then the text block
@@ -431,7 +440,12 @@ func (e *QueryEngine) emitThinkingTokens(sessionID string, blockIndex int, newTh
 	if deltaChars < 0 {
 		deltaChars = 0
 	}
-	deltaTokens := deltaChars / 4
+	var deltaTokens int
+	if e.tokenEstimator != nil {
+		deltaTokens = e.tokenEstimator.EstimateStringOutput(newThinkingText[state.PrevTotalTextLen:], e.model)
+	} else {
+		deltaTokens = deltaChars / 4
+	}
 	if deltaTokens < 1 && deltaChars > 0 {
 		deltaTokens = 1
 	}

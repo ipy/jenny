@@ -274,7 +274,12 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 
 		// AC1: Check compaction threshold before API request
 		// Estimate tokens and check if auto-compact should trigger
-		estimatedTokens := estimateTokens(messages)
+		var estimatedTokens int
+		if e.tokenEstimator != nil {
+			estimatedTokens = e.tokenEstimator.EstimateMessages(messages, e.model)
+		} else {
+			estimatedTokens = estimateTokens(messages)
+		}
 
 		// Emit warning if approaching threshold
 		if e.compactConfig.checkWarningThreshold(estimatedTokens) {
@@ -775,6 +780,14 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		// Accumulate cost for this turn
 		if resp.Model != "" {
 			AccumulateUsage(e.costState, resp.Model, resp.Usage)
+			// Feed actual output token count back into the estimator for EWMA calibration
+			if e.tokenEstimator != nil && resp.Usage.OutputTokens > 0 {
+				outputChars := len(textOutput.String()) + totalThinkingChars(thinkingBlocks)
+				e.tokenEstimator.ObserveOutput(resp.Model, outputChars, resp.Usage.OutputTokens)
+				if resp.Model != e.model && e.model != "" {
+					e.tokenEstimator.ObserveOutput(e.model, outputChars, resp.Usage.OutputTokens)
+				}
+			}
 		}
 
 		// Build and append assistant message with text, tool_use, and thinking blocks

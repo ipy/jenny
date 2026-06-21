@@ -261,7 +261,12 @@ func (e *QueryEngine) compactMessages(ctx context.Context, messages []api.Messag
 	// Reserve MIN_SAFETY_OVERHEAD for system prompt + tools + compaction instruction,
 	// plus SUMMARY_MAX_TOKENS for the summary output.
 	maxMessagesTokens := cfg.effectiveContextWindow() - MIN_SAFETY_OVERHEAD - SUMMARY_MAX_TOKENS
-	estimated := estimateTokens(messages)
+	var estimated int
+	if e.tokenEstimator != nil {
+		estimated = e.tokenEstimator.EstimateMessages(messages, e.model)
+	} else {
+		estimated = estimateTokens(messages)
+	}
 
 	if estimated <= maxMessagesTokens {
 		// Step 1: In-session compaction — reuses the cached system prompt + tools prefix

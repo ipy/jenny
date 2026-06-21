@@ -32,6 +32,12 @@ type ReadTool struct {
 	activator       SkillActivator
 	sessionID       string
 	modelName       string
+	tokenEstimator  TokenEstimator
+}
+
+// TokenEstimator is the interface for token estimation used by tools.
+type TokenEstimator interface {
+	EstimateString(s string, model string) int
 }
 
 // NewReadTool creates a new ReadTool with the given PermissionLevel.
@@ -75,6 +81,12 @@ func (t *ReadTool) GetReadFileCache() *ReadFileCache {
 // WithModelName sets the model name for vision capability checking.
 func (t *ReadTool) WithModelName(model string) *ReadTool {
 	t.modelName = model
+	return t
+}
+
+// WithTokenEstimator sets the token estimator for max_tokens checking.
+func (t *ReadTool) WithTokenEstimator(estimator TokenEstimator) *ReadTool {
+	t.tokenEstimator = estimator
 	return t
 }
 
@@ -320,13 +332,9 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 		readLines++
 	}
 
-	// maxTokens check: if exceeded, set Truncated instead of erroring
-	var truncated bool
-	if maxTokensVal, ok := input["max_tokens"].(float64); ok && int(maxTokensVal) > 0 {
-		estimatedTokens := len(strings.Join(resultLines, "\n")) / 4
-		if estimatedTokens > int(maxTokensVal) {
-			truncated = true
-		}
+	var maxTokensBudget int
+	if v, ok := input["max_tokens"].(float64); ok {
+		maxTokensBudget = int(v)
 	}
 
 	// Format output with line numbers (matching cat -n format)
@@ -373,6 +381,19 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 	// Add summary
 	fmt.Fprintf(&output, "\n[%d lines, started at line %d, total lines in file: %d]",
 		readLines, offset, totalLines)
+
+	// maxTokens check: estimate against the final formatted output (with line numbers)
+	var truncated bool
+	if maxTokensBudget > 0 {
+		formatted := output.String()
+		estimatedTokens := len(formatted) / 4
+		if t.tokenEstimator != nil && t.modelName != "" {
+			estimatedTokens = t.tokenEstimator.EstimateString(formatted, t.modelName)
+		}
+		if estimatedTokens > maxTokensBudget {
+			truncated = true
+		}
+	}
 
 	return &ToolResult{
 		Content:   output.String(),

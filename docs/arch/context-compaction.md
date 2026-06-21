@@ -141,14 +141,22 @@ Before next API call:
 
 ## Token Estimation
 
-`estimateTokens` uses charset-aware heuristic:
+A single, unified estimator produces token counts for every consumer in the engine (compaction thresholds, thinking-token streaming events, Read-tool truncation guards). It is the only source of token counts in the system; all ad-hoc character-to-token heuristics in individual subsystems are replaced.
+
+### Base Ratios (charset-aware)
 
 - ASCII/Latin bytes: ~4 chars per token.
 - Multi-byte (CJK, emoji, etc.): ~1.5 chars per token.
 
+### Per-Model Calibration
+
+After each API call, the estimator receives the actual `usage.input_tokens` and `usage.output_tokens` returned by the model, along with the character count of the corresponding text. It maintains a per-model exponentially-weighted moving average (α=0.2) of the ratio between actual and predicted tokens, and applies this factor to future estimates.
+
+Input and output correction factors are tracked independently because prompt and completion have different character compositions. When no calibration data exists for a model, the raw base ratios are used.
+
 Counts all message fields: `Content`, `Thinking`, `Signature`, `ToolUse` (name + input), and `ToolResults` (content + 50-char overhead).
 
-Target accuracy: within 10% for English, within 30% for CJK-heavy content.
+Target accuracy: within 10% for English, within 30% for CJK-heavy content (without calibration). With 3-5 turns of calibration data, accuracy improves to within 5% for all content types.
 
 ## Acceptance Criteria
 

@@ -81,6 +81,9 @@ type QueryEngine struct {
 	// Progress monitor (circuit breaker)
 	progressMonitor *ProgressMonitor
 
+	// Token estimator with per-model EWMA calibration
+	tokenEstimator *TokenEstimator
+
 	// Tool result counter for complexity fork trigger
 	toolResultCount int
 }
@@ -230,6 +233,7 @@ func NewQueryEngine(cfg *StreamConfig, tools []tool.Tool, model string, opts ...
 		structuredOutputTool: structuredTool,
 		secretRedactor:       redact.NewSecretRedactor(cfg.RedactMode),
 		startTime:            time.Now(),
+		tokenEstimator:       NewTokenEstimator(),
 	}
 
 	// Apply options
@@ -322,6 +326,7 @@ func (e *QueryEngine) WireTools() {
 			case *tool.ReadTool:
 				t.WithSessionID(sessionID)
 				t.WithModelName(e.model)
+				t.WithTokenEstimator(e.tokenEstimator)
 			case *tool.WriteTool:
 				t.WithSessionID(sessionID)
 			case *tool.EditTool:
