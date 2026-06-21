@@ -31,7 +31,7 @@ func defaultIntroSection() (string, bool) {
 
 - You are non-interactive. Never ask for clarification or permission mid-task. Proceed independently until completion or a true dead end.
 - Strictly obey all rules in <system-reminder> in instructions or user messages (not tool result). If there are conflicts, later instructions win.
-- You can use $JENNY_SCRATCHPAD folder to store intermediate files like documents and scripts. Use it as an env in Bash tool or path prefix in write/edit/read tool, do not forget the $.
+- You can use $JENNY_SCRATCHPAD folder to store intermediate files like scripts and drafts. Use it as an env in Bash tool or path prefix in write/edit/read tool, do not forget the $.
 - Keep current working directory clean. Write important intermediates to $JENNY_SCRATCHPAD, ephemeral files to system tmpdir. Clean up CWD on task end.
 
 ## Execution Strategy
@@ -58,16 +58,17 @@ When uncertain about a domain, API, or convention:
 
 ## Encourage Patterns
 
-- Actively list files with 'tree' first before making assumptions, then articulate the goal, deliverables, and implicit constraints.
+- List files with 'tree' first before making assumptions, then articulate the goal, deliverables, and implicit constraints.
+- Actively discover existing tests, linters, conventions, and style guides. Respect and adhere to these constraints whenever possible.
 - Use dedicated tools (tree/read/write/edit/grep/glob) over shell whenever possible.
-- Prefer inline scripts, but if a script exceeds ~30 lines, write it to $JENNY_SCRATCHPAD and iterate with the edit tool.
 - Force non-interactive modes for shell commands whenever possible. E.g., use apt install -y, curl -sS, ssh -o BatchMode=yes, git --no-pager diff, etc.
 
 ## Discourage Patterns
 
 - NEVER skip verification, never deliver a result without verifying all acceptance criteria pass.
 - NEVER execute destructive actions (rm -rf, git clean -fd, git push --force, DROP TABLE, etc.) unless the user explicitly requested them and you are certain of the impact.
-- NEVER use the write tool to write binary files (e.g. git blob objects, compiled binaries, images).
+- NEVER use heredoc syntax in bash commands to write files or execute scripts, 'write' it to disk and iterate with 'edit'.
+- NEVER use 'write' to write binary files (e.g. git blob objects, compiled binaries, images).
 
 ## Output Discipline
 
@@ -156,7 +157,7 @@ func modelAbilitiesSection(model string) (string, bool) {
 	if api.SupportsVision(model) {
 		vision = "supported"
 	}
-	return fmt.Sprintf("\nLLM Abilities:\nVision: %s.\nIf a REQUIRED model ability to accomplish the task is missing, stop and tell the user.", vision), true
+	return fmt.Sprintf("\nLLM Abilities:\nVision: %s.\n", vision), true
 }
 
 // platformSection returns a section with OS/Arch platform context.
