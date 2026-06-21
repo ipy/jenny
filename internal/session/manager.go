@@ -49,6 +49,7 @@ type TranscriptEntry struct {
 	CompactFailCount int    `json:"compact_fail_count,omitempty"`
 	SystemPrompt     string `json:"system_prompt,omitempty"`
 	TasksJSON        string `json:"tasks_json,omitempty"`
+	ToolNames        string `json:"tool_names,omitempty"`
 
 	// Worktree state fields - used for worktree isolation and resume
 	WorktreePath   string `json:"worktree_path,omitempty"`
@@ -454,6 +455,38 @@ func (m *Manager) LoadTaskStore(sessionID string) (string, error) {
 	for _, entry := range entries {
 		if entry.Type == EntryTypeState && entry.TasksJSON != "" {
 			latest = entry.TasksJSON
+		}
+	}
+	return latest, nil
+}
+
+// AppendToolNames persists the current tool name list as a state entry.
+func (m *Manager) AppendToolNames(sessionID string, toolNames string) error {
+	if m.Disabled || sessionID == "" || toolNames == "" {
+		return nil
+	}
+	return m.AppendEntry(sessionID, TranscriptEntry{
+		Type:      EntryTypeState,
+		ToolNames: toolNames,
+	})
+}
+
+// LoadToolNames loads the most recent tool name list from the transcript.
+// Returns empty string if no state entry with tool_names is found.
+func (m *Manager) LoadToolNames(sessionID string) (string, error) {
+	if sessionID == "" {
+		return "", nil
+	}
+
+	entries, err := m.LoadTranscript(sessionID)
+	if err != nil {
+		return "", err
+	}
+
+	var latest string
+	for _, entry := range entries {
+		if entry.Type == EntryTypeState && entry.ToolNames != "" {
+			latest = entry.ToolNames
 		}
 	}
 	return latest, nil

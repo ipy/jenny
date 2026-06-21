@@ -36,10 +36,11 @@ func TestModelRegistryOfflineFlag(t *testing.T) {
 			Category:    "model-registry",
 			Description: "--offline flag is recognized and accepted",
 			Target: harness.TargetInvocation{
-				Kind:   "prompt",
-				Prompt: "say hi",
-				Format: "text",
-				Args:   []string{"--offline"},
+				Kind:     "prompt",
+				Prompt:   "say hi",
+				Format:   "text",
+				Cassette: "echo-hello",
+				Args:     []string{"--offline"},
 			},
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,
@@ -50,10 +51,11 @@ func TestModelRegistryOfflineFlag(t *testing.T) {
 			Category:    "model-registry",
 			Description: "--offline exits 0 even without network",
 			Target: harness.TargetInvocation{
-				Kind:   "prompt",
-				Prompt: "say hi",
-				Format: "text",
-				Args:   []string{"--offline"},
+				Kind:     "prompt",
+				Prompt:   "say hi",
+				Format:   "text",
+				Cassette: "echo-hello",
+				Args:     []string{"--offline"},
 			},
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,

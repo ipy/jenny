@@ -141,11 +141,11 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 	// within the same session receive an identical string, protecting prompt caching.
 	if len(e.streamCfg.CachedSystemPrompt) == 0 {
 		e.streamCfg.CachedSystemPrompt = systemPromptBlocks
-		// Persist frozen system prompt to transcript for cross-process resume
+		// Persist frozen system prompt and tool names to transcript for cross-process resume
 		if e.sessionManager != nil && sessionID != "" {
-			// Join blocks for persistence (backward compatible or just for storage)
 			fullPrompt := strings.Join(systemPromptBlocks, "\n\n")
 			_ = e.sessionManager.AppendSystemPrompt(sessionID, fullPrompt)
+			_ = e.sessionManager.AppendToolNames(sessionID, e.frozenToolNames())
 		}
 	}
 

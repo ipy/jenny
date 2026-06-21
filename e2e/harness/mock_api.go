@@ -23,15 +23,3 @@ type Option = mockapi.Option
 func NewTestServer(t *testing.T, cassetteID string, opts ...Option) *MockServer {
 	return mockapi.NewTestServer(t, cassetteID, opts...)
 }
-
-// resolveCassetteDir resolves a relative cassette directory path to an absolute path
-// relative to the repository root.
-func resolveCassetteDir(rel string) string {
-	// rel is expected to be something like "fixtures/cassettes"
-	// We need to resolve it relative to the repo root.
-	repoRoot, err := findRepoRoot()
-	if err != nil {
-		return rel
-	}
-	return repoRoot + "/" + rel
-}

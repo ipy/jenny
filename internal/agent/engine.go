@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -221,6 +222,10 @@ func NewQueryEngine(cfg *StreamConfig, tools []tool.Tool, model string, opts ...
 					log.Debug("Task store restored", "sessionID", sessionID)
 				}
 			}
+		}
+		// Check tool list diff for prompt cache invalidation warning
+		if cfg.SessionManager != nil {
+			checkToolListDiff(cfg.SessionManager, sessionID, tools)
 		}
 	}
 
@@ -683,6 +688,64 @@ func seedReadFileCacheFromTranscript(cache *tool.ReadFileCache, sessionManager *
 	}
 
 	return nil
+}
+
+// frozenToolNames returns a sorted, comma-separated list of current tool names.
+func (e *QueryEngine) frozenToolNames() string {
+	names := make([]string, len(e.tools))
+	for i, t := range e.tools {
+		names[i] = t.Name()
+	}
+	sort.Strings(names)
+	return strings.Join(names, ",")
+}
+
+// checkToolListDiff compares the previous session's tool list with the current
+// one and warns if they differ, since any change invalidates the prompt cache.
+func checkToolListDiff(mgr *session.Manager, sessionID string, currentTools []tool.Tool) {
+	prevNames, err := mgr.LoadToolNames(sessionID)
+	if err != nil || prevNames == "" {
+		return
+	}
+
+	currentNamesList := make([]string, len(currentTools))
+	for i, t := range currentTools {
+		currentNamesList[i] = t.Name()
+	}
+	sort.Strings(currentNamesList)
+	currentNames := strings.Join(currentNamesList, ",")
+
+	if prevNames == currentNames {
+		return
+	}
+
+	prev := strings.Split(prevNames, ",")
+	curr := strings.Split(currentNames, ",")
+	prevSet := make(map[string]bool, len(prev))
+	for _, n := range prev {
+		prevSet[n] = true
+	}
+	currSet := make(map[string]bool, len(curr))
+	for _, n := range curr {
+		currSet[n] = true
+	}
+
+	var added, removed []string
+	for _, n := range curr {
+		if !prevSet[n] {
+			added = append(added, n)
+		}
+	}
+	for _, n := range prev {
+		if !currSet[n] {
+			removed = append(removed, n)
+		}
+	}
+
+	log.Warn("Tool list changed since previous session — prompt cache will be invalidated",
+		"added", strings.Join(added, ","),
+		"removed", strings.Join(removed, ","),
+	)
 }
 
 // ModelNotFoundError is returned when all attempted models in a fallback chain

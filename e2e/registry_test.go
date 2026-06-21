@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/ipy/jenny/e2e/harness"
+	"github.com/ipy/jenny/internal/testutil/mockapi"
 )
 
 // TestRegistryCLIFlags verifies the --offline and --refresh-registry CLI flags.
@@ -210,7 +211,14 @@ func TestRegistryCacheLoading(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		env := []string{"JENNY_HOME=" + tmpDir}
+		mock := mockapi.NewMockServer(mockapi.WithCassetteDir(cassetteDir))
+		defer mock.Close()
+
+		env := []string{
+			"JENNY_HOME=" + tmpDir,
+			"ANTHROPIC_BASE_URL=" + mock.URL() + "/cassette/echo-hello",
+			"ANTHROPIC_AUTH_TOKEN=dummy-token",
+		}
 		res := harness.RunJenny(t, env, "--offline", "-p", "say hi", "--output-format", "stream-json", "--verbose")
 		// The test should not crash; we verify the result event contains modelUsage
 		if res.ExitCode != 0 {

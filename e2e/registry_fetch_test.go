@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/e2e/harness"
+	"github.com/ipy/jenny/internal/testutil/mockapi"
 )
 
 // TestRegistryFetchBackgroundCancellation verifies that the background registry
@@ -45,11 +46,11 @@ func TestRegistryFetchBackgroundCancellation(t *testing.T) {
 			Category:    "registry-fetch",
 			Description: "--offline skips the background fetch entirely, no registry log messages appear",
 			Target: harness.TargetInvocation{
-				Kind: "cli",
-				Args: []string{"--offline", "--verbose", "-p", "say hi", "--output-format", "stream-json"},
-				Env: []string{
-					"ANTHROPIC_AUTH_TOKEN=dummy",
-				},
+				Kind:      "prompt",
+				Prompt:    "say hi",
+				Format:    "stream-json",
+				Cassette:  "echo-hello",
+				Args:      []string{"--offline", "--verbose"},
 				TimeoutMs: 15000,
 			},
 			Expected: harness.ExpectedBehavior{
@@ -61,7 +62,6 @@ func TestRegistryFetchBackgroundCancellation(t *testing.T) {
 						Subtype: "success",
 					},
 				},
-				// With --offline, there should be no "background fetch" or "registry fetch" messages.
 				Stderr: &harness.StderrExpectation{
 					NotContains: []string{"background fetch", "registry fetch"},
 				},
@@ -138,38 +138,33 @@ func TestRegistryFetchSyncRefreshNotBroken(t *testing.T) {
 // When jenny completes its main task quickly, the process exits without
 // waiting for the background fetch to finish.
 func TestRegistryFetchDoesNotBlockShutdown(t *testing.T) {
+	mock := mockapi.NewMockServer(mockapi.WithCassetteDir(cassetteDir))
+	defer mock.Close()
+
 	env := []string{
-		"ANTHROPIC_AUTH_TOKEN=dummy",
+		"ANTHROPIC_BASE_URL=" + mock.URL() + "/cassette/echo-hello",
+		"ANTHROPIC_AUTH_TOKEN=dummy-token",
 	}
 
-	// Run with --verbose to see all log messages
 	start := time.Now()
 	res := harness.RunJenny(t, env, "--verbose", "-p", "say hi", "--output-format", "stream-json")
 	elapsed := time.Since(start)
 
-	// Main task should complete successfully
 	if res.ExitCode != 0 {
 		t.Errorf("expected exit code 0, got %d; stderr=%s", res.ExitCode, res.Stderr)
 	}
 
-	// Verify NDJSON output
 	lines := strings.Split(strings.TrimSpace(res.Stdout), "\n")
 	if len(lines) < 3 {
 		t.Errorf("expected at least 3 NDJSON lines, got %d", len(lines))
 	}
 
-	// The crucial assertion: startup should be fast.
-	// With MD-9 fix, the background fetch is cancelled when the main flow
-	// completes, so total time should be well under 30s.
-	// Without the fix, the goroutine could leak for up to 30s.
 	if elapsed > 20*time.Second {
 		t.Errorf("process took too long: %v (expected < 20s); background goroutine may be leaking", elapsed)
 	} else {
 		t.Logf("process completed in %v (OK - background fetch does not block shutdown)", elapsed)
 	}
 
-	// Check stderr for registry-related messages (may or may not appear
-	// depending on timing of background fetch vs process shutdown)
 	t.Logf("stderr: %s", res.Stderr)
 }
 
