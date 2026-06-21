@@ -39,9 +39,9 @@ Modifies Jupyter `.ipynb` files only. Modes: replace, insert, delete. Read-befor
 
 | Mode | Behavior |
 |------|----------|
-| replace | Set source; reset execution_count/outputs for code cells. Fails with error if cell not found. Returns unified diff. |
-| insert | Splice after target or index 0; assign random id nbformat ≥4.5. Returns insertion message. |
-| delete | Splice out cell. Returns unified diff. |
+| replace | Set source; reset execution_count/outputs for code cells. Fails with error if cell not found. Returns success message. |
+| insert | Splice after target or index 0; assign random id nbformat ≥4.5. Returns success message. |
+| delete | Splice out cell. Returns success message. |
 
 Write via `json.MarshalIndent` (UTF-8, indent=1).
 

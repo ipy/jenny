@@ -528,7 +528,7 @@ func TestEditTool_CacheUpdated_BlackBox(t *testing.T) {
 	}
 }
 
-// TestEditTool_DiffOutput_BlackBox validates that edit produces proper unified diff.
+// TestEditTool_DiffOutput_BlackBox validates that edit returns a success message.
 func TestEditTool_DiffOutput_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
@@ -557,18 +557,24 @@ func TestEditTool_DiffOutput_BlackBox(t *testing.T) {
 		t.Fatalf("edit failed: %s", result.Content)
 	}
 
-	diff := result.Content
-	if !strings.Contains(diff, "--- a/") {
-		t.Fatal("DIFF FAIL: missing '--- a/' header")
+	// Verify success message
+	if !strings.Contains(result.Content, "Edited ") {
+		t.Fatal("FAIL: missing 'Edited ' prefix")
 	}
-	if !strings.Contains(diff, "+++ b/") {
-		t.Fatal("DIFF FAIL: missing '+++ b/' header")
+	if !strings.Contains(result.Content, f) {
+		t.Fatal("FAIL: missing file path in success message")
 	}
-	if !strings.Contains(diff, "-line two") {
-		t.Fatal("DIFF FAIL: diff should show deleted line '-line two'")
+	if !strings.Contains(result.Content, "replaced 1 occurrence") {
+		t.Fatal("FAIL: missing 'replaced 1 occurrence'")
 	}
-	if !strings.Contains(diff, "+line two modified") {
-		t.Fatal("DIFF FAIL: diff should show added line '+line two modified'")
+
+	// Verify file content was actually changed
+	data, err := os.ReadFile(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "line two modified") {
+		t.Fatal("FAIL: file content was not modified")
 	}
 }
 

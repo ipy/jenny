@@ -180,7 +180,7 @@ func TestWriteTool_AC3_ParentDirs(t *testing.T) {
 	}
 }
 
-// TestWriteTool_AC4_PatchDiff tests that the result includes patch diff.
+// TestWriteTool_AC4_PatchDiff tests that the result includes a success message.
 func TestWriteTool_AC4_PatchDiff(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
@@ -213,15 +213,15 @@ func TestWriteTool_AC4_PatchDiff(t *testing.T) {
 		t.Fatalf("write failed: %s", result.Content)
 	}
 
-	// Verify diff output contains expected markers
-	diff := result.Content
-	if !strings.Contains(diff, "---") || !strings.Contains(diff, "+++") {
-		t.Errorf("expected diff format with --- and +++, got: %s", diff)
+	// Verify success message
+	if !strings.Contains(result.Content, "Wrote ") {
+		t.Errorf("expected success message starting with 'Wrote', got: %s", result.Content)
 	}
-	// Check for + or - lines
-	hasChange := strings.Contains(diff, "+") || strings.Contains(diff, "-")
-	if !hasChange {
-		t.Errorf("expected diff to contain + or - lines, got: %s", diff)
+	if !strings.Contains(result.Content, testFile) {
+		t.Errorf("expected success message to contain file path, got: %s", result.Content)
+	}
+	if !strings.Contains(result.Content, "bytes") {
+		t.Errorf("expected success message to contain 'bytes', got: %s", result.Content)
 	}
 }
 
@@ -320,9 +320,9 @@ func TestReadWriteTool_ReadBeforeWrite(t *testing.T) {
 		t.Fatalf("write returned error: %s", writeResult.Content)
 	}
 
-	// Verify diff is present
-	if !strings.Contains(writeResult.Content, "---") || !strings.Contains(writeResult.Content, "+++") {
-		t.Errorf("write result missing diff format: %s", writeResult.Content)
+	// Verify success message
+	if !strings.Contains(writeResult.Content, "Wrote ") {
+		t.Errorf("write result missing success message: %s", writeResult.Content)
 	}
 
 	// Verify file content was updated
@@ -375,7 +375,7 @@ func TestWriteTool_PartialReadFails(t *testing.T) {
 	}
 }
 
-// TestWriteTool_UnchangedContent tests that writing unchanged content produces minimal diff.
+// TestWriteTool_UnchangedContent tests that writing unchanged content produces a success message.
 func TestWriteTool_UnchangedContent(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
@@ -409,9 +409,9 @@ func TestWriteTool_UnchangedContent(t *testing.T) {
 		t.Fatalf("write failed: %s", result.Content)
 	}
 
-	// Diff should still be present but might be minimal
-	if !strings.Contains(result.Content, "---") || !strings.Contains(result.Content, "+++") {
-		t.Errorf("expected diff format, got: %s", result.Content)
+	// Should still return success message
+	if !strings.Contains(result.Content, "Wrote ") {
+		t.Errorf("expected success message, got: %s", result.Content)
 	}
 }
 

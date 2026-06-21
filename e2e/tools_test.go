@@ -101,7 +101,7 @@ func TestToolWrite(t *testing.T) {
 		{
 			ID:          "tool.write.after-read-success",
 			Category:    "tools",
-			Description: "write tool succeeds after Read and produces diff",
+			Description: "write tool succeeds after Read and produces success message",
 			Target: harness.TargetInvocation{
 				WorkDirFiles: map[string]string{
 					"target.txt": "original content\n",
@@ -115,7 +115,7 @@ func TestToolWrite(t *testing.T) {
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,
 				Stdout: &harness.StdoutExpectation{
-					Contains: []string{"---", "+++", "diff"},
+					Contains: []string{"Wrote", "bytes"},
 				},
 			},
 		},
@@ -166,7 +166,7 @@ func TestToolEdit(t *testing.T) {
 		{
 			ID:          "tool.edit.after-read-success",
 			Category:    "tools",
-			Description: "edit tool succeeds after Read and produces diff",
+			Description: "edit tool succeeds after Read and produces success message",
 			Target: harness.TargetInvocation{
 				WorkDirFiles: map[string]string{
 					"target.txt": "original content\n",
@@ -180,7 +180,7 @@ func TestToolEdit(t *testing.T) {
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,
 				Stdout: &harness.StdoutExpectation{
-					Contains: []string{"---", "+++", "modified"},
+					Contains: []string{"Edited", "replaced"},
 				},
 			},
 		},

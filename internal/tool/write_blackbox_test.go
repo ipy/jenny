@@ -194,9 +194,9 @@ func TestWriteTool_AC3_ParentDirs_BlackBox(t *testing.T) {
 	}
 }
 
-// TestWriteTool_AC4_PatchDiff_BlackBox validates diff output format.
+// TestWriteTool_AC4_PatchDiff_BlackBox validates success message output format.
 func TestWriteTool_AC4_PatchDiff_BlackBox(t *testing.T) {
-	t.Run("modified file produces unified diff", func(t *testing.T) {
+	t.Run("modified file produces success message", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		cache := NewReadFileCache()
 		rt := NewReadTool(PermissionEdit, cache)
@@ -223,29 +223,28 @@ func TestWriteTool_AC4_PatchDiff_BlackBox(t *testing.T) {
 			t.Fatalf("write failed: %s", result.Content)
 		}
 
-		diff := result.Content
-		// Check unified diff format
-		if !strings.Contains(diff, "--- a/") {
-			t.Fatal("AC4 FAIL: diff missing '--- a/' header")
+		// Verify success message format
+		if !strings.Contains(result.Content, "Wrote ") {
+			t.Fatal("FAIL: missing 'Wrote ' prefix")
 		}
-		if !strings.Contains(diff, "+++ b/") {
-			t.Fatal("AC4 FAIL: diff missing '+++ b/' header")
+		if !strings.Contains(result.Content, f) {
+			t.Fatal("FAIL: missing file path")
 		}
-		if !strings.Contains(diff, "@@") {
-			t.Fatal("AC4 FAIL: diff missing hunk header '@@'")
+		if !strings.Contains(result.Content, "bytes") {
+			t.Fatal("FAIL: missing 'bytes'")
 		}
-		if !strings.Contains(diff, "-line two") {
-			t.Fatal("AC4 FAIL: diff missing deleted line '-line two'")
+
+		// Verify file content was actually written
+		data, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
 		}
-		if !strings.Contains(diff, "+line two modified") {
-			t.Fatal("AC4 FAIL: diff missing added line '+line two modified'")
-		}
-		if !strings.Contains(diff, "+line four") {
-			t.Fatal("AC4 FAIL: diff missing added line '+line four'")
+		if !strings.Contains(string(data), "line two modified") {
+			t.Fatal("FAIL: file content was not updated")
 		}
 	})
 
-	t.Run("new file (empty old content) shows all lines as additions", func(t *testing.T) {
+	t.Run("new file (empty old content) shows success message", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		cache := NewReadFileCache()
 		rt := NewReadTool(PermissionEdit, cache)
@@ -273,15 +272,8 @@ func TestWriteTool_AC4_PatchDiff_BlackBox(t *testing.T) {
 			t.Fatalf("write failed: %s", result.Content)
 		}
 
-		diff := result.Content
-		if !strings.Contains(diff, "--- a/") {
-			t.Fatal("AC4 FAIL: new-file diff missing '--- a/'")
-		}
-		if !strings.Contains(diff, "+brand new") {
-			t.Fatal("AC4 FAIL: new-file diff should show additions with +")
-		}
-		if !strings.Contains(diff, "+content") {
-			t.Fatal("AC4 FAIL: new-file diff should show additions with +")
+		if !strings.Contains(result.Content, "Wrote ") {
+			t.Fatal("FAIL: missing 'Wrote ' prefix")
 		}
 	})
 }
@@ -445,9 +437,9 @@ func TestWriteTool_EmptyContent(t *testing.T) {
 		t.Fatalf("expected empty file, got: %q", string(data))
 	}
 
-	// Diff should show deletion
-	if !strings.Contains(result.Content, "-original") {
-		t.Fatalf("expected diff to show -original for empty content write. Diff: %s", result.Content)
+	// Verify success message
+	if !strings.Contains(result.Content, "Wrote ") {
+		t.Fatalf("expected success message, got: %s", result.Content)
 	}
 }
 

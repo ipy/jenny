@@ -431,7 +431,7 @@ func TestEditTool_AC4_SingleMatchNoReplaceAll(t *testing.T) {
 	}
 }
 
-// TestEditTool_DiffOutput tests that the result includes patch diff.
+// TestEditTool_DiffOutput tests that the result includes a success message.
 func TestEditTool_DiffOutput(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
@@ -465,15 +465,15 @@ func TestEditTool_DiffOutput(t *testing.T) {
 		t.Fatalf("edit failed: %s", result.Content)
 	}
 
-	// Verify diff output contains expected markers
-	diff := result.Content
-	if !strings.Contains(diff, "---") || !strings.Contains(diff, "+++") {
-		t.Errorf("expected diff format with --- and +++, got: %s", diff)
+	// Verify success message contains path and occurrence count
+	if !strings.Contains(result.Content, "Edited ") {
+		t.Errorf("expected success message starting with 'Edited', got: %s", result.Content)
 	}
-	// Check for + or - lines
-	hasChange := strings.Contains(diff, "+") || strings.Contains(diff, "-")
-	if !hasChange {
-		t.Errorf("expected diff to contain + or - lines, got: %s", diff)
+	if !strings.Contains(result.Content, testFile) {
+		t.Errorf("expected success message to contain file path, got: %s", result.Content)
+	}
+	if !strings.Contains(result.Content, "replaced 1 occurrence") {
+		t.Errorf("expected success message to contain 'replaced 1 occurrence', got: %s", result.Content)
 	}
 }
 
@@ -984,7 +984,7 @@ func TestEditTool_EndLineBeforeStartLine(t *testing.T) {
 	}
 }
 
-// TestEditTool_ScopedEditDiffOutput verifies that scoped edit produces proper unified diff.
+// TestEditTool_ScopedEditDiffOutput verifies that scoped edit produces a success message.
 func TestEditTool_ScopedEditDiffOutput(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
@@ -1018,15 +1018,24 @@ func TestEditTool_ScopedEditDiffOutput(t *testing.T) {
 		t.Fatalf("scoped edit failed: %s", result.Content)
 	}
 
-	diff := result.Content
-	if !strings.Contains(diff, "---") || !strings.Contains(diff, "+++") {
-		t.Errorf("expected diff format with --- and +++, got: %s", diff)
+	// Verify success message
+	if !strings.Contains(result.Content, "Edited ") {
+		t.Errorf("expected success message starting with 'Edited', got: %s", result.Content)
 	}
-	if !strings.Contains(diff, "-line C") {
-		t.Errorf("expected diff to show removed '-line C', got: %s", diff)
+	if !strings.Contains(result.Content, testFile) {
+		t.Errorf("expected success message to contain file path, got: %s", result.Content)
 	}
-	if !strings.Contains(diff, "+modified line C") {
-		t.Errorf("expected diff to show added '+modified line C', got: %s", diff)
+
+	// Verify file content was actually changed
+	data, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatalf("failed to read file after edit: %v", err)
+	}
+	if !strings.Contains(string(data), "modified line C") {
+		t.Errorf("expected file to contain 'modified line C', got: %s", string(data))
+	}
+	if strings.Contains(string(data), "line C\n") && !strings.Contains(string(data), "modified") {
+		t.Errorf("expected file to not contain original 'line C' unchanged")
 	}
 }
 

@@ -50,7 +50,7 @@ Write creates or overwrites files. Read-before-write contract enforced at constr
 
 - Create parent directories (`mkdir -p`).
 - Atomic write: temp file in target directory → `Sync` → `os.Rename`. Cross-device (`EXDEV`) fallback via `copyAndReplace`. Windows: rename retry loop.
-- Return structured patch diff in tool result.
+- Return minimal success message: `Wrote <path>: N bytes`.
 
 ## Post-Write Updates
 
@@ -71,5 +71,5 @@ Write creates or overwrites files. Read-before-write contract enforced at constr
 - **AC1:** Write without ReadFileCache entry fails (at constrained permission levels).
 - **AC2:** Stale mtime fails before write.
 - **AC3:** Parent dirs created automatically.
-- **AC4:** Result includes patch diff.
+- **AC4:** Result includes success message.
 - **AC5:** ReadFileCache updated after success.

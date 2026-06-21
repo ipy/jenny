@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/constants"
-	"github.com/ipy/jenny/internal/utils"
 )
 
 // EditTool performs exact string replacement in files.
@@ -449,7 +448,7 @@ func (t *EditTool) executeGlobal(filePath, oldString, newString string, replaceA
 		}
 	}
 
-	return t.finalizeEdit(filePath, newContent, entry)
+	return t.finalizeEdit(filePath, newContent, entry, count)
 }
 
 // executeScoped performs a line-by-line streaming edit restricted to a line range.
@@ -683,7 +682,7 @@ func (t *EditTool) executeScoped(filePath, oldString, newString string, replaceA
 		newContentStr = string(newFullContent)
 	}
 
-	return t.finalizeEdit(filePath, newContentStr, entry)
+	return t.finalizeEdit(filePath, newContentStr, entry, count)
 }
 
 // normalizeLineEndingsBytes converts CRLF to LF in a byte slice.
@@ -715,7 +714,7 @@ func (t *EditTool) handleMissingFile(filePath, oldString, newString string, entr
 				IsError: true,
 			}, nil
 		}
-		return t.finalizeEdit(filePath, newString, entry)
+		return t.finalizeEdit(filePath, newString, entry, 1)
 	}
 	return &ToolResult{
 		Content: "Cannot edit without reading first. Use Read tool on this path before Edit.",
@@ -723,8 +722,8 @@ func (t *EditTool) handleMissingFile(filePath, oldString, newString string, entr
 	}, nil
 }
 
-// finalizeEdit updates the cache and returns the diff result.
-func (t *EditTool) finalizeEdit(filePath, newContent string, entry *ReadFileEntry) (*ToolResult, error) {
+// finalizeEdit updates the cache and returns a minimal success result.
+func (t *EditTool) finalizeEdit(filePath, newContent string, entry *ReadFileEntry, count int) (*ToolResult, error) {
 	// Get new mtime after write
 	newInfo, _ := os.Stat(filePath)
 	var newMtime time.Time
@@ -734,18 +733,11 @@ func (t *EditTool) finalizeEdit(filePath, newContent string, entry *ReadFileEntr
 		newMtime = entry.Mtime
 	}
 
-	// Generate patch diff using old content from cache vs new content
-	var oldContentFromCache string
-	if entry != nil {
-		oldContentFromCache = entry.Content
-	}
-	diff := utils.GenerateUnifiedDiff(oldContentFromCache, newContent, filePath)
-
 	// Update readFileCache after successful edit
 	t.readCache.RecordRead(filePath, newContent, newMtime, true, 0, 0)
 
 	return &ToolResult{
-		Content: diff,
+		Content: fmt.Sprintf("Edited %s: replaced %d occurrence(s)", filePath, count),
 		IsError: false,
 	}, nil
 }

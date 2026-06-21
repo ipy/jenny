@@ -63,6 +63,8 @@ Supports **scoped editing** via `start_line`/`end_line` to modify a specific lin
 
 Update `readFileState` and run skill discovery when the skills framework is enabled. No LSP or IDE file-history integration (headless CLI).
 
+Returns a minimal success message: `Edited <path>: replaced N occurrence(s)`. Error conditions return descriptive messages.
+
 ## Edge Cases
 
 | Case | Expected behavior |

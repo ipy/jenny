@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/constants"
-	"github.com/ipy/jenny/internal/utils"
 )
 
 // NotebookEditTool modifies Jupyter .ipynb files.
@@ -260,8 +259,6 @@ func (t *NotebookEditTool) Execute(ctx context.Context, input map[string]any, cw
 		}, nil
 	}
 
-	var oldContent string
-	var newContent string
 	var cellIdx int
 	var found bool
 
@@ -275,14 +272,12 @@ func (t *NotebookEditTool) Execute(ctx context.Context, input map[string]any, cw
 			}, nil
 		}
 		cell := cells[cellIdx].(map[string]any)
-		oldContent = getCellSource(cell)
 		cell["source"] = newSource
 		// Reset execution_count and outputs for code cells
 		if getCellType(cell) == "code" {
 			cell["execution_count"] = nil
 			cell["outputs"] = []any{}
 		}
-		newContent = newSource
 
 	case "insert":
 		targetIdx := 0
@@ -309,8 +304,6 @@ func (t *NotebookEditTool) Execute(ctx context.Context, input map[string]any, cw
 		// Splice in the new cell
 		cells = spliceCell(cells, targetIdx, newCell)
 		nb["cells"] = cells
-		oldContent = ""
-		newContent = newSource
 
 	case "delete":
 		cellIdx, found = findCellByID(cells, cellID)
@@ -320,11 +313,8 @@ func (t *NotebookEditTool) Execute(ctx context.Context, input map[string]any, cw
 				IsError: true,
 			}, nil
 		}
-		cell := cells[cellIdx].(map[string]any)
-		oldContent = getCellSource(cell)
 		cells = spliceCell(cells, cellIdx, nil) // nil means delete
 		nb["cells"] = cells
-		newContent = ""
 	}
 
 	// Marshal back to JSON with one-space indent
@@ -351,19 +341,11 @@ func (t *NotebookEditTool) Execute(ctx context.Context, input map[string]any, cw
 		newMtime = newInfo.ModTime()
 	}
 
-	// Generate diff output
-	var diff string
-	if oldContent != "" || newContent != "" {
-		diff = utils.GenerateUnifiedDiff(oldContent, newContent, notebookPath)
-	} else {
-		diff = fmt.Sprintf("Inserted cell at position in %s", notebookPath)
-	}
-
 	// AC5: Update readFileCache with new content, offset undefined to break Read dedup
 	t.readCache.RecordRead(notebookPath, string(newJSON), newMtime, true, 0, 0)
 
 	return &ToolResult{
-		Content: diff,
+		Content: fmt.Sprintf("Edited notebook %s: cell updated", notebookPath),
 		IsError: false,
 	}, nil
 }
@@ -408,27 +390,6 @@ func getCellType(cell map[string]any) string {
 		return ct
 	}
 	return "unknown"
-}
-
-// getCellSource returns the cell source content as a string.
-func getCellSource(cell map[string]any) string {
-	src, ok := cell["source"]
-	if !ok {
-		return ""
-	}
-	switch s := src.(type) {
-	case string:
-		return s
-	case []any:
-		var lines []string
-		for _, l := range s {
-			if line, ok := l.(string); ok {
-				lines = append(lines, line)
-			}
-		}
-		return strings.Join(lines, "")
-	}
-	return ""
 }
 
 // spliceCell inserts or deletes a cell at the given index.
