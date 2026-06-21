@@ -343,6 +343,10 @@ func (t *EditTool) executeGlobal(filePath, oldString, newString string, replaceA
 	content := string(currentContent)
 	content = normalizeLineEndings(content)
 
+	// Resolve old_string: try exact match first, then leading-whitespace
+	// normalization fallback (handles tab/space mismatches in indentation).
+	oldString = resolveOldString(content, oldString)
+
 	// Count occurrences of old_string in current content
 	count := strings.Count(content, oldString)
 
@@ -529,6 +533,9 @@ func (t *EditTool) executeScoped(filePath, oldString, newString string, replaceA
 
 	// Build scoped content for matching (joined by \n, no trailing \n)
 	scopedContent := strings.Join(scopedLines, "\n")
+
+	// Resolve old_string with leading-whitespace normalization fallback.
+	oldString = resolveOldString(scopedContent, oldString)
 
 	// Count matches
 	count := strings.Count(scopedContent, oldString)
@@ -760,6 +767,156 @@ func zeroMatchError(content string) *ToolResult {
 func normalizeLineEndings(content string) string {
 	content = strings.ReplaceAll(content, "\r\n", "\n")
 	return content
+}
+
+// indentStyle describes the file's leading-whitespace convention.
+type indentStyle struct {
+	usesTabs   bool // true = tabs, false = spaces
+	spaceWidth int  // meaningful only if !usesTabs; 0 if unknown
+}
+
+// resolveOldString attempts to find oldString in content. If exact matching
+// fails, it detects the file's indent style and converts oldString's leading
+// whitespace to match, then retries. This handles the case where a model
+// passes spaces for indentation in a tab-indented file (or vice versa).
+func resolveOldString(content, oldString string) string {
+	if strings.Count(content, oldString) > 0 {
+		return oldString
+	}
+
+	style := detectIndentStyle(content)
+	if style == nil {
+		return oldString
+	}
+
+	converted := convertIndent(oldString, style)
+	if strings.Count(content, converted) > 0 {
+		return converted
+	}
+
+	return oldString
+}
+
+// detectIndentStyle scans the first 100 lines of content to determine the
+// file's leading-whitespace convention. Returns nil if no indented lines found.
+func detectIndentStyle(content string) *indentStyle {
+	lines := strings.Split(content, "\n")
+	limit := min(len(lines), 100)
+
+	tabLines := 0
+	spaceLines := 0
+	spaceDepths := make(map[int]int)
+
+	for i := 0; i < limit; i++ {
+		prefix := leadingWhitespace(lines[i])
+		if prefix == "" {
+			continue
+		}
+		if strings.ContainsRune(prefix, '\t') {
+			tabLines++
+		} else {
+			spaceLines++
+			spaceDepths[len(prefix)]++
+		}
+	}
+
+	if tabLines > 0 {
+		return &indentStyle{usesTabs: true}
+	}
+
+	if spaceLines == 0 {
+		return nil
+	}
+
+	width := inferSpaceWidth(spaceDepths)
+	return &indentStyle{usesTabs: false, spaceWidth: width}
+}
+
+// inferSpaceWidth guesses the indent width from observed space depths.
+func inferSpaceWidth(depths map[int]int) int {
+	if len(depths) == 0 {
+		return 0
+	}
+
+	total := 0
+	for _, count := range depths {
+		total += count
+	}
+
+	// Try common widths from largest to smallest so that 4 beats 2
+	// when all depths are multiples of both.
+	for _, w := range []int{8, 4, 2} {
+		matches := 0
+		for depth, count := range depths {
+			if depth%w == 0 {
+				matches += count
+			}
+		}
+		if matches > 0 && float64(matches) >= 0.8*float64(total) {
+			return w
+		}
+	}
+
+	minDepth := 999
+	for d := range depths {
+		if d < minDepth && d > 0 {
+			minDepth = d
+		}
+	}
+	if minDepth == 999 {
+		return 4
+	}
+	return minDepth
+}
+
+// convertIndent rewrites the leading whitespace of each line in s to match
+// the target indent style.
+func convertIndent(s string, style *indentStyle) string {
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = convertLineIndent(line, style)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// convertLineIndent converts the leading whitespace of a single line to the
+// target indent style.
+func convertLineIndent(line string, style *indentStyle) string {
+	prefix := leadingWhitespace(line)
+	if prefix == "" {
+		return line
+	}
+	rest := line[len(prefix):]
+
+	width := style.spaceWidth
+	if width == 0 {
+		width = 4
+	}
+
+	visualWidth := 0
+	for _, ch := range prefix {
+		if ch == '\t' {
+			visualWidth = ((visualWidth / width) + 1) * width
+		} else {
+			visualWidth++
+		}
+	}
+
+	if style.usesTabs {
+		tabs := visualWidth / width
+		spaces := visualWidth % width
+		return strings.Repeat("\t", tabs) + strings.Repeat(" ", spaces) + rest
+	}
+	return strings.Repeat(" ", visualWidth) + rest
+}
+
+// leadingWhitespace returns the leading whitespace prefix of s.
+func leadingWhitespace(s string) string {
+	end := 0
+	for end < len(s) && (s[end] == ' ' || s[end] == '\t') {
+		end++
+	}
+	return s[:end]
 }
 
 // isUTF16BOM detects UTF-16 LE or BE byte-order marks at the start of data.

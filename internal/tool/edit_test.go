@@ -1236,3 +1236,511 @@ func TestEditAtomic(t *testing.T) {
 		t.Errorf("AC5 fallback FAIL: src should be removed after copy; stat err = %v", err)
 	}
 }
+
+// TestDetectIndentStyle tests indent style detection.
+func TestDetectIndentStyle(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		wantTabs bool
+		wantNil  bool
+	}{
+		{
+			name:     "tab-indented Go",
+			content:  "\tfunc foo() {\n\t\treturn 1\n\t}\n",
+			wantTabs: true,
+		},
+		{
+			name:     "2-space indent",
+			content:  "func main() {\n  x := 1\n  y := 2\n}\n",
+			wantTabs: false,
+		},
+		{
+			name:     "4-space indent",
+			content:  "def foo():\n    return 1\n    pass\n",
+			wantTabs: false,
+		},
+		{
+			name:    "no indented lines",
+			content: "hello\nworld\n",
+			wantNil: true,
+		},
+		{
+			name:     "tabs win over spaces",
+			content:  "  space line\n\t\ttab line\n",
+			wantTabs: true,
+		},
+		{
+			name:     "mixed tabs and spaces on same line",
+			content:  "\t  x := 1\n\t\ty := 2\n",
+			wantTabs: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			style := detectIndentStyle(tt.content)
+			if tt.wantNil {
+				if style != nil {
+					t.Errorf("expected nil, got &{%v %d}", style.usesTabs, style.spaceWidth)
+				}
+				return
+			}
+			if style == nil {
+				t.Fatal("expected non-nil style")
+			}
+			if style.usesTabs != tt.wantTabs {
+				t.Errorf("usesTabs = %v, want %v", style.usesTabs, tt.wantTabs)
+			}
+		})
+	}
+}
+
+// TestInferSpaceWidth tests space width inference from observed depths.
+func TestInferSpaceWidth(t *testing.T) {
+	tests := []struct {
+		name   string
+		depths map[int]int
+		want   int
+	}{
+		{
+			name:   "all multiples of 4",
+			depths: map[int]int{4: 10, 8: 8, 12: 5},
+			want:   4,
+		},
+		{
+			name:   "all multiples of 2",
+			depths: map[int]int{2: 5, 4: 4, 6: 3},
+			want:   2,
+		},
+		{
+			name:   "mostly multiples of 4, one outlier",
+			depths: map[int]int{4: 10, 8: 8, 3: 1},
+			want:   4,
+		},
+		{
+			name:   "single depth",
+			depths: map[int]int{3: 1},
+			want:   3,
+		},
+		{
+			name:   "empty",
+			depths: map[int]int{},
+			want:   0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := inferSpaceWidth(tt.depths)
+			if got != tt.want {
+				t.Errorf("got %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestConvertIndent tests indentation conversion.
+func TestConvertIndent(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		style  *indentStyle
+		output string
+	}{
+		{
+			name:   "spaces to tabs (4-space)",
+			input:  "    func foo() {\n        return 1\n    }",
+			style:  &indentStyle{usesTabs: true, spaceWidth: 4},
+			output: "\tfunc foo() {\n\t\treturn 1\n\t}",
+		},
+		{
+			name:   "tabs to spaces (4-space)",
+			input:  "\tfunc foo() {\n\t\treturn 1\n\t}",
+			style:  &indentStyle{usesTabs: false, spaceWidth: 4},
+			output: "    func foo() {\n        return 1\n    }",
+		},
+		{
+			name:   "tabs to spaces (2-space)",
+			input:  "\tfoo\n\t\tbar",
+			style:  &indentStyle{usesTabs: false, spaceWidth: 2},
+			output: "  foo\n    bar",
+		},
+		{
+			name:   "no leading whitespace",
+			input:  "hello\nworld",
+			style:  &indentStyle{usesTabs: true, spaceWidth: 4},
+			output: "hello\nworld",
+		},
+		{
+			name:   "mixed tabs and spaces input",
+			input:  "\t  x := 1",
+			style:  &indentStyle{usesTabs: false, spaceWidth: 4},
+			output: "      x := 1",
+		},
+		{
+			name:   "empty string",
+			input:  "",
+			style:  &indentStyle{usesTabs: true},
+			output: "",
+		},
+		{
+			name:   "tab width 8 — 4 spaces not enough for a tab",
+			input:  "        code",
+			style:  &indentStyle{usesTabs: true, spaceWidth: 8},
+			output: "\tcode",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := convertIndent(tt.input, tt.style)
+			if got != tt.output {
+				t.Errorf("got %q, want %q", got, tt.output)
+			}
+		})
+	}
+}
+
+// TestResolveOldString tests the full resolution pipeline.
+func TestResolveOldString(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		input   string
+		want    string
+	}{
+		{
+			name:    "exact match returns original",
+			content: "\tfunc foo() {\n\t\treturn 1\n\t}\n",
+			input:   "\tfunc foo()",
+			want:    "\tfunc foo()",
+		},
+		{
+			name:    "spaces to tabs conversion succeeds",
+			content: "\tfunc foo() {\n\t\treturn 1\n\t}\n",
+			input:   "    func foo()",
+			want:    "\tfunc foo()",
+		},
+		{
+			name:    "tabs to spaces conversion succeeds",
+			content: "    func foo() {\n        return 1\n    }\n",
+			input:   "\tfunc foo()",
+			want:    "    func foo()",
+		},
+		{
+			name:    "multi-line spaces to tabs",
+			content: "\tfunc foo() {\n\t\treturn 1\n\t}\n",
+			input:   "    func foo() {\n        return 1\n    }",
+			want:    "\tfunc foo() {\n\t\treturn 1\n\t}",
+		},
+		{
+			name:    "no match returns original",
+			content: "\tfunc foo() {\n\t\treturn 1\n\t}\n",
+			input:   "    func bar()",
+			want:    "    func bar()",
+		},
+		{
+			name:    "no indented file returns original",
+			content: "hello\nworld\n",
+			input:   "  hello",
+			want:    "  hello",
+		},
+		{
+			name:    "different indent depth not matched",
+			content: "\tfunc foo() {\n\t\treturn 1\n\t}\n",
+			input:   "  func foo()",
+			want:    "  func foo()",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveOldString(tt.content, tt.input)
+			if got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestEditTool_LeadingWhitespaceFallback_Global_TabsToSpaces tests that Edit
+// succeeds when the model passes space-indented old_string for a tab-indented file.
+func TestEditTool_LeadingWhitespaceFallback_Global_TabsToSpaces(t *testing.T) {
+	tmpDir := t.TempDir()
+	readCache := NewReadFileCache()
+	readTool := NewReadTool(PermissionEdit, readCache)
+	editTool := NewEditTool(readCache)
+
+	testFile := filepath.Join(tmpDir, "test.go")
+	content := "\tfunc foo() {\n\t\treturn 1\n\t}\n"
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	if err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	_, err = readTool.Execute(context.Background(), map[string]any{
+		"file_path": testFile,
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error during read: %v", err)
+	}
+
+	// Model passes space-indented old_string (should still work via fallback)
+	result, err := editTool.Execute(context.Background(), map[string]any{
+		"file_path":  testFile,
+		"old_string": "    func foo() {\n        return 1\n    }",
+		"new_string": "\tfunc foo() {\n\t\treturn 42\n\t}",
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("edit failed: %s", result.Content)
+	}
+
+	// Verify the edit worked (file should have tab-indented replacement)
+	data, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatalf("failed to read file: %v", err)
+	}
+	expected := "\tfunc foo() {\n\t\treturn 42\n\t}\n"
+	if string(data) != expected {
+		t.Errorf("expected %q, got %q", expected, string(data))
+	}
+}
+
+// TestEditTool_LeadingWhitespaceFallback_Global_SpacesToTabs tests that Edit
+// succeeds when the model passes tab-indented old_string for a space-indented file.
+func TestEditTool_LeadingWhitespaceFallback_Global_SpacesToTabs(t *testing.T) {
+	tmpDir := t.TempDir()
+	readCache := NewReadFileCache()
+	readTool := NewReadTool(PermissionEdit, readCache)
+	editTool := NewEditTool(readCache)
+
+	testFile := filepath.Join(tmpDir, "test.py")
+	content := "def foo():\n    return 1\n"
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	if err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	_, err = readTool.Execute(context.Background(), map[string]any{
+		"file_path": testFile,
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error during read: %v", err)
+	}
+
+	result, err := editTool.Execute(context.Background(), map[string]any{
+		"file_path":  testFile,
+		"old_string": "\treturn 1",
+		"new_string": "    return 42",
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("edit failed: %s", result.Content)
+	}
+
+	data, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatalf("failed to read file: %v", err)
+	}
+	expected := "def foo():\n    return 42\n"
+	if string(data) != expected {
+		t.Errorf("expected %q, got %q", expected, string(data))
+	}
+}
+
+// TestEditTool_LeadingWhitespaceFallback_Scoped tests the fallback in scoped mode.
+func TestEditTool_LeadingWhitespaceFallback_Scoped(t *testing.T) {
+	tmpDir := t.TempDir()
+	readCache := NewReadFileCache()
+	readTool := NewReadTool(PermissionEdit, readCache)
+	editTool := NewEditTool(readCache)
+
+	testFile := filepath.Join(tmpDir, "test.go")
+	content := "\tfunc foo() {\n\t\tx := 1\n\t\ty := 2\n\t}\n"
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	if err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	_, err = readTool.Execute(context.Background(), map[string]any{
+		"file_path": testFile,
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error during read: %v", err)
+	}
+
+	// Model passes space-indented old_string with scoped edit
+	result, err := editTool.Execute(context.Background(), map[string]any{
+		"file_path":  testFile,
+		"old_string": "        x := 1",
+		"new_string": "\t\tx := 99",
+		"start_line": float64(2),
+		"end_line":   float64(2),
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("scoped edit failed: %s", result.Content)
+	}
+
+	data, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatalf("failed to read file: %v", err)
+	}
+	expected := "\tfunc foo() {\n\t\tx := 99\n\t\ty := 2\n\t}\n"
+	if string(data) != expected {
+		t.Errorf("expected %q, got %q", expected, string(data))
+	}
+}
+
+// TestEditTool_LeadingWhitespaceFallback_ReplaceAll tests replace_all with
+// tab/space mismatch.
+func TestEditTool_LeadingWhitespaceFallback_ReplaceAll(t *testing.T) {
+	tmpDir := t.TempDir()
+	readCache := NewReadFileCache()
+	readTool := NewReadTool(PermissionEdit, readCache)
+	editTool := NewEditTool(readCache)
+
+	testFile := filepath.Join(tmpDir, "test.go")
+	content := "\tfoo\n\tfoo\n\tfoo\n"
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	if err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	_, err = readTool.Execute(context.Background(), map[string]any{
+		"file_path": testFile,
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error during read: %v", err)
+	}
+
+	result, err := editTool.Execute(context.Background(), map[string]any{
+		"file_path":   testFile,
+		"old_string":  "    foo",
+		"new_string":  "\tbar",
+		"replace_all": true,
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("edit failed: %s", result.Content)
+	}
+
+	data, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatalf("failed to read file: %v", err)
+	}
+	expected := "\tbar\n\tbar\n\tbar\n"
+	if string(data) != expected {
+		t.Errorf("expected %q, got %q", expected, string(data))
+	}
+}
+
+// TestEditTool_LeadingWhitespaceFallback_NoMatch tests that normalization
+// fallback returns zeroMatchError when it cannot help.
+func TestEditTool_LeadingWhitespaceFallback_NoMatch(t *testing.T) {
+	tmpDir := t.TempDir()
+	readCache := NewReadFileCache()
+	readTool := NewReadTool(PermissionEdit, readCache)
+	editTool := NewEditTool(readCache)
+
+	testFile := filepath.Join(tmpDir, "test.go")
+	content := "\tfunc foo() {\n\t\treturn 1\n\t}\n"
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	if err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	_, err = readTool.Execute(context.Background(), map[string]any{
+		"file_path": testFile,
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error during read: %v", err)
+	}
+
+	// Different indent depth — should NOT match (2 spaces vs 1 tab)
+	result, err := editTool.Execute(context.Background(), map[string]any{
+		"file_path":  testFile,
+		"old_string": "  func foo()",
+		"new_string": "  func bar()",
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("expected error when indent depth differs")
+	}
+	if !strings.Contains(result.Content, "String not found in file") {
+		t.Errorf("expected 'String not found in file', got: %s", result.Content)
+	}
+}
+
+// TestEditTool_LeadingWhitespaceFallback_NumExpected tests num_expected
+// works with normalization fallback.
+func TestEditTool_LeadingWhitespaceFallback_NumExpected(t *testing.T) {
+	tmpDir := t.TempDir()
+	readCache := NewReadFileCache()
+	readTool := NewReadTool(PermissionEdit, readCache)
+	editTool := NewEditTool(readCache)
+
+	testFile := filepath.Join(tmpDir, "test.go")
+	content := "\tfoo\n\tfoo\n\tfoo\n"
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	if err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	_, err = readTool.Execute(context.Background(), map[string]any{
+		"file_path": testFile,
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error during read: %v", err)
+	}
+
+	// Wrong num_expected with fallback should still error
+	result, err := editTool.Execute(context.Background(), map[string]any{
+		"file_path":    testFile,
+		"old_string":   "    foo",
+		"new_string":   "\tbar",
+		"num_expected": float64(2),
+	}, tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("expected error when num_expected doesn't match")
+	}
+	if !strings.Contains(result.Content, "Expected 2 replacement(s) but found 3") {
+		t.Errorf("expected num_expected error, got: %s", result.Content)
+	}
+}
+
+// TestLeadingWhitespace tests the leadingWhitespace helper.
+func TestLeadingWhitespace(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"", ""},
+		{"no indent", ""},
+		{"\t\ttab", "\t\t"},
+		{"    spaces", "    "},
+		{"\t  mixed", "\t  "},
+	}
+
+	for _, tt := range tests {
+		got := leadingWhitespace(tt.input)
+		if got != tt.want {
+			t.Errorf("leadingWhitespace(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
