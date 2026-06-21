@@ -1570,8 +1570,9 @@ func TestAC5_BackwardCompat_NoThinkingFields(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestAC2_DeepSeekEffortNormalization verifies that the transformer adds
-// extra_body for DeepSeek models and not for others, and that xhigh → max
-// normalization happens in client.SetThinkingConfig.
+// extra_body for DeepSeek models and not for others, normalizes effort values
+// to DeepSeek's supported range (high/max only), and rewrites max_completion_tokens
+// → max_tokens in extra_body.
 func TestAC2_DeepSeekEffortNormalization(t *testing.T) {
 	tests := []struct {
 		model     string
@@ -1579,13 +1580,13 @@ func TestAC2_DeepSeekEffortNormalization(t *testing.T) {
 		want      string
 		extraBody bool
 	}{
-		// DeepSeek models — transformer adds extra_body
-		{"deepseek-v4-flash", "low", "low", true},
-		{"deepseek-v4-flash", "medium", "medium", true},
+		// DeepSeek models — transformer adds extra_body, normalizes low/medium → high
+		{"deepseek-v4-flash", "low", "high", true},
+		{"deepseek-v4-flash", "medium", "high", true},
 		{"deepseek-v4-flash", "high", "high", true},
 		{"deepseek-v4-flash", "max", "max", true},
 		{"deepseek-v4-flash", "xhigh", "max", true},
-		{"deepseek-v4-pro", "low", "low", true},
+		{"deepseek-v4-pro", "low", "high", true},
 		{"deepseek-v4-pro", "max", "max", true},
 		// DeepSeek without effort — no extra_body
 		{"deepseek-v4-flash", "", "", false},
@@ -1621,6 +1622,16 @@ func TestAC2_DeepSeekEffortNormalization(t *testing.T) {
 				got, _ := req["reasoning_effort"].(string)
 				if got != tt.want {
 					t.Errorf("AC2 FAIL: reasoning_effort = %q, want %q", got, tt.want)
+				}
+
+				// DeepSeek: max_tokens must be at top level, not max_completion_tokens on the wire
+				if isDeepSeekModel(tt.model) {
+					if _, hasMCT := req["max_completion_tokens"]; hasMCT {
+						t.Error("AC2 FAIL: max_completion_tokens should not be present for DeepSeek")
+					}
+					if _, hasMT := req["max_tokens"]; !hasMT {
+						t.Error("AC2 FAIL: max_tokens missing from top-level for DeepSeek")
+					}
 				}
 
 				w.Header().Set("Content-Type", "application/json")

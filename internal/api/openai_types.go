@@ -3,6 +3,9 @@ package api
 import "encoding/json"
 
 // OpenAIRequest represents a chat completion request.
+// ExtraFields entries are flattened into the top-level JSON object during serialization,
+// allowing provider-specific transformers to inject or rename fields without modifying
+// the shared struct definition.
 type OpenAIRequest struct {
 	Model               string               `json:"model"`
 	Messages            []OpenAIMessage      `json:"messages"`
@@ -12,7 +15,30 @@ type OpenAIRequest struct {
 	StreamOptions       *OpenAIStreamOptions `json:"stream_options,omitempty"`
 	ReasoningEffort     string               `json:"reasoning_effort,omitempty"`
 	ExtraBody           map[string]any       `json:"extra_body,omitempty"`
+	ExtraFields         map[string]any       `json:"-"`
 }
+
+// MarshalJSON flattens ExtraFields into the top-level JSON object.
+func (r OpenAIRequest) MarshalJSON() ([]byte, error) {
+	if len(r.ExtraFields) == 0 {
+		return json.Marshal(openAIRequestAlias(r))
+	}
+	b, err := json.Marshal(openAIRequestAlias(r))
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+	for k, v := range r.ExtraFields {
+		m[k] = v
+	}
+	return json.Marshal(m)
+}
+
+// openAIRequestAlias prevents infinite recursion in MarshalJSON.
+type openAIRequestAlias OpenAIRequest
 
 // OpenAIMessage represents a message in the OpenAI chat format.
 type OpenAIMessage struct {

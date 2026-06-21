@@ -1219,6 +1219,14 @@ func TestOpenAIProvider_DeepSeekThinking(t *testing.T) {
 			t.Errorf("expected thinking.type 'enabled', got %v", thinking["type"])
 		}
 
+		// DeepSeek uses max_tokens in top level, not max_completion_tokens
+		if _, hasMCT := req["max_completion_tokens"]; hasMCT {
+			t.Error("max_completion_tokens should not be present for DeepSeek")
+		}
+		if _, hasMT := req["max_tokens"]; !hasMT {
+			t.Error("req.max_tokens missing for DeepSeek")
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		resp := `{

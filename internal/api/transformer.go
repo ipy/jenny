@@ -8,17 +8,36 @@ func isDeepSeekModel(model string) bool {
 }
 
 // deepSeekOpenAITransform injects DeepSeek-specific fields into OpenAI-format requests.
-// DeepSeek requires extra_body.thinking.type = "enabled" to activate thinking mode.
+//
+// DeepSeek diverges from OpenAI's Chat Completions API in several ways:
+//   - max_tokens field instead of max_completion_tokens
+//   - reasoning_effort only supports "high" and "max" (low/medium → high)
+//   - extra_body.thinking.type = "enabled" required to activate thinking mode
 func deepSeekOpenAITransform(body any) {
 	req, ok := body.(*OpenAIRequest)
 	if !ok {
 		return
 	}
+
+	// DeepSeek uses "max_tokens" not "max_completion_tokens".
+	// Move the value to ExtraFields so MarshalJSON flattens it to the top level.
+	if req.MaxCompletionTokens != nil {
+		if req.ExtraFields == nil {
+			req.ExtraFields = make(map[string]any)
+		}
+		req.ExtraFields["max_tokens"] = *req.MaxCompletionTokens
+		req.MaxCompletionTokens = nil
+	}
+
+	// DeepSeek only supports "high" and "max" reasoning_effort.
+	// Map unsupported levels (low, medium) to "high".
 	if req.ReasoningEffort != "" {
-		req.ExtraBody = map[string]any{
-			"thinking": map[string]any{
-				"type": "enabled",
-			},
+		req.ReasoningEffort = normalizeDeepSeekEffort(req.ReasoningEffort)
+		if req.ExtraBody == nil {
+			req.ExtraBody = make(map[string]any)
+		}
+		req.ExtraBody["thinking"] = map[string]any{
+			"type": "enabled",
 		}
 	}
 }
@@ -39,23 +58,51 @@ func deepSeekAnthropicTransform(body any) {
 }
 
 // deepSeekOpenAIResponsesTransform injects DeepSeek-specific fields into
-// OpenAI Responses-format requests. DeepSeek's OpenAI-compatible endpoint
-// accepts the same extra_body.thinking.type=enabled extension when
-// reasoning is requested, so when a reasoning config is present we mirror
-// the Chat path: emit extra_body.thinking.type=enabled. This is what
-// DeepSeek returns to switch the model into its native chain-of-thought
-// mode regardless of which OpenAI wire format is in use.
+// OpenAI Responses-format requests.
+//
+// DeepSeek diverges from OpenAI's Responses API in several ways:
+//   - Does not accept "developer" role; system prompts must use "system"
+//   - max_output_tokens is accepted but reasoning_effort only supports "high"/"max"
+//   - extra_body.thinking.type = "enabled" required to activate thinking mode
 func deepSeekOpenAIResponsesTransform(body any) {
 	req, ok := body.(*OpenAIResponsesRequest)
 	if !ok {
 		return
 	}
+
+	// DeepSeek does not accept "developer" role in input messages.
+	// Rewrite any "developer" role items to "system".
+	if input, ok := req.Input.([]any); ok {
+		for _, item := range input {
+			if m, ok := item.(map[string]any); ok {
+				if role, ok := m["role"].(string); ok && role == "developer" {
+					m["role"] = "system"
+				}
+			}
+		}
+	}
+
+	// Normalize reasoning effort to DeepSeek's supported range.
 	if req.ReasoningConfig != nil && req.ReasoningConfig.Effort != "" {
+		req.ReasoningConfig.Effort = normalizeDeepSeekEffort(req.ReasoningConfig.Effort)
 		req.ExtraBody = map[string]any{
 			"thinking": map[string]any{
 				"type": "enabled",
 			},
 		}
+	}
+}
+
+// normalizeDeepSeekEffort maps reasoning effort to DeepSeek's supported range.
+// DeepSeek only supports "high" and "max"; "low" and "medium" map to "high".
+func normalizeDeepSeekEffort(effort string) string {
+	switch effort {
+	case "low", "medium":
+		return "high"
+	case "high", "max":
+		return effort
+	default:
+		return "high"
 	}
 }
 
