@@ -270,7 +270,7 @@ func (r *Registry) Build() []Tool {
 			r.baseTools = append(r.baseTools, NewBashTool(r.permissionLevel).WithSessionID(r.sessionID).WithExecTool(execTool))
 		}
 
-		r.baseTools = append(r.baseTools, NewGlobTool(), NewGrepTool(), NewTreeTool(r.permissionLevel))
+		r.baseTools = append(r.baseTools, NewGlobTool(), NewGrepTool())
 		// Add MCP interaction tools only when MCP servers are configured
 		if r.hasMCPServers {
 			r.baseTools = append(r.baseTools, NewReadMcpResourceTool().WithSessionID(r.sessionID), NewMcpPromptTool())

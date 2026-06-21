@@ -4,6 +4,7 @@ package tool
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -17,6 +18,15 @@ import (
 	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/sandbox"
 )
+
+// isExecFailure reports whether err came from a fork/exec syscall failure
+// (binary not found, invalid ELF, permission denied on the executable, etc.)
+// as opposed to a runtime or I/O error. Used to decide whether falling back
+// to direct argv execution might succeed.
+func isExecFailure(err error) bool {
+	var pe *os.PathError
+	return errors.As(err, &pe) && pe.Op == "fork/exec"
+}
 
 const (
 	// maxInlineSize is the maximum size for inline output (30KB)
@@ -335,6 +345,12 @@ func (t *BashTool) runForegroundShell(ctx context.Context, shellPath, command st
 		Stderr: &stderr,
 	}, ExecOptions{Timeout: time.Duration(timeout) * time.Second})
 	if err != nil {
+		// Shell binary passed stat checks but exec failed (e.g. missing shared
+		// library, corrupted overlay FS, invalid ELF). Fall back to direct argv
+		// execution instead of surfacing a cryptic error to the model.
+		if isExecFailure(err) {
+			return t.executeShellFallback(ctx, command, timeout)
+		}
 		return &ToolResult{
 			Content: fmt.Sprintf("Error starting command: %v", err),
 			IsError: true,

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ipy/jenny/internal/api"
@@ -65,7 +64,6 @@ type ProgressMonitor struct {
 	// L2 fork-judge state
 	forkDispatched bool
 	forkResultCh   chan *ProgressEvalResult
-	mu             sync.Mutex
 }
 
 // ProgressEvalResult holds the LLM judge's evaluation of agent progress.

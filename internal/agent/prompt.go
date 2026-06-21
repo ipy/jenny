@@ -58,9 +58,9 @@ When uncertain about a domain, API, or convention:
 
 ## Encourage Patterns
 
-- List files with 'tree' first before making assumptions, then articulate the goal, deliverables, and implicit constraints.
+- List files with 'glob' first before making assumptions, then articulate the goal, deliverables, and implicit constraints.
 - Actively discover existing tests, linters, conventions, and style guides. Read and respect these constraints whenever possible.
-- Use dedicated tools (tree/read/write/edit/grep/glob) over shell whenever possible.
+- Use dedicated tools (read/write/edit/grep/glob) over shell whenever possible.
 - Force non-interactive modes for shell commands whenever possible. E.g., use apt install -y, curl -sS, ssh -o BatchMode=yes, git --no-pager diff, etc.
 
 ## Discourage Patterns

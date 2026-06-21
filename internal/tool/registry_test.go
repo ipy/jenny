@@ -22,21 +22,20 @@ func (t *mockTool) Execute(ctx context.Context, input map[string]any, cwd string
 // baseToolCount returns the number of tools produced by WithBaseTools() on the
 // current platform. This varies because Windows adds PowerShellTool
 // unconditionally, while Unix uses BashTool. On Windows, BashTool is also added
-// if bash.exe is found in PATH. Additionally, ReadMcpResourceTool, McpPromptTool,
-// TreeTool, and the 4 task tracking tools (TaskCreate, TaskGet, TaskList, TaskUpdate) are always
-// registered, making the total 11 on Unix.
+// if bash.exe is found in PATH. The 4 task tracking tools (TaskCreate, TaskGet,
+// TaskList, TaskUpdate) are always registered, making the total 8 on Unix.
 func baseToolCount() int {
 	if runtime.GOOS == "windows" {
-		// Read + PowerShell + Glob + Grep + Tree + 4 task tools = 9; +1 if bash.exe is in PATH
+		// Read + PowerShell + Glob + Grep + 4 task tools = 8; +1 if bash.exe is in PATH
 		// (MCP tools excluded unless hasMCPServers=true)
 		if _, err := exec.LookPath("bash.exe"); err == nil {
-			return 10
+			return 9
 		}
-		return 9
+		return 8
 	}
-	// Unix: Read + Bash + Glob + Grep + Tree + 4 task tools = 9
+	// Unix: Read + Bash + Glob + Grep + 4 task tools = 8
 	// (MCP tools excluded unless hasMCPServers=true)
-	return 9
+	return 8
 }
 
 // baseToolCountWithMCP returns the expected number of base tools including MCP interaction tools.
