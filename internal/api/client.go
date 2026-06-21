@@ -341,7 +341,7 @@ func (c *Client) SendMessageStream(
 		// Handle fallback if needed
 		if shouldFallback && (streamIncomplete || isIdleTimeout || len(result.Blocks) == 0) {
 			if result.IsPermanent {
-				log.Debug("Streaming failed with permanent error, skipping fallback", "error", result.Error)
+				log.Debug("Streaming failed with permanent error, skipping fallback", "error", result.Error, "category", result.ErrorCategory)
 			} else if ctx.Err() != nil {
 				log.Debug("Parent context cancelled, skipping fallback")
 			} else {

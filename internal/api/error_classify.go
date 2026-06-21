@@ -109,6 +109,7 @@ func classifyErrorCommon(statusCode int, body string) ErrorCategory {
 			"余额不足",
 			"exceed quota",
 			"insufficient",
+			"limit reached",
 			"limit exceeded",
 		}
 		for _, kw := range quotaKeywords {
