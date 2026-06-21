@@ -35,7 +35,7 @@ func TestDebtMD1RemoveMaxTokensOverride(t *testing.T) {
 		{
 			ID:          "debt-md1.max-tokens.default-64000",
 			Category:    "debt-md1",
-			Description: "turn 1 max_tokens uses earlyTurnCap for claude-sonnet-4-6",
+			Description: "turn 1 max_tokens uses earlyTurnCap (4096) for claude-sonnet-4-6 (maxOut=64000)",
 			Tags:        []string{"debt"},
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
@@ -49,7 +49,7 @@ func TestDebtMD1RemoveMaxTokensOverride(t *testing.T) {
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 16384,
+						MaxTokens: 4096,
 					},
 				},
 			},
@@ -57,7 +57,7 @@ func TestDebtMD1RemoveMaxTokensOverride(t *testing.T) {
 		{
 			ID:          "debt-md1.max-tokens.opus-default",
 			Category:    "debt-md1",
-			Description: "turn 1 max_tokens uses earlyTurnCap for claude-opus-4-6",
+			Description: "turn 1 max_tokens uses earlyTurnCap (16384) for claude-opus-4-6 (maxOut=128000)",
 			Tags:        []string{"debt"},
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
@@ -79,7 +79,7 @@ func TestDebtMD1RemoveMaxTokensOverride(t *testing.T) {
 		{
 			ID:          "debt-md1.max-tokens.haiku-default",
 			Category:    "debt-md1",
-			Description: "turn 1 max_tokens uses earlyTurnCap for claude-haiku-4-6",
+			Description: "turn 1 max_tokens uses earlyTurnCap (4096) for claude-haiku-4-6 (maxOut=64000)",
 			Tags:        []string{"debt"},
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
@@ -93,7 +93,7 @@ func TestDebtMD1RemoveMaxTokensOverride(t *testing.T) {
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 16384,
+						MaxTokens: 4096,
 					},
 				},
 			},

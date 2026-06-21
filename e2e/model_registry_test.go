@@ -116,7 +116,7 @@ func TestModelRegistryCacheBehavior(t *testing.T) {
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 16384,
+						MaxTokens: 4096,
 					},
 				},
 			},

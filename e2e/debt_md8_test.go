@@ -28,7 +28,7 @@ func TestDebtMD8ModelCapConsolidation(t *testing.T) {
 		{
 			ID:          "debt-MD-8.max-tokens.claude-sonnet-4-6",
 			Category:    "debt-MD-8",
-			Description: "turn 1 max_tokens uses earlyTurnCap (16384) for claude-sonnet-4-6",
+			Description: "turn 1 max_tokens uses earlyTurnCap (4096) for claude-sonnet-4-6 (maxOut=64000)",
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "say hello",
@@ -41,7 +41,7 @@ func TestDebtMD8ModelCapConsolidation(t *testing.T) {
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 16384,
+						MaxTokens: 4096,
 					},
 				},
 			},
@@ -49,7 +49,7 @@ func TestDebtMD8ModelCapConsolidation(t *testing.T) {
 		{
 			ID:          "debt-MD-8.max-tokens.claude-opus-4-5",
 			Category:    "debt-MD-8",
-			Description: "turn 1 max_tokens uses earlyTurnCap (16384) for claude-opus-4-5-20251101",
+			Description: "turn 1 max_tokens uses earlyTurnCap (16384) for claude-opus-4-5-20251101 (maxOut=128000)",
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "say hello",
@@ -70,7 +70,7 @@ func TestDebtMD8ModelCapConsolidation(t *testing.T) {
 		{
 			ID:          "debt-MD-8.max-tokens.claude-haiku-4-5",
 			Category:    "debt-MD-8",
-			Description: "turn 1 max_tokens uses earlyTurnCap (16384) for claude-haiku-4-5-20251001",
+			Description: "turn 1 max_tokens uses earlyTurnCap (4096) for claude-haiku-4-5-20251001 (maxOut=64000)",
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "say hello",
@@ -83,7 +83,7 @@ func TestDebtMD8ModelCapConsolidation(t *testing.T) {
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 16384,
+						MaxTokens: 4096,
 					},
 				},
 			},
