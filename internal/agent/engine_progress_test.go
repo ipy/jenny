@@ -581,32 +581,33 @@ func TestParseProgressEvalResponse_InvalidJSON(t *testing.T) {
 	}
 }
 
-func TestProgressMonitor_L2ForkJudge_MeaningfulProgressResets(t *testing.T) {
+func TestProgressMonitor_L1SecondForkJudge_MeaningfulProgressResets(t *testing.T) {
 	pm := NewProgressMonitor()
 	failBlock := []api.ToolUseBlock{{Name: "Bash", Input: map[string]any{"command": "x"}}}
 	failResult := []api.ToolResult{{Content: "error", IsError: true}}
 
-	for i := 0; i < l2Threshold; i++ {
+	for i := 0; i < l1SecondThreshold; i++ {
 		failBlock[0].Input["command"] = fmt.Sprintf("cmd_%d", i)
 		pm.RecordTurn(failBlock, failResult)
-		if i == l1FirstThreshold-1 || i == l1SecondThreshold-1 {
-			pm.CheckAndInject()
+		if i == l1FirstThreshold-1 {
+			pm.CheckAndInject() // consume first L1
 		}
 	}
 
-	if pm.Level() != ProgressLevelL2 {
-		t.Fatalf("expected L2 after %d no-progress turns, got level %d", l2Threshold, pm.Level())
+	if pm.ConsecutiveNoProgress() != l1SecondThreshold {
+		t.Fatalf("expected %d consecutive, got %d", l1SecondThreshold, pm.ConsecutiveNoProgress())
 	}
 
-	// Simulate fork judge returning meaningful progress
-	pm.ApplyProgressEvalResult(&ProgressEvalResult{
+	// Simulate fork via channel + drain (matching the real main loop pattern)
+	pm.forkResultCh <- &ProgressEvalResult{
 		TaskAlignment:      4,
 		OutcomeMomentum:    3,
 		FreshExploration:   4,
 		Overall:            3.65,
 		MeaningfulProgress: true,
 		Reasoning:          "Agent is systematically profiling queries as user requested.",
-	})
+	}
+	pm.DrainForkResult()
 
 	if pm.ConsecutiveNoProgress() != 0 {
 		t.Errorf("expected 0 consecutive after positive judge, got %d", pm.ConsecutiveNoProgress())
@@ -614,69 +615,68 @@ func TestProgressMonitor_L2ForkJudge_MeaningfulProgressResets(t *testing.T) {
 	if pm.Level() != ProgressLevelNone {
 		t.Errorf("expected level 0 after positive judge, got %d", pm.Level())
 	}
-	// Full reset: L1 flags cleared so they can fire again on a new streak
 	if pm.l1FirstFired {
 		t.Error("l1FirstFired should be false after full reset")
 	}
+	if pm.l1SecondFired {
+		t.Error("l1SecondFired should be false after full reset")
+	}
 }
 
-func TestProgressMonitor_L2ForkJudge_NoProgressFallsThrough(t *testing.T) {
+func TestProgressMonitor_L1SecondForkJudge_NoProgressFallsThrough(t *testing.T) {
 	pm := NewProgressMonitor()
 	failBlock := []api.ToolUseBlock{{Name: "Bash", Input: map[string]any{"command": "x"}}}
 	failResult := []api.ToolResult{{Content: "error", IsError: true}}
 
-	for i := 0; i < l2Threshold; i++ {
+	for i := 0; i < l1SecondThreshold; i++ {
 		failBlock[0].Input["command"] = fmt.Sprintf("cmd_%d", i)
 		pm.RecordTurn(failBlock, failResult)
-		if i == l1FirstThreshold-1 || i == l1SecondThreshold-1 {
-			pm.CheckAndInject()
+		if i == l1FirstThreshold-1 {
+			pm.CheckAndInject() // consume first L1
 		}
 	}
 
-	// Simulate fork judge returning no progress
-	pm.ApplyProgressEvalResult(&ProgressEvalResult{
+	// Simulate fork via channel + drain
+	pm.forkResultCh <- &ProgressEvalResult{
 		TaskAlignment:      1,
 		OutcomeMomentum:    2,
 		FreshExploration:   1,
 		Overall:            1.35,
 		MeaningfulProgress: false,
 		Reasoning:          "Agent is looping through the same error.",
-	})
+	}
+	pm.DrainForkResult()
 
 	// Counter should NOT be reset
-	if pm.ConsecutiveNoProgress() < l2Threshold {
-		t.Errorf("expected at least %d consecutive after negative judge, got %d", l2Threshold, pm.ConsecutiveNoProgress())
+	if pm.ConsecutiveNoProgress() < l1SecondThreshold {
+		t.Errorf("expected at least %d consecutive after negative judge, got %d", l1SecondThreshold, pm.ConsecutiveNoProgress())
 	}
-	// Level should remain L2
-	if pm.Level() != ProgressLevelL2 {
-		t.Errorf("expected level L2 after negative judge, got %d", pm.Level())
-	}
-	// L2 message should still fire
+	// L1 second reminder should still fire
 	msg, terminate := pm.CheckAndInject()
 	if terminate {
-		t.Error("L2 should not terminate immediately after negative judge")
+		t.Error("L1 second should not terminate after negative judge")
 	}
 	if msg == nil {
-		t.Fatal("L2 should inject FINAL WARNING after negative judge")
+		t.Fatal("L1 second reminder should fire after negative judge")
 	}
 }
 
-func TestProgressMonitor_L2ForkJudge_OnlyFiresOnce(t *testing.T) {
+func TestProgressMonitor_L1SecondForkJudge_OnlyFiresOnce(t *testing.T) {
 	pm := NewProgressMonitor()
 	failBlock := []api.ToolUseBlock{{Name: "Bash", Input: map[string]any{"command": "x"}}}
 	failResult := []api.ToolResult{{Content: "error", IsError: true}}
 
-	for i := 0; i < l2Threshold; i++ {
+	for i := 0; i < l1SecondThreshold; i++ {
 		failBlock[0].Input["command"] = fmt.Sprintf("cmd_%d", i)
 		pm.RecordTurn(failBlock, failResult)
-		if i == l1FirstThreshold-1 || i == l1SecondThreshold-1 {
-			pm.CheckAndInject()
+		if i == l1FirstThreshold-1 {
+			pm.CheckAndInject() // consume first L1
 		}
 	}
 
-	// First fork fires
+	// First fork fires at L1-second
 	if !pm.ShouldForkProgressEval() {
-		t.Fatal("first L2 trigger should request fork")
+		t.Fatal("L1-second trigger should request fork")
 	}
 
 	// Consume the fork opportunity
@@ -688,7 +688,7 @@ func TestProgressMonitor_L2ForkJudge_OnlyFiresOnce(t *testing.T) {
 	}
 }
 
-func TestProgressMonitor_L2ForkJudge_NotAtL1(t *testing.T) {
+func TestProgressMonitor_L1SecondForkJudge_NotAtL1First(t *testing.T) {
 	pm := NewProgressMonitor()
 	failBlock := []api.ToolUseBlock{{Name: "Bash", Input: map[string]any{"command": "x"}}}
 	failResult := []api.ToolResult{{Content: "error", IsError: true}}
@@ -698,8 +698,42 @@ func TestProgressMonitor_L2ForkJudge_NotAtL1(t *testing.T) {
 		pm.RecordTurn(failBlock, failResult)
 	}
 
-	// At L1, should not request fork
+	// At L1 first (10 turns), should not request fork
 	if pm.ShouldForkProgressEval() {
-		t.Error("L1 should not request fork judge")
+		t.Error("L1 first should not request fork judge")
+	}
+}
+
+func TestProgressMonitor_ForkDispatchedResetsOnProgress(t *testing.T) {
+	pm := NewProgressMonitor()
+	failBlock := []api.ToolUseBlock{{Name: "Bash", Input: map[string]any{"command": "x"}}}
+	failResult := []api.ToolResult{{Content: "error", IsError: true}}
+
+	for i := 0; i < l1SecondThreshold; i++ {
+		failBlock[0].Input["command"] = fmt.Sprintf("cmd_%d", i)
+		pm.RecordTurn(failBlock, failResult)
+		if i == l1FirstThreshold-1 {
+			pm.CheckAndInject()
+		}
+	}
+
+	// Fork was dispatched but result hasn't arrived yet
+	pm.MarkForkDispatched()
+	if !pm.forkDispatched {
+		t.Fatal("forkDispatched should be true after MarkForkDispatched")
+	}
+
+	// A heuristic progress signal arrives before the fork result
+	pm.RecordTurn(
+		[]api.ToolUseBlock{{Name: "write", Input: map[string]any{"file_path": "/workspace/out.txt"}}},
+		[]api.ToolResult{{Content: "ok"}},
+	)
+
+	// forkDispatched should be reset by the progress signal
+	if pm.forkDispatched {
+		t.Error("forkDispatched should be false after heuristic progress reset")
+	}
+	if pm.ConsecutiveNoProgress() != 0 {
+		t.Errorf("expected 0 consecutive after progress, got %d", pm.ConsecutiveNoProgress())
 	}
 }

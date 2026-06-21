@@ -265,7 +265,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			})
 		}
 
-		// Progress monitor: dispatch L2 fork-judge if needed, then check escalation
+			// Progress monitor: dispatch L1-second fork-judge if needed, then drain results
 		if e.progressMonitor.ShouldForkProgressEval() {
 			e.progressMonitor.MarkForkDispatched()
 			forkMessages := make([]api.Message, len(messages))
@@ -290,28 +290,33 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					log.Debug("Progress eval completed but session already ended, discarding result")
 					return
 				}
-				e.progressMonitor.ApplyProgressEvalResult(result)
-				log.Info("Progress eval result",
-					"overall", result.Overall,
-					"meaningful_progress", result.MeaningfulProgress,
-					"reasoning", result.Reasoning,
-				)
-				if e.streamCfg.Enabled {
-					msg := StreamMessage{
-						Type:    "system",
-						Subtype: "progress_eval",
-						Result: fmt.Sprintf(`{"task_alignment":%d,"outcome_momentum":%d,"fresh_exploration":%d,"overall":%.2f,"meaningful_progress":%v,"reasoning":%q}`,
-							result.TaskAlignment, result.OutcomeMomentum, result.FreshExploration,
-							result.Overall, result.MeaningfulProgress, result.Reasoning),
-						Uuid: GenerateUUID(),
+					// Send result to main loop via channel (non-blocking, drop if full)
+					select {
+					case e.progressMonitor.forkResultCh <- result:
+					default:
 					}
-					data, _ := json.Marshal(msg)
-					fmt.Fprintln(os.Stdout, string(data))
-				}
-			}()
-		}
+					log.Info("Progress eval result",
+						"overall", result.Overall,
+						"meaningful_progress", result.MeaningfulProgress,
+						"reasoning", result.Reasoning,
+					)
+					if e.streamCfg.Enabled {
+						msg := StreamMessage{
+							Type:    "system",
+							Subtype: "progress_eval",
+							Result:  progressEvalResultJSON(result),
+							Uuid:    GenerateUUID(),
+						}
+						data, _ := json.Marshal(msg)
+						fmt.Fprintln(os.Stdout, string(data))
+					}
+				}()
+			}
 
-		if msg, terminate := e.progressMonitor.CheckAndInject(); terminate {
+			// Drain any pending fork result before checking escalation
+			e.progressMonitor.DrainForkResult()
+
+			if msg, terminate := e.progressMonitor.CheckAndInject(); terminate {
 			return e.terminateProgressMonitor(sessionID)
 		} else if msg != nil {
 			messages = append(messages, *msg)

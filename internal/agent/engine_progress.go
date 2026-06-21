@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ipy/jenny/internal/api"
@@ -64,6 +65,7 @@ type ProgressMonitor struct {
 	// L2 fork-judge state
 	forkDispatched bool
 	forkResultCh   chan *ProgressEvalResult
+	mu             sync.Mutex
 }
 
 // ProgressEvalResult holds the LLM judge's evaluation of agent progress.
@@ -81,6 +83,7 @@ func NewProgressMonitor() *ProgressMonitor {
 	return &ProgressMonitor{
 		previouslyReadPaths: make(map[string]bool),
 		slidingWindow:       make([]int, slidingWindowSize),
+		forkResultCh:        make(chan *ProgressEvalResult, 1),
 	}
 }
 
@@ -108,6 +111,7 @@ func (pm *ProgressMonitor) RecordTurn(toolUseBlocks []api.ToolUseBlock, toolResu
 		pm.l1SecondFired = false
 		pm.l2Fired = false
 		pm.l2TurnCount = 0
+		pm.forkDispatched = false
 	} else {
 		pm.consecutiveNoProgress++
 		pm.totalNoProgress++
@@ -462,11 +466,11 @@ func (pm *ProgressMonitor) State() map[string]any {
 	}
 }
 
-// ShouldForkProgressEval returns true when the L2 fork-judge should be dispatched.
-// It fires exactly once per L2 trigger — when level is L2 and neither L2 message has
-// been injected yet nor a fork has been dispatched.
+// ShouldForkProgressEval returns true when the L1-second fork-judge should be dispatched.
+// It fires exactly once per L1-second trigger — when the consecutive no-progress count
+// reaches l1SecondThreshold (20) and the second L1 reminder hasn't fired yet.
 func (pm *ProgressMonitor) ShouldForkProgressEval() bool {
-	return pm.level == ProgressLevelL2 && !pm.l2Fired && !pm.forkDispatched
+	return pm.consecutiveNoProgress >= l1SecondThreshold && !pm.l1SecondFired && !pm.forkDispatched
 }
 
 // MarkForkDispatched records that the fork has been launched.
@@ -475,7 +479,7 @@ func (pm *ProgressMonitor) MarkForkDispatched() {
 }
 
 // ApplyProgressEvalResult applies the judge result. If meaningful progress is found,
-// all counters and escalation state reset to 0. Otherwise the L2 flow continues.
+// all counters and escalation state reset to 0. Otherwise the L1-second flow continues.
 func (pm *ProgressMonitor) ApplyProgressEvalResult(result *ProgressEvalResult) {
 	if result.MeaningfulProgress {
 		pm.consecutiveNoProgress = 0
@@ -485,10 +489,20 @@ func (pm *ProgressMonitor) ApplyProgressEvalResult(result *ProgressEvalResult) {
 		pm.l2Fired = false
 		pm.l2TurnCount = 0
 		pm.slidingL1Fired = false
+		pm.forkDispatched = false
 		return
 	}
-	// Negative result: let the L2 flow continue normally.
-	// l2Fired remains false so CheckAndInject can still fire.
+	// Negative result: let the L1-second flow continue normally.
+}
+
+// DrainForkResult non-blockingly drains the fork result channel and applies
+// the result. Called from the main loop before CheckAndInject.
+func (pm *ProgressMonitor) DrainForkResult() {
+	select {
+	case result := <-pm.forkResultCh:
+		pm.ApplyProgressEvalResult(result)
+	default:
+	}
 }
 
 func (pm *ProgressMonitor) pushSlidingWindow(score int) {
@@ -651,6 +665,12 @@ func forkProgressEval(ctx context.Context, client api.Requester, messages []api.
 	)
 
 	return result, nil
+}
+
+// progressEvalResultJSON marshals a ProgressEvalResult to a JSON string for stream events.
+func progressEvalResultJSON(result *ProgressEvalResult) string {
+	data, _ := json.Marshal(result)
+	return string(data)
 }
 
 // parseProgressEvalResponse extracts and parses the JSON response from the judge.

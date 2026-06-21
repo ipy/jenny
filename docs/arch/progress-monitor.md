@@ -127,9 +127,9 @@ Allows at most 5 additional **API turns** (tracked by `l2TurnCount`, incremented
 
 Engine terminates the session and emits a `result` event with `subtype: "progress_terminated"`, including the monitor state (consecutive count, total count, level).
 
-## L2 Fork-Judge Evaluation
+## L1-Second Fork-Judge Evaluation
 
-Before injecting the L2 FINAL WARNING, the engine fires a non-blocking side query ("fork") to evaluate whether the agent is making genuine progress that the heuristic scoring missed. This prevents false-positive terminations for task categories invisible to lexical scoring.
+Before injecting the L1 second reminder (at 20 turns), the engine fires a non-blocking side query ("fork") to evaluate whether the agent is making genuine progress that the heuristic scoring missed. This prevents false-positive escalation for task categories invisible to lexical scoring, and intervenes earlier than L2 to give the agent more room to recover.
 
 ### Motivation
 
@@ -144,7 +144,7 @@ Heuristic scoring (`scoreTurn`) only rewards a fixed set of signals: file writes
 
 ### Timing
 
-The fork fires when the consecutive no-progress counter reaches the L2 threshold (`l2Threshold`, currently 25). L1 (10/20 turns) is too early — exploration is still expected. Waiting until L2 gives the judge enough history while still having 5 grace turns left.
+The fork fires when the consecutive no-progress counter reaches the L1-second threshold (`l1SecondThreshold`, currently 20). L1-first (10 turns) is too early — exploration is still expected. Waiting until 20 turns gives the judge enough history while leaving 5 turns before L2 (25 turns) for the agent to self-correct if the judge result is negative.
 
 ### Judge Prompt
 
@@ -179,31 +179,33 @@ Each dimension is scored 1–5. The aggregate is a weighted average.
 
 | Result | Action |
 |--------|--------|
-| `meaningful_progress == true` | Reset `consecutiveNoProgress` to 0, reset all L1/L2 flags, set level back to `ProgressLevelNone`. Agent continues normally. Emit a `system` stream event with `subtype: "progress_eval"` and the judge result. |
-| `meaningful_progress == false` | Fall through to the existing L2 flow: inject the FINAL WARNING and begin the 5-turn grace countdown. |
+| `meaningful_progress == true` | Reset `consecutiveNoProgress` to 0, reset all L1/L2 flags and `forkDispatched`, set level back to `ProgressLevelNone`. Agent continues normally. Emit a `system` stream event with `subtype: "progress_eval"` and the judge result. |
+| `meaningful_progress == false` | Fall through to the existing L1-second flow: `CheckAndInject` proceeds in the same turn, injecting the L1 second reminder immediately. The agent then has 5 more turns before L2 triggers. |
 
 ### Fork Implementation
 
-The fork follows the same pattern as the complexity evaluation fork:
+The fork follows the same pattern as the complexity evaluation fork, with a channel-based handoff to eliminate data races:
 
 - Copies the full conversation history and appends the judge prompt as a final user message, preserving the shared prefix for prompt cache hits
 - Uses a separate API client with `max_tokens` overridden to 200
 - Runs with a 30-second timeout via `context.WithTimeout`
-- Does not block the main loop — the fork runs in a goroutine and applies the result directly to the progress monitor via `ApplyProgressEvalResult`
-- If the fork fails (timeout, API error, invalid response), the goroutine exits silently and the existing L2 flow proceeds (safe default: assume no progress)
+- Does not block the main loop — the fork runs in a goroutine and sends the result to the main loop via a buffered channel (`forkResultCh`, capacity 1, non-blocking send with drop-if-full)
+- The main loop drains the channel via `DrainForkResult()` before each `CheckAndInject()` call, ensuring the result is applied on the main goroutine
+- If the fork fails (timeout, API error, invalid response), the goroutine exits silently and the existing L1-second flow proceeds (safe default: assume no progress)
 
 ### Invariants
 
-- The judge fork fires at most once per L2 trigger (guarded by `ShouldForkProgressEval` which checks `level == L2 && !l2Fired && !forkDispatched`)
+- The judge fork fires at most once per L1-second trigger (guarded by `ShouldForkProgressEval` which checks `consecutiveNoProgress >= l1SecondThreshold && !l1SecondFired && !forkDispatched`)
+- `forkDispatched` resets on any progress signal (score > 0 in `RecordTurn`), ensuring a fresh fork opportunity on each new no-progress streak
 - A positive judge result always resets the counter, regardless of the heuristic score
-- A negative judge result does not alter the existing L2 → L3 escalation path
-- Fork failures (network, timeout, parse error) never prevent termination — safe default is "no progress"
+- A negative judge result does not alter the existing L1-second → L2 escalation path; `CheckAndInject` proceeds in the same turn
+- Fork failures (network, timeout, parse error) never prevent escalation — safe default is "no progress"
 
 ## Integration Points
 
-- **Pre-API check:** Before compaction and normalization, before each API call. Dispatches the L2 fork-judge if `ShouldForkProgressEval()` returns true, then calls `CheckAndInject()` to inject L1/L2 reminders or trigger L3 termination.
+- **Pre-API check:** Before compaction and normalization, before each API call. Dispatches the L1-second fork-judge if `ShouldForkProgressEval()` returns true, drains any pending fork result via `DrainForkResult()`, then calls `CheckAndInject()` to inject L1/L2 reminders or trigger L3 termination.
 - **Post-tool scoring:** After `executeAndProcessTools`. Calls `RecordTurn()` to score the turn and update escalation state, then `SetProgressLevel()` to sync the level to the max_tokens controller.
-- **Fork-judge callback:** The fork goroutine calls `ApplyProgressEvalResult()` on completion, which either resets the progress monitor (meaningful progress) or lets the L2 flow continue (no progress).
+- **Fork-judge callback:** The fork goroutine sends the result via `forkResultCh` (non-blocking send). The main loop drains it via `DrainForkResult()` before `CheckAndInject`, calling `ApplyProgressEvalResult` on the main goroutine — eliminating data races.
 - **max_tokens coupling:** L1 caps at 8192, L2 caps at 4096, L3 caps at 2048 (via `dynamic-max-tokens`), all with a floor of 2048.
 
 ## Invariants
@@ -211,7 +213,7 @@ The fork follows the same pattern as the complexity evaluation fork:
 - System prompt is never modified. All injections are virtual user messages.
 - L1/L2 reminder text is structured but concise — L1 includes a self-assessment framework, L2 demands best-effort delivery.
 - All counters reset on progress (score > 0), including `consecutiveNoProgress`, `level`, `l1FirstFired`, `l1SecondFired`, `l2Fired`, `l2TurnCount`, and `slidingL1Fired`.
-- All counters also reset on a positive L2 fork-judge result (`meaningful_progress == true`), regardless of the heuristic score.
+- All counters also reset on a positive L1-second fork-judge result (`meaningful_progress == true`), regardless of the heuristic score.
 - L3 is irreversible once triggered.
 - L2 allows at most 5 extra API turns (tracked by `l2TurnCount`, incremented once per `CheckAndInject` call) before escalating to L3.
 - Sliding window L1 trigger is guarded by `slidingL1Fired` to prevent repeated firing; resets on positive score.
