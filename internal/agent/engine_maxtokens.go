@@ -166,7 +166,10 @@ func turnBasedMaxTokens(turn int, modelMax int) int {
 	}
 }
 
-const complexityEvalPrompt = `Evaluate the task being worked on. Respond ONLY with a JSON object, no other text:
+const complexityEvalPrompt = `<system-reminder>
+This is a separate meta-evaluation request. Do not continue any prior conversation or call any tools.
+</system-reminder>
+Evaluate the task being worked on. Respond ONLY with a JSON object, no other text, comments or fences:
 {"complexity": <1-5>, "is_coding": <true/false>}
 Where complexity 1=trivial, 5=very complex, and is_coding=true if the task involves writing/modifying code.`
 

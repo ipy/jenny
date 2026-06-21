@@ -296,7 +296,10 @@ func (e *QueryEngine) compactMessages(ctx context.Context, messages []api.Messag
 // inSessionCompactPrompt is the instruction appended to the message chain
 // for in-session compaction. It reuses the session's system prompt and tools
 // so the entire prefix is a cache hit.
-const inSessionCompactPrompt = `The context window is approaching its limit. Provide a comprehensive summary of our entire conversation so far.
+const inSessionCompactPrompt = `<system-reminder>
+The context window is approaching its limit. This is a separate compaction request. Do not continue any prior conversation or call any tools.
+</system-reminder>
+Provide a comprehensive summary of the entire conversation so far.
 
 Include:
 - Explicit goal of the initial request
@@ -305,7 +308,7 @@ Include:
 - Outstanding tasks or unresolved questions
 - Important technical details and constraints
 
-Output ONLY the summary text. Do not call any tools.`
+Output ONLY the summary text.`
 
 // inSessionCompact performs compaction by appending a summary instruction to the
 // existing message chain, sharing the cached system prompt + tools + message
