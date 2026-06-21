@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ipy/jenny/internal/constants"
+	constants "github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/log"
 	"github.com/ipy/jenny/internal/utils"
 )
@@ -133,9 +133,9 @@ func TestManager_SessionExists(t *testing.T) {
 
 func TestSplitLines(t *testing.T) {
 	input := "line1\nline2\nline3\n"
-	lines := splitLines(input)
+	lines := utils.SplitLines(input)
 	if len(lines) != 3 {
-		t.Errorf("splitLines() returned %d lines, want 3", len(lines))
+		t.Errorf("utils.SplitLines() returned %d lines, want 3", len(lines))
 	}
 }
 
@@ -209,9 +209,9 @@ func TestContainsPathTraversal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := containsPathTraversal(tt.input)
+			got := utils.ContainsPathTraversal(tt.input)
 			if got != tt.want {
-				t.Errorf("containsPathTraversal(%q) = %v, want %v", tt.input, got, tt.want)
+				t.Errorf("utils.ContainsPathTraversal(%q) = %v, want %v", tt.input, got, tt.want)
 			}
 		})
 	}

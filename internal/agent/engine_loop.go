@@ -15,6 +15,7 @@ import (
 	"github.com/ipy/jenny/internal/log"
 	"github.com/ipy/jenny/internal/memdir"
 	"github.com/ipy/jenny/internal/session"
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // SubmitMessage runs a single query turn: persist message, run agent loop,
@@ -684,7 +685,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			}
 			// AC2: Non-user-abort error - increment compaction failure counter
 			// Skip increment for user-initiated aborts (context cancellation, Esc, SIGINT, etc.)
-			if !isUserAbortError(streamResult.Error) {
+			if !utils.IsUserAbortError(streamResult.Error) {
 				e.incrementCompactFailCount()
 			}
 			return "", fmt.Errorf("streaming error: %v", streamResult.Error)

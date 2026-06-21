@@ -184,9 +184,9 @@ func (s StreamMessage) MarshalJSON() ([]byte, error) {
 		// num_turns, result, stop_reason, ttft_ms, terminal_reason, api_error_status,
 		// session_id, total_cost_usd, usage, modelUsage, permission_denials, fast_mode_state, uuid
 		var fields []string
-		fields = append(fields, `"type":`+encodeString(s.Type))
+		fields = append(fields, `"type":`+utils.EncodeString(s.Type))
 		if s.Subtype != "" {
-			fields = append(fields, `"subtype":`+encodeString(s.Subtype))
+			fields = append(fields, `"subtype":`+utils.EncodeString(s.Subtype))
 		}
 		fields = append(fields, `"is_error":`+boolString(s.IsError))
 		// Always emit duration fields per reference format (even if 0)
@@ -196,10 +196,10 @@ func (s StreamMessage) MarshalJSON() ([]byte, error) {
 			fields = append(fields, fmt.Sprintf(`"num_turns":%d`, s.NumTurns))
 		}
 		if s.Result != "" {
-			fields = append(fields, `"result":`+encodeString(s.Result))
+			fields = append(fields, `"result":`+utils.EncodeString(s.Result))
 		}
 		if s.StopReason != "" {
-			fields = append(fields, `"stop_reason":`+encodeString(s.StopReason))
+			fields = append(fields, `"stop_reason":`+utils.EncodeString(s.StopReason))
 		}
 		// ttft_ms: time to first token (always emitted to match Claude Code format)
 		fields = append(fields, fmt.Sprintf(`"ttft_ms":%d`, s.TTFTMs))
@@ -209,16 +209,16 @@ func (s StreamMessage) MarshalJSON() ([]byte, error) {
 		fields = append(fields, fmt.Sprintf(`"time_to_request_ms":%d`, s.TimeToRequestMs))
 		// terminal_reason: mapped from stop_reason (omitted when empty)
 		if s.TerminalReason != "" {
-			fields = append(fields, `"terminal_reason":`+encodeString(s.TerminalReason))
+			fields = append(fields, `"terminal_reason":`+utils.EncodeString(s.TerminalReason))
 		}
 		// api_error_status: always emitted (null on success, string on error)
 		if s.APIErrorStatus != nil {
-			fields = append(fields, `"api_error_status":`+encodeString(*s.APIErrorStatus))
+			fields = append(fields, `"api_error_status":`+utils.EncodeString(*s.APIErrorStatus))
 		} else {
 			fields = append(fields, `"api_error_status":null`)
 		}
 		if s.SessionID != "" {
-			fields = append(fields, `"session_id":`+encodeString(s.SessionID))
+			fields = append(fields, `"session_id":`+utils.EncodeString(s.SessionID))
 		}
 		if s.TotalCostUSD != 0 {
 			fields = append(fields, fmt.Sprintf(`"total_cost_usd":%g`, s.TotalCostUSD))
@@ -248,10 +248,10 @@ func (s StreamMessage) MarshalJSON() ([]byte, error) {
 			fields = append(fields, `"permission_denials":[]`)
 		}
 		if s.FastModeState != "" {
-			fields = append(fields, `"fast_mode_state":`+encodeString(s.FastModeState))
+			fields = append(fields, `"fast_mode_state":`+utils.EncodeString(s.FastModeState))
 		}
 		if s.Uuid != "" {
-			fields = append(fields, `"uuid":`+encodeString(s.Uuid))
+			fields = append(fields, `"uuid":`+utils.EncodeString(s.Uuid))
 		}
 		return []byte("{" + strings.Join(fields, ",") + "}"), nil
 	}
@@ -259,7 +259,7 @@ func (s StreamMessage) MarshalJSON() ([]byte, error) {
 	// Assistant events: type, message, parent_tool_use_id, session_id, uuid
 	if s.Type == "assistant" {
 		var fields []string
-		fields = append(fields, `"type":`+encodeString(s.Type))
+		fields = append(fields, `"type":`+utils.EncodeString(s.Type))
 		if s.Message != nil {
 			switch m := s.Message.(type) {
 			case json.RawMessage:
@@ -270,22 +270,22 @@ func (s StreamMessage) MarshalJSON() ([]byte, error) {
 			}
 		}
 		if s.ParentToolUseID != nil {
-			fields = append(fields, `"parent_tool_use_id":`+encodeString(*s.ParentToolUseID))
+			fields = append(fields, `"parent_tool_use_id":`+utils.EncodeString(*s.ParentToolUseID))
 		}
 		if s.SessionID != "" {
-			fields = append(fields, `"session_id":`+encodeString(s.SessionID))
+			fields = append(fields, `"session_id":`+utils.EncodeString(s.SessionID))
 		}
 		if s.Uuid != "" {
-			fields = append(fields, `"uuid":`+encodeString(s.Uuid))
+			fields = append(fields, `"uuid":`+utils.EncodeString(s.Uuid))
 		}
 		return []byte("{" + strings.Join(fields, ",") + "}"), nil
 	}
 
 	// Default marshaling for all other event types - build manually to avoid recursion
 	var fields []string
-	fields = append(fields, `"type":`+encodeString(s.Type))
+	fields = append(fields, `"type":`+utils.EncodeString(s.Type))
 	if s.Subtype != "" {
-		fields = append(fields, `"subtype":`+encodeString(s.Subtype))
+		fields = append(fields, `"subtype":`+utils.EncodeString(s.Subtype))
 	}
 	if s.IsError {
 		fields = append(fields, `"is_error":true`)
@@ -300,22 +300,22 @@ func (s StreamMessage) MarshalJSON() ([]byte, error) {
 		fields = append(fields, fmt.Sprintf(`"num_turns":%d`, s.NumTurns))
 	}
 	if s.Result != "" {
-		fields = append(fields, `"result":`+encodeString(s.Result))
+		fields = append(fields, `"result":`+utils.EncodeString(s.Result))
 	}
 	if s.StopReason != "" {
-		fields = append(fields, `"stop_reason":`+encodeString(s.StopReason))
+		fields = append(fields, `"stop_reason":`+utils.EncodeString(s.StopReason))
 	}
 	if s.ParentToolUseID != nil {
-		fields = append(fields, `"parent_tool_use_id":`+encodeString(*s.ParentToolUseID))
+		fields = append(fields, `"parent_tool_use_id":`+utils.EncodeString(*s.ParentToolUseID))
 	}
 	if s.SessionID != "" {
-		fields = append(fields, `"session_id":`+encodeString(s.SessionID))
+		fields = append(fields, `"session_id":`+utils.EncodeString(s.SessionID))
 	}
 	if s.TotalCostUSD != 0 {
 		fields = append(fields, fmt.Sprintf(`"total_cost_usd":%g`, s.TotalCostUSD))
 	}
 	if s.Uuid != "" {
-		fields = append(fields, `"uuid":`+encodeString(s.Uuid))
+		fields = append(fields, `"uuid":`+utils.EncodeString(s.Uuid))
 	}
 	// estimated_tokens and estimated_tokens_delta: emitted for thinking_tokens events
 	// (always present when set, matching spec field contract)
@@ -348,20 +348,20 @@ func (s StreamMessage) MarshalJSON() ([]byte, error) {
 		}
 	}
 	if s.Content != "" {
-		fields = append(fields, `"content":`+encodeString(s.Content))
+		fields = append(fields, `"content":`+utils.EncodeString(s.Content))
 	}
 	if s.Model != "" {
-		fields = append(fields, `"model":`+encodeString(s.Model))
+		fields = append(fields, `"model":`+utils.EncodeString(s.Model))
 	}
 	if s.ToolName != "" {
-		fields = append(fields, `"tool_name":`+encodeString(s.ToolName))
+		fields = append(fields, `"tool_name":`+utils.EncodeString(s.ToolName))
 	}
 	if s.ToolInput != nil {
 		toolBytes, _ := json.Marshal(s.ToolInput)
 		fields = append(fields, `"input":`+string(toolBytes))
 	}
 	if s.ToolUseID != "" {
-		fields = append(fields, `"tool_use_id":`+encodeString(s.ToolUseID))
+		fields = append(fields, `"tool_use_id":`+utils.EncodeString(s.ToolUseID))
 	}
 	if s.IsPartial {
 		fields = append(fields, `"is_partial":true`)
@@ -371,7 +371,7 @@ func (s StreamMessage) MarshalJSON() ([]byte, error) {
 		fields = append(fields, `"error_max_tokens":`+string(errBytes))
 	}
 	if s.Timestamp != "" {
-		fields = append(fields, `"timestamp":`+encodeString(s.Timestamp))
+		fields = append(fields, `"timestamp":`+utils.EncodeString(s.Timestamp))
 	}
 	if s.ToolUseResult != nil {
 		toolBytes, _ := json.Marshal(s.ToolUseResult)

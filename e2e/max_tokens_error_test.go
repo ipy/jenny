@@ -8,10 +8,8 @@ import (
 	"github.com/ipy/jenny/internal/testutil/mockapi"
 )
 
-// TestDebtMD3MaxTokensErrorCategories verifies the categorizeMaxTokensError
+// TestMaxTokensErrorCategories verifies the categorizeMaxTokensError
 // fix through e2e behavioral testing.
-//
-// Spec: debt-MD-3 — MaxOutputTokens is 0 for CategoryContextExhausted
 //
 // The fix ensures categorizeMaxTokensError always populates MaxOutputTokens
 // from the model capability table, even when contextRejected is true.
@@ -23,15 +21,15 @@ import (
 // the passing unit tests (TestCategorizeMaxTokensError). These e2e tests
 // verify that both error categories are correctly triggered and handled.
 
-// TestDebtMD3OutputCapHit verifies the output_cap_hit category via e2e.
+// TestMaxTokensErrorOutputCapHit verifies the output_cap_hit category via e2e.
 // Uses a cassette with stop_reason: "max_tokens" to trigger CategoryOutputCapHit.
-func TestDebtMD3OutputCapHit(t *testing.T) {
+func TestMaxTokensErrorOutputCapHit(t *testing.T) {
 	runE2ESuite(t, []*harness.TestCase{
 		{
-			ID:          "debt-md3.output-cap-hit.category-correct",
-			Category:    "debt-md3",
+			ID:          "max-tokens-error.output-cap-hit.category-correct",
+			Category:    "max-tokens-error",
 			Description: "output_cap_hit: result event has correct category in result message",
-			Tags:        []string{"debt"},
+			Tags:        []string{"max-tokens-error"},
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "write a very long response",
@@ -67,10 +65,10 @@ func TestDebtMD3OutputCapHit(t *testing.T) {
 			},
 		},
 		{
-			ID:          "debt-md3.output-cap-hit.exit-code-nonzero",
-			Category:    "debt-md3",
+			ID:          "max-tokens-error.output-cap-hit.exit-code-nonzero",
+			Category:    "max-tokens-error",
 			Description: "output_cap_hit: process exits with non-zero code",
-			Tags:        []string{"debt"},
+			Tags:        []string{"max-tokens-error"},
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "write a very long response",
@@ -85,9 +83,9 @@ func TestDebtMD3OutputCapHit(t *testing.T) {
 	})
 }
 
-// TestDebtMD3ContextExhausted verifies the context_exhausted category via e2e.
+// TestMaxTokensErrorContextExhausted verifies the context_exhausted category via e2e.
 // Uses HTTP 413 error response to trigger CategoryContextExhausted.
-func TestDebtMD3ContextExhausted(t *testing.T) {
+func TestMaxTokensErrorContextExhausted(t *testing.T) {
 	cassetteDir := "fixtures/cassettes"
 	mock := mockapi.NewMockServer(mockapi.WithCassetteDir(cassetteDir))
 	defer mock.Close()
@@ -144,9 +142,9 @@ func TestDebtMD3ContextExhausted(t *testing.T) {
 	}
 }
 
-// TestDebtMD3ContextExhaustedWithModel verifies that the context_exhausted
+// TestMaxTokensErrorContextExhaustedWithModel verifies that the context_exhausted
 // error correctly identifies the model and propagates through the system.
-func TestDebtMD3ContextExhaustedWithModel(t *testing.T) {
+func TestMaxTokensErrorContextExhaustedWithModel(t *testing.T) {
 	tests := []struct {
 		name     string
 		model    string
@@ -197,9 +195,9 @@ func TestDebtMD3ContextExhaustedWithModel(t *testing.T) {
 	}
 }
 
-// TestDebtMD3OutputCapHitWithModel verifies the output_cap_hit category
+// TestMaxTokensErrorOutputCapHitWithModel verifies the output_cap_hit category
 // correctly handles different models through imperative tests.
-func TestDebtMD3OutputCapHitWithModel(t *testing.T) {
+func TestMaxTokensErrorOutputCapHitWithModel(t *testing.T) {
 	tests := []struct {
 		name              string
 		model             string

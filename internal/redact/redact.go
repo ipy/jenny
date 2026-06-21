@@ -3,10 +3,11 @@ package redact
 import (
 	"crypto/rand"
 	"fmt"
-	"math"
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // entropyThreshold is the minimum Shannon entropy (bits/char) used by
@@ -16,26 +17,13 @@ import (
 // docs/arch/secret-redaction.md.
 const entropyThreshold = 3.5
 
-// shannonEntropy computes the Shannon entropy (bits per character) of data.
+// shannonEntropy is a thin wrapper around utils.ShannonEntropy.
 // Copied verbatim from github.com/zricethezav/gitleaks/v8/detect/utils.go
 // (gitleaks keeps this helper unexported; we mirror it for entropy-based
 // detection). Kept in sync with upstream so behavior matches gitleaks'
 // own scoring.
 func shannonEntropy(data string) float64 {
-	if data == "" {
-		return 0
-	}
-	charCounts := make(map[rune]int)
-	for _, char := range data {
-		charCounts[char]++
-	}
-	invLength := 1.0 / float64(len(data))
-	var entropy float64
-	for _, count := range charCounts {
-		freq := float64(count) * invLength
-		entropy -= freq * math.Log2(freq)
-	}
-	return entropy
+	return utils.ShannonEntropy(data)
 }
 
 // SecretRedactor detects and redacts secrets in tool results.

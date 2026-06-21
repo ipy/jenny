@@ -39,7 +39,7 @@ func buildGracefulShutdownBinary(t *testing.T) string {
 	return binPath
 }
 
-// Note: findRepoRoot is defined in debt_md1_test.go
+// Note: findRepoRoot is defined in helpers_test.go
 
 // runJennyGraceful starts jenny with the given env and args, returns the cmd handle
 // so the caller can send signals.

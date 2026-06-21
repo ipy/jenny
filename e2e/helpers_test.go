@@ -1,6 +1,8 @@
 package e2e_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ipy/jenny/e2e/harness"
@@ -11,6 +13,25 @@ const (
 	targetPath  = "../cmd/jenny"
 	timeoutMs   = 60000
 )
+
+// findRepoRoot walks up from the test file directory to find go.mod.
+func findRepoRoot(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("go.mod not found")
+		}
+		dir = parent
+	}
+}
 
 func defaultConfig() *harness.Config {
 	return &harness.Config{

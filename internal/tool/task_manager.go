@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/constants"
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // TaskState represents the state of a background task.
@@ -265,7 +266,7 @@ func (tm *TaskManager) WriteTaskResult(taskID string, output string, exitCode in
 		return fmt.Errorf("marshaling task result: %w", err)
 	}
 
-	return appendJSONLLine(path, data)
+	return utils.AppendJSONLLine(path, data)
 }
 
 // FlushPartialOutput writes accumulated partial output to the task's output file.
@@ -291,23 +292,7 @@ func (tm *TaskManager) FlushPartialOutput(taskID string, output string, duration
 		return fmt.Errorf("marshaling partial result: %w", err)
 	}
 
-	return appendJSONLLine(path, data)
-}
-
-// appendJSONLLine appends a single JSONL line (data + '\n') to the file at path,
-// creating it if it does not exist. The file is opened with O_APPEND so concurrent
-// writes are atomic on POSIX when individual writes are <= PIPE_BUF (4 KiB).
-func appendJSONLLine(path string, data []byte) error {
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("opening task output file: %w", err)
-	}
-	defer f.Close()
-
-	if _, err := f.Write(append(data, '\n')); err != nil {
-		return fmt.Errorf("writing task output: %w", err)
-	}
-	return nil
+	return utils.AppendJSONLLine(path, data)
 }
 
 // TaskResultEntry represents a JSONL entry in the task output file.

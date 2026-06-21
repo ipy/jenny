@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/constants"
+	"github.com/ipy/jenny/internal/utils"
 )
 
 func TestTaskOutputTool_Name(t *testing.T) {
@@ -382,9 +383,9 @@ func TestParseTimeoutSeconds(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := parseTimeoutSeconds(tt.input)
+			got := utils.ParseTimeoutSeconds(tt.input)
 			if got != tt.want {
-				t.Errorf("parseTimeoutSeconds(%v) = %v, want %v", tt.input, got, tt.want)
+				t.Errorf("utils.ParseTimeoutSeconds(%v) = %v, want %v", tt.input, got, tt.want)
 			}
 		})
 	}

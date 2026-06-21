@@ -11,6 +11,7 @@ import (
 	"github.com/ipy/jenny/internal/api"
 	"github.com/ipy/jenny/internal/mcp"
 	"github.com/ipy/jenny/internal/session"
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // emitToolProgress emits a tool_progress event with subtype "output".
@@ -296,7 +297,7 @@ func (e *QueryEngine) handleStreamError(streamResult api.StreamResult, messages 
 	}
 	// AC2: Non-user-abort error - increment compaction failure counter
 	// Skip increment for user-initiated aborts (context cancellation, Esc, SIGINT, etc.)
-	if !isUserAbortError(streamResult.Error) {
+	if !utils.IsUserAbortError(streamResult.Error) {
 		e.incrementCompactFailCount()
 	}
 	return false, fmt.Errorf("streaming error: %v", streamResult.Error)

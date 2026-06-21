@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/ipy/jenny/internal/utils"
 	"github.com/knadh/koanf/parsers/json"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
@@ -423,37 +424,37 @@ type PluginInitInfo struct {
 // - Maintain correct field ordering per reference format
 func (s StreamMessage) MarshalJSON() ([]byte, error) {
 	var fields []string
-	fields = append(fields, `"type":`+encodeString(s.Type))
+	fields = append(fields, `"type":`+utils.EncodeString(s.Type))
 	if s.Subtype != "" {
-		fields = append(fields, `"subtype":`+encodeString(s.Subtype))
+		fields = append(fields, `"subtype":`+utils.EncodeString(s.Subtype))
 	}
 	if s.Content != "" {
-		fields = append(fields, `"content":`+encodeString(s.Content))
+		fields = append(fields, `"content":`+utils.EncodeString(s.Content))
 	}
 	if s.SessionID != "" {
-		fields = append(fields, `"session_id":`+encodeString(s.SessionID))
+		fields = append(fields, `"session_id":`+utils.EncodeString(s.SessionID))
 	}
 	if s.ParentToolUseID != nil {
-		fields = append(fields, `"parent_tool_use_id":`+encodeString(*s.ParentToolUseID))
+		fields = append(fields, `"parent_tool_use_id":`+utils.EncodeString(*s.ParentToolUseID))
 	}
 	if s.Uuid != "" {
-		fields = append(fields, `"uuid":`+encodeString(s.Uuid))
+		fields = append(fields, `"uuid":`+utils.EncodeString(s.Uuid))
 	}
 	if s.Result != "" {
-		fields = append(fields, `"result":`+encodeString(s.Result))
+		fields = append(fields, `"result":`+utils.EncodeString(s.Result))
 	}
 	if s.Model != "" {
-		fields = append(fields, `"model":`+encodeString(s.Model))
+		fields = append(fields, `"model":`+utils.EncodeString(s.Model))
 	}
 	if s.CWD != "" {
-		fields = append(fields, `"cwd":`+encodeString(s.CWD))
+		fields = append(fields, `"cwd":`+utils.EncodeString(s.CWD))
 	}
 	if len(s.Tools) > 0 {
 		toolsBytes, _ := stdjson.Marshal(s.Tools)
 		fields = append(fields, `"tools":`+string(toolsBytes))
 	}
 	if s.ToolName != "" {
-		fields = append(fields, `"tool_name":`+encodeString(s.ToolName))
+		fields = append(fields, `"tool_name":`+utils.EncodeString(s.ToolName))
 	}
 	if s.ToolInput != nil {
 		inputBytes, _ := stdjson.Marshal(s.ToolInput)
@@ -466,16 +467,16 @@ func (s StreamMessage) MarshalJSON() ([]byte, error) {
 		fields = append(fields, `"is_partial":true`)
 	}
 	if s.ClaudeCodeVersion != "" {
-		fields = append(fields, `"claude_code_version":`+encodeString(s.ClaudeCodeVersion))
+		fields = append(fields, `"claude_code_version":`+utils.EncodeString(s.ClaudeCodeVersion))
 	}
 	if s.PermissionMode != "" {
-		fields = append(fields, `"permissionMode":`+encodeString(s.PermissionMode))
+		fields = append(fields, `"permissionMode":`+utils.EncodeString(s.PermissionMode))
 	}
 	if s.FastModeState != "" {
-		fields = append(fields, `"fast_mode_state":`+encodeString(s.FastModeState))
+		fields = append(fields, `"fast_mode_state":`+utils.EncodeString(s.FastModeState))
 	}
 	if s.OutputStyle != "" {
-		fields = append(fields, `"output_style":`+encodeString(s.OutputStyle))
+		fields = append(fields, `"output_style":`+utils.EncodeString(s.OutputStyle))
 	}
 	// Always emit mcp_servers as array (even if empty) for init events compatibility
 	if s.MCPServers != nil {
@@ -511,15 +512,10 @@ func (s StreamMessage) MarshalJSON() ([]byte, error) {
 		fields = append(fields, `"memory_paths":`+string(mpBytes))
 	}
 	if s.APIKeySource != "" {
-		fields = append(fields, `"apiKeySource":`+encodeString(s.APIKeySource))
+		fields = append(fields, `"apiKeySource":`+utils.EncodeString(s.APIKeySource))
 	}
 
 	return []byte("{" + strings.Join(fields, ",") + "}"), nil
-}
-
-func encodeString(s string) string {
-	b, _ := stdjson.Marshal(s)
-	return string(b)
 }
 
 // WriteStreamJSON writes a message as NDJSON line to stdout.

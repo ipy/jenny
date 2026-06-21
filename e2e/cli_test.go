@@ -658,3 +658,109 @@ func TestCLIBooleanFlagNegation(t *testing.T) {
 		},
 	})
 }
+
+// TestCLIMutuallyExclusiveFlags verifies that --refresh-registry and --offline
+// are mutually exclusive when used together.
+func TestCLIMutuallyExclusiveFlags(t *testing.T) {
+	runE2ESuite(t, []*harness.TestCase{
+		{
+			ID:          "cli.mutual-exclusive.exits-nonzero",
+			Category:    "cli-flags",
+			Description: "--refresh-registry --offline exits nonzero with mutual exclusivity error",
+			Target: harness.TargetInvocation{
+				Kind: "cli",
+				Args: []string{"--refresh-registry", "--offline", "-p", "hello"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 1,
+				Stderr: &harness.StderrExpectation{
+					Contains: []string{"mutually exclusive"},
+				},
+			},
+		},
+		{
+			ID:          "cli.mutual-exclusive.reversed-order",
+			Category:    "cli-flags",
+			Description: "--offline --refresh-registry (reversed order) also exits nonzero",
+			Target: harness.TargetInvocation{
+				Kind: "cli",
+				Args: []string{"--offline", "--refresh-registry", "-p", "hello"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 1,
+				Stderr: &harness.StderrExpectation{
+					Contains: []string{"mutually exclusive"},
+				},
+			},
+		},
+		{
+			ID:          "cli.mutual-exclusive.refresh-registry-alone",
+			Category:    "cli-flags",
+			Description: "--refresh-registry alone does not produce mutual exclusivity error",
+			Target: harness.TargetInvocation{
+				Kind: "cli",
+				Args: []string{"--refresh-registry"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 1,
+				Stderr: &harness.StderrExpectation{
+					Contains:    []string{"no prompt"},
+					NotContains: []string{"mutually exclusive"},
+				},
+			},
+		},
+		{
+			ID:          "cli.mutual-exclusive.offline-alone",
+			Category:    "cli-flags",
+			Description: "--offline alone is accepted (no mutual exclusivity error)",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hi",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+				Args:     []string{"--offline"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				Stderr: &harness.StderrExpectation{
+					NotContains: []string{"mutually exclusive"},
+				},
+			},
+		},
+		{
+			ID:          "cli.mutual-exclusive.neither-flag",
+			Category:    "cli-flags",
+			Description: "neither --refresh-registry nor --offline produces no mutual exclusivity error",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hi",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				Stderr: &harness.StderrExpectation{
+					NotContains: []string{"mutually exclusive"},
+				},
+			},
+		},
+		{
+			ID:          "cli.mutual-exclusive.error-message-on-stderr",
+			Category:    "cli-flags",
+			Description: "mutual exclusivity error appears on stderr, not stdout",
+			Target: harness.TargetInvocation{
+				Kind: "cli",
+				Args: []string{"--refresh-registry", "--offline", "-p", "hello"},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 1,
+				Stdout: &harness.StdoutExpectation{
+					NotContains: []string{"mutually exclusive"},
+				},
+				Stderr: &harness.StderrExpectation{
+					Contains: []string{"mutually exclusive"},
+				},
+			},
+		},
+	})
+}

@@ -197,6 +197,50 @@ func TestCostTrackingResultFields(t *testing.T) {
 				},
 			},
 		},
+		{
+			ID:          "cost.result.cost-is-numeric",
+			Category:    "cost-tracking",
+			Description: "total_cost_usd is a non-empty numeric value",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hi",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				StreamJSON: &harness.StreamJSONExpectation{
+					LastEvent: &harness.EventExpectation{
+						Type:          "result",
+						FieldNotEmpty: []string{"total_cost_usd"},
+					},
+				},
+			},
+		},
+		{
+			ID:          "cost.result.model-usage-has-specific-model",
+			Category:    "cost-tracking",
+			Description: "modelUsage includes the specific model used in the request",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hi",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				StreamJSON: &harness.StreamJSONExpectation{
+					LastEvent: &harness.EventExpectation{
+						Type: "result",
+						Nested: map[string]*harness.EventExpectation{
+							"modelUsage": {
+								HasFields: []string{"claude-opus-4-5-20251101"},
+							},
+						},
+					},
+				},
+			},
+		},
 	})
 }
 

@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // TreeTool lists directory contents recursively as a tree.
@@ -87,7 +89,7 @@ func (t *TreeTool) Execute(ctx context.Context, input map[string]any, cwd string
 		path = filepath.Join(cwd, path)
 	}
 
-	absPath, err := NormalizePath(path)
+	absPath, err := utils.NormalizePath(path)
 	if err != nil {
 		return &ToolResult{Content: "Error: " + err.Error(), IsError: true}, nil
 	}
@@ -224,7 +226,7 @@ func (t *TreeTool) buildTree(root string, maxDepth int, showHidden bool, limit i
 		// Build hint
 		hint := ""
 		if it.isDir {
-			count, _ := CountDirEntries(it.path)
+			count, _ := utils.CountDirEntries(it.path)
 			switch count {
 			case 0:
 				hint = "[empty]"

@@ -14,6 +14,7 @@ import (
 
 	"github.com/ipy/jenny/internal/grepinproc"
 	"github.com/ipy/jenny/internal/sandbox"
+	"github.com/ipy/jenny/internal/utils"
 )
 
 const (
@@ -350,10 +351,7 @@ func boolVal(input map[string]any, key string) bool {
 // the rg path.
 func (t *GrepTool) executeInProcess(ctx context.Context, input map[string]any, pattern, cwd string) (*ToolResult, error) {
 	// Build a context with the requested timeout.
-	timeout := defaultTimeout
-	if timeoutVal, ok := input["timeout"].(float64); ok {
-		timeout = int(timeoutVal)
-	}
+	timeout := int(utils.ParseTimeoutSeconds(input))
 	derivedCtx, derivedCancel := context.WithCancel(ctx)
 	defer derivedCancel()
 	cmdCtx, cmdCancel := context.WithTimeout(derivedCtx, time.Duration(timeout)*time.Second)

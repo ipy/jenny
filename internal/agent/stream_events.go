@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ipy/jenny/internal/api"
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // contentBlockStopEvent represents a content_block_stop stream event with minimal fields.
@@ -35,22 +36,22 @@ type MinimalContentBlock struct {
 
 func (m MinimalContentBlock) MarshalJSON() ([]byte, error) {
 	// Build fields in order: type first, then only non-empty fields
-	fields := []any{`"type":` + encodeString(m.Type)}
+	fields := []any{`"type":` + utils.EncodeString(m.Type)}
 
 	switch m.Type {
 	case api.BlockTypeThinking:
 		if m.Thinking != "" {
-			fields = append(fields, `"thinking":`+encodeString(m.Thinking))
+			fields = append(fields, `"thinking":`+utils.EncodeString(m.Thinking))
 		}
 		if m.Signature != "" {
-			fields = append(fields, `"signature":`+encodeString(m.Signature))
+			fields = append(fields, `"signature":`+utils.EncodeString(m.Signature))
 		}
 	case api.BlockTypeText:
 		// Always include text field even when empty (per reference format for content_block_start)
-		fields = append(fields, `"text":`+encodeString(m.Text))
+		fields = append(fields, `"text":`+utils.EncodeString(m.Text))
 	case api.BlockTypeToolUse:
-		fields = append(fields, `"id":`+encodeString(m.ID))
-		fields = append(fields, `"name":`+encodeString(m.Name))
+		fields = append(fields, `"id":`+utils.EncodeString(m.ID))
+		fields = append(fields, `"name":`+utils.EncodeString(m.Name))
 		if m.Input != nil {
 			inputBytes, err := json.Marshal(m.Input)
 			if err != nil {
@@ -60,7 +61,7 @@ func (m MinimalContentBlock) MarshalJSON() ([]byte, error) {
 		}
 	case api.BlockTypeRedactedThinking:
 		if m.Text != "" {
-			fields = append(fields, `"data":`+encodeString(m.Text))
+			fields = append(fields, `"data":`+utils.EncodeString(m.Text))
 		}
 	}
 
@@ -85,42 +86,42 @@ func (m MinimalDelta) MarshalJSON() ([]byte, error) {
 	case api.DeltaTypeThinking:
 		fields = []any{`"type":"thinking_delta"`}
 		if m.Thinking != "" {
-			fields = append(fields, `"thinking":`+encodeString(m.Thinking))
+			fields = append(fields, `"thinking":`+utils.EncodeString(m.Thinking))
 		}
 		if m.Signature != "" {
-			fields = append(fields, `"signature":`+encodeString(m.Signature))
+			fields = append(fields, `"signature":`+utils.EncodeString(m.Signature))
 		}
 	case api.DeltaTypeText:
 		fields = []any{`"type":"text_delta"`}
 		if m.Text != "" {
-			fields = append(fields, `"text":`+encodeString(m.Text))
+			fields = append(fields, `"text":`+utils.EncodeString(m.Text))
 		}
 	case api.DeltaTypeInputJSON:
 		fields = []any{`"type":"input_json_delta"`}
 		if m.PartialJSON != "" {
-			fields = append(fields, `"partial_json":`+encodeString(m.PartialJSON))
+			fields = append(fields, `"partial_json":`+utils.EncodeString(m.PartialJSON))
 		}
 	case api.DeltaTypeSignature:
 		fields = []any{`"type":"signature_delta"`}
 		if m.Signature != "" {
-			fields = append(fields, `"signature":`+encodeString(m.Signature))
+			fields = append(fields, `"signature":`+utils.EncodeString(m.Signature))
 		}
 	case api.EventMessageDelta:
 		// Reference format: delta has stop_reason/stop_sequence directly, no nested type field
 		// Always include stop_reason and stop_sequence (possibly null)
 		fields = []any{}
 		if m.StopReason != "" {
-			fields = append(fields, `"stop_reason":`+encodeString(m.StopReason))
+			fields = append(fields, `"stop_reason":`+utils.EncodeString(m.StopReason))
 		} else {
 			fields = append(fields, `"stop_reason":null`)
 		}
 		if m.StopSeq != nil {
-			fields = append(fields, `"stop_sequence":`+encodeString(*m.StopSeq))
+			fields = append(fields, `"stop_sequence":`+utils.EncodeString(*m.StopSeq))
 		} else {
 			fields = append(fields, `"stop_sequence":null`)
 		}
 	default:
-		fields = []any{`"type":` + encodeString(m.Type)}
+		fields = []any{`"type":` + utils.EncodeString(m.Type)}
 	}
 
 	return []byte("{" + joinFields(fields) + "}"), nil
@@ -140,10 +141,10 @@ type MinimalMessage struct {
 }
 
 func (m MinimalMessage) MarshalJSON() ([]byte, error) {
-	fields := []any{`"id":` + encodeString(m.ID), `"type":` + encodeString(m.Type), `"role":` + encodeString(m.Role)}
+	fields := []any{`"id":` + utils.EncodeString(m.ID), `"type":` + utils.EncodeString(m.Type), `"role":` + utils.EncodeString(m.Role)}
 
 	if m.Model != "" {
-		fields = append(fields, `"model":`+encodeString(m.Model))
+		fields = append(fields, `"model":`+utils.EncodeString(m.Model))
 	}
 
 	if m.Content != nil {
@@ -156,12 +157,12 @@ func (m MinimalMessage) MarshalJSON() ([]byte, error) {
 
 	// Always include stop_reason and stop_sequence (possibly null per reference format)
 	if m.StopReason != nil {
-		fields = append(fields, `"stop_reason":`+encodeString(*m.StopReason))
+		fields = append(fields, `"stop_reason":`+utils.EncodeString(*m.StopReason))
 	} else {
 		fields = append(fields, `"stop_reason":null`)
 	}
 	if m.StopSeq != nil {
-		fields = append(fields, `"stop_sequence":`+encodeString(*m.StopSeq))
+		fields = append(fields, `"stop_sequence":`+utils.EncodeString(*m.StopSeq))
 	} else {
 		fields = append(fields, `"stop_sequence":null`)
 	}
@@ -186,11 +187,6 @@ type StreamUsage struct {
 	CacheReadInputTokens     int    `json:"cache_read_input_tokens"`
 	OutputTokens             int    `json:"output_tokens"`
 	ServiceTier              string `json:"service_tier"`
-}
-
-func encodeString(s string) string {
-	b, _ := json.Marshal(s)
-	return string(b)
 }
 
 func joinFields(fields []any) string {

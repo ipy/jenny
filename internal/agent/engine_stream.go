@@ -11,6 +11,7 @@ import (
 
 	"github.com/ipy/jenny/internal/api"
 	"github.com/ipy/jenny/internal/tool"
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // TurnCount returns the current turn count for diagnostics.
@@ -227,24 +228,24 @@ func (e *QueryEngine) emitConsolidatedAssistant(
 		// Reference order: type, thinking, signature
 		blockFields := []string{
 			`"type":"thinking"`,
-			`"thinking":` + encodeString(tb.Text),
+			`"thinking":` + utils.EncodeString(tb.Text),
 		}
 		if tb.Signature != "" {
-			blockFields = append(blockFields, `"signature":`+encodeString(tb.Signature))
+			blockFields = append(blockFields, `"signature":`+utils.EncodeString(tb.Signature))
 		}
 		contentFields = append(contentFields, "{"+strings.Join(blockFields, ",")+"}")
 	}
 	if textOutput.Len() > 0 {
 		// Reference order: type, text
-		contentFields = append(contentFields, `{"type":"text","text":`+encodeString(textOutput.String())+`}`)
+		contentFields = append(contentFields, `{"type":"text","text":`+utils.EncodeString(textOutput.String())+`}`)
 	}
 	for _, tb := range toolUseBlocks {
 		// Reference order: type, id, name, input
 		inputBytes, _ := json.Marshal(tb.Input)
 		blockFields := []string{
 			`"type":"tool_use"`,
-			`"id":` + encodeString(tb.ID),
-			`"name":` + encodeString(tb.Name),
+			`"id":` + utils.EncodeString(tb.ID),
+			`"name":` + utils.EncodeString(tb.Name),
 			`"input":` + string(inputBytes),
 		}
 		contentFields = append(contentFields, "{"+strings.Join(blockFields, ",")+"}")
@@ -254,21 +255,21 @@ func (e *QueryEngine) emitConsolidatedAssistant(
 	// Build full message structure per spec: id, type, role, model, content, stop_reason, stop_sequence, usage
 	// Using ordered field construction to match reference format
 	messageFields := []string{
-		`"id":` + encodeString(messageID),
+		`"id":` + utils.EncodeString(messageID),
 		`"type":"message"`,
 		`"role":"assistant"`,
-		`"model":` + encodeString(model),
+		`"model":` + utils.EncodeString(model),
 		`"content":` + contentJSON,
 	}
 
 	// Always include stop_reason and stop_sequence (possibly null)
 	if stopReason != "" {
-		messageFields = append(messageFields, `"stop_reason":`+encodeString(stopReason))
+		messageFields = append(messageFields, `"stop_reason":`+utils.EncodeString(stopReason))
 	} else {
 		messageFields = append(messageFields, `"stop_reason":null`)
 	}
 	if stopSequence != "" {
-		messageFields = append(messageFields, `"stop_sequence":`+encodeString(stopSequence))
+		messageFields = append(messageFields, `"stop_sequence":`+utils.EncodeString(stopSequence))
 	} else {
 		messageFields = append(messageFields, `"stop_sequence":null`)
 	}
@@ -306,13 +307,13 @@ func (e *QueryEngine) emitAssistantEvent(sessionID string, block api.ContentBloc
 	switch block.Type {
 	case api.BlockTypeThinking:
 		blockFields = append(blockFields, `"type":"thinking"`)
-		blockFields = append(blockFields, `"thinking":`+encodeString(block.Thinking))
+		blockFields = append(blockFields, `"thinking":`+utils.EncodeString(block.Thinking))
 		if block.Signature != "" {
-			blockFields = append(blockFields, `"signature":`+encodeString(block.Signature))
+			blockFields = append(blockFields, `"signature":`+utils.EncodeString(block.Signature))
 		}
 	case api.BlockTypeText:
 		blockFields = append(blockFields, `"type":"text"`)
-		blockFields = append(blockFields, `"text":`+encodeString(block.Text))
+		blockFields = append(blockFields, `"text":`+utils.EncodeString(block.Text))
 	case api.BlockTypeToolUse:
 		// Ensure ToolInput is never nil in stream-json output —
 		// some models return arguments=null which can leave ToolInput nil.
@@ -321,8 +322,8 @@ func (e *QueryEngine) emitAssistantEvent(sessionID string, block api.ContentBloc
 		}
 		inputBytes, _ := json.Marshal(block.ToolInput)
 		blockFields = append(blockFields, `"type":"tool_use"`)
-		blockFields = append(blockFields, `"id":`+encodeString(block.ToolID))
-		blockFields = append(blockFields, `"name":`+encodeString(block.ToolName))
+		blockFields = append(blockFields, `"id":`+utils.EncodeString(block.ToolID))
+		blockFields = append(blockFields, `"name":`+utils.EncodeString(block.ToolName))
 		blockFields = append(blockFields, `"input":`+string(inputBytes))
 	default:
 		return
@@ -330,10 +331,10 @@ func (e *QueryEngine) emitAssistantEvent(sessionID string, block api.ContentBloc
 	contentJSON := "[{" + strings.Join(blockFields, ",") + "}]"
 
 	messageFields := []string{
-		`"id":` + encodeString(messageID),
+		`"id":` + utils.EncodeString(messageID),
 		`"type":"message"`,
 		`"role":"assistant"`,
-		`"model":` + encodeString(model),
+		`"model":` + utils.EncodeString(model),
 		`"content":` + contentJSON,
 		`"stop_reason":null`,
 		`"stop_sequence":null`,
@@ -366,21 +367,21 @@ func (e *QueryEngine) emitAssistantFinalEvent(sessionID string, messageID string
 	}
 
 	messageFields := []string{
-		`"id":` + encodeString(messageID),
+		`"id":` + utils.EncodeString(messageID),
 		`"type":"message"`,
 		`"role":"assistant"`,
-		`"model":` + encodeString(model),
+		`"model":` + utils.EncodeString(model),
 		`"content":[]`, // Final event has empty content
 	}
 
 	// Include stop_reason and stop_sequence
 	if stopReason != "" {
-		messageFields = append(messageFields, `"stop_reason":`+encodeString(stopReason))
+		messageFields = append(messageFields, `"stop_reason":`+utils.EncodeString(stopReason))
 	} else {
 		messageFields = append(messageFields, `"stop_reason":null`)
 	}
 	if stopSequence != "" {
-		messageFields = append(messageFields, `"stop_sequence":`+encodeString(stopSequence))
+		messageFields = append(messageFields, `"stop_sequence":`+utils.EncodeString(stopSequence))
 	} else {
 		messageFields = append(messageFields, `"stop_sequence":null`)
 	}

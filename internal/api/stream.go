@@ -2,17 +2,16 @@
 package api
 
 import (
-	crypto_rand "crypto/rand"
 	"encoding/json"
-	"fmt"
 	"time"
+
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // GenerateShortID generates a short random hex ID for synthetic message IDs.
+// Deprecated: Use utils.GenerateShortID instead.
 func GenerateShortID() string {
-	b := make([]byte, 12)
-	_, _ = crypto_rand.Read(b)
-	return fmt.Sprintf("%x", b)
+	return utils.GenerateShortID()
 }
 
 // DefaultIdleTimeout is the default timeout for idle watchdog (30 seconds).

@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 	"unicode/utf8"
+
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // TestUTF8SafeTruncate verifies AC7: rune-aware truncation never splits
@@ -74,12 +76,12 @@ func TestUTF8SafeTruncate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := utf8SafeTruncate(tt.input, tt.maxBytes)
+			got := utils.SafeTruncate(tt.input, tt.maxBytes)
 			if tt.want != "" && got != tt.want {
-				t.Errorf("utf8SafeTruncate(%q, %d) = %q, want %q", tt.input, tt.maxBytes, got, tt.want)
+				t.Errorf("utils.SafeTruncate(%q, %d) = %q, want %q", tt.input, tt.maxBytes, got, tt.want)
 			}
 			if tt.wantValid && !utf8.ValidString(got) {
-				t.Errorf("utf8SafeTruncate(%q, %d) = %q is not valid UTF-8", tt.input, tt.maxBytes, got)
+				t.Errorf("utils.SafeTruncate(%q, %d) = %q is not valid UTF-8", tt.input, tt.maxBytes, got)
 			}
 		})
 	}
@@ -92,7 +94,7 @@ func TestUTF8SafeTruncate_NoSplitEmoji(t *testing.T) {
 	// Truncating mid-sequence produces invalid UTF-8; our function must avoid it.
 	input := strings.Repeat("🔥", 100) // 400 bytes of emoji
 	maxBytes := 399                   // Force truncation mid-rune
-	result := utf8SafeTruncate(input, maxBytes)
+	result := utils.SafeTruncate(input, maxBytes)
 	// AC7: The result must be valid UTF-8 (no split code points).
 	if !utf8.ValidString(result) {
 		t.Errorf("AC7 FAIL: result contains invalid UTF-8: %q", result)

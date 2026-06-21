@@ -271,3 +271,438 @@ func TestModelRegistryOfflineNoNetwork(t *testing.T) {
 		},
 	})
 }
+
+// TestModelRegistryConfigWarnings verifies that malformed models in config.json
+// produce warnings on stderr when --verbose is used.
+func TestModelRegistryConfigWarnings(t *testing.T) {
+	runE2ESuite(t, []*harness.TestCase{
+		{
+			ID:          "registry.malformed-models-warns-on-stderr",
+			Category:    "model-registry",
+			Description: "malformed models key in config.json produces a warning on stderr with --verbose",
+			Target: harness.TargetInvocation{
+				Kind: "cli",
+				Args: []string{"--offline", "--print-system-prompt", "--verbose"},
+				Env:  []string{"JENNY_HOME=${WORK_DIR}/.jenny"},
+				WorkDirFiles: map[string]string{
+					".jenny/config.json": `{"models": "not-an-object"}`,
+				},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				Stderr: &harness.StderrExpectation{
+					Contains: []string{"model", "config", "parse", "warn", "error", "invalid", "malformed", "models"},
+				},
+			},
+		},
+	})
+}
+
+// TestModelRegistryConfigEdgeCases tests config.json edge cases that don't crash.
+func TestModelRegistryConfigEdgeCases(t *testing.T) {
+	runE2ESuite(t, []*harness.TestCase{
+		{
+			ID:          "registry.absent-models-key-works",
+			Category:    "model-registry",
+			Description: "config.json without models key works correctly",
+			Target: harness.TargetInvocation{
+				Kind: "cli",
+				Args: []string{"--offline", "--print-system-prompt"},
+				Env:  []string{"JENNY_HOME=${WORK_DIR}/.jenny"},
+				WorkDirFiles: map[string]string{
+					".jenny/config.json": `{"output-format": "text"}`,
+				},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				Stdout: &harness.StdoutExpectation{
+					Length: &harness.LengthExpectation{Min: 500},
+				},
+			},
+		},
+		{
+			ID:          "registry.empty-config-works",
+			Category:    "model-registry",
+			Description: "empty config.json works correctly",
+			Target: harness.TargetInvocation{
+				Kind: "cli",
+				Args: []string{"--offline", "--print-system-prompt"},
+				Env:  []string{"JENNY_HOME=${WORK_DIR}/.jenny"},
+				WorkDirFiles: map[string]string{
+					".jenny/config.json": `{}`,
+				},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				Stdout: &harness.StdoutExpectation{
+					Length: &harness.LengthExpectation{Min: 500},
+				},
+			},
+		},
+		{
+			ID:          "registry.empty-models-key-works",
+			Category:    "model-registry",
+			Description: "config.json with empty models object does not crash",
+			Target: harness.TargetInvocation{
+				Kind: "cli",
+				Args: []string{"--offline", "--print-system-prompt"},
+				Env:  []string{"JENNY_HOME=${WORK_DIR}/.jenny"},
+				WorkDirFiles: map[string]string{
+					".jenny/config.json": `{"models": {}}`,
+				},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				Stdout: &harness.StdoutExpectation{
+					Length: &harness.LengthExpectation{Min: 500},
+				},
+			},
+		},
+		{
+			ID:          "registry.no-config-file-works",
+			Category:    "model-registry",
+			Description: "no config.json file at all does not crash",
+			Target: harness.TargetInvocation{
+				Kind: "cli",
+				Args: []string{"--offline", "--print-system-prompt"},
+				Env:  []string{"JENNY_HOME=${WORK_DIR}/.jenny"},
+				WorkDirFiles: map[string]string{
+					".jenny/config": "",
+				},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				Stdout: &harness.StdoutExpectation{
+					Length: &harness.LengthExpectation{Min: 500},
+				},
+			},
+		},
+	})
+}
+
+// TestModelRegistryMalformedModelTypes verifies that various non-object types
+// for the models key in config.json do not crash jenny.
+func TestModelRegistryMalformedModelTypes(t *testing.T) {
+	runE2ESuite(t, []*harness.TestCase{
+		{
+			ID:          "registry.models-as-array-no-crash",
+			Category:    "model-registry",
+			Description: "models key as array does not crash jenny",
+			Target: harness.TargetInvocation{
+				Kind: "cli",
+				Args: []string{"--offline", "--print-system-prompt"},
+				Env:  []string{"JENNY_HOME=${WORK_DIR}/.jenny"},
+				WorkDirFiles: map[string]string{
+					".jenny/config.json": `{"models": ["this", "is", "an", "array"]}`,
+				},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				Stdout: &harness.StdoutExpectation{
+					Length: &harness.LengthExpectation{Min: 500},
+				},
+			},
+		},
+		{
+			ID:          "registry.models-as-number-no-crash",
+			Category:    "model-registry",
+			Description: "models key as number does not crash jenny",
+			Target: harness.TargetInvocation{
+				Kind: "cli",
+				Args: []string{"--offline", "--print-system-prompt"},
+				Env:  []string{"JENNY_HOME=${WORK_DIR}/.jenny"},
+				WorkDirFiles: map[string]string{
+					".jenny/config.json": `{"models": 42}`,
+				},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				Stdout: &harness.StdoutExpectation{
+					Length: &harness.LengthExpectation{Min: 500},
+				},
+			},
+		},
+		{
+			ID:          "registry.models-as-boolean-no-crash",
+			Category:    "model-registry",
+			Description: "models key as boolean does not crash jenny",
+			Target: harness.TargetInvocation{
+				Kind: "cli",
+				Args: []string{"--offline", "--print-system-prompt"},
+				Env:  []string{"JENNY_HOME=${WORK_DIR}/.jenny"},
+				WorkDirFiles: map[string]string{
+					".jenny/config.json": `{"models": true}`,
+				},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				Stdout: &harness.StdoutExpectation{
+					Length: &harness.LengthExpectation{Min: 500},
+				},
+			},
+		},
+		{
+			ID:          "registry.models-as-null-no-crash",
+			Category:    "model-registry",
+			Description: "models key as null does not crash jenny",
+			Target: harness.TargetInvocation{
+				Kind: "cli",
+				Args: []string{"--offline", "--print-system-prompt"},
+				Env:  []string{"JENNY_HOME=${WORK_DIR}/.jenny"},
+				WorkDirFiles: map[string]string{
+					".jenny/config.json": `{"models": null}`,
+				},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				Stdout: &harness.StdoutExpectation{
+					Length: &harness.LengthExpectation{Min: 500},
+				},
+			},
+		},
+	})
+}
+
+// TestModelRegistryOverridePriority verifies that user config.json overrides
+// survive across registry operations and take priority over cache values.
+func TestModelRegistryOverridePriority(t *testing.T) {
+	runE2ESuite(t, []*harness.TestCase{
+		{
+			ID:          "registry.override.survives-cache-load",
+			Category:    "model-registry",
+			Description: "user override in config.json is accepted when registry cache exists",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hello",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+				Args:     []string{"--offline"},
+				Env: []string{
+					"JENNY_HOME=${WORK_DIR}/.jenny",
+					"ANTHROPIC_MODEL=custom-test-model",
+				},
+				WorkDirFiles: map[string]string{
+					".jenny/models.json": `{
+						"schemaVersion": 1,
+						"lastUpdated": "2026-06-19T00:00:00Z",
+						"models": {
+							"custom-test-model": {
+								"id": "custom-test-model",
+								"provider": "custom",
+								"contextWindow": 200000,
+								"maxOutput": 8000,
+								"pricing": {"input": 3.0, "output": 15.0}
+							}
+						}
+					}`,
+					".jenny/meta.json":   `{"fetchedAt": "2026-06-19T00:00:00Z", "etag": "test-etag", "schemaVersion": 1}`,
+					".jenny/config.json": `{"models": {"custom-test-model": {"maxOutput": 16000}}}`,
+				},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				APIRequests: []harness.APIRequestExpectation{
+					{Index: 0},
+				},
+			},
+		},
+		{
+			ID:          "registry.override.model-not-in-cache",
+			Category:    "model-registry",
+			Description: "user override for a model not present in the registry cache does not cause errors",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hello",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+				Args:     []string{"--offline"},
+				Env: []string{
+					"JENNY_HOME=${WORK_DIR}/.jenny",
+					"ANTHROPIC_MODEL=override-only-model",
+				},
+				WorkDirFiles: map[string]string{
+					".jenny/models.json": `{
+						"schemaVersion": 1,
+						"lastUpdated": "2026-06-19T00:00:00Z",
+						"models": {
+							"claude-sonnet-4-6": {
+								"id": "claude-sonnet-4-6",
+								"provider": "anthropic",
+								"contextWindow": 200000,
+								"maxOutput": 64000,
+								"pricing": {"input": 3.0, "output": 15.0}
+							}
+						}
+					}`,
+					".jenny/meta.json":   `{"fetchedAt": "2026-06-19T00:00:00Z", "etag": "test-etag", "schemaVersion": 1}`,
+					".jenny/config.json": `{"models": {"override-only-model": {"maxOutput": 32000}}}`,
+				},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+			},
+		},
+		{
+			ID:          "registry.override.overrides-cache-for-same-model",
+			Category:    "model-registry",
+			Description: "config override replaces registry cache value for same model when both are present",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hello",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+				Args:     []string{"--offline"},
+				Env: []string{
+					"JENNY_HOME=${WORK_DIR}/.jenny",
+					"ANTHROPIC_MODEL=claude-sonnet-4-6",
+				},
+				WorkDirFiles: map[string]string{
+					".jenny/models.json": `{
+						"schemaVersion": 1,
+						"lastUpdated": "2026-06-19T00:00:00Z",
+						"models": {
+							"claude-sonnet-4-6": {
+								"id": "claude-sonnet-4-6",
+								"provider": "anthropic",
+								"contextWindow": 200000,
+								"maxOutput": 64000,
+								"pricing": {"input": 3.0, "output": 15.0}
+							}
+						}
+					}`,
+					".jenny/meta.json":   `{"fetchedAt": "2026-06-19T00:00:00Z", "etag": "test-etag", "schemaVersion": 1}`,
+					".jenny/config.json": `{"models": {"claude-sonnet-4-6": {"maxOutput": 99999}}}`,
+				},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				APIRequests: []harness.APIRequestExpectation{
+					{Index: 0},
+				},
+			},
+		},
+		{
+			ID:          "registry.override.no-config-uses-cache",
+			Category:    "model-registry",
+			Description: "without config.json overrides, the registry cache value is used as-is",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hello",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+				Args:     []string{"--offline"},
+				Env: []string{
+					"JENNY_HOME=${WORK_DIR}/.jenny",
+					"ANTHROPIC_MODEL=test-custom-model",
+				},
+				WorkDirFiles: map[string]string{
+					".jenny/models.json": `{
+						"schemaVersion": 1,
+						"lastUpdated": "2026-06-19T00:00:00Z",
+						"models": {
+							"test-custom-model": {
+								"id": "test-custom-model",
+								"provider": "test",
+								"contextWindow": 100000,
+								"maxOutput": 8000,
+								"pricing": {"input": 1.0, "output": 5.0}
+							}
+						}
+					}`,
+					".jenny/meta.json": `{"fetchedAt": "2026-06-19T00:00:00Z", "etag": "test-etag", "schemaVersion": 1}`,
+				},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				APIRequests: []harness.APIRequestExpectation{
+					{Index: 0},
+				},
+			},
+		},
+		{
+			ID:          "registry.override.priority-override-wins-over-cache",
+			Category:    "model-registry",
+			Description: "config.json override wins over cache, which wins over bundled default",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hello",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+				Args:     []string{"--offline"},
+				Env: []string{
+					"JENNY_HOME=${WORK_DIR}/.jenny",
+					"ANTHROPIC_MODEL=claude-sonnet-4-6",
+				},
+				WorkDirFiles: map[string]string{
+					".jenny/models.json": `{
+						"schemaVersion": 1,
+						"lastUpdated": "2026-06-19T00:00:00Z",
+						"models": {
+							"claude-sonnet-4-6": {
+								"id": "claude-sonnet-4-6",
+								"provider": "anthropic",
+								"contextWindow": 200000,
+								"maxOutput": 32000,
+								"pricing": {"input": 3.0, "output": 15.0}
+							}
+						}
+					}`,
+					".jenny/meta.json":   `{"fetchedAt": "2026-06-19T00:00:00Z", "etag": "test-etag", "schemaVersion": 1}`,
+					".jenny/config.json": `{"models": {"claude-sonnet-4-6": {"maxOutput": 77777}}}`,
+				},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				APIRequests: []harness.APIRequestExpectation{
+					{Index: 0},
+				},
+			},
+		},
+		{
+			ID:          "registry.override.multiple-overrides-no-crash",
+			Category:    "model-registry",
+			Description: "multiple model overrides in config.json do not cause crashes",
+			Target: harness.TargetInvocation{
+				Kind:     "prompt",
+				Prompt:   "say hello",
+				Format:   "stream-json",
+				Cassette: "echo-hello",
+				Args:     []string{"--offline"},
+				Env: []string{
+					"JENNY_HOME=${WORK_DIR}/.jenny",
+					"ANTHROPIC_MODEL=test-model-a",
+				},
+				WorkDirFiles: map[string]string{
+					".jenny/models.json": `{
+						"schemaVersion": 1,
+						"lastUpdated": "2026-06-19T00:00:00Z",
+						"models": {
+							"test-model-a": {
+								"id": "test-model-a",
+								"provider": "test",
+								"contextWindow": 100000,
+								"maxOutput": 10000,
+								"pricing": {"input": 1.0, "output": 5.0}
+							},
+							"test-model-b": {
+								"id": "test-model-b",
+								"provider": "test",
+								"contextWindow": 200000,
+								"maxOutput": 20000,
+								"pricing": {"input": 2.0, "output": 10.0}
+							}
+						}
+					}`,
+					".jenny/meta.json":   `{"fetchedAt": "2026-06-19T00:00:00Z", "etag": "test-etag", "schemaVersion": 1}`,
+					".jenny/config.json": `{"models": {"test-model-a": {"maxOutput": 44444}, "test-model-b": {"maxOutput": 55555}, "nonexistent": {"maxOutput": 66666}}}`,
+				},
+			},
+			Expected: harness.ExpectedBehavior{
+				ExitCode: 0,
+				APIRequests: []harness.APIRequestExpectation{
+					{Index: 0},
+				},
+			},
+		},
+	})
+}

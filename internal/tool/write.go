@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/constants"
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // WriteTool writes content to files with read-before-write validation.
@@ -296,7 +297,7 @@ func (t *WriteTool) Execute(ctx context.Context, input map[string]any, cwd strin
 	if entry != nil {
 		oldContent = entry.Content
 	}
-	diff := GenerateUnifiedDiff(oldContent, content, filePath)
+	diff := utils.GenerateUnifiedDiff(oldContent, content, filePath)
 
 	// Update readFileCache after successful write (AC5)
 	t.readCache.UpdateAfterWrite(filePath, content, newMtime)

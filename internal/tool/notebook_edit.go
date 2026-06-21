@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/constants"
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // NotebookEditTool modifies Jupyter .ipynb files.
@@ -353,7 +354,7 @@ func (t *NotebookEditTool) Execute(ctx context.Context, input map[string]any, cw
 	// Generate diff output
 	var diff string
 	if oldContent != "" || newContent != "" {
-		diff = GenerateUnifiedDiff(oldContent, newContent, notebookPath)
+		diff = utils.GenerateUnifiedDiff(oldContent, newContent, notebookPath)
 	} else {
 		diff = fmt.Sprintf("Inserted cell at position in %s", notebookPath)
 	}

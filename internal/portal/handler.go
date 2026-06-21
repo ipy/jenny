@@ -22,6 +22,7 @@ import (
 	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/git"
 	"github.com/ipy/jenny/internal/session"
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // SessionMeta represents session metadata returned by the API.
@@ -161,7 +162,7 @@ func (p *Portal) getSessionMeta(sessionID string) (*SessionMeta, error) {
 	}
 
 	var lastEntry session.TranscriptEntry
-	lines := splitLines(string(data))
+	lines := utils.SplitLines(string(data))
 	for _, line := range lines {
 		if line == "" {
 			continue
@@ -217,23 +218,6 @@ func (p *Portal) getSessionMeta(sessionID string) (*SessionMeta, error) {
 	}
 
 	return meta, nil
-}
-
-// splitLines splits a string into lines (without trailing newlines).
-func splitLines(s string) []string {
-	var lines []string
-	for i := 0; i < len(s); {
-		j := i
-		for j < len(s) && s[j] != '\n' {
-			j++
-		}
-		lines = append(lines, s[i:j])
-		if j < len(s) {
-			j++
-		}
-		i = j
-	}
-	return lines
 }
 
 // handleSessionStream handles GET /api/sessions/{id}/stream (SSE).
@@ -304,7 +288,7 @@ func (p *Portal) handleSessionStream(w http.ResponseWriter, r *http.Request) {
 					// Parse and emit each new line
 					newData := buf.String()
 					buf.Reset()
-					newLines := splitLines(newData)
+					newLines := utils.SplitLines(newData)
 					for _, line := range newLines {
 						if line == "" {
 							continue
@@ -518,7 +502,7 @@ func (p *Portal) getSessionPID(sessionID string) (int, error) {
 		return 0, err
 	}
 
-	lines := splitLines(string(data))
+	lines := utils.SplitLines(string(data))
 	for i := len(lines) - 1; i >= 0; i-- {
 		var entry struct {
 			Type string `json:"type"`
@@ -578,7 +562,7 @@ func (p *Portal) handleStats(w http.ResponseWriter, r *http.Request) {
 	for _, id := range sessionIDs {
 		transcriptPath := filepath.Join(constants.SessionDir(id), "transcript.jsonl")
 		if data, err := os.ReadFile(transcriptPath); err == nil {
-			lines := splitLines(string(data))
+			lines := utils.SplitLines(string(data))
 			for _, line := range lines {
 				if line == "" {
 					continue
@@ -771,7 +755,7 @@ func readSkillDescription(skillPath string) string {
 		data, err := os.ReadFile(filepath.Join(skillPath, name))
 		if err == nil {
 			// Use first non-empty, non-heading line as description
-			lines := splitLines(string(data))
+			lines := utils.SplitLines(string(data))
 			for _, line := range lines {
 				line = strings.TrimSpace(line)
 				if line == "" || strings.HasPrefix(line, "#") {

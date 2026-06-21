@@ -8,21 +8,20 @@ import (
 	"github.com/ipy/jenny/e2e/harness"
 )
 
-// TestDebtMD9BackgroundFetchCancellation verifies that the background registry
-// fetch goroutine has proper cancellation (debt MD-9).
+// TestRegistryFetchBackgroundCancellation verifies that the background registry
+// fetch goroutine has proper cancellation.
 //
-// Spec requirements:
-//  1. The background fetch goroutine should be cancellable via context.
-//  2. When the 3s soft timeout fires, the context should be cancelled,
-//     aborting the in-flight HTTP request.
-//  3. The goroutine should not outlive the soft timeout.
-//  4. The synchronous --refresh-registry path should not be affected.
-//  5. Proper logging when fetch is cancelled vs completes vs errors.
-func TestDebtMD9BackgroundFetchCancellation(t *testing.T) {
+// The background fetch goroutine should be cancellable via context.
+// When the 3s soft timeout fires, the context should be cancelled,
+// aborting the in-flight HTTP request.
+// The goroutine should not outlive the soft timeout.
+// The synchronous --refresh-registry path should not be affected.
+// Proper logging when fetch is cancelled vs completes vs errors.
+func TestRegistryFetchBackgroundCancellation(t *testing.T) {
 	runE2ESuite(t, []*harness.TestCase{
 		{
-			ID:          "debt-md9.startup-does-not-hang",
-			Category:    "debt-md9",
+			ID:          "registry-fetch.startup-does-not-hang",
+			Category:    "registry-fetch",
 			Description: "jenny startup completes quickly even when registry fetch is happening in background",
 			Target: harness.TargetInvocation{
 				Kind: "cli",
@@ -42,8 +41,8 @@ func TestDebtMD9BackgroundFetchCancellation(t *testing.T) {
 			},
 		},
 		{
-			ID:          "debt-md9.offline-skips-background-fetch",
-			Category:    "debt-md9",
+			ID:          "registry-fetch.offline-skips-background-fetch",
+			Category:    "registry-fetch",
 			Description: "--offline skips the background fetch entirely, no registry log messages appear",
 			Target: harness.TargetInvocation{
 				Kind: "cli",
@@ -71,14 +70,14 @@ func TestDebtMD9BackgroundFetchCancellation(t *testing.T) {
 	})
 }
 
-// TestDebtMD9StartupCompletesQuickly verifies that jenny startup does not
-// hang when the registry endpoint is slow. This is the core of MD-9:
-// the background fetch goroutine must not block startup.
+// TestRegistryFetchStartupCompletesQuickly verifies that jenny startup does not
+// hang when the registry endpoint is slow. The background fetch goroutine
+// must not block startup.
 //
 // We run jenny with --print-system-prompt which should exit quickly
 // regardless of registry fetch status. The background fetch runs
 // concurrently and should not delay the main process.
-func TestDebtMD9StartupCompletesQuickly(t *testing.T) {
+func TestRegistryFetchStartupCompletesQuickly(t *testing.T) {
 	env := []string{
 		"ANTHROPIC_AUTH_TOKEN=dummy",
 	}
@@ -105,14 +104,14 @@ func TestDebtMD9StartupCompletesQuickly(t *testing.T) {
 	}
 }
 
-// TestDebtMD9SyncRefreshRegistryNotBroken verifies that the synchronous
+// TestRegistryFetchSyncRefreshNotBroken verifies that the synchronous
 // --refresh-registry path still works correctly after the cancellation
 // changes to the background fetch path.
 //
 // The --refresh-registry flag hits the real GitHub endpoint. It may succeed
 // (exit 0) or fail with a parse error on the real data (exit 1). In either
 // case it must NOT hang, crash, or panic.
-func TestDebtMD9SyncRefreshRegistryNotBroken(t *testing.T) {
+func TestRegistryFetchSyncRefreshNotBroken(t *testing.T) {
 	env := []string{
 		"ANTHROPIC_AUTH_TOKEN=dummy",
 	}
@@ -134,11 +133,11 @@ func TestDebtMD9SyncRefreshRegistryNotBroken(t *testing.T) {
 	t.Logf("sync --refresh-registry: exit=%d, stderr=%s", res.ExitCode, stderr)
 }
 
-// TestDebtMD9BackgroundFetchDoesNotBlockShutdown verifies the core MD-9 fix:
+// TestRegistryFetchDoesNotBlockShutdown verifies the core fix:
 // the background fetch goroutine does not block process shutdown.
 // When jenny completes its main task quickly, the process exits without
 // waiting for the background fetch to finish.
-func TestDebtMD9BackgroundFetchDoesNotBlockShutdown(t *testing.T) {
+func TestRegistryFetchDoesNotBlockShutdown(t *testing.T) {
 	env := []string{
 		"ANTHROPIC_AUTH_TOKEN=dummy",
 	}
@@ -174,14 +173,14 @@ func TestDebtMD9BackgroundFetchDoesNotBlockShutdown(t *testing.T) {
 	t.Logf("stderr: %s", res.Stderr)
 }
 
-// TestDebtMD9NormalStartupWithMockAPI verifies that normal startup
+// TestRegistryFetchNormalStartupWithMockAPI verifies that normal startup
 // with a reachable mock API still works correctly after the
 // cancellation changes.
-func TestDebtMD9NormalStartupWithMockAPI(t *testing.T) {
+func TestRegistryFetchNormalStartupWithMockAPI(t *testing.T) {
 	runE2ESuite(t, []*harness.TestCase{
 		{
-			ID:          "debt-md9.normal-startup.with-mock-api",
-			Category:    "debt-md9",
+			ID:          "registry-fetch.normal-startup.with-mock-api",
+			Category:    "registry-fetch",
 			Description: "normal startup with reachable mock API completes successfully; background fetch does not interfere",
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
@@ -204,13 +203,13 @@ func TestDebtMD9NormalStartupWithMockAPI(t *testing.T) {
 	})
 }
 
-// TestDebtMD9BackgroundFetchCancelledOnShutdown verifies that the background
+// TestRegistryFetchCancelledOnShutdown verifies that the background
 // fetch goroutine's context is cancelled when the process shuts down.
 // This is tested by checking that:
 // 1. The process exits cleanly (exit code 0)
 // 2. The process does not hang waiting for the background fetch
 // 3. No panic or crash occurs
-func TestDebtMD9BackgroundFetchCancelledOnShutdown(t *testing.T) {
+func TestRegistryFetchCancelledOnShutdown(t *testing.T) {
 	env := []string{
 		"ANTHROPIC_AUTH_TOKEN=dummy",
 	}

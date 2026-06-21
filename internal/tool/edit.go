@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/constants"
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // EditTool performs exact string replacement in files.
@@ -738,7 +739,7 @@ func (t *EditTool) finalizeEdit(filePath, newContent string, entry *ReadFileEntr
 	if entry != nil {
 		oldContentFromCache = entry.Content
 	}
-	diff := GenerateUnifiedDiff(oldContentFromCache, newContent, filePath)
+	diff := utils.GenerateUnifiedDiff(oldContentFromCache, newContent, filePath)
 
 	// Update readFileCache after successful edit
 	t.readCache.RecordRead(filePath, newContent, newMtime, true, 0, 0)

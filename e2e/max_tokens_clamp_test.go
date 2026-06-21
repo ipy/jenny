@@ -62,3 +62,57 @@ func TestMaxTokensClamp(t *testing.T) {
 	}
 	runE2ESuite(t, cases)
 }
+
+// TestMaxTokensClampTools verifies that API requests include tool definitions.
+func TestMaxTokensClampTools(t *testing.T) {
+	runE2ESuite(t, []*harness.TestCase{{
+		ID:          "max-tokens-clamp.api-request-has-tools",
+		Category:    "max-tokens-clamp",
+		Description: "API request includes tools with expected types",
+		Tags:        []string{"max-tokens-clamp"},
+		Target: harness.TargetInvocation{
+			Kind:     "prompt",
+			Prompt:   "say hello",
+			Format:   "stream-json",
+			Cassette: "echo-hello",
+		},
+		Expected: harness.ExpectedBehavior{
+			ExitCode: 0,
+			APIRequests: []harness.APIRequestExpectation{
+				{
+					Index: 0,
+					Tools: &harness.ToolsExpectation{
+						MinCount: 3,
+						HasTool:  []string{"Read", "Bash"},
+					},
+				},
+			},
+		},
+	}})
+}
+
+// TestMaxTokensClampDefaultModel verifies that the default model (no env override)
+// produces a valid non-zero max_tokens in the API request.
+func TestMaxTokensClampDefaultModel(t *testing.T) {
+	runE2ESuite(t, []*harness.TestCase{{
+		ID:          "max-tokens-clamp.default-model-no-env",
+		Category:    "max-tokens-clamp",
+		Description: "default model (no ANTHROPIC_MODEL set) produces valid max_tokens",
+		Tags:        []string{"max-tokens-clamp"},
+		Target: harness.TargetInvocation{
+			Kind:     "prompt",
+			Prompt:   "say hello",
+			Format:   "stream-json",
+			Cassette: "echo-hello",
+		},
+		Expected: harness.ExpectedBehavior{
+			ExitCode: 0,
+			APIRequests: []harness.APIRequestExpectation{
+				{
+					Index:    0,
+					HasField: []string{"max_tokens"},
+				},
+			},
+		},
+	}})
+}

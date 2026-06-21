@@ -599,25 +599,3 @@ func EmitCompactWarning(estimatedTokens int, threshold int) {
 		"threshold", threshold,
 		"buffer", threshold-estimatedTokens)
 }
-
-// isUserAbortError checks if an error message indicates a user-initiated abort.
-// User aborts include context cancellation, Esc key, SIGINT, etc.
-func isUserAbortError(errMsg string) bool {
-	if errMsg == "" {
-		return false
-	}
-	lowerMsg := strings.ToLower(errMsg)
-	// Check for Go standard context cancellation messages
-	if strings.Contains(lowerMsg, "context canceled") ||
-		strings.Contains(lowerMsg, "context cancelled") ||
-		strings.Contains(lowerMsg, "context deadline exceeded") {
-		return true
-	}
-	// Check for explicit user interrupt patterns
-	if strings.Contains(lowerMsg, "user interrupt") ||
-		strings.Contains(lowerMsg, "sigint") ||
-		strings.Contains(lowerMsg, "keyboard interrupt") {
-		return true
-	}
-	return false
-}

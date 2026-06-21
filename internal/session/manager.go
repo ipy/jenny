@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	"github.com/ipy/jenny/internal/compact"
 	"github.com/ipy/jenny/internal/constants"
@@ -157,7 +156,7 @@ func ValidateSessionID(id string) error {
 	if id == "" {
 		return fmt.Errorf("session ID is required")
 	}
-	if containsPathTraversal(id) {
+	if utils.ContainsPathTraversal(id) {
 		return fmt.Errorf("invalid session ID: path traversal not allowed")
 	}
 	return nil
@@ -171,31 +170,10 @@ func (m *Manager) TranscriptDir() string {
 // transcriptPath returns the path to the transcript file for a session.
 func (m *Manager) transcriptPath(sessionID string) string {
 	// Validate session ID doesn't contain path traversal attempts
-	if sessionID == "" || containsPathTraversal(sessionID) {
+	if sessionID == "" || utils.ContainsPathTraversal(sessionID) {
 		return ""
 	}
 	return filepath.Join(m.jennyDir, "sessions", sessionID, "transcript.jsonl")
-}
-
-// containsPathTraversal checks if a string contains path traversal components.
-func containsPathTraversal(s string) bool {
-	if s == "" {
-		return false
-	}
-	// Check for absolute paths or parent directory references
-	if s[0] == '/' || s[0] == '\\' {
-		return true
-	}
-	if len(s) >= 2 && s[0] == '.' && (s[1] == '/' || s[1] == '\\' || (s[1] == '.' && (len(s) < 3 || s[2] == '/' || s[2] == '\\'))) {
-		return true
-	}
-	// Also check for embedded ../
-	for i := 0; i < len(s)-1; i++ {
-		if s[i] == '.' && s[i+1] == '.' && (i+2 < len(s) && (s[i+2] == '/' || s[i+2] == '\\')) {
-			return true
-		}
-	}
-	return false
 }
 
 // AppendEntry appends a transcript entry to the session's transcript file.
@@ -211,7 +189,7 @@ func (m *Manager) AppendEntry(sessionID string, entry TranscriptEntry) error {
 	}
 
 	// Validate session ID doesn't contain path traversal
-	if containsPathTraversal(sessionID) {
+	if utils.ContainsPathTraversal(sessionID) {
 		return fmt.Errorf("invalid session ID: path traversal not allowed")
 	}
 
@@ -274,7 +252,7 @@ func (m *Manager) LoadTranscript(sessionID string) ([]TranscriptEntry, error) {
 		return nil, fmt.Errorf("session ID is required")
 	}
 
-	if containsPathTraversal(sessionID) {
+	if utils.ContainsPathTraversal(sessionID) {
 		return nil, fmt.Errorf("invalid session ID: path traversal not allowed")
 	}
 
@@ -291,7 +269,7 @@ func (m *Manager) LoadTranscript(sessionID string) ([]TranscriptEntry, error) {
 	}
 
 	var entries []TranscriptEntry
-	lines := splitLines(string(data))
+	lines := utils.SplitLines(string(data))
 	for _, line := range lines {
 		if line == "" {
 			continue
@@ -318,8 +296,7 @@ func (m *Manager) LoadTranscript(sessionID string) ([]TranscriptEntry, error) {
 
 // truncateForLog returns s truncated to at most max bytes using rune-aware
 // slicing, ensuring no multi-byte code points are split. Appends "..."
-// when truncation occurs. Uses the same pattern as utf8SafeTruncate in
-// internal/tool/utf8.go.
+// when truncation occurs. Uses utils.SafeTruncate internally.
 func truncateForLog(s string, max int) string {
 	if max <= 0 {
 		return ""
@@ -327,13 +304,7 @@ func truncateForLog(s string, max int) string {
 	if len(s) <= max {
 		return s
 	}
-	// Use stdlib utf8.ValidString to find a safe truncation boundary,
-	// same pattern as utf8SafeTruncate in internal/tool/utf8.go.
-	result := s[:max]
-	for !utf8.ValidString(result) {
-		result = result[:len(result)-1]
-	}
-	return result + "..."
+	return utils.SafeTruncate(s, max) + "..."
 }
 
 // LoadCompactFailCount loads the most recent compactFailCount from the transcript.
@@ -343,7 +314,7 @@ func (m *Manager) LoadCompactFailCount(sessionID string) (int, error) {
 		return 0, fmt.Errorf("session ID is required")
 	}
 
-	if containsPathTraversal(sessionID) {
+	if utils.ContainsPathTraversal(sessionID) {
 		return 0, fmt.Errorf("invalid session ID: path traversal not allowed")
 	}
 
@@ -360,7 +331,7 @@ func (m *Manager) LoadCompactFailCount(sessionID string) (int, error) {
 	}
 
 	var latestCount int
-	lines := splitLines(string(data))
+	lines := utils.SplitLines(string(data))
 	for _, line := range lines {
 		if line == "" {
 			continue
@@ -379,30 +350,12 @@ func (m *Manager) LoadCompactFailCount(sessionID string) (int, error) {
 	return latestCount, nil
 }
 
-// splitLines splits a string into lines (without trailing newlines).
-func splitLines(s string) []string {
-	var lines []string
-	for i := 0; i < len(s); {
-		// Find next newline
-		j := i
-		for j < len(s) && s[j] != '\n' {
-			j++
-		}
-		lines = append(lines, s[i:j])
-		if j < len(s) {
-			j++ // skip newline
-		}
-		i = j
-	}
-	return lines
-}
-
 // SessionExists checks if a session transcript exists.
 func (m *Manager) SessionExists(sessionID string) bool {
 	if sessionID == "" {
 		return false
 	}
-	if containsPathTraversal(sessionID) {
+	if utils.ContainsPathTraversal(sessionID) {
 		return false
 	}
 	m.mu.RLock()
@@ -423,7 +376,7 @@ func (m *Manager) CheckRewriteSize(sessionID string) error {
 	if sessionID == "" {
 		return fmt.Errorf("session ID is required")
 	}
-	if containsPathTraversal(sessionID) {
+	if utils.ContainsPathTraversal(sessionID) {
 		return fmt.Errorf("invalid session ID: path traversal not allowed")
 	}
 
@@ -517,7 +470,7 @@ func (m *Manager) LoadPostBoundaryMessages(sessionID string) ([]TranscriptEntry,
 		return nil, fmt.Errorf("session ID is required")
 	}
 
-	if containsPathTraversal(sessionID) {
+	if utils.ContainsPathTraversal(sessionID) {
 		return nil, fmt.Errorf("invalid session ID: path traversal not allowed")
 	}
 
@@ -535,7 +488,7 @@ func (m *Manager) LoadPostBoundaryMessages(sessionID string) ([]TranscriptEntry,
 
 	// Single pass: build entries slice while tracking the last boundary position.
 	// lastBoundaryIdx tracks the index in the filtered entries slice (not raw line index).
-	lines := splitLines(string(data))
+	lines := utils.SplitLines(string(data))
 	var entries []TranscriptEntry
 	var lastBoundaryIdx int = -1
 
@@ -651,7 +604,7 @@ func MaybeExtractArchive(sessionID string, keepArchive bool) error {
 	if sessionID == "" {
 		return fmt.Errorf("session ID is required")
 	}
-	if containsPathTraversal(sessionID) {
+	if utils.ContainsPathTraversal(sessionID) {
 		return fmt.Errorf("invalid session ID: path traversal not allowed")
 	}
 

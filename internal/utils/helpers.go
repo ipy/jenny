@@ -1,15 +1,73 @@
-// Package tool provides tool implementations.
-package tool
+package utils
 
 import (
 	"fmt"
+	"math"
+	"regexp"
 	"strings"
 )
 
-const (
-	// maxDiffSize caps diff output to prevent bloating tool results
-	maxDiffSize = 50 * 1024
-)
+// GlobToRegex converts a glob pattern to a regex pattern.
+func GlobToRegex(pattern string) string {
+	var result strings.Builder
+	result.WriteString("^")
+
+	for i, ch := range pattern {
+		switch ch {
+		case '*':
+			result.WriteString(".*")
+		case '?':
+			result.WriteString(".")
+		case '.':
+			result.WriteString(`\.`)
+		case '\\':
+			if i+1 < len(pattern) {
+				result.WriteString(regexp.QuoteMeta(string(pattern[i+1])))
+			} else {
+				result.WriteString(`\\`)
+			}
+		default:
+			result.WriteString(regexp.QuoteMeta(string(ch)))
+		}
+	}
+
+	result.WriteString("$")
+	return result.String()
+}
+
+// MatchGlobPattern checks if a command matches a glob pattern.
+// Supports: * (any chars), ? (single char)
+func MatchGlobPattern(pattern, command string) bool {
+	regexPattern := GlobToRegex(pattern)
+	matched, _ := regexp.MatchString(regexPattern, command)
+	return matched
+}
+
+// ShannonEntropy computes the Shannon entropy (bits per character) of data.
+func ShannonEntropy(data string) float64 {
+	if data == "" {
+		return 0
+	}
+	charCounts := make(map[rune]int)
+	for _, char := range data {
+		charCounts[char]++
+	}
+	invLength := 1.0 / float64(len(data))
+	var entropy float64
+	for _, count := range charCounts {
+		freq := float64(count) * invLength
+		entropy -= freq * math.Log2(freq)
+	}
+	return entropy
+}
+
+// max returns the larger of two integers.
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
 
 // DiffLine represents a single line in a diff.
 type DiffLine struct {
@@ -17,12 +75,22 @@ type DiffLine struct {
 	Content string
 }
 
+// diffEntry represents a line in the computed diff
+type diffEntry struct {
+	Type    string
+	OldIdx  int
+	NewIdx  int
+	Content string
+}
+
+// maxDiffSize caps diff output to prevent bloating results.
+const maxDiffSize = 50 * 1024
+
 // GenerateUnifiedDiff generates a unified diff string between old and new content.
 func GenerateUnifiedDiff(oldContent, newContent, path string) string {
 	oldLines := strings.Split(oldContent, "\n")
 	newLines := strings.Split(newContent, "\n")
 
-	// Remove trailing empty line from split if present
 	if len(oldLines) > 0 && oldLines[len(oldLines)-1] == "" {
 		oldLines = oldLines[:len(oldLines)-1]
 	}
@@ -30,15 +98,12 @@ func GenerateUnifiedDiff(oldContent, newContent, path string) string {
 		newLines = newLines[:len(newLines)-1]
 	}
 
-	// Compute LCS-based diff
 	diff := computeLCS(oldLines, newLines)
 
-	// Build unified diff output
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("--- a/%s\n", path))
 	sb.WriteString(fmt.Sprintf("+++ b/%s\n", path))
 
-	// Format hunks
 	var hunks []string
 	var currentHunk []DiffLine
 
@@ -57,19 +122,16 @@ func GenerateUnifiedDiff(oldContent, newContent, path string) string {
 			currentHunk = append(currentHunk, DiffLine{Type: "add", Content: "+" + diffLine.Content})
 		}
 
-		// Flush hunk when we have a good chunk
 		if len(currentHunk) >= 4 && i < len(diff)-1 {
 			hunks = append(hunks, formatHunk(currentHunk, diff, i))
 			currentHunk = nil
 		}
 	}
 
-	// Flush remaining hunk
 	if len(currentHunk) > 0 {
 		hunks = append(hunks, formatHunk(currentHunk, diff, len(diff)-1))
 	}
 
-	// Write hunks
 	for _, hunk := range hunks {
 		if sb.Len()+len(hunk) > maxDiffSize {
 			break
@@ -84,19 +146,10 @@ func GenerateUnifiedDiff(oldContent, newContent, path string) string {
 	return result
 }
 
-// diffEntry represents a line in the computed diff
-type diffEntry struct {
-	Type    string
-	OldIdx  int
-	NewIdx  int
-	Content string
-}
-
 func computeLCS(oldLines, newLines []string) []diffEntry {
 	m := len(oldLines)
 	n := len(newLines)
 
-	// Build LCS table
 	lcs := make([][]int, m+1)
 	for i := range lcs {
 		lcs[i] = make([]int, n+1)
@@ -111,7 +164,6 @@ func computeLCS(oldLines, newLines []string) []diffEntry {
 		}
 	}
 
-	// Backtrack to find diff (build in reverse, then reverse at end to avoid O(n²) prepend)
 	var result []diffEntry
 	i, j := m, n
 	for i > 0 || j > 0 {
@@ -128,7 +180,6 @@ func computeLCS(oldLines, newLines []string) []diffEntry {
 		}
 	}
 
-	// Reverse the result since we built it backwards
 	for left, right := 0, len(result)-1; left < right; left, right = left+1, right-1 {
 		result[left], result[right] = result[right], result[left]
 	}
@@ -141,7 +192,6 @@ func formatHunk(lines []DiffLine, fullDiff []diffEntry, endIdx int) string {
 		return ""
 	}
 
-	// Find hunk start positions by scanning from beginning to find first non-context line
 	oldStart := 1
 	newStart := 1
 	for _, line := range lines {
@@ -152,14 +202,12 @@ func formatHunk(lines []DiffLine, fullDiff []diffEntry, endIdx int) string {
 		newStart++
 	}
 
-	// Adjust start to be the line number of the first line in this hunk
 	for i := endIdx - len(lines) + 1; i <= endIdx; i++ {
 		if i < 0 || i >= len(fullDiff) {
 			continue
 		}
 		entry := fullDiff[i]
 		if entry.Type == "context" {
-			// Adjust start to the actual line numbers from the diff entries
 			oldStart = entry.OldIdx + 1
 			newStart = entry.NewIdx + 1
 			break

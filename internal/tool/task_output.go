@@ -5,22 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"os"
 	"time"
-)
 
-// parseTimeoutSeconds extracts and validates the timeout parameter from input.
-// Returns default of 30s if not provided or if timeout <= 0, caps at 600s maximum.
-func parseTimeoutSeconds(input map[string]any) float64 {
-	timeoutSecondsFloat := 30.0
-	if timeoutVal, ok := input["timeout"].(float64); ok {
-		if timeoutVal > 0 {
-			timeoutSecondsFloat = math.Min(timeoutVal, 600.0)
-		}
-	}
-	return timeoutSecondsFloat
-}
+	"github.com/ipy/jenny/internal/utils"
+)
 
 // TaskOutputTool retrieves output from background tasks.
 type TaskOutputTool struct {
@@ -82,7 +71,7 @@ func (t *TaskOutputTool) Execute(ctx context.Context, input map[string]any, cwd 
 	}
 
 	// Get timeout parameter (default: 30s, max: 600s)
-	timeoutSecondsFloat := parseTimeoutSeconds(input)
+	timeoutSecondsFloat := utils.ParseTimeoutSeconds(input)
 
 	if t.taskManager == nil {
 		return &ToolResult{
@@ -183,7 +172,7 @@ func (t *TaskOutputTool) readTaskOutput(info *TaskInfo) (string, error) {
 	}
 
 	// Parse JSONL entry (last line contains the final result)
-	lines := splitJSONLLines(data)
+	lines := utils.SplitJSONLLines(data)
 	if len(lines) == 0 {
 		return "", fmt.Errorf("empty output file")
 	}
@@ -195,23 +184,4 @@ func (t *TaskOutputTool) readTaskOutput(info *TaskInfo) (string, error) {
 	}
 
 	return entry.Output, nil
-}
-
-// splitJSONLLines splits JSONL data into lines, handling the last line without newline.
-func splitJSONLLines(data []byte) []string {
-	var lines []string
-	start := 0
-	for i, b := range data {
-		if b == '\n' {
-			if line := string(data[start:i]); line != "" {
-				lines = append(lines, line)
-			}
-			start = i + 1
-		}
-	}
-	// Add remaining content as last line
-	if remaining := string(data[start:]); remaining != "" {
-		lines = append(lines, remaining)
-	}
-	return lines
 }

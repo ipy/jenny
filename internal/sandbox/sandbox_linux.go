@@ -5,9 +5,10 @@ package sandbox
 import (
 	"context"
 	"os/exec"
-	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // LinuxSandboxManager implements SandboxManager using bubblewrap (bwrap).
@@ -75,7 +76,7 @@ func (m *LinuxSandboxManager) WrapWithSandbox(command string) (string, error) {
 
 	// Check if command matches an excluded pattern
 	for _, pattern := range cfg.ExcludedCommands {
-		if matchGlobPattern(pattern, command) {
+		if utils.MatchGlobPattern(pattern, command) {
 			return command, nil
 		}
 	}
@@ -95,7 +96,7 @@ func (m *LinuxSandboxManager) WrapWithSandbox(command string) (string, error) {
 
 	// Add shell command to execute
 	wrapped.WriteString(" -- sh -c ")
-	wrapped.WriteString(escapeShellArg(command))
+	wrapped.WriteString(utils.EscapeShellArg(command))
 
 	return wrapped.String(), nil
 }
@@ -166,45 +167,4 @@ func (m *LinuxSandboxManager) RipgrepConfig() RipgrepConfig {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.config.Ripgrep
-}
-
-// escapeShellArg escapes a string for use in a shell argument.
-func escapeShellArg(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
-}
-
-// matchGlobPattern checks if a command matches a glob pattern.
-// Supports: * (any chars), ? (single char)
-func matchGlobPattern(pattern, command string) bool {
-	regexPattern := globToRegex(pattern)
-	matched, _ := regexp.MatchString(regexPattern, command)
-	return matched
-}
-
-// globToRegex converts a glob pattern to a regex pattern.
-func globToRegex(pattern string) string {
-	var result strings.Builder
-	result.WriteString("^")
-
-	for i, ch := range pattern {
-		switch ch {
-		case '*':
-			result.WriteString(".*")
-		case '?':
-			result.WriteString(".")
-		case '.':
-			result.WriteString(`\.`)
-		case '\\':
-			if i+1 < len(pattern) {
-				result.WriteString(regexp.QuoteMeta(string(pattern[i+1])))
-			} else {
-				result.WriteString(`\\`)
-			}
-		default:
-			result.WriteString(regexp.QuoteMeta(string(ch)))
-		}
-	}
-
-	result.WriteString("$")
-	return result.String()
 }
