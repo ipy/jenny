@@ -9,12 +9,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // RunResult captures the outcome of running the target binary.
@@ -403,14 +404,9 @@ func RunJennyInDir(t testing.TB, dir string, env []string, args ...string) RunRe
 	}
 }
 
-// uuidV4Re matches a lowercase UUID v4 string.
-var uuidV4Re = regexp.MustCompile(
-	`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`,
-)
-
-// IsValidUUID checks if a string is a valid UUID v4.
+// IsValidUUID checks if a string is a valid UUID v7.
 func IsValidUUID(s string) bool {
-	return uuidV4Re.MatchString(s)
+	return utils.IsValidUUID(s)
 }
 
 // injectVerboseForStreamJSON adds --verbose if --output-format stream-json is present.

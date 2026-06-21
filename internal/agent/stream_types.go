@@ -2,7 +2,6 @@
 package agent
 
 import (
-	crypto_rand "crypto/rand"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"github.com/ipy/jenny/internal/session"
 	"github.com/ipy/jenny/internal/skills"
 	"github.com/ipy/jenny/internal/tool"
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // SessionID generates a new session ID using the session package.
@@ -403,13 +403,9 @@ type ErrorMaxTokensDetail struct {
 	Threshold       int    `json:"threshold,omitempty"`
 }
 
-// GenerateUUID generates a random UUID v4.
+// GenerateUUID generates a UUID v7 string.
 func GenerateUUID() string {
-	b := make([]byte, 16)
-	_, _ = crypto_rand.Read(b)
-	b[6] = (b[6] & 0x0f) | 0x40
-	b[8] = (b[8] & 0x3f) | 0x80
-	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+	return utils.NewUUID()
 }
 
 // Usage represents token usage information for streaming output.

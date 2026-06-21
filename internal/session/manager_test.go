@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -14,10 +13,7 @@ import (
 
 	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/log"
-)
-
-var uuidV4Re = regexp.MustCompile(
-	`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`,
+	"github.com/ipy/jenny/internal/utils"
 )
 
 func TestNewSessionID(t *testing.T) {
@@ -25,8 +21,8 @@ func TestNewSessionID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSessionID() error = %v", err)
 	}
-	if !uuidV4Re.MatchString(id1) {
-		t.Errorf("NewSessionID() = %q, want UUID v4 format", id1)
+	if !utils.IsValidUUID(id1) {
+		t.Errorf("NewSessionID() = %q, want UUID v7 format", id1)
 	}
 
 	id2, err := NewSessionID()

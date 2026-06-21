@@ -2,7 +2,6 @@
 package session
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -16,6 +15,7 @@ import (
 	"github.com/ipy/jenny/internal/compact"
 	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/log"
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // Transcript entry type constants.
@@ -138,18 +138,9 @@ func NewManager(rootDir string, disabled bool) (*Manager, error) {
 	return &Manager{jennyDir: jennyDir, transcriptDir: transcriptDir}, nil
 }
 
-// NewSessionID generates a new session ID as a lowercase UUID v4 string.
+// NewSessionID generates a new session ID as a lowercase UUID v7 string.
 func NewSessionID() (string, error) {
-	return newUUID(), nil
-}
-
-// newUUID generates a random UUID v4 string (lowercase).
-func newUUID() string {
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	b[6] = (b[6] & 0x0f) | 0x40
-	b[8] = (b[8] & 0x3f) | 0x80
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+	return utils.NewUUID(), nil
 }
 
 // ParseSessionID validates a session ID format.
@@ -226,7 +217,7 @@ func (m *Manager) AppendEntry(sessionID string, entry TranscriptEntry) error {
 
 	entry.Timestamp = time.Now().UTC()
 	entry.SessionID = sessionID
-	entry.UUID = newUUID()
+	entry.UUID = utils.NewUUID()
 	data, err := json.Marshal(entry)
 	if err != nil {
 		return fmt.Errorf("marshaling transcript entry: %w", err)
