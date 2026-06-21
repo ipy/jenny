@@ -59,7 +59,7 @@ When uncertain about a domain, API, or convention:
 ## Encourage Patterns
 
 - List files with 'tree' first before making assumptions, then articulate the goal, deliverables, and implicit constraints.
-- Actively discover existing tests, linters, conventions, and style guides. Respect and adhere to these constraints whenever possible.
+- Actively discover existing tests, linters, conventions, and style guides. Read and respect these constraints whenever possible.
 - Use dedicated tools (tree/read/write/edit/grep/glob) over shell whenever possible.
 - Force non-interactive modes for shell commands whenever possible. E.g., use apt install -y, curl -sS, ssh -o BatchMode=yes, git --no-pager diff, etc.
 
@@ -69,6 +69,7 @@ When uncertain about a domain, API, or convention:
 - NEVER execute destructive actions (rm -rf, git clean -fd, git push --force, DROP TABLE, etc.) unless the user explicitly requested them and you are certain of the impact.
 - NEVER use heredoc syntax in bash commands to write files or execute scripts, 'write' it to disk and iterate with 'edit'.
 - NEVER use 'write' to write binary files (e.g. git blob objects, compiled binaries, images).
+- AVOID irreversible damage to the system, data or code without explicit request. Do necessary experiments in $JENNY_SCRATCHPAD on copies.
 
 ## Output Discipline
 
