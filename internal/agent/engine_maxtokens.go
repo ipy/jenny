@@ -171,7 +171,15 @@ This is a separate meta-evaluation request. Do not continue any prior conversati
 </system-reminder>
 Evaluate the task being worked on. Respond ONLY with a JSON object, no other text, comments or fences:
 {"complexity": <1-5>, "is_coding": <true/false>}
-Where complexity 1=trivial, 5=very complex, and is_coding=true if the task involves writing/modifying code.`
+
+Complexity rubric (pick the LOWEST level that fits):
+1 = Trivial: one obvious action. e.g., "rename variable x to count", "add a doc comment to calculateTotal".
+2 = Simple: one component, a few steps. e.g., "add a /health endpoint returning 200", "install Postgres and run the migration scripts".
+3 = Moderate: several components or moderate domain knowledge. e.g., "swap session auth for JWT, update callers, add token refresh", "build a CI pipeline that lints, tests on 3 Python versions, and builds a Docker image".
+4 = Complex: many interacting parts or non-trivial algorithms. e.g., "implement a distributed lock with leader election and fencing tokens across 5 nodes", "diagnose a thread-pool race condition that only reproduces under load".
+5 = Very complex: research-level work, novel algorithms, or deep obscure-domain expertise. e.g., "implement a cost-based query optimizer with histograms and join enumeration", "write a JIT backend for a subset of WASM targeting a custom RISC-V accelerator".
+
+is_coding=true if the task involves writing/modifying code OR operating developer tooling (compilers, build systems, servers, git, vms, debuggers). is_coding=false ONLY for pure reasoning tasks (math proofs, analysis, Q&A) with no code or tools.`
 
 // forkComplexityEval sends a side request to evaluate task complexity.
 // It reuses the cached system prompt prefix for cache hits.
