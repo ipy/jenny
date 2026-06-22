@@ -277,6 +277,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			forkMessages := make([]api.Message, len(messages))
 			copy(forkMessages, messages)
 			forkModel := e.model
+			forkTools := e.toolParams
 			parentCtx := ctx
 			go func() {
 				forkCtx, forkCancel := context.WithTimeout(context.WithoutCancel(parentCtx), 30*time.Second)
@@ -287,7 +288,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					return
 				}
 				forkClient.SetMaxTokensOverride(forkMaxTokens)
-				result, err := forkProgressEval(forkCtx, forkClient, forkMessages, systemPrompt)
+				result, model, usage, err := forkProgressEval(forkCtx, forkClient, forkMessages, systemPrompt, forkTools)
 				if err != nil {
 					log.Debug("Progress eval fork failed", "error", err)
 					return
@@ -296,6 +297,14 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					log.Debug("Progress eval completed but session already ended, discarding result")
 					return
 				}
+				// Accumulate cost for the side request
+				e.mu.Lock()
+				if model != "" {
+					AccumulateUsage(e.costState, model, usage)
+				}
+				totalCost := e.costState.TotalCostUSD
+				modelUsage := e.buildModelUsage()
+				e.mu.Unlock()
 				// Send result to main loop via channel (non-blocking, drop if full)
 				select {
 				case e.progressMonitor.forkResultCh <- result:
@@ -308,10 +317,12 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				)
 				if e.streamCfg.Enabled {
 					msg := StreamMessage{
-						Type:    "system",
-						Subtype: "progress_eval",
-						Result:  progressEvalResultJSON(result),
-						Uuid:    GenerateUUID(),
+						Type:         "system",
+						Subtype:      "progress_eval",
+						Result:       progressEvalResultJSON(result),
+						Uuid:         GenerateUUID(),
+						TotalCostUSD: totalCost,
+						ModelUsage:   modelUsage,
 					}
 					data, _ := json.Marshal(msg)
 					fmt.Fprintln(os.Stdout, string(data))
@@ -988,6 +999,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				forkMessages := make([]api.Message, len(messages))
 				copy(forkMessages, messages)
 				forkModel := e.model
+				forkTools := e.toolParams
 				parentCtx := ctx
 				go func() {
 					forkCtx, forkCancel := context.WithTimeout(context.WithoutCancel(parentCtx), 30*time.Second)
@@ -998,7 +1010,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 						return
 					}
 					forkClient.SetMaxTokensOverride(forkMaxTokens)
-					cr, err := forkComplexityEval(forkCtx, forkClient, forkMessages, systemPrompt)
+					cr, model, usage, err := forkComplexityEval(forkCtx, forkClient, forkMessages, systemPrompt, forkTools)
 					if err != nil {
 						log.Debug("Complexity eval fork failed", "error", err)
 						return
@@ -1008,14 +1020,24 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 						log.Debug("Complexity eval completed but session already ended, discarding result")
 						return
 					}
+					// Accumulate cost for the side request
+					e.mu.Lock()
+					if model != "" {
+						AccumulateUsage(e.costState, model, usage)
+					}
+					totalCost := e.costState.TotalCostUSD
+					modelUsage := e.buildModelUsage()
+					e.mu.Unlock()
 					e.maxTokensCtrl.SetComplexityResult(cr)
 					log.Info("Complexity eval result", "complexity", cr.Complexity, "is_coding", cr.IsCoding)
 					if e.streamCfg.Enabled {
 						msg := StreamMessage{
-							Type:    "system",
-							Subtype: "complexity_eval",
-							Result:  fmt.Sprintf(`{"complexity":%d,"is_coding":%v}`, cr.Complexity, cr.IsCoding),
-							Uuid:    GenerateUUID(),
+							Type:         "system",
+							Subtype:      "complexity_eval",
+							Result:       fmt.Sprintf(`{"complexity":%d,"is_coding":%v}`, cr.Complexity, cr.IsCoding),
+							Uuid:         GenerateUUID(),
+							TotalCostUSD: totalCost,
+							ModelUsage:   modelUsage,
 						}
 						data, _ := json.Marshal(msg)
 						fmt.Fprintln(os.Stdout, string(data))

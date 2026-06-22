@@ -183,7 +183,7 @@ is_coding=true if the task involves writing/modifying code OR operating develope
 
 // forkComplexityEval sends a side request to evaluate task complexity.
 // It reuses the cached system prompt prefix for cache hits.
-func forkComplexityEval(ctx context.Context, client api.Requester, messages []api.Message, systemPrompt []string) (*ComplexityResult, error) {
+func forkComplexityEval(ctx context.Context, client api.Requester, messages []api.Message, systemPrompt []string, tools []api.ToolParam) (*ComplexityResult, string, api.Usage, error) {
 	evalMsg := api.Message{
 		Role:    api.RoleUser,
 		Content: complexityEvalPrompt,
@@ -192,9 +192,9 @@ func forkComplexityEval(ctx context.Context, client api.Requester, messages []ap
 	copy(forkMessages, messages)
 	forkMessages = append(forkMessages, evalMsg)
 
-	resp, err := client.SendMessage(ctx, forkMessages, nil, nil, systemPrompt, "")
+	resp, err := client.SendMessage(ctx, forkMessages, tools, nil, systemPrompt, "")
 	if err != nil {
-		return nil, err
+		return nil, "", api.Usage{}, err
 	}
 
 	var text string
@@ -208,7 +208,7 @@ func forkComplexityEval(ctx context.Context, client api.Requester, messages []ap
 
 	var cr ComplexityResult
 	if err := json.Unmarshal([]byte(text), &cr); err != nil {
-		return nil, err
+		return nil, "", api.Usage{}, err
 	}
 
 	if cr.Complexity < 1 || cr.Complexity > 5 {
@@ -216,7 +216,7 @@ func forkComplexityEval(ctx context.Context, client api.Requester, messages []ap
 	}
 
 	log.Debug("Complexity eval result", "complexity", cr.Complexity, "is_coding", cr.IsCoding)
-	return &cr, nil
+	return &cr, resp.Model, resp.Usage, nil
 }
 
 // extractJSON finds the first {...} in the text.

@@ -632,7 +632,7 @@ Weights: task_alignment 50%%, outcome_momentum 35%%, fresh_exploration 15%%.`
 // forkProgressEval sends a side request appending the judge prompt to a copy
 // of the conversation history. The shared prefix (system prompt + prior messages)
 // enables prompt cache hits.
-func forkProgressEval(ctx context.Context, client api.Requester, messages []api.Message, systemPrompt []string) (*ProgressEvalResult, error) {
+func forkProgressEval(ctx context.Context, client api.Requester, messages []api.Message, systemPrompt []string, tools []api.ToolParam) (*ProgressEvalResult, string, api.Usage, error) {
 	evalMsg := api.Message{
 		Role:    api.RoleUser,
 		Content: progressEvalPrompt,
@@ -641,9 +641,9 @@ func forkProgressEval(ctx context.Context, client api.Requester, messages []api.
 	copy(forkMessages, messages)
 	forkMessages = append(forkMessages, evalMsg)
 
-	resp, err := client.SendMessage(ctx, forkMessages, nil, nil, systemPrompt, "")
+	resp, err := client.SendMessage(ctx, forkMessages, tools, nil, systemPrompt, "")
 	if err != nil {
-		return nil, err
+		return nil, "", api.Usage{}, err
 	}
 
 	var text string
@@ -655,7 +655,7 @@ func forkProgressEval(ctx context.Context, client api.Requester, messages []api.
 
 	result, err := parseProgressEvalResponse(text)
 	if err != nil {
-		return nil, err
+		return nil, resp.Model, resp.Usage, err
 	}
 
 	log.Debug("Progress eval result",
@@ -666,7 +666,7 @@ func forkProgressEval(ctx context.Context, client api.Requester, messages []api.
 		"meaningful_progress", result.MeaningfulProgress,
 	)
 
-	return result, nil
+	return result, resp.Model, resp.Usage, nil
 }
 
 // progressEvalResultJSON marshals a ProgressEvalResult to a JSON string for stream events.

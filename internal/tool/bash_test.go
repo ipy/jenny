@@ -841,22 +841,22 @@ func TestBashTool_HeredocSuggestion(t *testing.T) {
 		},
 		{
 			name:     "heredoc at threshold boundary",
-			command:  makeHeredoc(20),
+			command:  makeHeredoc(30),
 			wantHint: false,
 		},
 		{
 			name:     "heredoc over threshold",
-			command:  makeHeredoc(21),
+			command:  makeHeredoc(31),
 			wantHint: true,
 		},
 		{
 			name:     "long heredoc with dash delimiter",
-			command:  "cat <<-'EOF'\n" + strings.Repeat("x\n", 25) + "EOF",
+			command:  "cat <<-'EOF'\n" + strings.Repeat("x\n", 31) + "EOF",
 			wantHint: true,
 		},
 		{
 			name:     "heredoc with double-quoted delimiter",
-			command:  "cat <<\"EOF\"\n" + strings.Repeat("x\n", 25) + "EOF",
+			command:  "cat <<\"EOF\"\n" + strings.Repeat("x\n", 31) + "EOF",
 			wantHint: true,
 		},
 		{
@@ -866,7 +866,7 @@ func TestBashTool_HeredocSuggestion(t *testing.T) {
 		},
 		{
 			name:     "multiline heredoc in middle of command",
-			command:  "grep foo <<'DATA'\n" + strings.Repeat("x\n", 30) + "DATA\nwc -l",
+			command:  "grep foo <<'DATA'\n" + strings.Repeat("x\n", 31) + "DATA\nwc -l",
 			wantHint: true,
 		},
 		{
@@ -890,7 +890,7 @@ func TestBashTool_HeredocSuggestion(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			hasHint := strings.Contains(result.Content, "Consider using the Write tool")
+			hasHint := strings.Contains(result.Content, "Use the write tool")
 			if hasHint != tt.wantHint {
 				t.Errorf("wantHint=%v, got hint=%v. Content: %s", tt.wantHint, hasHint, result.Content)
 			}
