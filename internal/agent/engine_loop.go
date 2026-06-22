@@ -334,6 +334,67 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			}()
 		}
 
+		// L3 fork-judge: dispatch before hard termination to give agent a last chance
+		if e.progressMonitor.ShouldForkL3ProgressEval() {
+			e.progressMonitor.MarkL3ForkDispatched()
+			forkMessages := make([]api.Message, len(messages))
+			copy(forkMessages, messages)
+			forkModel := e.model
+			forkTools := e.toolParams
+			parentCtx := ctx
+			go func() {
+				forkCtx, forkCancel := context.WithTimeout(context.WithoutCancel(parentCtx), 30*time.Second)
+				defer forkCancel()
+				forkClient, err := api.NewClientWithModel(forkModel)
+				if err != nil {
+					log.Debug("L3 progress eval fork client creation failed", "error", err)
+					return
+				}
+				forkClient.SetMaxTokensOverride(forkMaxTokens)
+				forkClient.SetThinkingConfig(api.ThinkingConfig{
+					Effort:       e.streamCfg.Effort,
+					BudgetTokens: e.streamCfg.ThinkingBudget,
+				})
+				result, model, usage, err := forkProgressEval(forkCtx, forkClient, forkMessages, systemPrompt, forkTools)
+				if err != nil {
+					log.Debug("L3 progress eval fork failed", "error", err)
+					return
+				}
+				if parentCtx.Err() != nil {
+					log.Debug("L3 progress eval completed but session already ended, discarding result")
+					return
+				}
+				e.mu.Lock()
+				if model != "" {
+					AccumulateUsage(e.costState, model, usage)
+				}
+				totalCost := e.costState.TotalCostUSD
+				modelUsage := e.buildModelUsage()
+				e.mu.Unlock()
+				select {
+				case e.progressMonitor.forkResultCh <- result:
+				default:
+				}
+				log.Info("L3 progress eval result",
+					"overall", result.Overall,
+					"meaningful_progress", result.MeaningfulProgress,
+					"reasoning", result.Reasoning,
+				)
+				if e.streamCfg.Enabled {
+					msg := StreamMessage{
+						Type:         "system",
+						Subtype:      "progress_eval",
+						Result:       progressEvalResultJSON(result),
+						Uuid:         GenerateUUID(),
+						TotalCostUSD: totalCost,
+						ModelUsage:   modelUsage,
+					}
+					data, _ := json.Marshal(msg)
+					fmt.Fprintln(os.Stdout, string(data))
+				}
+			}()
+		}
+
 		// Drain any pending fork result before checking escalation
 		e.progressMonitor.DrainForkResult()
 

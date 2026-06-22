@@ -14,7 +14,44 @@ func TestProgressMonitor_ScoreTurn_FileWrite(t *testing.T) {
 		[]api.ToolResult{{Content: "ok"}},
 	)
 	if ts.Score != 3 {
-		t.Errorf("expected score 3 for file write, got %d", ts.Score)
+		t.Errorf("expected score 3 for first file write, got %d", ts.Score)
+	}
+}
+
+func TestProgressMonitor_ScoreTurn_FileRewriteDecay(t *testing.T) {
+	pm := NewProgressMonitor()
+	path := "/workspace/results.json"
+	block := []api.ToolUseBlock{{Name: "write", Input: map[string]any{"file_path": path}}}
+	result := []api.ToolResult{{Content: "ok"}}
+
+	// 1st write: +3
+	ts1 := pm.scoreTurn(block, result)
+	if ts1.Score != 3 {
+		t.Errorf("1st write: expected +3, got %d", ts1.Score)
+	}
+
+	// 2nd write: +1
+	ts2 := pm.scoreTurn(block, result)
+	if ts2.Score != 1 {
+		t.Errorf("2nd write: expected +1, got %d", ts2.Score)
+	}
+
+	// 3rd write: 0
+	ts3 := pm.scoreTurn(block, result)
+	if ts3.Score != 0 {
+		t.Errorf("3rd write: expected 0, got %d", ts3.Score)
+	}
+
+	// 4th write: -1
+	ts4 := pm.scoreTurn(block, result)
+	if ts4.Score != -1 {
+		t.Errorf("4th write: expected -1, got %d", ts4.Score)
+	}
+
+	// 5th write: still -1 (capped)
+	ts5 := pm.scoreTurn(block, result)
+	if ts5.Score != -1 {
+		t.Errorf("5th write: expected -1, got %d", ts5.Score)
 	}
 }
 
@@ -401,9 +438,79 @@ func TestProgressMonitor_L3_After30NoProgress(t *testing.T) {
 		t.Errorf("expected L3 after %d no-progress turns, got level %d", l3Threshold, pm.Level())
 	}
 
+	// Main loop pattern: dispatch fork BEFORE CheckAndInject
+	if !pm.ShouldForkL3ProgressEval() {
+		t.Fatal("ShouldForkL3ProgressEval should be true when L3 first reached")
+	}
+	pm.MarkL3ForkDispatched()
+
+	// L3 defers termination while fork is in flight
 	_, terminate := pm.CheckAndInject()
+	if terminate {
+		t.Error("L3 should defer while fork is in flight")
+	}
+
+	// Simulate negative fork result
+	pm.forkResultCh <- &ProgressEvalResult{
+		TaskAlignment:    1,
+		OutcomeMomentum:  1,
+		FreshExploration: 1,
+		Overall:          1.0,
+		Reasoning:        "stuck",
+	}
+	pm.DrainForkResult()
+
+	// Now L3 should terminate (fork returned negative)
+	_, terminate = pm.CheckAndInject()
 	if !terminate {
-		t.Error("L3 should terminate")
+		t.Error("L3 should terminate after negative fork-judge")
+	}
+}
+
+func TestProgressMonitor_L3_ForkJudgePositiveRescues(t *testing.T) {
+	pm := NewProgressMonitor()
+	failBlock := []api.ToolUseBlock{{Name: "Bash", Input: map[string]any{"command": "x"}}}
+	failResult := []api.ToolResult{{Content: "error", IsError: true}}
+
+	for i := 0; i < l3Threshold; i++ {
+		failBlock[0].Input["command"] = fmt.Sprintf("cmd_%d", i)
+		pm.RecordTurn(failBlock, failResult)
+		if i == l1FirstThreshold-1 || i == l1SecondThreshold-1 || i == l2Threshold-1 {
+			pm.CheckAndInject()
+		}
+	}
+
+	// L3 defers termination
+	if !pm.ShouldForkL3ProgressEval() {
+		t.Fatal("ShouldForkL3ProgressEval should be true at L3")
+	}
+	pm.MarkL3ForkDispatched()
+
+	// Fork is in flight → defer
+	_, terminate := pm.CheckAndInject()
+	if terminate {
+		t.Error("L3 should defer while fork is in flight")
+	}
+
+	// Positive fork result → rescue
+	pm.forkResultCh <- &ProgressEvalResult{
+		TaskAlignment:    4,
+		OutcomeMomentum:  3,
+		FreshExploration: 3,
+		Overall:          3.55,
+		Reasoning:        "making real progress",
+	}
+	pm.DrainForkResult()
+
+	if pm.Level() != ProgressLevelNone {
+		t.Errorf("expected level 0 after positive L3 fork, got %d", pm.Level())
+	}
+	if pm.ConsecutiveNoProgress() != 0 {
+		t.Errorf("expected 0 consecutive after rescue, got %d", pm.ConsecutiveNoProgress())
+	}
+	_, terminate = pm.CheckAndInject()
+	if terminate {
+		t.Error("should not terminate after positive fork rescue")
 	}
 }
 
@@ -502,10 +609,29 @@ func TestProgressMonitor_L2_EscalatesToL3AfterTurns(t *testing.T) {
 		}
 	}
 
-	// Next check should escalate to L3
+	// L2→L3 escalation: defers to let fork-judge dispatch
+	_, term = pm.CheckAndInject()
+	if term {
+		t.Error("L2→L3 escalation should defer (not immediate terminate) to allow fork-judge")
+	}
+	if pm.Level() != ProgressLevelL3 {
+		t.Errorf("expected L3 after exceeding L2 max turns, got %d", pm.Level())
+	}
+
+	// Simulate negative fork-judge → terminate
+	pm.MarkL3ForkDispatched()
+	pm.forkResultCh <- &ProgressEvalResult{
+		TaskAlignment:    1,
+		OutcomeMomentum:  1,
+		FreshExploration: 1,
+		Overall:          1.0,
+		Reasoning:        "stuck",
+	}
+	pm.DrainForkResult()
+
 	_, term = pm.CheckAndInject()
 	if !term {
-		t.Error("should terminate after exceeding L2 max turns")
+		t.Error("should terminate after negative L3 fork-judge")
 	}
 }
 

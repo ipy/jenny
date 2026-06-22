@@ -66,8 +66,8 @@ func TestTurnBasedMaxTokens(t *testing.T) {
 		turn     int
 		expected int
 	}{
-		{1, 16384},  // early turn: high cap for thinking models
-		{3, 16384},  // still early
+		{1, 8192},   // early turn: capped to prevent runaway thinking
+		{3, 8192},   // still early
 		{4, 16384},  // mid schedule
 		{10, 16384}, // end of mid
 		{11, 15984}, // taper starts: 16384 - 1*400
@@ -106,13 +106,13 @@ func TestTurnBasedMaxTokens(t *testing.T) {
 }
 
 func TestMaxTokensController_Discovery(t *testing.T) {
-	// deepseek-chat has modelMax > 100K, so earlyTurnCap = 16384
+	// deepseek-chat has modelMax > 100K, so earlyTurnCap = 8192
 	c := NewMaxTokensController("deepseek-chat")
 
 	for turn := 1; turn <= 3; turn++ {
 		got := c.ComputeEffective(turn)
-		if got != 16384 {
-			t.Errorf("turn %d: expected 16384 during discovery, got %d", turn, got)
+		if got != 8192 {
+			t.Errorf("turn %d: expected 8192 during discovery, got %d", turn, got)
 		}
 	}
 }
@@ -154,8 +154,8 @@ func TestMaxTokensController_DiscoveryIgnoresFork(t *testing.T) {
 
 	for turn := 1; turn <= 3; turn++ {
 		got := c.ComputeEffective(turn)
-		if got != 16384 {
-			t.Errorf("turn %d: discovery should use earlyTurnCap, expected 16384, got %d", turn, got)
+		if got != 8192 {
+			t.Errorf("turn %d: discovery should use earlyTurnCap, expected 8192, got %d", turn, got)
 		}
 	}
 }

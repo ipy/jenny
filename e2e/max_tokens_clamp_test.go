@@ -8,7 +8,7 @@ import (
 
 // TestMaxTokensClamp verifies max_tokens in outbound API requests.
 // With dynamic max_tokens, turn 1 uses the earlyTurnCap which varies by model:
-//   - Models with maxOut >= 100K: 16384
+//   - Models with maxOut >= 100K: 8192
 //   - Smaller models: min(4096, modelMax)
 func TestMaxTokensClamp(t *testing.T) {
 	models := []struct {
@@ -16,13 +16,13 @@ func TestMaxTokensClamp(t *testing.T) {
 		name     string
 		expected int
 	}{
-		// Large models (maxOut >= 100K) → earlyTurnCap = 16384
-		{"claude-opus-4-5-20251101", "opus-capability", 16384}, // maxOut=128000
-		{"gpt-5", "gpt-5-capability", 16384},                   // maxOut=128000
-		{"deepseek-v4-1", "deepseek-v4-capability", 16384},     // maxOut=393216
-		{"claude-fable-5-1", "fable-capability", 16384},        // maxOut=128000
-		{"o3", "o3-capability", 16384},                         // maxOut=100000
-		{"o4-mini", "o4-mini-capability", 16384},               // maxOut=100000
+		// Large models (maxOut >= 100K) → earlyTurnCap = 8192
+		{"claude-opus-4-5-20251101", "opus-capability", 8192}, // maxOut=128000
+		{"gpt-5", "gpt-5-capability", 8192},                   // maxOut=128000
+		{"deepseek-v4-1", "deepseek-v4-capability", 8192},     // maxOut=393216
+		{"claude-fable-5-1", "fable-capability", 8192},        // maxOut=128000
+		{"o3", "o3-capability", 8192},                         // maxOut=100000
+		{"o4-mini", "o4-mini-capability", 8192},               // maxOut=100000
 
 		// Medium/small models (maxOut < 100K) → earlyTurnCap = 4096
 		{"claude-sonnet-4-6", "default-sonnet-capability", 4096}, // maxOut=64000

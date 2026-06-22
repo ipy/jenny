@@ -2,6 +2,7 @@ package tool
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -194,12 +195,23 @@ func (e *ExecTool) WithSessionID(id string) *ExecTool {
 }
 
 // Start launches the process and returns immediately after cmd.Start succeeds.
+// If cmd.Start fails with E2BIG or ENAMETOOLONG (environment too large for the
+// kernel's ARG_MAX), it retries once with a minimal core-only environment.
 func (e *ExecTool) Start(ctx context.Context, req ExecRequest, opts ExecOptions) (*ExecHandle, error) {
+	env := mergeExecEnv(e.sessionID, req.Env)
+	handle, err := e.startWithEnv(ctx, req, opts, env)
+	if err != nil && isEnvTooBig(err) {
+		minimal := coreOnlyEnv(e.sessionID)
+		return e.startWithEnv(ctx, req, opts, minimal)
+	}
+	return handle, err
+}
+
+func (e *ExecTool) startWithEnv(ctx context.Context, req ExecRequest, opts ExecOptions, env []string) (*ExecHandle, error) {
 	cmd := exec.Command(req.Path, req.Args...)
 	cmd.Dir = req.Dir
 	setupProcessGroup(cmd)
 
-	env := mergeExecEnv(e.sessionID, req.Env)
 	cmd.Env = env
 
 	if req.Stdin != nil {
@@ -236,6 +248,40 @@ func (e *ExecTool) Start(ctx context.Context, req ExecRequest, opts ExecOptions)
 		cancel:    cancel,
 		startTime: time.Now(),
 	}, nil
+}
+
+// isEnvTooBig reports whether err is an E2BIG or ENAMETOOLONG from fork/exec,
+// indicating the combined argument + environment block exceeds the kernel limit.
+// Some container runtimes report ENAMETOOLONG instead of E2BIG for this condition.
+func isEnvTooBig(err error) bool {
+	var pe *os.PathError
+	if !errors.As(err, &pe) {
+		return false
+	}
+	if pe.Op != "fork/exec" {
+		return false
+	}
+	// Check error string portably — avoids platform-specific syscall imports.
+	msg := pe.Err.Error()
+	return msg == "argument list too long" || msg == "file name too long"
+}
+
+// coreOnlyEnv returns a minimal environment containing only essential variables
+// (PATH, HOME, TERM, etc.) plus JENNY_SCRATCHPAD. Used as fallback when the
+// standard environment exceeds the kernel's ARG_MAX.
+func coreOnlyEnv(sessionID string) []string {
+	corePrefixes := strings.Split(coreEnvPrefixes, ",")
+	var result []string
+	for _, entry := range os.Environ() {
+		for _, p := range corePrefixes {
+			if strings.HasPrefix(entry, p) {
+				result = append(result, entry)
+				break
+			}
+		}
+	}
+	result = append(result, "JENNY_SCRATCHPAD="+constants.ScratchpadDir(sessionID))
+	return result
 }
 
 func (h *ExecHandle) waitInternal() (*ExecResult, error) {

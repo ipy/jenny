@@ -57,8 +57,8 @@ type ProgressMonitor struct {
 	slidingL1Fired   bool
 
 	previouslyReadPaths    map[string]bool
-	readPathOrder          []string // FIFO insertion order for eviction
-	previouslyWrittenPaths map[string]bool
+	readPathOrder          []string       // FIFO insertion order for eviction
+	previouslyWrittenPaths map[string]int // path → write count
 	lastCommandHash        string
 	lastErrorText          string
 
@@ -66,6 +66,11 @@ type ProgressMonitor struct {
 	forkDispatched bool
 	forkResultCh   chan *ProgressEvalResult
 	forkEvalCount  int // number of fork-judge evaluations completed (for dynamic threshold)
+
+	// L3 fork-judge state: before hard termination, dispatch one final fork-judge.
+	// If the judge says meaningful progress, reset counters.
+	// This fork counts against the same forkEvalCount (rising threshold).
+	l3ForkDispatched bool
 }
 
 // ProgressEvalResult holds the LLM judge's evaluation of agent progress.
@@ -82,7 +87,7 @@ type ProgressEvalResult struct {
 func NewProgressMonitor() *ProgressMonitor {
 	return &ProgressMonitor{
 		previouslyReadPaths:    make(map[string]bool),
-		previouslyWrittenPaths: make(map[string]bool),
+		previouslyWrittenPaths: make(map[string]int),
 		slidingWindow:          make([]int, slidingWindowSize),
 		forkResultCh:           make(chan *ProgressEvalResult, 1),
 	}
@@ -136,6 +141,7 @@ func (pm *ProgressMonitor) RecordTurn(toolUseBlocks []api.ToolUseBlock, toolResu
 		pm.l2Fired = false
 		pm.l2TurnCount = 0
 		pm.forkDispatched = false
+		pm.l3ForkDispatched = false
 	} else {
 		if score.Score <= 0 {
 			pm.consecutiveNoProgress++
@@ -277,14 +283,11 @@ func (pm *ProgressMonitor) scoreTurn(toolUseBlocks []api.ToolUseBlock, toolResul
 		case "write", "edit", "notebook_edit":
 			path := extractStringField(tb.Input, "file_path")
 			if pm.isTaskOutput(path) {
-				if pm.previouslyWrittenPaths[path] {
-					ts.Score += 1
-					ts.Signals = append(ts.Signals, fmt.Sprintf("file_rewrite:%s", path))
-				} else {
-					pm.previouslyWrittenPaths[path] = true
-					ts.Score += 3
-					ts.Signals = append(ts.Signals, fmt.Sprintf("file_write:%s", path))
-				}
+				pm.previouslyWrittenPaths[path]++
+				count := pm.previouslyWrittenPaths[path]
+				score, signal := fileWriteScore(count)
+				ts.Score += score
+				ts.Signals = append(ts.Signals, fmt.Sprintf("%s:%s", signal, path))
 			} else if pm.isScratchpad(path) {
 				ts.Score += 1
 				ts.Signals = append(ts.Signals, "scratchpad_write")
@@ -456,10 +459,22 @@ func (pm *ProgressMonitor) CheckAndInject() (msg *api.Message, terminate bool) {
 		pm.l2TurnCount++
 		if pm.l2TurnCount > l2MaxTurns {
 			pm.level = ProgressLevelL3
-			return nil, true
+			// Fall through to L3 handler (which may dispatch a fork-judge
+			// before terminating) on the next CheckAndInject call.
+			return nil, false
 		}
 
 	case ProgressLevelL3:
+		if pm.forkDispatched {
+			// L3 fork-judge is in flight; defer termination until result arrives.
+			return nil, false
+		}
+		if pm.l3ForkDispatched {
+			// Fork completed with negative result (level still L3) → hard terminate.
+			return nil, true
+		}
+		// No fork dispatched yet — the main loop's ShouldForkL3ProgressEval
+		// will fire on the same iteration; defer termination for one cycle.
 		return nil, true
 	}
 
@@ -515,6 +530,21 @@ func (pm *ProgressMonitor) MarkForkDispatched() {
 	pm.forkDispatched = true
 }
 
+// ShouldForkL3ProgressEval returns true when the L3 fork-judge should be dispatched.
+// It fires exactly once when L3 is reached (hard termination imminent) to give the
+// agent one last chance: if the judge finds meaningful progress, the session is "rescued".
+// This fork shares the forkEvalCount with L1-second forks, so the threshold rises
+// across all evaluations (3.0 → 3.5 → 4.0).
+func (pm *ProgressMonitor) ShouldForkL3ProgressEval() bool {
+	return pm.level >= ProgressLevelL3 && !pm.l3ForkDispatched && !pm.forkDispatched
+}
+
+// MarkL3ForkDispatched records that the L3 fork has been launched.
+func (pm *ProgressMonitor) MarkL3ForkDispatched() {
+	pm.l3ForkDispatched = true
+	pm.forkDispatched = true
+}
+
 // forkJudgeThreshold returns the dynamic threshold for the nth fork-judge
 // evaluation. Each successive evaluation demands a higher bar, making it
 // progressively harder for the judge to rescue a stuck session.
@@ -556,9 +586,10 @@ func (pm *ProgressMonitor) ApplyProgressEvalResult(result *ProgressEvalResult) {
 		pm.l2TurnCount = 0
 		pm.slidingL1Fired = false
 		pm.forkDispatched = false
+		pm.l3ForkDispatched = false
 		return
 	}
-	// Negative result: let the L1-second flow continue normally.
+	// Negative result: let the escalation flow continue normally.
 }
 
 // DrainForkResult non-blockingly drains the fork result channel and applies
@@ -589,6 +620,25 @@ func (pm *ProgressMonitor) slidingWindowSum() int {
 		sum += pm.slidingWindow[i]
 	}
 	return sum
+}
+
+// fileWriteScore returns the score and signal name for the nth write to the same file.
+//
+//	1st write: +3 (file_write)    — fresh output, strong signal
+//	2nd write: +1 (file_rewrite)  — iteration, mild positive
+//	3rd write:  0 (rewrite_neutral) — diminishing returns
+//	4th+ write: -1 (rewrite_stale) — spinning, capped at -1 to avoid over-punishment
+func fileWriteScore(writeCount int) (int, string) {
+	switch {
+	case writeCount <= 1:
+		return 3, "file_write"
+	case writeCount == 2:
+		return 1, "file_rewrite"
+	case writeCount == 3:
+		return 0, "rewrite_neutral"
+	default:
+		return -1, "rewrite_stale"
+	}
 }
 
 func (pm *ProgressMonitor) isTaskOutput(path string) bool {

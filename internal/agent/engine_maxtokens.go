@@ -103,11 +103,12 @@ func (c *MaxTokensController) ComputeEffective(turn int) int {
 }
 
 // earlyTurnCap returns the max_tokens cap for the first 3 discovery turns.
-// For models with large output capacity (thinking models where thinking tokens
-// share the output budget), a higher cap prevents thinking from starving tool calls.
+// Set to 8192 for thinking models: high enough for planning + first tool calls,
+// low enough to prevent runaway thinking burns (e.g. Task 66: 14K thinking tokens
+// on turn 1 with zero tool use at 16384 cap).
 func (c *MaxTokensController) earlyTurnCap() int {
 	if c.modelMax >= 100_000 {
-		return min(16384, c.modelMax)
+		return min(8192, c.modelMax)
 	}
 	return min(4096, c.modelMax)
 }
@@ -152,7 +153,7 @@ func turnBasedMaxTokens(turn int, modelMax int) int {
 	switch {
 	case turn <= 3:
 		if modelMax >= 100_000 {
-			return min(16384, modelMax)
+			return min(8192, modelMax)
 		}
 		return min(4096, modelMax)
 	case turn <= 10:
