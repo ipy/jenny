@@ -11,11 +11,11 @@ import (
 	"github.com/ipy/jenny/internal/tool"
 )
 
-func TestWebFetch_AC1_10MBBodyLimit(t *testing.T) {
-	// Start a server that returns > 10 MB of data.
+func TestWebFetch_AC1_BodyTruncation(t *testing.T) {
+	// Start a server that returns > 128 KB of data.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Return 11 MB of 'a' characters.
-		data := strings.Repeat("a", 11*1024*1024)
+		// Return 200 KB of 'a' characters.
+		data := strings.Repeat("a", 200*1024)
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte(data))
 	}))
@@ -30,19 +30,25 @@ func TestWebFetch_AC1_10MBBodyLimit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !result.IsError {
-		t.Error("expected IsError for response exceeding 10MB limit")
+	if result.IsError {
+		t.Fatalf("expected no error for oversized body, got: %s", result.Content)
 	}
-	if !strings.Contains(result.Content, "10 MB") && !strings.Contains(result.Content, "limit") {
-		t.Errorf("expected error mentioning size limit, got: %s", result.Content)
+	if !result.Truncated {
+		t.Error("expected Truncated flag to be set for oversized body")
+	}
+	if len(result.Content) > 140*1024 { // allow small overhead
+		t.Errorf("expected content capped near 128K chars, got %d chars", len(result.Content))
+	}
+	if !strings.Contains(result.Content, "[Content truncated at") {
+		t.Errorf("expected truncation note in content, got: %s", result.Content[:200])
 	}
 }
 
-func TestWebFetch_AC2_100KMarkdownCap(t *testing.T) {
-	// Start a server that returns HTML that will produce > 100K chars of markdown.
+func TestWebFetch_AC2_MarkdownCap(t *testing.T) {
+	// Start a server that returns HTML that will produce > 128K chars of markdown.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		// Generate enough paragraphs to exceed the 100K cap.
+		// Generate enough paragraphs to exceed the 128K cap.
 		var sb strings.Builder
 		sb.WriteString("<html><body>")
 		for i := range 3000 {
@@ -65,8 +71,8 @@ func TestWebFetch_AC2_100KMarkdownCap(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("unexpected error: %s", result.Content)
 	}
-	if len(result.Content) > 110000 { // allow small overhead
-		t.Errorf("expected markdown to be capped near 100K chars, got %d chars", len(result.Content))
+	if len(result.Content) > 140*1024 { // allow small overhead
+		t.Errorf("expected markdown to be capped near 128K chars, got %d chars", len(result.Content))
 	}
 	if !result.Truncated {
 		t.Error("expected Truncated flag to be set")
@@ -192,6 +198,39 @@ func TestWebFetch_RawHTML(t *testing.T) {
 	}
 	if result.Content != htmlContent {
 		t.Errorf("expected raw HTML to be returned as-is\n  got: %q\n want: %q", result.Content, htmlContent)
+	}
+}
+
+func TestWebFetch_RawHTMLTruncation(t *testing.T) {
+	// Raw mode should also truncate at 128K chars.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := strings.Repeat("a", 200*1024)
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(data))
+	}))
+	defer srv.Close()
+
+	fetchTool := tool.NewWebFetchTool().WithSkipBlocklist()
+	ctx := context.Background()
+
+	result, err := fetchTool.Execute(ctx, map[string]any{
+		"url": srv.URL,
+		"raw": true,
+	}, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("unexpected IsError: %s", result.Content)
+	}
+	if !result.Truncated {
+		t.Error("expected Truncated flag to be set for oversized raw body")
+	}
+	if len(result.Content) > 140*1024 {
+		t.Errorf("expected raw content capped near 128K chars, got %d chars", len(result.Content))
+	}
+	if !strings.Contains(result.Content, "[Content truncated at") {
+		t.Errorf("expected truncation note in raw content, got: %s", result.Content[:200])
 	}
 }
 

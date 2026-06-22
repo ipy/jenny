@@ -22,8 +22,8 @@ import (
 
 // WebFetch limits.
 const (
-	webFetchMaxBodyBytes     = 1 * 1024 * 1024  // 1 MB (AC1)
-	webFetchMaxMarkdownChars = 100000           // 100K chars (AC2)
+	webFetchMaxReadBytes     = 256 * 1024       // max bytes to read from network (headroom for HTML→markdown expansion)
+	webFetchMaxContentChars  = 128 * 1024       // 128K chars content cap
 	webFetchTimeout          = 60 * time.Second // request timeout
 	webFetchMaxRedirects     = 10               // max redirect hops
 	webFetchMaxURLLength     = 2000             // max URL length
@@ -346,18 +346,11 @@ func (t *WebFetchTool) fetch(ctx context.Context, parsedURL *url.URL, urlStr str
 	}
 	defer resp.Body.Close()
 
-	// AC1: Limit response body to 10 MB + 1 byte for overflow detection.
-	limitedBody := io.LimitReader(resp.Body, webFetchMaxBodyBytes+1)
+	// Read body up to read limit.
+	limitedBody := io.LimitReader(resp.Body, webFetchMaxReadBytes+1)
 	body, err := io.ReadAll(limitedBody)
 	if err != nil {
 		return nil, fmt.Errorf("reading response body: %w", err)
-	}
-
-	if len(body) > webFetchMaxBodyBytes {
-		return &ToolResult{
-			Content: fmt.Sprintf("Response body exceeds the %d MB limit. Consider a more specific URL.", webFetchMaxBodyBytes/(1024*1024)),
-			IsError: true,
-		}, nil
 	}
 
 	// Determine content type.
@@ -368,20 +361,20 @@ func (t *WebFetchTool) fetch(ctx context.Context, parsedURL *url.URL, urlStr str
 	// Check if this is HTML content.
 	if contentType == "text/html" || contentType == "application/xhtml+xml" || contentType == "" {
 		if raw {
-			// Return raw HTML body without markdown conversion.
+			content, truncated := t.truncateContent(string(body))
 			return &ToolResult{
-				Content: string(body),
-				IsError: false,
+				Content:   content,
+				IsError:   false,
+				Truncated: truncated,
 			}, nil
 		}
 		// Treat empty Content-Type as HTML (common for web pages).
 		markdown, truncated := t.convertHTMLToMarkdown(string(body))
-		result := &ToolResult{
+		return &ToolResult{
 			Content:   markdown,
 			IsError:   false,
 			Truncated: truncated,
-		}
-		return result, nil
+		}, nil
 	}
 
 	// Binary content — save to disk.
@@ -401,7 +394,7 @@ func (t *WebFetchTool) fetch(ctx context.Context, parsedURL *url.URL, urlStr str
 }
 
 // convertHTMLToMarkdown converts HTML to markdown and caps the output at
-// webFetchMaxMarkdownChars characters (AC2).
+// webFetchMaxContentChars characters.
 func (t *WebFetchTool) convertHTMLToMarkdown(htmlInput string) (string, bool) {
 	markdown, err := htmltomarkdown.ConvertString(htmlInput)
 	if err != nil {
@@ -409,18 +402,21 @@ func (t *WebFetchTool) convertHTMLToMarkdown(htmlInput string) (string, bool) {
 		markdown = htmlInput
 	}
 
-	if len(markdown) > webFetchMaxMarkdownChars {
-		// AC2: Cap at 100K chars (rune-safe truncation).
-		note := fmt.Sprintf("\n\n[Content truncated at %d characters]", webFetchMaxMarkdownChars)
-		runes := []rune(markdown)
-		maxRunes := webFetchMaxMarkdownChars - len(note)
-		if maxRunes > len(runes) {
-			maxRunes = len(runes)
-		}
-		truncated := string(runes[:maxRunes])
-		return truncated + note, true
+	return t.truncateContent(markdown)
+}
+
+// truncateContent caps content at webFetchMaxContentChars characters (rune-safe).
+func (t *WebFetchTool) truncateContent(content string) (string, bool) {
+	if len(content) <= webFetchMaxContentChars {
+		return content, false
 	}
-	return markdown, false
+	note := fmt.Sprintf("\n\n[Content truncated at %d characters]", webFetchMaxContentChars)
+	runes := []rune(content)
+	maxRunes := webFetchMaxContentChars - len(note)
+	if maxRunes > len(runes) {
+		maxRunes = len(runes)
+	}
+	return string(runes[:maxRunes]) + note, true
 }
 
 // saveBinaryToDisk saves binary data to ~/.jenny/fetched/ and returns the path.

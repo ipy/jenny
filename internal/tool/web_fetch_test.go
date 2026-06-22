@@ -311,11 +311,11 @@ func TestWebFetchTool_RawHTMLNoConversion(t *testing.T) {
 func TestWebFetchTool_AC2_MarkdownCap(t *testing.T) {
 	tool := NewWebFetchTool()
 
-	// Generate HTML long enough to exceed the 100K markdown cap.
-	// Each <p>...</p> adds ~80 chars of markdown, so 2000 paragraphs = ~160K.
+	// Generate HTML long enough to exceed the 128K content cap.
+	// Each <p>...</p> adds ~80 chars of markdown, so 2500 paragraphs = ~200K.
 	var sb strings.Builder
 	sb.WriteString("<html><body>")
-	for i := range 2000 {
+	for i := range 2500 {
 		sb.WriteString(fmt.Sprintf("<p>Paragraph number %d with some content to make it realistic and long enough to be meaningful.</p>", i))
 	}
 	sb.WriteString("</body></html>")
@@ -325,8 +325,8 @@ func TestWebFetchTool_AC2_MarkdownCap(t *testing.T) {
 	if !truncated {
 		t.Error("expected truncated=true for very long HTML")
 	}
-	if len(md) > 110000 { // allow small overhead
-		t.Errorf("expected markdown to be capped near 100K chars, got %d", len(md))
+	if len(md) > 140*1024 { // allow small overhead
+		t.Errorf("expected markdown to be capped near 128K chars, got %d", len(md))
 	}
 }
 
