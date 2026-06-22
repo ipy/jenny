@@ -268,6 +268,46 @@ func TestWebFetchTool_ConvertHTMLToMarkdown(t *testing.T) {
 	}
 }
 
+func TestWebFetchTool_InputSchemaIncludesRaw(t *testing.T) {
+	tool := NewWebFetchTool()
+	schema := tool.InputSchema()
+	props, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("properties should be a map")
+	}
+	rawProp, ok := props["raw"]
+	if !ok {
+		t.Fatal("schema should have 'raw' property")
+	}
+	rawMap, ok := rawProp.(map[string]any)
+	if !ok {
+		t.Fatal("raw property should be a map")
+	}
+	if rawMap["type"] != "boolean" {
+		t.Errorf("expected raw type 'boolean', got %v", rawMap["type"])
+	}
+	if desc, ok := rawMap["description"].(string); !ok || desc == "" {
+		t.Error("raw property should have a description")
+	}
+}
+
+func TestWebFetchTool_RawHTMLNoConversion(t *testing.T) {
+	tool := NewWebFetchTool()
+
+	html := `<html><body><h1>Test</h1><p>Hello</p></body></html>`
+	md, truncated := tool.convertHTMLToMarkdown(html)
+	if truncated {
+		t.Error("expected not truncated for short HTML")
+	}
+	// Markdown conversion should produce different output than raw HTML.
+	if md == html {
+		t.Error("expected markdown conversion to differ from raw HTML")
+	}
+	if !strings.Contains(md, "Test") {
+		t.Errorf("expected markdown to contain 'Test', got: %s", md)
+	}
+}
+
 func TestWebFetchTool_AC2_MarkdownCap(t *testing.T) {
 	tool := NewWebFetchTool()
 

@@ -169,6 +169,61 @@ func TestWebFetch_AC5_CredentialsRejected(t *testing.T) {
 	}
 }
 
+func TestWebFetch_RawHTML(t *testing.T) {
+	htmlContent := "<html><body><h1>Raw Test</h1><p>This should stay as HTML.</p></body></html>"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(htmlContent))
+	}))
+	defer srv.Close()
+
+	fetchTool := tool.NewWebFetchTool().WithSkipBlocklist()
+	ctx := context.Background()
+
+	result, err := fetchTool.Execute(ctx, map[string]any{
+		"url": srv.URL,
+		"raw": true,
+	}, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("unexpected IsError: %s", result.Content)
+	}
+	if result.Content != htmlContent {
+		t.Errorf("expected raw HTML to be returned as-is\n  got: %q\n want: %q", result.Content, htmlContent)
+	}
+}
+
+func TestWebFetch_RawFalseConvertsToMarkdown(t *testing.T) {
+	htmlContent := "<html><body><h1>Markdown Test</h1></body></html>"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(htmlContent))
+	}))
+	defer srv.Close()
+
+	fetchTool := tool.NewWebFetchTool().WithSkipBlocklist()
+	ctx := context.Background()
+
+	result, err := fetchTool.Execute(ctx, map[string]any{
+		"url": srv.URL,
+		"raw": false,
+	}, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("unexpected IsError: %s", result.Content)
+	}
+	if result.Content == htmlContent {
+		t.Error("expected HTML to be converted to markdown when raw=false, but got raw HTML")
+	}
+	if !strings.Contains(result.Content, "Markdown Test") {
+		t.Errorf("expected markdown to contain heading text, got: %s", result.Content)
+	}
+}
+
 func TestWebFetch_BinarySave(t *testing.T) {
 	// Start a server returning binary content.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -22,6 +22,7 @@ Fetches URL content and converts HTML to markdown.
 | Param | Description |
 |-------|-------------|
 | `url` | HTTP(S) URL (max 2000 chars) |
+| `raw` | Optional boolean. When `true`, returns the raw HTML body without converting to markdown. Defaults to `false`. |
 
 ## Limits
 
@@ -37,7 +38,8 @@ Reject credentials in URL.
 
 ## Behavior
 
-- HTML → markdown (html-to-markdown).
+- HTML → markdown (html-to-markdown) by default.
+- `raw: true` returns the raw HTML body without conversion.
 - Domain blocklist preflight (10s timeout).
 - Cache: 15 min / 50 MB LRU; hostname cache 5 min.
 - Cross-host redirect → instruct model to re-fetch redirect URL (no auto cross-host follow).

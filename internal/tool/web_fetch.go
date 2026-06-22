@@ -191,7 +191,7 @@ func (t *WebFetchTool) Name() string {
 
 // Description returns a description of the tool.
 func (t *WebFetchTool) Description() string {
-	return "Fetch content from a URL. Converts HTML to markdown. Caches responses for 15 minutes. " +
+	return "Fetch content from a URL. Converts HTML to markdown by default. Set raw=true to return the raw HTML body. Caches responses for 15 minutes. " +
 		"Supports HTTP and HTTPS URLs only. Binary content is saved to disk and the path is returned. " +
 		"Warning: URLs with embedded credentials (user:password@host) are rejected for security reasons."
 }
@@ -204,6 +204,10 @@ func (t *WebFetchTool) InputSchema() map[string]any {
 			"url": map[string]any{
 				"type":        "string",
 				"description": "HTTP(S) URL to fetch (max 2000 characters)",
+			},
+			"raw": map[string]any{
+				"type":        "boolean",
+				"description": "When true, returns the raw HTML body instead of converting to markdown. Defaults to false.",
 			},
 		},
 		"required": []string{"url"},
@@ -262,13 +266,16 @@ func (t *WebFetchTool) Execute(ctx context.Context, input map[string]any, cwd st
 		}, nil
 	}
 
+	// Extract raw parameter (optional boolean, defaults to false).
+	raw, _ := input["raw"].(bool)
+
 	// Check cache.
 	if cached, ok := t.responseCache.get(urlStr); ok {
 		return cached, nil
 	}
 
 	// Fetch with pinned addresses to prevent DNS rebinding.
-	result, err := t.fetch(ctx, parsedURL, urlStr, resolvedAddrs)
+	result, err := t.fetch(ctx, parsedURL, urlStr, resolvedAddrs, raw)
 	if err != nil {
 		// Check if it's a redirectError — return as non-error instruction.
 		var redirErr *redirectError
@@ -296,7 +303,7 @@ func (t *WebFetchTool) Execute(ctx context.Context, input map[string]any, cwd st
 // fetch performs the HTTP request and processes the response.
 // pinnedAddrs are the pre-resolved IP addresses from the blocklist check;
 // using them in a custom dialer prevents DNS rebinding attacks.
-func (t *WebFetchTool) fetch(ctx context.Context, parsedURL *url.URL, urlStr string, pinnedAddrs []string) (*ToolResult, error) {
+func (t *WebFetchTool) fetch(ctx context.Context, parsedURL *url.URL, urlStr string, pinnedAddrs []string, raw bool) (*ToolResult, error) {
 	// Build transport with pinned dialer to prevent DNS rebinding SSRF.
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	if len(pinnedAddrs) > 0 {
@@ -360,6 +367,13 @@ func (t *WebFetchTool) fetch(ctx context.Context, parsedURL *url.URL, urlStr str
 
 	// Check if this is HTML content.
 	if contentType == "text/html" || contentType == "application/xhtml+xml" || contentType == "" {
+		if raw {
+			// Return raw HTML body without markdown conversion.
+			return &ToolResult{
+				Content: string(body),
+				IsError: false,
+			}, nil
+		}
 		// Treat empty Content-Type as HTML (common for web pages).
 		markdown, truncated := t.convertHTMLToMarkdown(string(body))
 		result := &ToolResult{
