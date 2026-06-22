@@ -79,9 +79,10 @@ type CompactMetadata struct {
 
 // ToolUse represents a tool call in the transcript.
 type ToolUse struct {
-	ID    string         `json:"id"`
-	Name  string         `json:"name"`
-	Input map[string]any `json:"input,omitempty"`
+	ID        string         `json:"id"`
+	Name      string         `json:"name"`
+	Input     map[string]any `json:"input,omitempty"`
+	Signature string         `json:"signature,omitempty"`
 }
 
 // Manager handles session persistence.

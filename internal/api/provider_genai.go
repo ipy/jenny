@@ -585,12 +585,13 @@ func (p *genaiProvider) processStreamChunk(resp *GenAIResponse, acc *genAIStream
 					RawEvent: AnthropicStreamEvent{Type: EventContentBlockStop, Index: fcIdx},
 				}
 
-				acc.appendFunctionCall(part.FunctionCall)
+				acc.appendFunctionCall(part.FunctionCall, part.ThoughtSignature)
 				blocksChan <- StreamContentBlock{Block: ContentBlock{
 					Type:      BlockTypeToolUse,
 					ToolID:    toolID,
 					ToolName:  part.FunctionCall.Name,
 					ToolInput: part.FunctionCall.Args,
+					Signature: part.ThoughtSignature,
 				}}
 			}
 		}
@@ -675,6 +676,7 @@ func (p *genaiProvider) buildContents(messages []Message, toolResults []ToolResu
 						Name: tu.Name,
 						Args: tu.Input,
 					},
+					ThoughtSignature: tu.Signature,
 				})
 			}
 			if len(parts) == 0 {
@@ -814,6 +816,7 @@ func (p *genaiProvider) parseResponse(resp *GenAIResponse) (*Response, error) {
 				Type:      BlockTypeToolUse,
 				ToolName:  part.FunctionCall.Name,
 				ToolInput: part.FunctionCall.Args,
+				Signature: part.ThoughtSignature,
 			})
 		}
 	}
@@ -846,6 +849,7 @@ type genAIStreamAccumulator struct {
 	thinking   string
 	stopReason StopReason
 	funcCalls  map[int]*GenAIFunctionCall
+	signatures map[int]string
 
 	blockCounter    int
 	thinkingStarted bool
@@ -857,7 +861,10 @@ type genAIStreamAccumulator struct {
 }
 
 func newGenAIStreamAccumulator() *genAIStreamAccumulator {
-	return &genAIStreamAccumulator{funcCalls: make(map[int]*GenAIFunctionCall)}
+	return &genAIStreamAccumulator{
+		funcCalls:  make(map[int]*GenAIFunctionCall),
+		signatures: make(map[int]string),
+	}
 }
 
 func (acc *genAIStreamAccumulator) nextBlockIndex() int {
@@ -878,9 +885,10 @@ func (acc *genAIStreamAccumulator) setStopReason(r StopReason) {
 	}
 }
 
-func (acc *genAIStreamAccumulator) appendFunctionCall(fc *GenAIFunctionCall) {
+func (acc *genAIStreamAccumulator) appendFunctionCall(fc *GenAIFunctionCall, sig string) {
 	idx := len(acc.funcCalls)
 	acc.funcCalls[idx] = fc
+	acc.signatures[idx] = sig
 }
 
 func (acc *genAIStreamAccumulator) finalize() []ContentBlock {
@@ -897,6 +905,7 @@ func (acc *genAIStreamAccumulator) finalize() []ContentBlock {
 				Type:      BlockTypeToolUse,
 				ToolName:  fc.Name,
 				ToolInput: fc.Args,
+				Signature: acc.signatures[i],
 			})
 		}
 	}

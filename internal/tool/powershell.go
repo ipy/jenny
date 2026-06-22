@@ -190,6 +190,9 @@ func (t *PowerShellTool) runForegroundPowerShell(ctx context.Context, shellPath,
 		Stderr: &stderr,
 	}, ExecOptions{Timeout: time.Duration(timeout) * time.Second})
 	if err != nil {
+		if isExecFailure(err) {
+			return t.executeShellFallback(ctx, command, timeout)
+		}
 		return &ToolResult{
 			Content: fmt.Sprintf("Error starting command: %v", err),
 			IsError: true,

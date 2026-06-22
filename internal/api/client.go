@@ -429,9 +429,10 @@ func (m *Message) IsAPISafe() bool {
 
 // ToolUseBlock represents a tool use block in a message.
 type ToolUseBlock struct {
-	ID    string
-	Name  string
-	Input map[string]any
+	ID        string
+	Name      string
+	Input     map[string]any
+	Signature string // Gemini 3 thought_signature for function call validation
 }
 
 // ToolResultBlock represents a tool result block in a message.

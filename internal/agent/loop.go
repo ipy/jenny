@@ -78,9 +78,10 @@ func RebuildMessages(entries []session.TranscriptEntry) []api.Message {
 			toolUseBlocks := make([]api.ToolUseBlock, 0, len(entry.ToolUse))
 			for _, tu := range entry.ToolUse {
 				toolUseBlocks = append(toolUseBlocks, api.ToolUseBlock{
-					ID:    tu.ID,
-					Name:  tu.Name,
-					Input: tu.Input,
+					ID:        tu.ID,
+					Name:      tu.Name,
+					Input:     tu.Input,
+					Signature: tu.Signature,
 				})
 			}
 			currentAssistant = &api.Message{
@@ -235,9 +236,10 @@ func Run(ctx context.Context, prompt string, tools []tool.Tool, cwd string, maxI
 			case api.BlockTypeToolUse:
 				// Collect tool_use blocks for the assistant message
 				toolUseBlocks = append(toolUseBlocks, api.ToolUseBlock{
-					ID:    block.ToolID,
-					Name:  block.ToolName,
-					Input: block.ToolInput,
+					ID:        block.ToolID,
+					Name:      block.ToolName,
+					Input:     block.ToolInput,
+					Signature: block.Signature,
 				})
 
 				// Find and execute the tool

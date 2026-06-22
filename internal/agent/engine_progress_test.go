@@ -538,8 +538,16 @@ func TestParseProgressEvalResponse_MeaningfulProgress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !result.MeaningfulProgress {
-		t.Error("expected meaningful_progress=true")
+	// parseProgressEvalResponse always sets MeaningfulProgress=false;
+	// the dynamic threshold is applied later by ApplyProgressEvalResult.
+	if result.MeaningfulProgress {
+		t.Error("expected meaningful_progress=false from parser (deferred to ApplyProgressEvalResult)")
+	}
+	// Verify the computed overall is high enough that ApplyProgressEvalResult
+	// with the default threshold (3.0) would accept it.
+	expectedOverall := float64(4)*0.50 + float64(3)*0.35 + float64(4)*0.15
+	if result.Overall != expectedOverall {
+		t.Errorf("expected overall=%.2f, got %.2f", expectedOverall, result.Overall)
 	}
 	if result.TaskAlignment != 4 {
 		t.Errorf("expected task_alignment=4, got %d", result.TaskAlignment)
@@ -569,8 +577,13 @@ func TestParseProgressEvalResponse_WithFences(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !result.MeaningfulProgress {
-		t.Error("expected meaningful_progress=true with fences")
+	// Parser always sets false; verify the overall is correctly computed.
+	if result.MeaningfulProgress {
+		t.Error("expected meaningful_progress=false from parser (deferred to ApplyProgressEvalResult)")
+	}
+	expectedOverall := float64(5)*0.50 + float64(4)*0.35 + float64(5)*0.15
+	if diff := result.Overall - expectedOverall; diff > 0.01 || diff < -0.01 {
+		t.Errorf("expected overall≈%.2f, got %.20f", expectedOverall, result.Overall)
 	}
 }
 

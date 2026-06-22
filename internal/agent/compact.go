@@ -337,6 +337,7 @@ func (e *QueryEngine) inSessionCompact(ctx context.Context, messages []api.Messa
 	messagesWithInstruction = append(messagesWithInstruction, compactMsg)
 
 	e.client.SetMaxTokensOverride(SUMMARY_MAX_TOKENS)
+	defer e.client.SetMaxTokensOverride(0) // restore to model default; main loop re-sets before each call
 	resp, err := e.client.SendMessage(ctx, messagesWithInstruction, e.toolParams, nil, systemPrompt, "")
 	if err != nil {
 		return nil, fmt.Errorf("in-session compaction API call: %w", err)
@@ -385,6 +386,20 @@ func (e *QueryEngine) forkSummaryAgent(ctx context.Context, messages []api.Messa
 
 	summarySystemPrompt := []string{"You are a helpful assistant that summarizes conversations concisely. For every claim, tag confidence: [CONFIRMED] observed fact, [SPECULATIVE] reasoned but unverified, [UNVERIFIED] stated intent not yet acted on, [EXCLUDED] tried and rejected or ruled out. Cover: (1) primary request and user intent — explicit and implicit, (2) key decisions and rationale, (3) excluded paths — approaches tried and rejected or ruled out, with reasons, (4) errors and fixes, (5) files modified with specific identifiers (function names, type names), (6) key technical concepts, (7) current work when compaction triggered, (8) actionable next steps."}
 
+	// Disable thinking for the summary call — thinking is wasted overhead for a
+	// one-shot summarization task. Restore both overrides when done.
+	e.client.SetThinkingConfig(api.ThinkingConfig{})
+	defer func() {
+		if e.streamCfg != nil {
+			e.client.SetThinkingConfig(api.ThinkingConfig{
+				Effort:       e.streamCfg.Effort,
+				BudgetTokens: e.streamCfg.ThinkingBudget,
+			})
+		}
+		e.client.SetMaxTokensOverride(0)
+	}()
+	e.client.SetMaxTokensOverride(SUMMARY_MAX_TOKENS)
+
 	var lastErr error
 	maxRetries := 5
 
@@ -419,7 +434,6 @@ func (e *QueryEngine) forkSummaryAgent(ctx context.Context, messages []api.Messa
 			}
 		}
 
-		e.client.SetMaxTokensOverride(SUMMARY_MAX_TOKENS)
 		resp, err := e.client.SendMessage(ctx, summaryMessages, nil, nil, summarySystemPrompt, "")
 		if err != nil {
 			lastErr = err
@@ -499,24 +513,15 @@ func isPromptTooLongError(err error) bool {
 		strings.Contains(errStr, "413")
 }
 
-// truncateContent truncates content to a maximum number of runes.
-func truncateContent(content string, maxLen int) string {
-	runes := []rune(content)
-	if len(runes) <= maxLen {
-		return content
-	}
-	return string(runes[:maxLen]) + "..."
-}
-
 // prepareSummaryMessages prepares messages for the summary API call by stripping
-// images and documents and replacing them with markers.
+// images, documents, thinking blocks, and signatures.
 func prepareSummaryMessages(messages []api.Message) []api.Message {
 	var result []api.Message
 	for _, msg := range messages {
-		// Make a copy to avoid modifying original
 		processedMsg := msg
+		processedMsg.Thinking = ""
+		processedMsg.Signature = ""
 
-		// Strip image/document content from user messages
 		if msg.Role == "user" {
 			processedMsg.Content = stripMediaMarkers(msg.Content)
 		}

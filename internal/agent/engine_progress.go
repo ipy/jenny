@@ -56,14 +56,16 @@ type ProgressMonitor struct {
 	slidingFull      bool
 	slidingL1Fired   bool
 
-	previouslyReadPaths map[string]bool
-	readPathOrder       []string // FIFO insertion order for eviction
-	lastCommandHash     string
-	lastErrorText       string
+	previouslyReadPaths    map[string]bool
+	readPathOrder          []string // FIFO insertion order for eviction
+	previouslyWrittenPaths map[string]bool
+	lastCommandHash        string
+	lastErrorText          string
 
 	// L2 fork-judge state
 	forkDispatched bool
 	forkResultCh   chan *ProgressEvalResult
+	forkEvalCount  int // number of fork-judge evaluations completed (for dynamic threshold)
 }
 
 // ProgressEvalResult holds the LLM judge's evaluation of agent progress.
@@ -79,9 +81,10 @@ type ProgressEvalResult struct {
 // NewProgressMonitor creates a new ProgressMonitor for tracking agent progress.
 func NewProgressMonitor() *ProgressMonitor {
 	return &ProgressMonitor{
-		previouslyReadPaths: make(map[string]bool),
-		slidingWindow:       make([]int, slidingWindowSize),
-		forkResultCh:        make(chan *ProgressEvalResult, 1),
+		previouslyReadPaths:    make(map[string]bool),
+		previouslyWrittenPaths: make(map[string]bool),
+		slidingWindow:          make([]int, slidingWindowSize),
+		forkResultCh:           make(chan *ProgressEvalResult, 1),
 	}
 }
 
@@ -95,6 +98,28 @@ func (pm *ProgressMonitor) ConsecutiveNoProgress() int {
 	return pm.consecutiveNoProgress
 }
 
+// resetScoreForLevel returns the minimum positive score needed to reset the
+// counter at a given escalation level. Higher levels require stronger progress
+// signals to break out, preventing low-value actions (e.g. a single package
+// install) from resetting the counter deep into an escalation cycle.
+//
+//	L0 (None): score >= 1 (any positive signal)
+//	L1:        score >= 2 (single +1 is insufficient)
+//	L2:        score >= 3 (needs a strong signal like test_pass or file_write)
+//	L3:        score >= 4 (only test_pass + other, or multiple strong signals)
+func resetScoreForLevel(level ProgressLevel) int {
+	switch level {
+	case ProgressLevelL3:
+		return 4
+	case ProgressLevelL2:
+		return 3
+	case ProgressLevelL1:
+		return 2
+	default:
+		return 1
+	}
+}
+
 // RecordTurn evaluates the tool results from a turn and updates the progress state.
 // Returns the computed TurnScore.
 func (pm *ProgressMonitor) RecordTurn(toolUseBlocks []api.ToolUseBlock, toolResults []api.ToolResult) TurnScore {
@@ -102,7 +127,8 @@ func (pm *ProgressMonitor) RecordTurn(toolUseBlocks []api.ToolUseBlock, toolResu
 
 	pm.pushSlidingWindow(score.Score)
 
-	if score.Score > 0 {
+	requiredScore := resetScoreForLevel(pm.level)
+	if score.Score >= requiredScore {
 		pm.consecutiveNoProgress = 0
 		pm.level = ProgressLevelNone
 		pm.l1FirstFired = false
@@ -111,8 +137,10 @@ func (pm *ProgressMonitor) RecordTurn(toolUseBlocks []api.ToolUseBlock, toolResu
 		pm.l2TurnCount = 0
 		pm.forkDispatched = false
 	} else {
-		pm.consecutiveNoProgress++
-		pm.totalNoProgress++
+		if score.Score <= 0 {
+			pm.consecutiveNoProgress++
+			pm.totalNoProgress++
+		}
 	}
 
 	prevLevel := pm.level
@@ -124,6 +152,7 @@ func (pm *ProgressMonitor) RecordTurn(toolUseBlocks []api.ToolUseBlock, toolResu
 		"consecutive_no_progress", pm.consecutiveNoProgress,
 		"level", int(pm.level),
 		"sliding_sum", pm.slidingWindowSum(),
+		"required_score", requiredScore,
 	)
 
 	if pm.level != prevLevel {
@@ -248,8 +277,14 @@ func (pm *ProgressMonitor) scoreTurn(toolUseBlocks []api.ToolUseBlock, toolResul
 		case "write", "edit", "notebook_edit":
 			path := extractStringField(tb.Input, "file_path")
 			if pm.isTaskOutput(path) {
-				ts.Score += 3
-				ts.Signals = append(ts.Signals, fmt.Sprintf("file_write:%s", path))
+				if pm.previouslyWrittenPaths[path] {
+					ts.Score += 1
+					ts.Signals = append(ts.Signals, fmt.Sprintf("file_rewrite:%s", path))
+				} else {
+					pm.previouslyWrittenPaths[path] = true
+					ts.Score += 3
+					ts.Signals = append(ts.Signals, fmt.Sprintf("file_write:%s", path))
+				}
 			} else if pm.isScratchpad(path) {
 				ts.Score += 1
 				ts.Signals = append(ts.Signals, "scratchpad_write")
@@ -480,11 +515,38 @@ func (pm *ProgressMonitor) MarkForkDispatched() {
 	pm.forkDispatched = true
 }
 
-// ApplyProgressEvalResult applies the judge result. If meaningful progress is found,
-// all counters and escalation state reset to 0. Otherwise the L1-second flow continues.
+// forkJudgeThreshold returns the dynamic threshold for the nth fork-judge
+// evaluation. Each successive evaluation demands a higher bar, making it
+// progressively harder for the judge to rescue a stuck session.
+func forkJudgeThreshold(evalCount int) float64 {
+	switch {
+	case evalCount <= 1:
+		return 3.0
+	case evalCount == 2:
+		return 3.5
+	default:
+		return 4.0
+	}
+}
+
+// ApplyProgressEvalResult applies the judge result. If meaningful progress is found
+// (above the dynamic threshold), all counters and escalation state reset to 0.
+// Otherwise the L1-second flow continues.
 // Always clears forkDispatched — the fork has completed and delivered its result.
 func (pm *ProgressMonitor) ApplyProgressEvalResult(result *ProgressEvalResult) {
 	pm.forkDispatched = false
+	pm.forkEvalCount++
+
+	threshold := forkJudgeThreshold(pm.forkEvalCount)
+	result.MeaningfulProgress = result.Overall >= threshold
+
+	log.Debug("Fork-judge threshold applied",
+		"eval_count", pm.forkEvalCount,
+		"threshold", threshold,
+		"overall", result.Overall,
+		"meaningful", result.MeaningfulProgress,
+	)
+
 	if result.MeaningfulProgress {
 		pm.consecutiveNoProgress = 0
 		pm.level = ProgressLevelNone
@@ -696,10 +758,11 @@ func parseProgressEvalResponse(text string) (*ProgressEvalResult, error) {
 		return nil, fmt.Errorf("fresh_exploration out of range: %d", result.FreshExploration)
 	}
 
-	// Compute overall from weighted average (ignore the model's overall to avoid gaming)
+	// Compute overall from weighted average (ignore the model's overall to avoid gaming).
+	// MeaningfulProgress is set later by ApplyProgressEvalResult using the dynamic threshold.
 	overall := float64(result.TaskAlignment)*0.50 + float64(result.OutcomeMomentum)*0.35 + float64(result.FreshExploration)*0.15
 	result.Overall = overall
-	result.MeaningfulProgress = overall >= 3.0
+	result.MeaningfulProgress = false // will be set by ApplyProgressEvalResult with dynamic threshold
 
 	return &result, nil
 }

@@ -20,7 +20,8 @@ type GenAIPart struct {
 	InlineData       *GenAIBlob             `json:"inlineData,omitempty"`
 	FunctionCall     *GenAIFunctionCall     `json:"functionCall,omitempty"`
 	FunctionResponse *GenAIFunctionResponse `json:"functionResponse,omitempty"`
-	Thought          bool                   `json:"thought,omitempty"` // For thinking/reasoning
+	Thought          bool                   `json:"thought,omitempty"`          // For thinking/reasoning
+	ThoughtSignature string                 `json:"thoughtSignature,omitempty"` // Gemini 3 thought signature
 }
 
 // GenAIBlob represents inline data (e.g. images).

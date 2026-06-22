@@ -288,6 +288,10 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					return
 				}
 				forkClient.SetMaxTokensOverride(forkMaxTokens)
+				forkClient.SetThinkingConfig(api.ThinkingConfig{
+					Effort:       e.streamCfg.Effort,
+					BudgetTokens: e.streamCfg.ThinkingBudget,
+				})
 				result, model, usage, err := forkProgressEval(forkCtx, forkClient, forkMessages, systemPrompt, forkTools)
 				if err != nil {
 					log.Debug("Progress eval fork failed", "error", err)
@@ -548,9 +552,10 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				}
 				// Collect tool_use blocks for the assistant message
 				toolUseBlocks = append(toolUseBlocks, api.ToolUseBlock{
-					ID:    block.Block.ToolID,
-					Name:  block.Block.ToolName,
-					Input: block.Block.ToolInput,
+					ID:        block.Block.ToolID,
+					Name:      block.Block.ToolName,
+					Input:     block.Block.ToolInput,
+					Signature: block.Block.Signature,
 				})
 				// AC1: Emit assistant event for tool_use block stop
 				if e.streamCfg.Enabled {
@@ -801,9 +806,10 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				case api.BlockTypeToolUse:
 					// Collect tool_use blocks for the assistant message
 					toolUseBlocks = append(toolUseBlocks, api.ToolUseBlock{
-						ID:    block.ToolID,
-						Name:  block.ToolName,
-						Input: block.ToolInput,
+						ID:        block.ToolID,
+						Name:      block.ToolName,
+						Input:     block.ToolInput,
+						Signature: block.Signature,
 					})
 				case api.BlockTypeWebSearchResult:
 					// AC5: Process web search results and surface error codes in fallback
@@ -1010,6 +1016,10 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 						return
 					}
 					forkClient.SetMaxTokensOverride(forkMaxTokens)
+					forkClient.SetThinkingConfig(api.ThinkingConfig{
+						Effort:       e.streamCfg.Effort,
+						BudgetTokens: e.streamCfg.ThinkingBudget,
+					})
 					cr, model, usage, err := forkComplexityEval(forkCtx, forkClient, forkMessages, systemPrompt, forkTools)
 					if err != nil {
 						log.Debug("Complexity eval fork failed", "error", err)

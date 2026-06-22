@@ -13,6 +13,20 @@ import (
 	"github.com/ipy/jenny/internal/constants"
 )
 
+const (
+	// maxEnvTotalBytes is the soft limit for total environment block size.
+	// Linux's default ARG_MAX is ~2 MiB (shared between argv + env). We
+	// target 1 MiB for env alone to leave room for command arguments.
+	maxEnvTotalBytes = 1 << 20
+
+	// maxSingleEnvBytes is the limit for a single environment variable.
+	// Variables exceeding this are truncated with a warning suffix.
+	maxSingleEnvBytes = 32 << 10
+
+	// coreEnvPrefixes are env vars always preserved even during sanitization.
+	coreEnvPrefixes = "PATH=,HOME=,USER=,TERM=,LANG=,LC_,SHELL=,TMPDIR=,TMP=,TEMP=,XDG_,DISPLAY=,SSH_,JENNY_,ANTHROPIC_,OPENAI_,DEEPSEEK_"
+)
+
 func mergeExecEnv(sessionID string, extra []string) []string {
 	const prefix = "JENNY_SCRATCHPAD="
 	scratchpad := prefix + constants.ScratchpadDir(sessionID)
@@ -30,7 +44,77 @@ func mergeExecEnv(sessionID string, extra []string) []string {
 		}
 		filtered = append(filtered, entry)
 	}
-	return append(filtered, scratchpad)
+	filtered = append(filtered, scratchpad)
+
+	return sanitizeEnv(filtered)
+}
+
+// sanitizeEnv enforces size limits on the environment block to prevent
+// ENAMETOOLONG / E2BIG errors from oversized env after commands like
+// setup.py install bloat PATH or PYTHONPATH.
+//
+// Strategy:
+//  1. Truncate any single variable exceeding maxSingleEnvBytes.
+//  2. If total size still exceeds maxEnvTotalBytes, drop non-core variables
+//     from largest to smallest until under budget.
+func sanitizeEnv(env []string) []string {
+	totalSize := 0
+	for i, entry := range env {
+		if len(entry) > maxSingleEnvBytes {
+			env[i] = entry[:maxSingleEnvBytes] + "...(truncated)"
+		}
+		totalSize += len(env[i])
+	}
+
+	if totalSize <= maxEnvTotalBytes {
+		return env
+	}
+
+	corePrefixes := strings.Split(coreEnvPrefixes, ",")
+	isCore := func(entry string) bool {
+		for _, p := range corePrefixes {
+			if strings.HasPrefix(entry, p) {
+				return true
+			}
+		}
+		return false
+	}
+
+	type envEntry struct {
+		idx  int
+		size int
+		core bool
+	}
+	entries := make([]envEntry, len(env))
+	for i, e := range env {
+		entries[i] = envEntry{idx: i, size: len(e), core: isCore(e)}
+	}
+
+	// Sort non-core entries by size descending so we drop the largest first.
+	// Use a simple selection: mark non-core entries for removal until under budget.
+	for totalSize > maxEnvTotalBytes {
+		largestIdx := -1
+		largestSize := 0
+		for i, e := range entries {
+			if !e.core && e.size > largestSize {
+				largestSize = e.size
+				largestIdx = i
+			}
+		}
+		if largestIdx < 0 {
+			break // only core entries left
+		}
+		totalSize -= entries[largestIdx].size
+		entries[largestIdx].size = 0 // mark for removal
+	}
+
+	result := make([]string, 0, len(env))
+	for i, e := range entries {
+		if e.size > 0 {
+			result = append(result, env[i])
+		}
+	}
+	return result
 }
 
 // ExecRequest describes a process to launch.
