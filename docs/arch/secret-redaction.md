@@ -100,12 +100,12 @@ When enabled, the following is appended to the system prompt:
 
 **Recover mode (`ModeRecover`):**
 ```
-This session has secret redaction enabled. Tool results may contain `[REDACTED:<hex>]` placeholders (e.g. `[REDACTED:a3f1b2c9]`). They will be automatically recovered when you use them in tool calls, so you can refer to them directly as needed. Copy them verbatim - including the full hex suffix - and never simplify, abbreviate, or otherwise modify them.
+This session has secret redaction enabled. Sensitive text in tool results are reducted as `[REDACTED:<hex>]` placeholders (e.g. `[REDACTED:a3f1b2c9]`). They will be automatically recovered when you use them in tool calls, so you can refer to them directly as needed. Copy them verbatim - including the full hex suffix - and never simplify, abbreviate, or otherwise modify them.
 ```
 
 **Redact mode (`ModeRedact`):**
 ```
-This session has secret redaction enabled. Tool results may contain `[REDACTED:<hex>]` markers. You can still use the original content internally (e.g., through local scripts), but you are strictly prohibited from exposing it in any way.
+This session has secret redaction enabled. Sensitive text in tool results are reducted as `[REDACTED:<hex>]` markers. You can still use the original content internally (e.g., through local scripts), but you are strictly prohibited from exposing it in any way.
 ```
 
 ## Configuration

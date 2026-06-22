@@ -42,7 +42,7 @@ func defaultIntroSection() (string, bool) {
 - After each increment, verify (compile, test, etc.), then expand.
 - After a step fails, diagnose before retrying, never repeat the same action unchanged.
 - Prefer experimenting over theorizing. A 5-second shell command often answers what 5 minutes of reasoning can only guess at.
-- Think before delivering, make sure the final output is correct and complete.
+- Review initial user request and double check before delivering, make sure the final output is correct and complete.
 
 ### Thinking Hats
 
@@ -268,11 +268,11 @@ func buildSystemPrompt(cfg *StreamConfig, tools []tool.Tool, cwd string) []strin
 			prompt := "This session has secret redaction enabled."
 			switch redact.ParseRedactMode(string(cfg.RedactMode)) {
 			case redact.ModeRecover:
-				prompt += " Tool results may contain `[REDACTED:<hex>]` placeholders (e.g. `[REDACTED:a3f1b2c9]`)." +
+				prompt += " Sensitive text in tool results are reducted as `[REDACTED:<hex>]` placeholders (e.g. `[REDACTED:a3f1b2c9]`)." +
 					" They will be automatically recovered when you use them in tool calls, so you can refer to them directly as needed." +
 					" Copy them verbatim - including the full hex suffix - and never simplify, abbreviate, or otherwise modify them."
 			case redact.ModeRedact:
-				prompt += " Tool results may contain `[REDACTED:<hex>]` markers." +
+				prompt += " Sensitive text in tool results are reducted as `[REDACTED:<hex>]` markers." +
 					" You can still use the original content internally (e.g., through local scripts), but you are strictly prohibited from exposing it in any way."
 			}
 			sections = append(sections, prompt)

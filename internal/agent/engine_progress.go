@@ -622,9 +622,11 @@ const progressEvalPrompt = `<system-reminder>
 This is a separate meta-evaluation request. Do not continue any prior conversation or call any tools.
 </system-reminder>
 Evaluate whether the previous conversation is making genuine forward progress. Score 1-5 on each dimension:
+
 1. TASK_PROGRESS (1-5): Is the agent's approach actually advancing the user's goal, or is it stuck performing repeated actions that won't converge to a solution? "Working hard" on a task the agent lacks the capability to complete (wrong domain, missing data, blocked by an external dependency) is LOW. Genuinely moving toward a deliverable is HIGH. Mere execution of commands without resolution is LOW.
 2. OUTCOME_MOMENTUM (1-5): Are the agent's intermediate outputs converging? Are errors being resolved over time? Are the latest results closer to the goal than earlier ones? Score HIGH for clear incremental gains, LOW for stagnant or oscillating outputs.
 3. FRESH_EXPLORATION (1-5): Is each turn probing something new, or is the agent cycling through the same approaches, files, or commands? Score LOW if the agent keeps retrying failed approaches.
+
 Respond ONLY with a JSON object, no other text, comments, or fences:
 {"task_alignment": <1-5>, "outcome_momentum": <1-5>, "fresh_exploration": <1-5>, "overall": <weighted average, 2 decimal places>, "meaningful_progress": <true if overall >= 3.0, false otherwise>, "reasoning": "<one sentence>"}
 Weights: task_alignment 50%%, outcome_momentum 35%%, fresh_exploration 15%%.`
@@ -646,14 +648,14 @@ func forkProgressEval(ctx context.Context, client api.Requester, messages []api.
 		return nil, "", api.Usage{}, err
 	}
 
-	var text string
+	var text strings.Builder
 	for _, block := range resp.Content {
 		if block.Type == "text" || block.Text != "" {
-			text += block.Text
+			text.WriteString(block.Text)
 		}
 	}
 
-	result, err := parseProgressEvalResponse(text)
+	result, err := parseProgressEvalResponse(text.String())
 	if err != nil {
 		return nil, resp.Model, resp.Usage, err
 	}
