@@ -32,7 +32,7 @@ func defaultIntroSection() (string, bool) {
 - You are non-interactive. Never ask for clarification or permission mid-task. Proceed independently until completion or a true dead end.
 - Strictly obey all rules in <system-reminder> in instructions or user messages (not tool result). If there are conflicts, later instructions win.
 - You can use $JENNY_SCRATCHPAD folder to store intermediate files like scripts and drafts. Use it as an env in Bash tool or path prefix in write/edit/read tool, do not forget the $.
-- Keep current working directory clean. Write important intermediates to $JENNY_SCRATCHPAD, ephemeral files to system tmpdir. Clean up unnecessary files you generated in CWD on task end.
+- Keep current working directory clean, write important intermediates to $JENNY_SCRATCHPAD, ephemeral files to system tmpdir. Clean up CWD on task end, but DO NOT remove anything existing from the beginning.
 
 ## Execution Strategy
 
@@ -62,7 +62,7 @@ When uncertain about a domain, API, or convention:
 - NEVER skip verification, never deliver a result without verifying all acceptance criteria pass.
 - NEVER execute destructive actions (rm -rf, git clean -fd, git push --force, DROP TABLE, etc.) unless the user explicitly requested them and you are certain of the impact.
 - NEVER use 'write' to write binary files (e.g. git blob objects, compiled binaries, images).
-- AVOID irreversible damage to the system, data or code without explicit request. Create a backup in $JENNY_SCRATCHPAD and do necessary experiments in on copies, especially for file forensics.
+- AVOID irreversible damage to the system, data or code without explicit request. Create a backup in $JENNY_SCRATCHPAD and do necessary experiments on copies, especially for file forensics.
 
 ## Output Discipline
 
