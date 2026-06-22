@@ -277,6 +277,9 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			forkMessages := make([]api.Message, len(messages))
 			copy(forkMessages, messages)
 			forkModel := e.model
+			if e.requestedModel != "" {
+				forkModel = e.requestedModel
+			}
 			forkTools := e.toolParams
 			parentCtx := ctx
 			go func() {
@@ -340,6 +343,9 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			forkMessages := make([]api.Message, len(messages))
 			copy(forkMessages, messages)
 			forkModel := e.model
+			if e.requestedModel != "" {
+				forkModel = e.requestedModel
+			}
 			forkTools := e.toolParams
 			parentCtx := ctx
 			go func() {
@@ -410,7 +416,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		var estimatedTokens int
 		var preAPICharCount int // cached for EWMA Observe after API response
 		if e.tokenEstimator != nil {
-			estimatedTokens, preAPICharCount = e.tokenEstimator.EstimateMessagesWithChars(messages, e.model)
+			estimatedTokens, preAPICharCount = e.tokenEstimator.EstimateMessagesWithChars(messages, e.requestedModel)
 		} else {
 			estimatedTokens = estimateTokens(messages)
 		}
@@ -1031,10 +1037,18 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			}
 		}
 
-		// AC3: When synthetic results were generated, detach the loop context
-		// from cancellation so the next iteration can deliver them to the model
-		if hasSynthetic {
+		// When synthetic results were generated, allow exactly one more
+		// iteration to deliver them to the model. Detach the context from
+		// cancellation for that single iteration so the API call can
+		// proceed. After that iteration (or if already in-flight), the
+		// flag is cleared and normal cancellation resumes.
+		if hasSynthetic && e.syntheticInFlight <= 0 {
+			e.originalCtx = ctx
 			ctx = context.WithoutCancel(ctx)
+			e.syntheticInFlight = 2
+		}
+		if e.syntheticInFlight > 0 {
+			e.syntheticInFlight--
 		}
 		// Check session memory threshold after each turn
 		if e.sessionMemory != nil {
@@ -1066,6 +1080,9 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				forkMessages := make([]api.Message, len(messages))
 				copy(forkMessages, messages)
 				forkModel := e.model
+				if e.requestedModel != "" {
+					forkModel = e.requestedModel
+				}
 				forkTools := e.toolParams
 				parentCtx := ctx
 				go func() {
@@ -1100,12 +1117,12 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					modelUsage := e.buildModelUsage()
 					e.mu.Unlock()
 					e.maxTokensCtrl.SetComplexityResult(cr)
-					log.Info("Complexity eval result", "complexity", cr.Complexity, "is_coding", cr.IsCoding)
+					log.Info("Complexity eval result", "complexity", cr.Complexity, "is_coding", cr.NeedWrite)
 					if e.streamCfg.Enabled {
 						msg := StreamMessage{
 							Type:         "system",
 							Subtype:      "complexity_eval",
-							Result:       fmt.Sprintf(`{"complexity":%d,"is_coding":%v}`, cr.Complexity, cr.IsCoding),
+							Result:       fmt.Sprintf(`{"complexity":%d,"is_coding":%v}`, cr.Complexity, cr.NeedWrite),
 							Uuid:         GenerateUUID(),
 							TotalCostUSD: totalCost,
 							ModelUsage:   modelUsage,

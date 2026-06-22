@@ -49,7 +49,7 @@ func (e *QueryEngine) handleStopReason(
 		return e.handleStopEndTurn(ctx, resp, textOutput, sessionID, toolResults, assistantMsg, messages)
 
 	case api.StopReasonToolUse:
-		return e.handleStopToolUse(toolResults, messages)
+		return e.handleStopToolUse(ctx, toolResults, messages)
 
 	case api.StopReasonMaxTokens:
 		return e.handleStopMaxTokens(ctx, resp, streamResult, textOutput, sessionID, toolResults, toolUseBlocks, messages)
@@ -135,12 +135,24 @@ func (e *QueryEngine) handleStopEndTurn(
 }
 
 // handleStopToolUse processes the tool_use stop reason: appends tool results
-// as a user message and signals the loop to continue.
-func (e *QueryEngine) handleStopToolUse(toolResults []api.ToolResult, messages *[]api.Message) (string, error, bool) {
+// as a user message and signals the loop to continue. When the context is
+// cancelled or the synthetic delivery iteration is already in-flight, it
+// returns shouldContinue = false to prevent an uninterruptible loop.
+func (e *QueryEngine) handleStopToolUse(ctx context.Context, toolResults []api.ToolResult, messages *[]api.Message) (string, error, bool) {
 	e.outputCapHitCount = 0
 	if len(toolResults) > 0 {
 		userMsg := buildToolResultUserMsg(toolResults)
 		*messages = append(*messages, userMsg)
+	}
+	// If the user pressed Ctrl+C during this tool turn, don't continue.
+	if ctx.Err() != nil {
+		return "", nil, false
+	}
+	// If the synthetic delivery iteration has completed (counter reached 0)
+	// and the original context was cancelled, don't allow another tool_use
+	// turn — the model might retry indefinitely.
+	if e.syntheticInFlight <= 0 && e.originalCtx != nil && e.originalCtx.Err() != nil {
+		return "", nil, false
 	}
 	return "", nil, true
 }

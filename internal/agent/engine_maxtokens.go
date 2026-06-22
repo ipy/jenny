@@ -13,7 +13,7 @@ import (
 // ComplexityResult holds the parsed result from a fork-based complexity evaluation.
 type ComplexityResult struct {
 	Complexity int  `json:"complexity"`
-	IsCoding   bool `json:"is_coding"`
+	NeedWrite  bool `json:"need_write"`
 }
 
 // MaxTokensController manages dynamic max_tokens computation.
@@ -75,7 +75,7 @@ func (c *MaxTokensController) ComputeEffective(turn int) int {
 	if turn <= 3 {
 		base = c.earlyTurnCap()
 	} else if cr != nil {
-		base = computeMaxTokens(cr.Complexity, cr.IsCoding, c.modelMax)
+		base = computeMaxTokens(cr.Complexity, cr.NeedWrite, c.modelMax)
 	} else {
 		base = turnBasedMaxTokens(turn, c.modelMax)
 	}
@@ -171,7 +171,7 @@ const complexityEvalPrompt = `<system-reminder>
 This is a separate meta-evaluation request. Do not continue any prior conversation or call any tools.
 </system-reminder>
 Evaluate the task being worked on. Respond ONLY with a JSON object, no other text, comments or fences:
-{"complexity": <1-5>, "is_coding": <true/false>}
+{"complexity": <1-5>, "need_write": <true/false>}
 
 Complexity rubric (pick the LOWEST level that fits):
 1 = Trivial: one obvious action. e.g., "rename variable x to count", "add a doc comment to calculateTotal".
@@ -180,7 +180,7 @@ Complexity rubric (pick the LOWEST level that fits):
 4 = Complex: many interacting parts or non-trivial algorithms. e.g., "implement a distributed lock with leader election and fencing tokens across 5 nodes", "diagnose a thread-pool race condition that only reproduces under load".
 5 = Very complex: research-level work, novel algorithms, or deep obscure-domain expertise. e.g., "implement a cost-based query optimizer with histograms and join enumeration", "write a JIT backend for a subset of WASM targeting a custom RISC-V accelerator".
 
-is_coding=true if the task involves writing/modifying code OR operating developer tooling (compilers, build systems, servers, git, vms, debuggers). is_coding=false ONLY for pure reasoning tasks (math proofs, analysis, Q&A) with no code or tools.`
+need_write=true if the task involves writing/modifying code, article, or other complex artifacts. This is a strong signal that more out tokens may be needed.`
 
 // forkComplexityEval sends a side request to evaluate task complexity.
 // It reuses the cached system prompt prefix for cache hits.
@@ -216,7 +216,7 @@ func forkComplexityEval(ctx context.Context, client api.Requester, messages []ap
 		cr.Complexity = 3
 	}
 
-	log.Debug("Complexity eval result", "complexity", cr.Complexity, "is_coding", cr.IsCoding)
+	log.Debug("Complexity eval result", "complexity", cr.Complexity, "need_write", cr.NeedWrite)
 	return &cr, resp.Model, resp.Usage, nil
 }
 

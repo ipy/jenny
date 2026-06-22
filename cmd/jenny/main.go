@@ -542,6 +542,17 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// Escalating double-SIGINT: if the cooperative cancel doesn't unwind
+	// within a reasonable time, a second Ctrl+C forces os.Exit(2) immediately.
+	// This prevents the user from being trapped by a runaway loop.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt)
+	go func() {
+		<-sigCh
+		os.Exit(2)
+	}()
+	defer signal.Stop(sigCh)
+
 	// Redact mode is read by the unified koanf config layer (cli.Flags.RedactMode):
 	//   1. --redact CLI flag (highest)
 	//   2. JENNY_REDACT env var / .jenny/config.json

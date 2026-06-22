@@ -57,10 +57,11 @@ type ModelParamsInfo struct {
 
 // ModelParams returns the context window and max output tokens for a model.
 // Uses the centralized capability table for both values.
-func ModelParams(model string) ModelParamsInfo {
+// Optional fallbackModel names are tried when the primary model is unrecognized.
+func ModelParams(model string, fallbackModel ...string) ModelParamsInfo {
 	return ModelParamsInfo{
 		ContextWindow:   modelContextWindowLookup(model),
-		MaxOutputTokens: modelMaxOutputCap(model),
+		MaxOutputTokens: modelMaxOutputCap(model, fallbackModel...),
 	}
 }
 

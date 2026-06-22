@@ -4,6 +4,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -34,6 +35,7 @@ type QueryEngine struct {
 	toolParams     []ToolParam
 	streamCfg      *StreamConfig
 	model          string
+	requestedModel string // Original configured model, preserved for capability lookup fallback.
 	startTime      time.Time
 	turnCount      int
 	maxTurns       int
@@ -90,6 +92,18 @@ type QueryEngine struct {
 
 	// Counter for consecutive output_cap_hit events (for truncate-and-continue)
 	outputCapHitCount int
+
+	// syntheticInFlight is set when a tool turn produced synthetic (interrupted)
+	// results and context.WithoutCancel was used. It counts remaining synthetic
+	// delivery iterations: 1 means one delivery turn is allowed, 0 means no more.
+	// Prevents an uninterruptible infinite loop after Ctrl+C.
+	syntheticInFlight int
+
+	// originalCtx holds the loop's cancellable context from before
+	// context.WithoutCancel was applied. When non-nil, it is used to
+	// check for user cancellation (Ctrl+C) independently of the
+	// detached loop context.
+	originalCtx context.Context
 }
 
 // thinkingBlockState tracks the accumulated thinking tokens for a single thinking block.
@@ -291,6 +305,7 @@ func NewQueryEngine(cfg *StreamConfig, tools []tool.Tool, model string, opts ...
 			e.model = c.GetModel()
 		}
 	}
+	e.requestedModel = e.model
 	e.compactConfig = newCompactConfigForModel(e.model, e.streamCfg)
 
 	// Initialize dynamic max_tokens and progress monitor

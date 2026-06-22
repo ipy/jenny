@@ -135,8 +135,12 @@ var modelCapTable = []modelCapEntry{
 //   - If override <= 0, return the model's full capability (default).
 //   - For unknown models, return the conservative fallback (16384) and emit a
 //     WARN log with reason "unknown_model_capability_default".
-func ResolveMaxTokens(model string, override int) int {
-	cap := lookupModelCap(model)
+//
+// Optional fallbackModel names are tried in order when the primary model is
+// unrecognized. Each fallback goes through the full lookup chain (registry →
+// normalize → bundled table).
+func ResolveMaxTokens(model string, override int, fallbackModel ...string) int {
+	cap := lookupModelCap(model, firstFallback(fallbackModel))
 
 	if override <= 0 {
 		if override < 0 {
@@ -176,12 +180,25 @@ func normalizeModelName(model string) string {
 	return model
 }
 
+// firstFallback returns the first non-empty string from the variadic fallback
+// list, or empty string if none are provided.
+func firstFallback(fallbacks []string) string {
+	for _, fb := range fallbacks {
+		if fb != "" {
+			return fb
+		}
+	}
+	return ""
+}
+
 // lookupModelCap finds the max output tokens for a model by consulting the
 // external model registry first, then falling back to the bundled capability table.
 // For model names with provider prefixes (e.g. deepseek/deepseek-v4-pro), it
 // first tries the original name, then retries with the normalized bare name.
+// If fallbackModel is non-empty and all lookups fail for the primary model,
+// the entire lookup chain is retried with the fallback name.
 // Returns unknownModelMaxTokens for unrecognized models.
-func lookupModelCap(model string) int {
+func lookupModelCap(model string, fallbackModel string) int {
 	reg := config.GlobalRegistry()
 
 	// Consult external model registry first (original name)
@@ -214,6 +231,45 @@ func lookupModelCap(model string) int {
 	for _, e := range modelCapTable {
 		if strings.HasPrefix(lowerBare, strings.ToLower(e.pattern)) {
 			return e.maxOut
+		}
+	}
+
+	// All lookups failed — retry with fallback if provided and different
+	if fallbackModel != "" && fallbackModel != model {
+		if reg != nil {
+			if cap, ok := reg.Capability(fallbackModel); ok {
+				log.Debug("max_tokens: using registry capability (fallback)",
+					"model", model,
+					"fallback", fallbackModel,
+					"capability", cap,
+				)
+				return cap
+			}
+		}
+
+		bareFallback := normalizeModelName(fallbackModel)
+		if bareFallback != fallbackModel && reg != nil {
+			if cap, ok := reg.Capability(bareFallback); ok {
+				log.Debug("max_tokens: using registry capability (fallback, normalized)",
+					"model", model,
+					"fallback", fallbackModel,
+					"normalized", bareFallback,
+					"capability", cap,
+				)
+				return cap
+			}
+		}
+
+		lowerBareFallback := strings.ToLower(bareFallback)
+		for _, e := range modelCapTable {
+			if strings.HasPrefix(lowerBareFallback, strings.ToLower(e.pattern)) {
+				log.Debug("max_tokens: using bundled capability (fallback)",
+					"model", model,
+					"fallback", fallbackModel,
+					"capability", e.maxOut,
+				)
+				return e.maxOut
+			}
 		}
 	}
 
@@ -278,8 +334,9 @@ func SupportsVision(model string) bool {
 
 // modelMaxOutputCap returns the max output token capability for a model
 // by delegating to the canonical lookupModelCap.
-func modelMaxOutputCap(model string) int {
-	return lookupModelCap(model)
+// Optional fallbackModel names are tried in order when the primary model is unrecognized.
+func modelMaxOutputCap(model string, fallbackModel ...string) int {
+	return lookupModelCap(model, firstFallback(fallbackModel))
 }
 
 // modelContextWindowLookup returns the context window size for a given model.

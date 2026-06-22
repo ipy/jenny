@@ -198,6 +198,10 @@ Clamp events emit structured WARN log lines via the existing logger. The log con
 
 The `categorizeMaxTokensError` function populates `MaxOutputTokens` from the same capability table, making the field trustworthy for callers receiving either a `CategoryOutputCapHit` or `CategoryContextExhausted` error. Since pre-request clamping prevents configuration overshoot from reaching the API, a `MaxTokensError` represents a legitimate output-cap hit — the caller configured correctly, and the model simply filled its budget.
 
+### Requested Model Fallback
+
+When an API gateway remaps a requested model to a different actual model (e.g., `claude-opus-4-7` routed through a gateway that returns `xopdeepseekv4pro`), the actual model name from the API response may not exist in the capability table or registry. To avoid degrading to the conservative fallback (16384 tokens), `lookupModelCap` accepts a fallback model parameter. When the primary model fails all three resolution tiers, the lookup retries with the fallback — typically the originally requested model name. The fallback is only applied to `max_tokens` resolution; other capability queries (`SupportsVision`, `SupportsNativeSearch`, context window) are the caller's responsibility to retry with a fallback if needed.
+
 ## External Model Registry
 
 Jenny fetches a community-maintained model registry (`aidy-models`) to keep capability, pricing, and context-window data current without hand-maintenance. The registry is consulted at lookup time and falls back gracefully to the bundled table when unavailable.

@@ -370,3 +370,84 @@ func newTestRegistryForPrefix(t *testing.T) *config.ModelRegistry {
 	}
 	return r
 }
+
+// --- Fallback model tests ---
+
+// TestLookupModelCap_FallbackOnUnknown verifies that when the primary model is
+// unknown and a fallback is provided, lookupModelCap retries with the fallback.
+func TestLookupModelCap_FallbackOnUnknown(t *testing.T) {
+	log.ResetForTest()
+	resetGlobalRegistryForTest()
+
+	got := lookupModelCap("xopdeepseekv4pro", "claude-opus-4-7")
+	want := 128000 // claude-opus-4-7's maxOut from the table
+	if got != want {
+		t.Errorf("lookupModelCap(%q, %q) = %d, want %d", "xopdeepseekv4pro", "claude-opus-4-7", got, want)
+	}
+}
+
+// TestLookupModelCap_FallbackWhenPrimaryKnown verifies the fallback is ignored
+// when the primary model matches an entry.
+func TestLookupModelCap_FallbackWhenPrimaryKnown(t *testing.T) {
+	log.ResetForTest()
+	resetGlobalRegistryForTest()
+
+	got := lookupModelCap("claude-sonnet-4-20250514", "claude-opus-4-7")
+	want := 64000 // claude-sonnet-4's own cap, not opus's
+	if got != want {
+		t.Errorf("lookupModelCap(%q, %q) = %d, want %d", "claude-sonnet-4-20250514", "claude-opus-4-7", got, want)
+	}
+}
+
+// TestLookupModelCap_FallbackEmptyIgnored verifies empty fallback is a no-op.
+func TestLookupModelCap_FallbackEmptyIgnored(t *testing.T) {
+	log.ResetForTest()
+	resetGlobalRegistryForTest()
+
+	got := lookupModelCap("unknown-model-v99", "")
+	want := unknownModelMaxTokens
+	if got != want {
+		t.Errorf("lookupModelCap(%q, %q) = %d, want %d", "unknown-model-v99", "", got, want)
+	}
+}
+
+// TestResolveMaxTokens_Fallback verifies end-to-end fallback through ResolveMaxTokens.
+func TestResolveMaxTokens_Fallback(t *testing.T) {
+	log.ResetForTest()
+	resetGlobalRegistryForTest()
+
+	// Unknown model with fallback: uses fallback's capability
+	got := ResolveMaxTokens("xopdeepseekv4pro", 0, "claude-opus-4-7")
+	if got != 128000 {
+		t.Errorf("ResolveMaxTokens(%q, 0, %q) = %d, want 128000", "xopdeepseekv4pro", "claude-opus-4-7", got)
+	}
+
+	// Unknown model, override within fallback cap
+	got = ResolveMaxTokens("xopdeepseekv4pro", 32000, "claude-opus-4-7")
+	if got != 32000 {
+		t.Errorf("ResolveMaxTokens(%q, 32000, %q) = %d, want 32000", "xopdeepseekv4pro", "claude-opus-4-7", got)
+	}
+
+	// Unknown model, override exceeds fallback cap -> clamp
+	got = ResolveMaxTokens("xopdeepseekv4pro", 300000, "claude-opus-4-7")
+	if got != 128000 {
+		t.Errorf("ResolveMaxTokens(%q, 300000, %q) = %d, want 128000", "xopdeepseekv4pro", "claude-opus-4-7", got)
+	}
+}
+
+// TestResolveMaxTokens_FallbackWithRegistry verifies fallback retries registry too.
+func TestResolveMaxTokens_FallbackWithRegistry(t *testing.T) {
+	log.ResetForTest()
+	resetGlobalRegistryForTest()
+
+	r := newTestRegistryForPrefix(t)
+	config.SetGlobalRegistryForTest(r)
+
+	// Primary unknown, fallback has registry entry via provider prefix
+	got := ResolveMaxTokens("xopdeepseekv4pro", 0, "deepseek-anthropic/deepseek-v4-pro")
+	if got != 24000 {
+		t.Errorf("ResolveMaxTokens(xopdeepseekv4pro, 0, deepseek-anthropic/deepseek-v4-pro) = %d, want 24000 (registry)", got)
+	}
+
+	resetGlobalRegistryForTest()
+}

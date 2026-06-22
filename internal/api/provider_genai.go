@@ -388,7 +388,7 @@ func (p *genaiProvider) SendMessageStream(ctx context.Context, messages []Messag
 					result.Model = model
 				}
 				if stopReason == StopReasonMaxTokens {
-					result.MaxTokensErr = categorizeMaxTokensError(result.Model, result.Usage.OutputTokens, result.ContextRejected)
+					result.MaxTokensErr = categorizeMaxTokensError(result.Model, result.Usage.OutputTokens, result.ContextRejected, p.model)
 				}
 			}
 		}
@@ -406,7 +406,7 @@ func (p *genaiProvider) SendMessageStream(ctx context.Context, messages []Messag
 		}
 
 		if (result.StopReason == StopReasonMaxTokens || result.ContextRejected) && result.MaxTokensErr == nil {
-			result.MaxTokensErr = categorizeMaxTokensError(result.Model, result.Usage.OutputTokens, result.ContextRejected)
+			result.MaxTokensErr = categorizeMaxTokensError(result.Model, result.Usage.OutputTokens, result.ContextRejected, p.model)
 		}
 
 		// Emit Anthropic-compatible message_delta and message_stop

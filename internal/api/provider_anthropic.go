@@ -665,7 +665,7 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 		result.Model = acc.getModel()
 
 		if (result.StopReason == StopReasonMaxTokens || result.ContextRejected) && result.MaxTokensErr == nil {
-			result.MaxTokensErr = categorizeMaxTokensError(result.Model, result.Usage.OutputTokens, result.ContextRejected)
+			result.MaxTokensErr = categorizeMaxTokensError(result.Model, result.Usage.OutputTokens, result.ContextRejected, p.model)
 		}
 	}()
 
@@ -694,8 +694,9 @@ func toolToSDK(t ToolParam, isLast bool) AnthropicTool {
 
 // categorizeMaxTokensError creates a MaxTokensError from streaming results.
 // Uses the centralized capability table for accurate MaxOutputTokens.
-func categorizeMaxTokensError(model string, outputTokens int, contextRejected bool) *MaxTokensError {
-	maxOutputTokens := modelMaxOutputCap(model)
+// Optional fallbackModel names are tried when the primary model is unrecognized.
+func categorizeMaxTokensError(model string, outputTokens int, contextRejected bool, fallbackModel ...string) *MaxTokensError {
+	maxOutputTokens := modelMaxOutputCap(model, fallbackModel...)
 	if contextRejected {
 		return &MaxTokensError{Category: CategoryContextExhausted, Model: model, OutputTokens: outputTokens, MaxOutputTokens: maxOutputTokens}
 	}

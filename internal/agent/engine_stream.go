@@ -37,7 +37,7 @@ func (e *QueryEngine) buildModelUsage() any {
 	}
 	result := make(map[string]any)
 	for model, usage := range e.costState.ModelUsage {
-		params := api.ModelParams(model)
+		params := api.ModelParams(model, e.requestedModel)
 		result[model] = map[string]any{
 			"inputTokens":              usage.InputTokens,
 			"outputTokens":             usage.OutputTokens,

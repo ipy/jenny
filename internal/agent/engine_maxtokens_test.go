@@ -139,7 +139,7 @@ func TestMaxTokensController_TurnBased_BeforeFork(t *testing.T) {
 
 func TestMaxTokensController_ForkOverridesTurnBased(t *testing.T) {
 	c := NewMaxTokensController("deepseek-chat")
-	c.SetComplexityResult(&ComplexityResult{Complexity: 3, IsCoding: true})
+	c.SetComplexityResult(&ComplexityResult{Complexity: 3, NeedWrite: true})
 
 	got := c.ComputeEffective(5)
 	expected := computeMaxTokens(3, true, c.modelMax)
@@ -150,7 +150,7 @@ func TestMaxTokensController_ForkOverridesTurnBased(t *testing.T) {
 
 func TestMaxTokensController_DiscoveryIgnoresFork(t *testing.T) {
 	c := NewMaxTokensController("deepseek-chat")
-	c.SetComplexityResult(&ComplexityResult{Complexity: 5, IsCoding: true})
+	c.SetComplexityResult(&ComplexityResult{Complexity: 5, NeedWrite: true})
 
 	for turn := 1; turn <= 3; turn++ {
 		got := c.ComputeEffective(turn)
@@ -162,7 +162,7 @@ func TestMaxTokensController_DiscoveryIgnoresFork(t *testing.T) {
 
 func TestMaxTokensController_ProgressLevelCaps(t *testing.T) {
 	c := NewMaxTokensController("deepseek-chat")
-	c.SetComplexityResult(&ComplexityResult{Complexity: 5, IsCoding: true})
+	c.SetComplexityResult(&ComplexityResult{Complexity: 5, NeedWrite: true})
 
 	c.SetProgressLevel(ProgressLevelL1)
 	got := c.ComputeEffective(5)

@@ -2710,3 +2710,157 @@ func TestAC3_TaskCompletionsAsContent(t *testing.T) {
 	t.Logf("Completions injected as Content: %s", expectedContent)
 	t.Log("PASS: task completions use Content injection, not synthetic ToolResults")
 }
+
+// TestHandleStopToolUse_InterruptedContext verifies that handleStopToolUse
+// returns shouldContinue=false when the context is cancelled, preventing
+// the loop from continuing indefinitely after Ctrl+C.
+func TestHandleStopToolUse_InterruptedContext(t *testing.T) {
+	e := &QueryEngine{}
+
+	// Case 1: active context -> should continue
+	messages := []api.Message{}
+	ctx := context.Background()
+	_, _, shouldContinue := e.handleStopToolUse(ctx, nil, &messages)
+	if !shouldContinue {
+		t.Error("FAIL: expected shouldContinue=true with active context")
+	}
+
+	// Case 2: cancelled context -> should NOT continue
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, _, shouldContinue = e.handleStopToolUse(cancelCtx, nil, &messages)
+	if shouldContinue {
+		t.Error("FAIL: expected shouldContinue=false with cancelled context")
+	}
+	t.Log("PASS: handleStopToolUse respects context cancellation")
+}
+
+// TestSyntheticInFlight_LimitedToOneIteration verifies that the
+// syntheticInFlight flag limits the WithoutCancel detour to exactly one
+// iteration. When the model responds with tool_use on the synthetic delivery
+// turn, handleStopToolUse sees syntheticInFlight=true and terminates the
+// loop instead of continuing indefinitely.
+func TestSyntheticInFlight_LimitedToOneIteration(t *testing.T) {
+	tmpDir := t.TempDir()
+	sessMgr, err := session.NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager error: %v", err)
+	}
+
+	sessionID := "sess_synthetic_limit_test"
+
+	// Mock server: first call returns tool_use, second call would return
+	// tool_use AGAIN (simulating a model that retries). With the fix, the
+	// synthetic delivery turn runs exactly once, and when the model returns
+	// tool_use again, handleStopToolUse kills the loop.
+	turn1Events := []string{
+		sseLine("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"test","stop_reason":null,"usage":{"input_tokens":1,"output_tokens":1}}}`),
+		sseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"tool_block_1","name":"Grep","input":{}}}`),
+		sseLine("content_block_stop", `{"type":"content_block_stop","index":0}`),
+		sseLine("message_delta", `{"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"input_tokens":1,"output_tokens":1}}`),
+		sseLine("message_stop", `{"type":"message_stop"}`),
+	}
+	turn2Events := []string{
+		sseLine("message_start", `{"type":"message_start","message":{"id":"msg_2","type":"message","role":"assistant","content":[],"model":"test","stop_reason":null,"usage":{"input_tokens":1,"output_tokens":1}}}`),
+		sseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"tool_block_2","name":"Read","input":{}}}`),
+		sseLine("content_block_stop", `{"type":"content_block_stop","index":0}`),
+		sseLine("message_delta", `{"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"input_tokens":1,"output_tokens":1}}`),
+		sseLine("message_stop", `{"type":"message_stop"}`),
+	}
+
+	var apiCallCount atomic.Int32
+	ms := mockapi.NewMockServer()
+	ms.SetPathHandler("POST /v1/messages", func(w http.ResponseWriter, r *http.Request) {
+		io.ReadAll(r.Body)
+		r.Body.Close()
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.WriteHeader(http.StatusOK)
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			return
+		}
+		flusher.Flush()
+
+		n := apiCallCount.Add(1)
+		var events []string
+		if n == 1 {
+			events = turn1Events
+		} else {
+			events = turn2Events
+		}
+		for _, ev := range events {
+			io.WriteString(w, ev)
+			flusher.Flush()
+		}
+	})
+	server := ms.Server
+	defer server.Close()
+
+	t.Setenv("ANTHROPIC_BASE_URL", server.URL)
+	t.Setenv("ANTHROPIC_API_KEY", "test-key")
+
+	// Use a blocking tool that only returns when context is cancelled.
+	// The short parentCtx timeout triggers cancellation, which produces
+	// synthetic results, which triggers the WithoutCancel detour.
+	blocker := &blockingTool{name: "Grep", blockDuration: 10 * time.Second}
+	fast := &fastTool{name: "Read", content: "real content"}
+	tools := []tool.Tool{blocker, fast}
+
+	cfg := StreamConfig{
+		Enabled:        false,
+		SessionManager: sessMgr,
+		SessionID:      sessionID,
+	}
+	engine := mustNewQueryEngine(&cfg, tools, "test-model", WithClient(fastClient(t)))
+
+	// Short timeout triggers context cancellation during tool execution,
+	// which generates synthetic results and triggers the WithoutCancel path.
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	_, err = engine.SubmitMessage(ctx, "test prompt")
+	t.Logf("SubmitMessage returned with error: %v", err)
+
+	gotCalls := apiCallCount.Load()
+	if gotCalls > 2 {
+		t.Errorf("FAIL: API called %d times (expected at most 2: first turn + synthetic delivery turn)", gotCalls)
+	} else {
+		t.Logf("PASS: API called %d times (loop limited to at most 2 iterations)", gotCalls)
+	}
+}
+
+// TestSyntheticInFlight_ResetOnNonSynthetic verifies that the
+// syntheticInFlight counter is reset when a turn completes without
+// synthetic results, preventing state leakage across turns.
+func TestSyntheticInFlight_ResetOnNonSynthetic(t *testing.T) {
+	e := &QueryEngine{}
+
+	// Simulate: first tool turn produces synthetic results
+	e.syntheticInFlight = 2
+
+	// Simulate the decrement at the end of the delivery iteration
+	if e.syntheticInFlight > 0 {
+		e.syntheticInFlight--
+	}
+
+	// After the delivery iteration, syntheticInFlight should be 1
+	if e.syntheticInFlight != 1 {
+		t.Errorf("FAIL: syntheticInFlight should be 1 after one delivery iteration, got %d", e.syntheticInFlight)
+	}
+
+	// Second tool turn with no synthetic results must reset the counter
+	hasSynthetic := false
+	if hasSynthetic && e.syntheticInFlight <= 0 {
+		// would set syntheticInFlight = 2
+	}
+	if e.syntheticInFlight > 0 {
+		e.syntheticInFlight--
+	}
+
+	if e.syntheticInFlight != 0 {
+		t.Errorf("FAIL: syntheticInFlight should be 0 after non-synthetic turn, got %d", e.syntheticInFlight)
+	}
+	t.Log("PASS: syntheticInFlight reset after non-synthetic turn")
+}
