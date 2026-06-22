@@ -148,16 +148,24 @@ func getGitStatusShort(cwd string) (string, error) {
 	return string(out), nil
 }
 
-// modelAbilitiesSection returns a section declaring the model's abilities.
+// modelAbilitiesSection returns a section declaring the model's abilities and
+// workarounds for any missing capabilities.
 func modelAbilitiesSection(model string) (string, bool) {
 	if model == "" {
 		return "", false
 	}
-	vision := "unsupported"
-	if api.SupportsVision(model) {
-		vision = "supported"
+
+	var sb strings.Builder
+	sb.WriteString("Model abilities:\n")
+
+	vision := api.SupportsVision(model)
+	if vision {
+		sb.WriteString("- Vision: supported (model can understand images from Read tool)\n")
+	} else {
+		sb.WriteString("- Vision: unsupported (Read tool cannot read images, use third-party tools to work around if needed)\n")
 	}
-	return fmt.Sprintf("\nLLM Abilities:\nVision: %s.\n", vision), true
+
+	return sb.String(), true
 }
 
 // platformSection returns a section with OS/Arch platform context.

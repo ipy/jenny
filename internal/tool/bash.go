@@ -896,7 +896,7 @@ func suggestHeredocToFile(command string) string {
 	if bodyLines <= maxHeredocLines {
 		return ""
 	}
-	return fmt.Sprintf("This command contains a %d-line heredoc. Consider using the Write tool to create a file instead and reference it in the command.", bodyLines)
+	return fmt.Sprintf("This command contains a %d-line heredoc. Use the write tool to create a file then reference it in the command.", bodyLines)
 }
 
 // heredocDelim returns the heredoc delimiter if line contains an unquoted << that starts
