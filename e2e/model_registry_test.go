@@ -185,12 +185,19 @@ func TestModelRegistryConfigOverride(t *testing.T) {
 			},
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,
-				// Config override for claude-sonnet-4-6 should take precedence
-				// over the bundled capability table (64000).
+				// The config override sets modelMax=88888, which lowers the
+				// auto-compact threshold enough that the full system prompt
+				// triggers compact before the first turn. Request[0] is the
+				// compact summary (SUMMARY_MAX_TOKENS=20000). Request[1] is
+				// the normal agent turn (earlyTurnCap=min(4096,88888)=4096).
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 88888,
+						MaxTokens: 20000,
+					},
+					{
+						Index:     1,
+						MaxTokens: 4096,
 					},
 				},
 			},
