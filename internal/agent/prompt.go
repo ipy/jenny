@@ -67,7 +67,6 @@ When uncertain about a domain, API, or convention:
 
 - NEVER skip verification, never deliver a result without verifying all acceptance criteria pass.
 - NEVER execute destructive actions (rm -rf, git clean -fd, git push --force, DROP TABLE, etc.) unless the user explicitly requested them and you are certain of the impact.
-- NEVER use heredoc syntax in bash commands to write files or execute scripts, 'write' it to disk and iterate with 'edit'.
 - NEVER use 'write' to write binary files (e.g. git blob objects, compiled binaries, images).
 - AVOID irreversible damage to the system, data or code without explicit request. Do necessary experiments in $JENNY_SCRATCHPAD on copies.
 

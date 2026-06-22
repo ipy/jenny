@@ -817,3 +817,83 @@ func TestBashTool_TimeoutKillsChildProcesses(t *testing.T) {
 		t.Errorf("timeout took too long: %v", elapsed)
 	}
 }
+
+func TestBashTool_HeredocSuggestion(t *testing.T) {
+	makeHeredoc := func(lines int) string {
+		var b strings.Builder
+		b.WriteString("cat <<'EOF'\n")
+		for i := 0; i < lines; i++ {
+			fmt.Fprintf(&b, "line %d\n", i)
+		}
+		b.WriteString("EOF\n")
+		return b.String()
+	}
+
+	tests := []struct {
+		name     string
+		command  string
+		wantHint bool
+	}{
+		{
+			name:     "short heredoc below threshold",
+			command:  makeHeredoc(2),
+			wantHint: false,
+		},
+		{
+			name:     "heredoc at threshold boundary",
+			command:  makeHeredoc(20),
+			wantHint: false,
+		},
+		{
+			name:     "heredoc over threshold",
+			command:  makeHeredoc(21),
+			wantHint: true,
+		},
+		{
+			name:     "long heredoc with dash delimiter",
+			command:  "cat <<-'EOF'\n" + strings.Repeat("x\n", 25) + "EOF",
+			wantHint: true,
+		},
+		{
+			name:     "heredoc with double-quoted delimiter",
+			command:  "cat <<\"EOF\"\n" + strings.Repeat("x\n", 25) + "EOF",
+			wantHint: true,
+		},
+		{
+			name:     "here-string should not trigger",
+			command:  "cat <<< \"some short string\"",
+			wantHint: false,
+		},
+		{
+			name:     "multiline heredoc in middle of command",
+			command:  "grep foo <<'DATA'\n" + strings.Repeat("x\n", 30) + "DATA\nwc -l",
+			wantHint: true,
+		},
+		{
+			name:     "unterminated heredoc should be ignored",
+			command:  "cat <<'EOF'\n" + strings.Repeat("x\n", 30),
+			wantHint: false,
+		},
+		{
+			name:     "heredoc within single quotes ignored",
+			command:  "echo 'cat <<EOF\nfoo\nEOF'",
+			wantHint: false,
+		},
+	}
+
+	tool := NewBashTool(PermissionEdit)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tool.Execute(context.Background(), map[string]any{
+				"command": tt.command,
+			}, t.TempDir())
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			hasHint := strings.Contains(result.Content, "Consider using the Write tool")
+			if hasHint != tt.wantHint {
+				t.Errorf("wantHint=%v, got hint=%v. Content: %s", tt.wantHint, hasHint, result.Content)
+			}
+		})
+	}
+}

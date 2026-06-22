@@ -229,13 +229,7 @@ func (t *PowerShellTool) runForegroundPowerShell(ctx context.Context, shellPath,
 func (t *PowerShellTool) executeShellFallback(ctx context.Context, command string, timeout int) (*ToolResult, error) {
 	parsed := parseSimpleCommand(command, ShellFlavorPowerShell)
 	if !parsed.OK {
-		hint := "split into separate calls"
-		for _, issue := range parsed.Issues {
-			if strings.Contains(issue, "builtin") {
-				hint = "use a different tool, or run on a host with PowerShell"
-				break
-			}
-		}
+		hint := fallbackHint
 		return &ToolResult{
 			Content: formatToolError(
 				"shell_unavailable",
@@ -519,13 +513,7 @@ func (t *PowerShellTool) resolveExecArgv(command string) (string, []string, erro
 
 	parsed := parseSimpleCommand(command, ShellFlavorPowerShell)
 	if !parsed.OK {
-		hint := "split into separate calls"
-		for _, issue := range parsed.Issues {
-			if strings.Contains(issue, "builtin") {
-				hint = "use a different tool, or run on a host with PowerShell"
-				break
-			}
-		}
+		hint := fallbackHint
 		return "", nil, fmt.Errorf("%s", formatToolError(
 			"shell_unavailable",
 			"powershell.exe not found; input not runnable as simple argv",

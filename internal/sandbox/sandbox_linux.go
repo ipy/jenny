@@ -38,7 +38,7 @@ func (m *LinuxSandboxManager) Initialize(ctx context.Context, cfg Config) error 
 // Caller must hold m.mu.
 func (m *LinuxSandboxManager) setupLocked(ctx context.Context, cfg Config) error {
 	// Check if bwrap is available
-	if err := exec.CommandContext(ctx, "which", "bwrap").Run(); err != nil {
+	if _, err := exec.LookPath("bwrap"); err != nil {
 		m.available = false
 		if cfg.FailIfUnavailable {
 			m.initError = &ErrMissingDependency{
@@ -53,7 +53,7 @@ func (m *LinuxSandboxManager) setupLocked(ctx context.Context, cfg Config) error
 
 	// Validate sandboxed ripgrep binary if configured
 	if cfg.Ripgrep.Command != "" {
-		if err := exec.CommandContext(ctx, "which", cfg.Ripgrep.Command).Run(); err != nil {
+		if _, err := exec.LookPath(cfg.Ripgrep.Command); err != nil {
 			m.initError = &ErrMissingDependency{
 				Backend:     BackendLinux,
 				Dependency:  "ripgrep: " + cfg.Ripgrep.Command,

@@ -114,7 +114,7 @@ func (m *MacOSSandboxManager) RefreshConfig(ctx context.Context) error {
 // Caller must hold m.mu.
 func (m *MacOSSandboxManager) setupLocked(ctx context.Context, cfg Config) error {
 	// Check if sandbox-exec is available
-	if err := exec.CommandContext(ctx, "which", "sandbox-exec").Run(); err != nil {
+	if _, err := exec.LookPath("sandbox-exec"); err != nil {
 		m.available = false
 		if cfg.FailIfUnavailable {
 			m.initError = &ErrMissingDependency{
@@ -129,7 +129,7 @@ func (m *MacOSSandboxManager) setupLocked(ctx context.Context, cfg Config) error
 
 	// Validate sandboxed ripgrep binary if configured
 	if cfg.Ripgrep.Command != "" {
-		if err := exec.CommandContext(ctx, "which", cfg.Ripgrep.Command).Run(); err != nil {
+		if _, err := exec.LookPath(cfg.Ripgrep.Command); err != nil {
 			m.initError = &ErrMissingDependency{
 				Backend:     BackendMacOS,
 				Dependency:  "ripgrep: " + cfg.Ripgrep.Command,

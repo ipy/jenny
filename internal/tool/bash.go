@@ -31,6 +31,11 @@ func isExecFailure(err error) bool {
 const (
 	// maxInlineSize is the maximum size for inline output (30KB)
 	maxInlineSize = 30720
+	// maxHeredocLines is the max number of lines in a heredoc before suggesting Write.
+	maxHeredocLines = 30
+	// fallbackHint is shown when a shell is missing and the command can't be
+	// parsed into a simple argv list for direct exec.
+	fallbackHint = "use a simple argv command (program arg1 arg2 ...) so the exec fallback can run it"
 )
 
 // resolveShellHook, when set by tests, overrides shell resolution.
@@ -174,6 +179,14 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 	command, ok := input["command"].(string)
 	if !ok || command == "" {
 		return nil, fmt.Errorf("command is required and must be a string")
+	}
+
+	// Suggest Write tool for long heredocs before spending time on security checks.
+	if suggestion := suggestHeredocToFile(command); suggestion != "" {
+		return &ToolResult{
+			Content: suggestion,
+			IsError: false,
+		}, nil
 	}
 
 	t.mu.Lock()
@@ -401,7 +414,7 @@ func (t *BashTool) executeShellFallback(ctx context.Context, command string, tim
 				"sandbox active; simple-exec fallback cannot honor sandbox",
 				command,
 				"",
-				"run on a host with a shell",
+				fallbackHint,
 			),
 			IsError: true,
 		}, nil
@@ -409,13 +422,7 @@ func (t *BashTool) executeShellFallback(ctx context.Context, command string, tim
 
 	parsed := parseSimpleCommand(command, ShellFlavorBash)
 	if !parsed.OK {
-		hint := "split into separate calls"
-		for _, issue := range parsed.Issues {
-			if strings.Contains(issue, "builtin") {
-				hint = "use a different tool, or run on a host with a shell"
-				break
-			}
-		}
+		hint := fallbackHint
 		return &ToolResult{
 			Content: formatToolError(
 				"shell_unavailable",
@@ -703,7 +710,7 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 		})
 		if startErr != nil {
 			outputMu.Lock()
-			output.WriteString(fmt.Sprintf("failed to start command: %v", startErr))
+			fmt.Fprintf(&output, "failed to start command: %v", startErr)
 			outputMu.Unlock()
 			atomic.StoreInt32(&cmdDone, 1)
 			close(done)
@@ -826,19 +833,13 @@ func (t *BashTool) resolveExecArgv(command string) (string, []string, error) {
 			"sandbox active; simple-exec fallback cannot honor sandbox",
 			command,
 			"",
-			"run on a host with a shell",
+			fallbackHint,
 		))
 	}
 
 	parsed := parseSimpleCommand(command, ShellFlavorBash)
 	if !parsed.OK {
-		hint := "split into separate calls"
-		for _, issue := range parsed.Issues {
-			if strings.Contains(issue, "builtin") {
-				hint = "use a different tool, or run on a host with a shell"
-				break
-			}
-		}
+		hint := fallbackHint
 		return "", nil, fmt.Errorf("%s", formatToolError(
 			"shell_unavailable",
 			"shell not found; input not runnable as simple argv",
@@ -870,4 +871,67 @@ func (t *BashTool) maybeWrapWithSandbox(command string, input map[string]any) (s
 
 	// Wrap with sandbox
 	return t.sandbox.WrapWithSandbox(command)
+}
+
+// suggestHeredocToFile checks the first line for a heredoc delimiter and returns a
+// suggestion if the heredoc body exceeds maxHeredocLines.
+func suggestHeredocToFile(command string) string {
+	first, rest, hasNewline := strings.Cut(command, "\n")
+	if !hasNewline {
+		return ""
+	}
+	delim := heredocDelim(first)
+	if delim == "" {
+		return ""
+	}
+	// Count body lines up to the closing delimiter line.
+	bodyLines := strings.Count(rest, "\n")
+	if idx := strings.Index(rest, "\n"+delim+"\n"); idx >= 0 {
+		bodyLines = strings.Count(rest[:idx], "\n") + 1
+	} else if idx := strings.Index(rest, "\n"+delim); idx >= 0 && idx+len(delim)+1 == len(rest) {
+		bodyLines = strings.Count(rest[:idx], "\n") + 1
+	} else {
+		return "" // unterminated
+	}
+	if bodyLines <= maxHeredocLines {
+		return ""
+	}
+	return fmt.Sprintf("This command contains a %d-line heredoc. Consider using the Write tool to create a file instead and reference it in the command.", bodyLines)
+}
+
+// heredocDelim returns the heredoc delimiter if line contains an unquoted << that starts
+// a heredoc, stripping <<-, quotes, and trailing content. Returns "" if none found.
+func heredocDelim(line string) string {
+	// Look for << not followed by < (exclude <<< here-strings).
+	idx := strings.Index(line, "<<")
+	if idx < 0 || strings.HasPrefix(line[idx+2:], "<") {
+		return ""
+	}
+	// Check << is not inside quotes by scanning bytes before it.
+	quoted := false
+	for i := range idx {
+		if line[i] == '\'' || line[i] == '"' {
+			quoted = !quoted
+		}
+	}
+	if quoted {
+		return ""
+	}
+	rest := strings.TrimSpace(line[idx+2:])
+	if strings.HasPrefix(rest, "-") {
+		rest = strings.TrimSpace(rest[1:])
+	}
+	if len(rest) > 0 && (rest[0] == '\'' || rest[0] == '"') {
+		q := rest[0]
+		rest = rest[1:]
+		if j := strings.IndexByte(rest, q); j >= 0 {
+			return rest[:j]
+		}
+		return ""
+	}
+	// Unquoted delimiter: take up to first whitespace.
+	if j := strings.IndexAny(rest, " \t"); j >= 0 {
+		return rest[:j]
+	}
+	return rest
 }
