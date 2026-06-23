@@ -391,9 +391,8 @@ func TestParseTimeoutSeconds(t *testing.T) {
 	}
 }
 
-// TestTaskOutputAppend verifies that WriteTaskResult uses append mode
-// (AC6: Task output file uses append mode). Two consecutive writes must
-// produce two JSONL lines in the file.
+// TestTaskOutputAppend verifies that WriteTaskResult uses append mode.
+// Two consecutive writes must produce two JSONL lines in the file.
 func TestTaskOutputAppend(t *testing.T) {
 	tmpDir := t.TempDir()
 	tm := NewTaskManager().WithProjectRoot(tmpDir)
@@ -447,7 +446,7 @@ func TestTaskOutputAppend(t *testing.T) {
 }
 
 // TestTaskOutputFlushThenWrite verifies that FlushPartialOutput followed by
-// WriteTaskResult preserves both entries (AC6).
+// WriteTaskResult preserves both entries.
 func TestTaskOutputFlushThenWrite(t *testing.T) {
 	tmpDir := t.TempDir()
 	tm := NewTaskManager().WithProjectRoot(tmpDir)

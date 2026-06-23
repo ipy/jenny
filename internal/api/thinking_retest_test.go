@@ -83,9 +83,9 @@ func TestResponsesAPI_EffortTranslation(t *testing.T) {
 	t.Log("PASS: reasoning_config.effort correctly set for Responses API")
 }
 
-// TestAC2_NoEffort_NoReasoningConfig verifies that when --effort is not set,
+// TestNoEffort_NoReasoningConfig verifies that when --effort is not set,
 // no reasoning_config is sent (backward compatible).
-func TestAC2_NoEffort_NoReasoningConfig(t *testing.T) {
+func TestNoEffort_NoReasoningConfig(t *testing.T) {
 	ms := mockapi.NewMockServer()
 	ms.SetPathHandler("POST /v1/responses", func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -138,10 +138,10 @@ func TestAC2_NoEffort_NoReasoningConfig(t *testing.T) {
 	t.Log("PASS: no reasoning_config when effort not set")
 }
 
-// TestAC2_EffortNotThreaded_EmptyEffortFromCLI verifies that when
+// TestEffortNotThreaded_EmptyEffortFromCLI verifies that when
 // StreamConfig.Effort is empty, SetThinkingConfig is not called with a
 // non-empty value, so the provider doesn't send effort.
-func TestAC2_EffortNotThreaded_EmptyEffortFromCLI(t *testing.T) {
+func TestEffortNotThreaded_EmptyEffortFromCLI(t *testing.T) {
 	ms := mockapi.NewMockServer()
 	ms.SetPathHandler("POST /chat/completions", func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -197,9 +197,9 @@ func TestAC2_EffortNotThreaded_EmptyEffortFromCLI(t *testing.T) {
 // DeepSeek extra_body thinking
 // ---------------------------------------------------------------------------
 
-// TestAC2_DeepSeekExtraBody_Enabled verifies DeepSeek models get
+// TestDeepSeekExtraBody_Enabled verifies DeepSeek models get
 // extra_body: {"thinking": {"type": "enabled"}} when effort is set.
-func TestAC2_DeepSeekExtraBody_Enabled(t *testing.T) {
+func TestDeepSeekExtraBody_Enabled(t *testing.T) {
 	ms := mockapi.NewMockServer()
 	ms.SetPathHandler("POST /chat/completions", func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -272,9 +272,9 @@ func TestAC2_DeepSeekExtraBody_Enabled(t *testing.T) {
 	t.Log("PASS: DeepSeek extra_body and reasoning persistence working")
 }
 
-// TestAC2_DeepSeekExtraBody_NoEffort_NoExtraBody verifies that without
+// TestDeepSeekExtraBody_NoEffort_NoExtraBody verifies that without
 // effort, no extra_body is added for DeepSeek models.
-func TestAC2_DeepSeekExtraBody_NoEffort_NoExtraBody(t *testing.T) {
+func TestDeepSeekExtraBody_NoEffort_NoExtraBody(t *testing.T) {
 	ms := mockapi.NewMockServer()
 	ms.SetPathHandler("POST /chat/completions", func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -331,9 +331,9 @@ func TestAC2_DeepSeekExtraBody_NoEffort_NoExtraBody(t *testing.T) {
 // Effort threaded from CLI through agent to provider
 // ---------------------------------------------------------------------------
 
-// TestAC2_EffortThreaded_FromCLIThroughEngine verifies the full threading
+// TestEffortThreaded_FromCLIThroughEngine verifies the full threading
 // of effort flag from CLI -> StreamConfig -> QueryEngine -> provider.
-func TestAC2_EffortThreaded_FromCLIThroughEngine(t *testing.T) {
+func TestEffortThreaded_FromCLIThroughEngine(t *testing.T) {
 	ms := mockapi.NewMockServer()
 	ms.SetPathHandler("POST /v1/responses", func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -396,9 +396,9 @@ func TestAC2_EffortThreaded_FromCLIThroughEngine(t *testing.T) {
 // Thinking persistence in .jsonl transcript
 // ---------------------------------------------------------------------------
 
-// TestAC3_ThinkingPersisted_JSONLTranscript verifies that assistant entries
+// TestThinkingPersisted_JSONLTranscript verifies that assistant entries
 // with thinking blocks are persisted to and loaded from .jsonl transcripts.
-func TestAC3_ThinkingPersisted_JSONLTranscript(t *testing.T) {
+func TestThinkingPersisted_JSONLTranscript(t *testing.T) {
 	// Verify TranscriptEntry has Thinking and Signature fields
 	// by round-tripping through JSON
 
@@ -430,9 +430,9 @@ func TestAC3_ThinkingPersisted_JSONLTranscript(t *testing.T) {
 	t.Log("PASS: thinking and signature fields round-trip through JSON")
 }
 
-// TestAC3_ThinkingPersisted_OpenAIChat_Provider tests that reasoning_content from
+// TestThinkingPersisted_OpenAIChat_Provider tests that reasoning_content from
 // OpenAI Chat API is captured as thinking block in the provider response.
-func TestAC3_ThinkingPersisted_OpenAIChat_Provider(t *testing.T) {
+func TestThinkingPersisted_OpenAIChat_Provider(t *testing.T) {
 	ms := mockapi.NewMockServer()
 	ms.SetPathHandler("POST /chat/completions", func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -506,9 +506,9 @@ func TestAC3_ThinkingPersisted_OpenAIChat_Provider(t *testing.T) {
 	t.Log("PASS: thinking content extracted from OpenAI Chat response for transcript persistence")
 }
 
-// TestAC3_ThinkingPersisted_DeepSeek_Provider tests that reasoning_content from
+// TestThinkingPersisted_DeepSeek_Provider tests that reasoning_content from
 // DeepSeek is captured as thinking block in the response.
-func TestAC3_ThinkingPersisted_DeepSeek_Provider(t *testing.T) {
+func TestThinkingPersisted_DeepSeek_Provider(t *testing.T) {
 	ms := mockapi.NewMockServer()
 	ms.SetPathHandler("POST /chat/completions", func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -574,9 +574,9 @@ func TestAC3_ThinkingPersisted_DeepSeek_Provider(t *testing.T) {
 // Thinking round-trip for tool calls
 // ---------------------------------------------------------------------------
 
-// TestAC4_ResponsesAPI_ThinkingRoundTrip verifies that assistant messages
+// TestResponsesAPI_ThinkingRoundTrip verifies that assistant messages
 // with thinking blocks are reconstructed correctly for the Responses API.
-func TestAC4_ResponsesAPI_ThinkingRoundTrip(t *testing.T) {
+func TestResponsesAPI_ThinkingRoundTrip(t *testing.T) {
 	ms := mockapi.NewMockServer()
 	ms.SetPathHandler("POST /v1/responses", func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -699,9 +699,9 @@ func TestAC4_ResponsesAPI_ThinkingRoundTrip(t *testing.T) {
 	t.Log("PASS: Responses API thinking round-trip working")
 }
 
-// TestAC4_ChatAPI_ThinkingWithToolCalls verifies that for OpenAI Chat API,
+// TestChatAPI_ThinkingWithToolCalls verifies that for OpenAI Chat API,
 // reasoning_content is included on assistant messages that also have tool_calls.
-func TestAC4_ChatAPI_ThinkingWithToolCalls(t *testing.T) {
+func TestChatAPI_ThinkingWithToolCalls(t *testing.T) {
 	ms := mockapi.NewMockServer()
 	ms.SetPathHandler("POST /chat/completions", func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -813,9 +813,9 @@ func TestAC4_ChatAPI_ThinkingWithToolCalls(t *testing.T) {
 	t.Log("PASS: Chat API reasoning_content round-trip with tool_calls working")
 }
 
-// TestAC4_AnthropicThinkingBeforeToolUse verifies that for Anthropic API,
+// TestAnthropicThinkingBeforeToolUse verifies that for Anthropic API,
 // the thinking block with signature appears before tool_use blocks.
-func TestAC4_AnthropicThinkingBeforeToolUse(t *testing.T) {
+func TestAnthropicThinkingBeforeToolUse(t *testing.T) {
 	// Verify content block ordering
 	content := []ContentBlock{
 		{Type: "thinking", Thinking: "Step 1: analyze...", Signature: "sig_an_123"},
@@ -842,10 +842,10 @@ func TestAC4_AnthropicThinkingBeforeToolUse(t *testing.T) {
 	t.Log("PASS: Anthropic thinking before tool_use ordering verified")
 }
 
-// TestAC4_RoundTrip_No400Error verifies that loading a transcript with
+// TestRoundTrip_No400Error verifies that loading a transcript with
 // thinking blocks and sending the reconstructed history does not produce
 // 400 errors.
-func TestAC4_RoundTrip_No400Error(t *testing.T) {
+func TestRoundTrip_No400Error(t *testing.T) {
 	ms := mockapi.NewMockServer()
 	ms.SetPathHandler("POST /v1/responses", func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -940,9 +940,9 @@ func TestAC4_RoundTrip_No400Error(t *testing.T) {
 	t.Log("PASS: multi-turn thinking round-trip succeeds without 400 errors")
 }
 
-// TestAC4_ChatAPIRoundTrip_ThinkingToolCalls_No400 verifies that OpenAI Chat
+// TestChatAPIRoundTrip_ThinkingToolCalls_No400 verifies that OpenAI Chat
 // API round-trip with thinking+tool_calls works without 400 errors.
-func TestAC4_ChatAPIRoundTrip_ThinkingToolCalls_No400(t *testing.T) {
+func TestChatAPIRoundTrip_ThinkingToolCalls_No400(t *testing.T) {
 	ms := mockapi.NewMockServer()
 	ms.SetPathHandler("POST /chat/completions", func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -1047,9 +1047,9 @@ func TestAC4_ChatAPIRoundTrip_ThinkingToolCalls_No400(t *testing.T) {
 // Responses API round-trip thinking — retest
 // ---------------------------------------------------------------------------
 
-// TestAC4_ResponsesAPI_ThinkingRoundTrip_Retest verifies the full round-trip:
+// TestResponsesAPI_ThinkingRoundTrip_Retest verifies the full round-trip:
 // send with thinking -> persist -> load -> reconstruct -> send again
-func TestAC4_ResponsesAPI_ThinkingRoundTrip_Retest(t *testing.T) {
+func TestResponsesAPI_ThinkingRoundTrip_Retest(t *testing.T) {
 	// Create transcript entries with thinking
 	tmpDir, err := os.MkdirTemp("", "jenny-ac4-rt-*")
 	if err != nil {
@@ -1123,10 +1123,10 @@ func TestAC4_ResponsesAPI_ThinkingRoundTrip_Retest(t *testing.T) {
 	t.Log("PASS: Responses API thinking round-trip through transcript verified")
 }
 
-// TestAC4_RoundTrip_StillBroken_NoMessageThinking verifies that when
+// TestRoundTrip_StillBroken_NoMessageThinking verifies that when
 // an assistant message has no content (only thinking + tool calls), it
 // still round-trips correctly without 400 errors.
-func TestAC4_RoundTrip_StillBroken_NoMessageThinking(t *testing.T) {
+func TestRoundTrip_StillBroken_NoMessageThinking(t *testing.T) {
 	ms := mockapi.NewMockServer()
 	ms.SetPathHandler("POST /v1/responses", func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -1223,19 +1223,19 @@ func TestAC4_RoundTrip_StillBroken_NoMessageThinking(t *testing.T) {
 
 	resp, err := client.SendMessage(context.Background(), messages, nil, nil, []string{}, "")
 	if err != nil {
-		t.Fatalf("AC4 FAIL: NoMessageThinking round-trip error: %v", err)
+		t.Fatalf("FAIL: NoMessageThinking round-trip error: %v", err)
 	}
 	_ = resp
-	t.Log("AC4 PASS: No-message-thinking round-trip works without 400")
+	t.Log("PASS: No-message-thinking round-trip works without 400")
 }
 
 // ---------------------------------------------------------------------------
-// AC3: Thinking persisted in .jsonl file
+// Thinking persisted in .jsonl file
 // ---------------------------------------------------------------------------
 
-// TestAC3_ThinkingPersisted_JSONLFile verifies that thinking/signature fields
+// TestThinkingPersisted_JSONLFile verifies that thinking/signature fields
 // are serialized in .jsonl transcript files.
-func TestAC3_ThinkingPersisted_JSONLFile(t *testing.T) {
+func TestThinkingPersisted_JSONLFile(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-ac3-jsonl-*")
 	if err != nil {
 		t.Fatalf("MkdirTemp error = %v", err)
@@ -1275,22 +1275,22 @@ func TestAC3_ThinkingPersisted_JSONLFile(t *testing.T) {
 	}
 
 	if loaded["thinking"] != "I computed: 6 * 7 = 42" {
-		t.Errorf("AC3 FAIL: thinking = %v, want 'I computed: 6 * 7 = 42'", loaded["thinking"])
+		t.Errorf("FAIL: thinking = %v, want 'I computed: 6 * 7 = 42'", loaded["thinking"])
 	}
 	if loaded["signature"] != "sig_test_abc" {
-		t.Errorf("AC3 FAIL: signature = %v, want 'sig_test_abc'", loaded["signature"])
+		t.Errorf("FAIL: signature = %v, want 'sig_test_abc'", loaded["signature"])
 	}
 
-	t.Log("AC3 PASS: thinking and signature persisted in .jsonl file")
+	t.Log("PASS: thinking and signature persisted in .jsonl file")
 }
 
 // ---------------------------------------------------------------------------
-// retest-AC4: Comprehensive round-trip test
+// Comprehensive round-trip test
 // ---------------------------------------------------------------------------
 
-// TestRetest_AC4_FullRoundTrip verifies the complete chain:
+// TestFullRoundTrip verifies the complete chain:
 // response with thinking -> extract for persistence -> transcript -> load -> rebuild messages -> send
-func TestRetest_AC4_FullRoundTrip(t *testing.T) {
+func TestFullRoundTrip(t *testing.T) {
 	ms := mockapi.NewMockServer()
 	callCount := 0
 	ms.SetPathHandler("POST /v1/responses", func(w http.ResponseWriter, r *http.Request) {
@@ -1340,17 +1340,17 @@ func TestRetest_AC4_FullRoundTrip(t *testing.T) {
 				hasReasoning = true
 				summaryArr, ok := itemMap["summary"].([]any)
 				if !ok || len(summaryArr) == 0 {
-					t.Errorf("retest-AC4: reasoning summary expected non-empty []any, got %T", itemMap["summary"])
+					t.Errorf("reasoning summary expected non-empty []any, got %T", itemMap["summary"])
 					continue
 				}
 				part, _ := summaryArr[0].(map[string]any)
 				if part["text"] != "Planning the search..." {
-					t.Errorf("retest-AC4: reasoning text = %v, want 'Planning the search...'", part["text"])
+					t.Errorf("reasoning text = %v, want 'Planning the search...'", part["text"])
 				}
 			}
 		}
 		if !hasReasoning {
-			t.Error("retest-AC4 FAIL: reasoning block missing in multi-turn input")
+			t.Error("FAIL: reasoning block missing in multi-turn input")
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -1429,19 +1429,19 @@ func TestRetest_AC4_FullRoundTrip(t *testing.T) {
 
 	resp2, err := client.SendMessage(context.Background(), messages, nil, nil, []string{}, "")
 	if err != nil {
-		t.Fatalf("AC4 FAIL: full round-trip error = %v", err)
+		t.Fatalf("FAIL: full round-trip error = %v", err)
 	}
 	_ = resp2
-	t.Log("retest-AC4 PASS: full round-trip with thinking extraction and reconstruction works")
+	t.Log("PASS: full round-trip with thinking extraction and reconstruction works")
 }
 
 // ---------------------------------------------------------------------------
 // Edge case: Non-DeepSeek model should not get extra_body
 // ---------------------------------------------------------------------------
 
-// TestAC2_ChatAPI_ReasoningEffort_NoExtraBodyForNonDeepSeek verifies that
+// TestChatAPI_ReasoningEffort_NoExtraBodyForNonDeepSeek verifies that
 // non-DeepSeek models do NOT get extra_body (transformer only applies to DeepSeek).
-func TestAC2_ChatAPI_ReasoningEffort_NoExtraBodyForNonDeepSeek(t *testing.T) {
+func TestChatAPI_ReasoningEffort_NoExtraBodyForNonDeepSeek(t *testing.T) {
 	ms := mockapi.NewMockServer()
 	ms.SetPathHandler("POST /chat/completions", func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -1490,17 +1490,17 @@ func TestAC2_ChatAPI_ReasoningEffort_NoExtraBodyForNonDeepSeek(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SendMessage error = %v", err)
 	}
-	t.Log("AC2 PASS: non-DeepSeek model gets reasoning_effort without extra_body")
+	t.Log("PASS: non-DeepSeek model gets reasoning_effort without extra_body")
 }
 
 // ---------------------------------------------------------------------------
-// AC5: Backward compatibility for old transcript formats
+// Backward compatibility for old transcript formats
 // ---------------------------------------------------------------------------
 
-// TestAC5_BackwardCompat_NoThinkingFields verifies that loading a transcript
+// TestBackwardCompat_NoThinkingFields verifies that loading a transcript
 // with entries that lack thinking/signature fields (old format) does not
 // error, panic, or corrupt loaded data.
-func TestAC5_BackwardCompat_NoThinkingFields(t *testing.T) {
+func TestBackwardCompat_NoThinkingFields(t *testing.T) {
 	// Create a mock transcript JSONL with old-format entries (no thinking/signature)
 	tmpDir, err := os.MkdirTemp("", "jenny-ac5-backcompat-*")
 	if err != nil {
@@ -1541,39 +1541,39 @@ func TestAC5_BackwardCompat_NoThinkingFields(t *testing.T) {
 
 	loaded, err := m.LoadTranscript("ac5-test")
 	if err != nil {
-		t.Fatalf("AC5 FAIL: LoadTranscript error = %v (expected no error for old format)", err)
+		t.Fatalf("FAIL: LoadTranscript error = %v (expected no error for old format)", err)
 	}
 
 	if len(loaded) != len(oldEntries) {
-		t.Fatalf("AC5 FAIL: expected %d entries, got %d", len(oldEntries), len(loaded))
+		t.Fatalf("FAIL: expected %d entries, got %d", len(oldEntries), len(loaded))
 	}
 
 	// Verify thinking and signature are empty (not error, not corrupted)
 	for i, e := range loaded {
 		if e.Thinking != "" {
-			t.Errorf("AC5 FAIL: entry %d has Thinking=%q, want empty string", i, e.Thinking)
+			t.Errorf("FAIL: entry %d has Thinking=%q, want empty string", i, e.Thinking)
 		}
 		if e.Signature != "" {
-			t.Errorf("AC5 FAIL: entry %d has Signature=%q, want empty string", i, e.Signature)
+			t.Errorf("FAIL: entry %d has Signature=%q, want empty string", i, e.Signature)
 		}
 		// Verify content is intact
 		if e.Content == "" {
-			t.Errorf("AC5 FAIL: entry %d has empty Content", i)
+			t.Errorf("FAIL: entry %d has empty Content", i)
 		}
 	}
 
-	t.Log("AC5 PASS: old-format transcripts load without error, panic, or data corruption")
+	t.Log("PASS: old-format transcripts load without error, panic, or data corruption")
 }
 
 // ---------------------------------------------------------------------------
-// AC2: DeepSeek effort normalization
+// DeepSeek effort normalization
 // ---------------------------------------------------------------------------
 
-// TestAC2_DeepSeekEffortNormalization verifies that the transformer adds
+// TestDeepSeekEffortNormalization verifies that the transformer adds
 // extra_body for DeepSeek models and not for others, normalizes effort values
 // to DeepSeek's supported range (high/max only), and rewrites max_completion_tokens
 // → max_tokens in extra_body.
-func TestAC2_DeepSeekEffortNormalization(t *testing.T) {
+func TestDeepSeekEffortNormalization(t *testing.T) {
 	tests := []struct {
 		model     string
 		effort    string
@@ -1612,25 +1612,25 @@ func TestAC2_DeepSeekEffortNormalization(t *testing.T) {
 				// Check extra_body
 				_, hasExtra := req["extra_body"]
 				if tt.extraBody && !hasExtra {
-					t.Error("AC2 FAIL: extra_body missing when expected")
+					t.Error("FAIL: extra_body missing when expected")
 				}
 				if !tt.extraBody && hasExtra {
-					t.Error("AC2 FAIL: extra_body present when not expected")
+					t.Error("FAIL: extra_body present when not expected")
 				}
 
 				// Check reasoning_effort value
 				got, _ := req["reasoning_effort"].(string)
 				if got != tt.want {
-					t.Errorf("AC2 FAIL: reasoning_effort = %q, want %q", got, tt.want)
+					t.Errorf("FAIL: reasoning_effort = %q, want %q", got, tt.want)
 				}
 
 				// DeepSeek: max_tokens must be at top level, not max_completion_tokens on the wire
 				if isDeepSeekModel(tt.model) {
 					if _, hasMCT := req["max_completion_tokens"]; hasMCT {
-						t.Error("AC2 FAIL: max_completion_tokens should not be present for DeepSeek")
+						t.Error("FAIL: max_completion_tokens should not be present for DeepSeek")
 					}
 					if _, hasMT := req["max_tokens"]; !hasMT {
-						t.Error("AC2 FAIL: max_tokens missing from top-level for DeepSeek")
+						t.Error("FAIL: max_tokens missing from top-level for DeepSeek")
 					}
 				}
 
@@ -1663,17 +1663,17 @@ func TestAC2_DeepSeekEffortNormalization(t *testing.T) {
 		})
 	}
 
-	t.Log("AC2 PASS: DeepSeek effort normalization verified")
+	t.Log("PASS: DeepSeek effort normalization verified")
 }
 
 // ---------------------------------------------------------------------------
-// AC3: Anthropic provider output_config with effort
+// Anthropic provider output_config with effort
 // ---------------------------------------------------------------------------
 
-// TestAC3_AnthropicProvider_OutputConfigEffort verifies that the DeepSeek
+// TestAnthropicProvider_OutputConfigEffort verifies that the DeepSeek
 // transformer adds output_config.effort to Anthropic-format requests on
 // DeepSeek models, and that non-DeepSeek models don't get it.
-func TestAC3_AnthropicProvider_OutputConfigEffort(t *testing.T) {
+func TestAnthropicProvider_OutputConfigEffort(t *testing.T) {
 	tests := []struct {
 		name             string
 		model            string
@@ -1789,5 +1789,5 @@ func TestAC3_AnthropicProvider_OutputConfigEffort(t *testing.T) {
 		})
 	}
 
-	t.Log("AC3 PASS: Anthropic provider output_config with effort working")
+	t.Log("PASS: Anthropic provider output_config with effort working")
 }

@@ -17,10 +17,10 @@ import (
 var captureStdout = testutil.CaptureStdout
 
 // ============================================================================
-// AC1: Skills discovered on Read/Write/Edit path access
+// Skills discovered on Read/Write/Edit path access
 // ============================================================================
 
-func TestAC1_ReadTool_ActivatesSkillOnPathAccess(t *testing.T) {
+func TestReadTool_ActivatesSkillOnPathAccess(t *testing.T) {
 	// Create a skill directory under .jenny/skills/
 	tmpDir := t.TempDir()
 	skillDir := filepath.Join(tmpDir, constants.ProjectDirName, "skills", "my-skill")
@@ -77,10 +77,10 @@ func TestAC1_ReadTool_ActivatesSkillOnPathAccess(t *testing.T) {
 	if !strings.Contains(stdout, `"path":"`+strings.ReplaceAll(fileInSkillDir, "\\", "\\\\")+`"`) {
 		t.Errorf("expected file path in event, got: %s", stdout)
 	}
-	t.Logf("AC1 PASS: ReadTool emitted skill_activated event: %s", stdout)
+	t.Logf("PASS: ReadTool emitted skill_activated event: %s", stdout)
 }
 
-func TestAC1_WriteTool_ActivatesSkillOnPathAccess(t *testing.T) {
+func TestWriteTool_ActivatesSkillOnPathAccess(t *testing.T) {
 	// Create a skill directory
 	tmpDir := t.TempDir()
 	skillDir := filepath.Join(tmpDir, constants.ProjectDirName, "skills", "my-skill")
@@ -134,10 +134,10 @@ func TestAC1_WriteTool_ActivatesSkillOnPathAccess(t *testing.T) {
 	if !strings.Contains(stdout, `"skill":"my-skill"`) {
 		t.Errorf("expected skill name in event, got: %s", stdout)
 	}
-	t.Logf("AC1 PASS: WriteTool emitted skill_activated event: %s", stdout)
+	t.Logf("PASS: WriteTool emitted skill_activated event: %s", stdout)
 }
 
-func TestAC1_EditTool_ActivatesSkillOnPathAccess(t *testing.T) {
+func TestEditTool_ActivatesSkillOnPathAccess(t *testing.T) {
 	tmpDir := t.TempDir()
 	skillDir := filepath.Join(tmpDir, constants.ProjectDirName, "skills", "my-skill")
 	if err := os.MkdirAll(skillDir, 0755); err != nil {
@@ -186,14 +186,14 @@ func TestAC1_EditTool_ActivatesSkillOnPathAccess(t *testing.T) {
 	if !strings.Contains(stdout, `"skill":"my-skill"`) {
 		t.Errorf("expected skill name in event, got: %s", stdout)
 	}
-	t.Logf("AC1 PASS: EditTool emitted skill_activated event: %s", stdout)
+	t.Logf("PASS: EditTool emitted skill_activated event: %s", stdout)
 }
 
 // ============================================================================
-// AC2: Conditional activation on glob match
+// Conditional activation on glob match
 // ============================================================================
 
-func TestAC2_ReadTool_GlobActivatesOnMatchingPath(t *testing.T) {
+func TestReadTool_GlobActivatesOnMatchingPath(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create skill with activation_glob in frontmatter
@@ -260,10 +260,10 @@ Helps with Markdown files.
 	if !strings.Contains(stdout, `"skill":"markdown-helper"`) {
 		t.Errorf("expected skill 'markdown-helper' in event, got: %s", stdout)
 	}
-	t.Logf("AC2 PASS: Glob-matched skill activated: %s", stdout)
+	t.Logf("PASS: Glob-matched skill activated: %s", stdout)
 }
 
-func TestAC2_ReadTool_GlobDoesNotActivateOnNonMatchingPath(t *testing.T) {
+func TestReadTool_GlobDoesNotActivateOnNonMatchingPath(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	skillDir := filepath.Join(tmpDir, constants.ProjectDirName, "skills", "markdown-helper")
@@ -316,10 +316,10 @@ activation_glob: "**/*.md"
 	if strings.Contains(stdout, `{"type":"skill_activated"`) {
 		t.Errorf("expected NO skill_activated for non-matching path, got: %s", stdout)
 	}
-	t.Logf("AC2 PASS: No activation for non-matching glob path")
+	t.Logf("PASS: No activation for non-matching glob path")
 }
 
-func TestAC2_SkillWithoutGlob_OnlyActivatesWithinRoot(t *testing.T) {
+func TestSkillWithoutGlob_OnlyActivatesWithinRoot(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Skill without activation_glob
@@ -366,7 +366,7 @@ func TestAC2_SkillWithoutGlob_OnlyActivatesWithinRoot(t *testing.T) {
 	if !strings.Contains(stdout, `{"type":"skill_activated"`) {
 		t.Errorf("expected skill_activated for path within root, got: %s", stdout)
 	} else {
-		t.Logf("AC2 PASS: Skill without glob activates within root dir")
+		t.Logf("PASS: Skill without glob activates within root dir")
 	}
 
 	// Test 2: Access outside skill root => should NOT activate
@@ -387,26 +387,26 @@ func TestAC2_SkillWithoutGlob_OnlyActivatesWithinRoot(t *testing.T) {
 	if strings.Contains(stdout, `{"type":"skill_activated"`) {
 		t.Errorf("expected NO skill_activated for path outside root without glob, got: %s", stdout)
 	} else {
-		t.Logf("AC2 PASS: Skill without glob does NOT activate outside root")
+		t.Logf("PASS: Skill without glob does NOT activate outside root")
 	}
 }
 
 // ============================================================================
-// AC3: MCP prompts not invokable as skills
+// MCP prompts not invokable as skills
 // ============================================================================
 
-func TestAC3_MCPExclusion_ArchitecturalInvariant(t *testing.T) {
-	// AC3: MCP prompts not invokable as skills (architectural invariant)
+func TestMCPExclusion_ArchitecturalInvariant(t *testing.T) {
+	// MCP prompts not invokable as skills (architectural invariant)
 	// MCP prompts don't have SKILL.md files, so skills.Discover() never returns them.
-	t.Log("AC3: Architectural invariant - MCP prompts lack SKILL.md files, Discover() never returns them")
+	t.Log("Architectural invariant - MCP prompts lack SKILL.md files, Discover() never returns them")
 }
 
 // ============================================================================
-// AC4: Bare mode skips skill discovery
+// Bare mode skips skill discovery
 // ============================================================================
 
-func TestAC4_BareMode_NoSkillTool(t *testing.T) {
-	// AC4: Bare mode skips skill discovery
+func TestBareMode_NoSkillTool(t *testing.T) {
+	// Bare mode skips skill discovery
 	// When bare mode is active, no skill_activated events should occur
 	tmpDir := t.TempDir()
 	skillDir := filepath.Join(tmpDir, constants.ProjectDirName, "skills", "test-skill")
@@ -467,7 +467,7 @@ func TestAC4_BareMode_NoSkillTool(t *testing.T) {
 	if strings.Contains(stdout, `{"type":"skill_activated"`) {
 		t.Errorf("expected NO skill_activated event in bare mode, got: %s", stdout)
 	} else {
-		t.Logf("AC4 PASS: No skill_activated event in bare mode")
+		t.Logf("PASS: No skill_activated event in bare mode")
 	}
 }
 

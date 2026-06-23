@@ -15,7 +15,7 @@ func TestCommandGate_CheckCommand(t *testing.T) {
 		wantErr bool
 		errMsg  string
 	}{
-		// AC1: Command substitution blocked
+		// Command substitution blocked
 		{
 			name:    "command substitution with $(cat /etc/passwd)",
 			command: "$(cat /etc/passwd)",
@@ -91,7 +91,7 @@ func TestCommandGate_CheckCommand(t *testing.T) {
 			errMsg:  "carriage return",
 		},
 
-		// AC3: Git injection blocked
+		// Git injection blocked
 		{
 			name:    "git -c injection",
 			command: "git -c core.gitProxy=evil log",
@@ -173,7 +173,7 @@ func TestCommandGate_CheckPipelineSegments(t *testing.T) {
 		wantErr bool
 		errMsg  string
 	}{
-		// AC2: Read-only pipeline validation
+		// Read-only pipeline validation
 		{
 			name:    "pipeline with mutating final segment",
 			command: "echo ok | rm -rf /",
@@ -265,7 +265,7 @@ func TestCommandGate_CheckDevicePath(t *testing.T) {
 		wantErr bool
 		errMsg  string
 	}{
-		// AC5: Device paths blocked
+		// Device paths blocked
 		{
 			name:    "/dev/urandom blocked",
 			path:    "/dev/urandom",
@@ -417,9 +417,9 @@ func TestIsSegmentReadOnly(t *testing.T) {
 	}
 }
 
-// TestAC5_SecurityGateErrorMessages verifies error messages use "for security reasons"
+// TestSecurityGateErrorMessages verifies error messages use "for security reasons"
 // instead of "in read-only mode".
-func TestAC5_SecurityGateErrorMessages(t *testing.T) {
+func TestSecurityGateErrorMessages(t *testing.T) {
 	gate := NewCommandGate(PermissionEdit)
 
 	// Redirection should say "for security reasons"

@@ -39,7 +39,7 @@ func TestWebFetchTool_NameAndDescription(t *testing.T) {
 	}
 }
 
-func TestWebFetchTool_AC5_CredentialsInURL(t *testing.T) {
+func TestWebFetchTool_CredentialsInURL(t *testing.T) {
 	tool := NewWebFetchTool()
 	ctx := context.Background()
 
@@ -57,7 +57,7 @@ func TestWebFetchTool_AC5_CredentialsInURL(t *testing.T) {
 	}
 }
 
-func TestWebFetchTool_AC5_InvalidScheme(t *testing.T) {
+func TestWebFetchTool_InvalidScheme(t *testing.T) {
 	tool := NewWebFetchTool()
 	ctx := context.Background()
 
@@ -75,7 +75,7 @@ func TestWebFetchTool_AC5_InvalidScheme(t *testing.T) {
 	}
 }
 
-func TestWebFetchTool_AC5_URLTooLong(t *testing.T) {
+func TestWebFetchTool_URLTooLong(t *testing.T) {
 	tool := NewWebFetchTool()
 	ctx := context.Background()
 
@@ -95,7 +95,7 @@ func TestWebFetchTool_AC5_URLTooLong(t *testing.T) {
 	}
 }
 
-func TestWebFetchTool_AC3_BlocklistLocalhost(t *testing.T) {
+func TestWebFetchTool_BlocklistLocalhost(t *testing.T) {
 	tool := NewWebFetchTool()
 	ctx := context.Background()
 
@@ -113,7 +113,7 @@ func TestWebFetchTool_AC3_BlocklistLocalhost(t *testing.T) {
 	}
 }
 
-func TestWebFetchTool_AC3_BlocklistPrivateIP(t *testing.T) {
+func TestWebFetchTool_BlocklistPrivateIP(t *testing.T) {
 	tool := NewWebFetchTool()
 	ctx := context.Background()
 	tests := []struct {
@@ -140,7 +140,7 @@ func TestWebFetchTool_AC3_BlocklistPrivateIP(t *testing.T) {
 	}
 }
 
-func TestWebFetchTool_AC3_PublicDomainAllowed(t *testing.T) {
+func TestWebFetchTool_PublicDomainAllowed(t *testing.T) {
 	// This test validates that a public domain passes the blocklist check.
 	// It will attempt DNS resolution, so it may fail in offline environments.
 	tool := NewWebFetchTool()
@@ -308,7 +308,7 @@ func TestWebFetchTool_RawHTMLNoConversion(t *testing.T) {
 	}
 }
 
-func TestWebFetchTool_AC2_MarkdownCap(t *testing.T) {
+func TestWebFetchTool_MarkdownCap(t *testing.T) {
 	tool := NewWebFetchTool()
 
 	// Generate HTML long enough to exceed the 128K content cap.

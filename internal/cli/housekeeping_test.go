@@ -119,21 +119,21 @@ func TestNoDeadCleanCompactHelpers(t *testing.T) {
 		}
 		content := readFileOrFail(t, p)
 		if re.Match(content) {
-			t.Errorf("AC1: dead helper redefined in %s\n"+
+			t.Errorf("dead helper redefined in %s\n"+
 				"Delete it; shouldRunClean/shouldRunCompact in cmd/jenny/main.go "+
 				"is the single source of truth.", p)
 		}
 	}
 }
 
-// TestAC2_CleanCompactDetectionLivesInMain encodes AC2: shouldRunClean and
+// TestCleanCompactDetectionLivesInMain encodes: shouldRunClean and
 // shouldRunCompact are defined in cmd/jenny/main.go, and no other Go
 // file in the tree mentions these identifiers.
 //
 // Note: this test enforces the spec literally — "the only file that
 // mentions those identifiers is `cmd/jenny/main.go`". If the helpers are
 // renamed, update this test and the corresponding callsite together.
-func TestAC2_CleanCompactDetectionLivesInMain(t *testing.T) {
+func TestCleanCompactDetectionLivesInMain(t *testing.T) {
 	root := repoRoot(t)
 	mainPath := filepath.Join(root, "cmd", "jenny", "main.go")
 	mainContent := readFileOrFail(t, mainPath)
@@ -147,7 +147,7 @@ func TestAC2_CleanCompactDetectionLivesInMain(t *testing.T) {
 	}
 	for _, frag := range mustContain {
 		if !bytes.Contains(mainContent, []byte(frag)) {
-			t.Errorf("AC2: cmd/jenny/main.go missing %q", frag)
+			t.Errorf("cmd/jenny/main.go missing %q", frag)
 		}
 	}
 
@@ -164,7 +164,7 @@ func TestAC2_CleanCompactDetectionLivesInMain(t *testing.T) {
 		content := readFileOrFail(t, p)
 		for _, ident := range []string{"shouldRunClean", "shouldRunCompact"} {
 			if bytes.Contains(content, []byte(ident)) {
-				t.Errorf("AC2: %s mentions %s; "+
+				t.Errorf("%s mentions %s; "+
 					"this identifier must live only in cmd/jenny/main.go",
 					p, ident)
 			}
@@ -172,10 +172,10 @@ func TestAC2_CleanCompactDetectionLivesInMain(t *testing.T) {
 	}
 }
 
-// TestAC3_CleanCompactDocFrontMatter encodes AC3: docs/arch/clean-compact.md
+// TestCleanCompactDocFrontMatter encodes: docs/arch/clean-compact.md
 // must contain `status: done`, `spec: complete`, and `code: complete`,
 // and no other status:/spec:/code: line.
-func TestAC3_CleanCompactDocFrontMatter(t *testing.T) {
+func TestCleanCompactDocFrontMatter(t *testing.T) {
 	root := repoRoot(t)
 	docPath := filepath.Join(root, "docs", "arch", "clean-compact.md")
 	content := readFileOrFail(t, docPath)
@@ -195,7 +195,7 @@ func TestAC3_CleanCompactDocFrontMatter(t *testing.T) {
 			}
 			got := strings.TrimSpace(strings.TrimPrefix(line, prefix))
 			if got != expectedValue {
-				t.Errorf("AC3: line %q has %q, want %q",
+				t.Errorf("line %q has %q, want %q",
 					line, prefix+" "+got, prefix+" "+expectedValue)
 			}
 		}
@@ -205,19 +205,19 @@ func TestAC3_CleanCompactDocFrontMatter(t *testing.T) {
 	}
 }
 
-// TestAC4_CleanCompactDocHasEofNewline encodes AC4:
-// docs/arch/clean-compact.md must end with a single LF (0x0a) so POSIX
-// text-file tools (wc -l, git diff, markdownlint) behave deterministically.
-func TestAC4_CleanCompactDocHasEofNewline(t *testing.T) {
+// TestCleanCompactDocHasEofNewline encodes: docs/arch/clean-compact.md must
+// end with a single LF (0x0a) so POSIX text-file tools (wc -l, git diff,
+// markdownlint) behave deterministically.
+func TestCleanCompactDocHasEofNewline(t *testing.T) {
 	root := repoRoot(t)
 	docPath := filepath.Join(root, "docs", "arch", "clean-compact.md")
 	content := readFileOrFail(t, docPath)
 
 	if len(content) == 0 {
-		t.Fatal("AC4: docs/arch/clean-compact.md is empty")
+		t.Fatal("docs/arch/clean-compact.md is empty")
 	}
 	if content[len(content)-1] != '\n' {
-		t.Errorf("AC4: docs/arch/clean-compact.md does not end with LF "+
+		t.Errorf("docs/arch/clean-compact.md does not end with LF "+
 			"(last byte is 0x%02x); append a trailing newline",
 			content[len(content)-1])
 	}

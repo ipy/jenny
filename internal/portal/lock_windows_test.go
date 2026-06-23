@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestAC1_WindowsFlock(t *testing.T) {
+func TestWindowsFlock(t *testing.T) {
 	tmpDir := t.TempDir()
 	lockPath := filepath.Join(tmpDir, "test.lock")
 

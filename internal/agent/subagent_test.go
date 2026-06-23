@@ -298,7 +298,7 @@ func TestSubagentType_InvalidTypeError(t *testing.T) {
 	}
 }
 
-func TestLocalSubagentRunner_AC1_InvalidTypeError(t *testing.T) {
+func TestLocalSubagentRunner_InvalidTypeError(t *testing.T) {
 	client, cleanup := newMockClient(t)
 	defer cleanup()
 
@@ -335,7 +335,7 @@ func TestLocalSubagentRunner_AC1_InvalidTypeError(t *testing.T) {
 	}
 }
 
-func TestLocalSubagentRunner_AC3_ParameterPassthrough(t *testing.T) {
+func TestLocalSubagentRunner_ParameterPassthrough(t *testing.T) {
 	// Test that parameters are forwarded correctly
 	client, cleanup := newMockClient(t)
 	defer cleanup()
@@ -357,7 +357,7 @@ func TestLocalSubagentRunner_AC3_ParameterPassthrough(t *testing.T) {
 	// If we get here without panic, the params were at least parsed correctly
 }
 
-func TestLocalSubagentRunner_AC4_SubagentLifecycle(t *testing.T) {
+func TestLocalSubagentRunner_SubagentLifecycle(t *testing.T) {
 	// Test that subagent runs in its own context
 	client, cleanup := newMockClient(t)
 	defer cleanup()
@@ -384,7 +384,7 @@ func TestLocalSubagentRunner_AC4_SubagentLifecycle(t *testing.T) {
 	}
 }
 
-func TestAsyncSubagentRunner_AC2_AsyncLaunch(t *testing.T) {
+func TestAsyncSubagentRunner_AsyncLaunch(t *testing.T) {
 	client, cleanup := newMockClient(t)
 	defer cleanup()
 
@@ -416,7 +416,7 @@ func TestAsyncSubagentRunner_AC2_AsyncLaunch(t *testing.T) {
 	}
 }
 
-func TestLocalSubagentRunner_AC4_StreamConfigPropagation(t *testing.T) {
+func TestLocalSubagentRunner_StreamConfigPropagation(t *testing.T) {
 	client, cleanup := newMockClient(t)
 	defer cleanup()
 

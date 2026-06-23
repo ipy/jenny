@@ -153,7 +153,7 @@ func (tm *TaskManager) CancelKillTimer(taskID string) {
 }
 
 // Stop terminates a running task using SIGTERM then SIGKILL after 5s.
-// AC1+AC2: SIGKILL timer is stored and cancellable; state remains Running
+// SIGKILL timer is stored and cancellable; state remains Running
 // until timer fires so the escalation path is not blocked.
 func (tm *TaskManager) Stop(taskID string) error {
 	tm.mu.Lock()

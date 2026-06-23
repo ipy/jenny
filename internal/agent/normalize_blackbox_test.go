@@ -385,8 +385,8 @@ func TestNonMediaError(t *testing.T) {
 	t.Log("PASS: non-media errors pass through unchanged")
 }
 
-// TestStripMediaErrorFromMessage verifies offending tool_result is stripped.
-func TestStripMediaErrorFromMessage(t *testing.T) {
+// TestStripMediaErrorFromMessage_Blackbox verifies offending tool_result is stripped.
+func TestStripMediaErrorFromMessage_Blackbox(t *testing.T) {
 	msg := &api.Message{
 		Role: "user",
 		ToolResults: []api.ToolResultBlock{

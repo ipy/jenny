@@ -18,7 +18,7 @@ type Registry struct {
 	enabled                map[string]bool
 	permissionLevel        PermissionLevel
 	hasBaseTools           bool
-	strictMCP              bool // AC3: when true, suppress all built-in tools
+	strictMCP              bool // When true, suppress all built-in tools
 	readCache              *ReadFileCache
 	sandbox                sandbox.SandboxManager
 	webFetchEnabled        bool
@@ -231,7 +231,7 @@ func (r *Registry) Build() []Tool {
 	seen := make(map[string]int) // name -> index
 	var result []Tool
 
-	// AC3: --strict-mcp-config suppresses all built-in tools. MCP tools (added
+	// Strict mode configuration suppresses all built-in tools. MCP tools (added
 	// below from r.mcpTools) still flow through. Skip the base-tools block
 	// entirely so neither the base set nor the optional add-ons (WebFetch,
 	// WebSearch, etc.) appear in the result.

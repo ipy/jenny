@@ -11,8 +11,8 @@ import (
 	"github.com/ipy/jenny/internal/constants"
 )
 
-// TestWriteTool_AC1_NoPriorRead tests that Write without prior Read fails.
-func TestWriteTool_AC1_NoPriorRead(t *testing.T) {
+// TestWriteTool_NoPriorRead tests that Write without prior Read fails.
+func TestWriteTool_NoPriorRead(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	writeTool := NewWriteTool(readCache)
@@ -35,8 +35,8 @@ func TestWriteTool_AC1_NoPriorRead(t *testing.T) {
 	}
 }
 
-// TestWriteTool_AC1_NoPriorReadThenReadWorks tests that Read then Write works.
-func TestWriteTool_AC1_ReadThenWriteWorks(t *testing.T) {
+// TestWriteTool_ReadThenWriteWorks tests that Read then Write works.
+func TestWriteTool_ReadThenWriteWorks(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	readTool := NewReadTool(PermissionEdit, readCache)
@@ -73,8 +73,8 @@ func TestWriteTool_AC1_ReadThenWriteWorks(t *testing.T) {
 	}
 }
 
-// TestWriteTool_AC2_StaleMtime tests that stale mtime fails before write.
-func TestWriteTool_AC2_StaleMtime(t *testing.T) {
+// TestWriteTool_StaleMtime tests that stale mtime fails before write.
+func TestWriteTool_StaleMtime(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	readTool := NewReadTool(PermissionEdit, readCache)
@@ -118,8 +118,8 @@ func TestWriteTool_AC2_StaleMtime(t *testing.T) {
 	}
 }
 
-// TestWriteTool_AC3_ParentDirs verifies parent directory creation works.
-func TestWriteTool_AC3_ParentDirs(t *testing.T) {
+// TestWriteTool_ParentDirs verifies parent directory creation works.
+func TestWriteTool_ParentDirs(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	readTool := NewReadTool(PermissionEdit, readCache)
@@ -131,7 +131,7 @@ func TestWriteTool_AC3_ParentDirs(t *testing.T) {
 
 	// Verify parent dirs don't exist (this is the test precondition)
 	if _, err := os.Stat(deepDir); err == nil || !os.IsNotExist(err) {
-		t.Fatalf("parent directory should not exist for AC3 test: %v", err)
+		t.Fatalf("parent directory should not exist for parent dirs test: %v", err)
 	}
 
 	// Create and read a file at the deep path (this creates the parents)
@@ -180,8 +180,8 @@ func TestWriteTool_AC3_ParentDirs(t *testing.T) {
 	}
 }
 
-// TestWriteTool_AC4_PatchDiff tests that the result includes a success message.
-func TestWriteTool_AC4_PatchDiff(t *testing.T) {
+// TestWriteTool_PatchDiff tests that the result includes a success message.
+func TestWriteTool_PatchDiff(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	readTool := NewReadTool(PermissionEdit, readCache)
@@ -225,8 +225,8 @@ func TestWriteTool_AC4_PatchDiff(t *testing.T) {
 	}
 }
 
-// TestWriteTool_AC5_CacheUpdated tests that second write succeeds without re-read.
-func TestWriteTool_AC5_CacheUpdated(t *testing.T) {
+// TestWriteTool_CacheUpdated tests that second write succeeds without re-read.
+func TestWriteTool_CacheUpdated(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	readTool := NewReadTool(PermissionEdit, readCache)

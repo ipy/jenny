@@ -11,7 +11,7 @@ import (
 	"github.com/ipy/jenny/internal/tool"
 )
 
-func TestWebFetch_AC1_BodyTruncation(t *testing.T) {
+func TestWebFetch_BodyTruncation(t *testing.T) {
 	// Start a server that returns > 128 KB of data.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Return 200 KB of 'a' characters.
@@ -44,7 +44,7 @@ func TestWebFetch_AC1_BodyTruncation(t *testing.T) {
 	}
 }
 
-func TestWebFetch_AC2_MarkdownCap(t *testing.T) {
+func TestWebFetch_MarkdownCap(t *testing.T) {
 	// Start a server that returns HTML that will produce > 128K chars of markdown.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
@@ -79,7 +79,7 @@ func TestWebFetch_AC2_MarkdownCap(t *testing.T) {
 	}
 }
 
-func TestWebFetch_AC3_BlocklistLocalhost(t *testing.T) {
+func TestWebFetch_BlocklistLocalhost(t *testing.T) {
 	fetchTool := tool.NewWebFetchTool()
 	ctx := context.Background()
 
@@ -98,7 +98,7 @@ func TestWebFetch_AC3_BlocklistLocalhost(t *testing.T) {
 	}
 }
 
-func TestWebFetch_AC4_CrossHostRedirect(t *testing.T) {
+func TestWebFetch_CrossHostRedirect(t *testing.T) {
 	// Start a server that redirects to a different host.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Location", "http://other.example.com/page")
@@ -126,7 +126,7 @@ func TestWebFetch_AC4_CrossHostRedirect(t *testing.T) {
 	}
 }
 
-func TestWebFetch_AC4_SameHostRedirect(t *testing.T) {
+func TestWebFetch_SameHostRedirect(t *testing.T) {
 	// Start a server that redirects to the same host.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/final" {
@@ -156,7 +156,7 @@ func TestWebFetch_AC4_SameHostRedirect(t *testing.T) {
 	}
 }
 
-func TestWebFetch_AC5_CredentialsRejected(t *testing.T) {
+func TestWebFetch_CredentialsRejected(t *testing.T) {
 	fetchTool := tool.NewWebFetchTool()
 	ctx := context.Background()
 

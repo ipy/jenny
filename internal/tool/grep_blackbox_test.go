@@ -12,7 +12,7 @@ import (
 	"github.com/ipy/jenny/internal/tool"
 )
 
-func TestBlackBox_AC1_HeadLimit(t *testing.T) {
+func TestBlackBox_HeadLimit(t *testing.T) {
 	tmpDir := t.TempDir()
 	// Create 310 files with matching content
 	for i := range 310 {
@@ -55,7 +55,7 @@ func TestBlackBox_AC1_HeadLimit(t *testing.T) {
 		t.Errorf("expected >250 results with head_limit=0, got %d", len(lines))
 	}
 }
-func TestBlackBox_AC2_DashPattern(t *testing.T) {
+func TestBlackBox_DashPattern(t *testing.T) {
 	tmpDir := t.TempDir()
 	// Create file with literal "-foo"
 	if err := os.WriteFile(filepath.Join(tmpDir, "matches.txt"), []byte("-foo"), 0644); err != nil {
@@ -85,7 +85,7 @@ func TestBlackBox_AC2_DashPattern(t *testing.T) {
 		t.Errorf("-foo should NOT match file containing 'bar', got: %s", result.Content)
 	}
 }
-func TestBlackBox_AC3_Timeout(t *testing.T) {
+func TestBlackBox_Timeout(t *testing.T) {
 	tools := tool.NewGrepTool()
 	// Test 1: timeout=0 (as float64) with a search that requires scanning many files.
 	// The timeout value flows through as float64 (matching JSON decode behavior).
@@ -114,7 +114,7 @@ func TestBlackBox_AC3_Timeout(t *testing.T) {
 	}
 	t.Errorf("expected timeout error with timeout=0, got success result")
 }
-func TestBlackBox_AC4_OutputCap(t *testing.T) {
+func TestBlackBox_OutputCap(t *testing.T) {
 	tmpDir := t.TempDir()
 	// Single file with many lines that match, exceeding 20K chars
 	var sb strings.Builder
@@ -147,7 +147,7 @@ func TestBlackBox_AC4_OutputCap(t *testing.T) {
 		t.Errorf("output too long: %d chars (should be capped ~20K)", len(result.Content))
 	}
 }
-func TestBlackBox_AC5_VCSExcluded(t *testing.T) {
+func TestBlackBox_VCSExcluded(t *testing.T) {
 	tmpDir := t.TempDir()
 	// .git/objects tree with matching content
 	gitObjs := filepath.Join(tmpDir, ".git", "objects")

@@ -26,7 +26,7 @@ func TestPowerShellToolExecute(t *testing.T) {
 		if tool.InputSchema() == nil {
 			t.Error("expected non-nil InputSchema")
 		}
-		t.Log("AC2 PASS: PowerShellTool struct is valid on non-Windows (powershell.exe not available)")
+		t.Log("PASS: PowerShellTool struct is valid on non-Windows (powershell.exe not available)")
 		return
 	}
 
@@ -52,7 +52,7 @@ func TestPowerShellToolExecute(t *testing.T) {
 	if actual != expected {
 		t.Errorf("expected %q, got %q", expected, actual)
 	}
-	t.Log("AC2 PASS: PowerShellTool.Execute returns UTF-8 output")
+	t.Log("PASS: PowerShellTool.Execute returns UTF-8 output")
 }
 
 // TestPowerShellToolBackground tests background execution.
@@ -81,5 +81,5 @@ func TestPowerShellToolBackground(t *testing.T) {
 	if result.OutputFile == "" {
 		t.Error("expected non-empty output file for background task")
 	}
-	t.Log("AC2 PASS: PowerShellTool background execution works")
+	t.Log("PASS: PowerShellTool background execution works")
 }

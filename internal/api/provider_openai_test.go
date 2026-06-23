@@ -13,7 +13,7 @@ import (
 
 // ---------------------------------------------------------------------------
 // TestOpenAIProvider_ChatBasic tests basic Chat API response
-// AC3: OpenAI Chat backend is selectable
+// OpenAI Chat backend is selectable
 // ---------------------------------------------------------------------------
 
 func TestOpenAIProvider_ChatBasic(t *testing.T) {
@@ -115,7 +115,7 @@ func TestOpenAIProvider_ChatBasic(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 // TestOpenAIProvider_ChatWithTools tests tool_calls handling
-// AC4: OpenAI Chat roundtrip with tools
+// OpenAI Chat roundtrip with tools
 // ---------------------------------------------------------------------------
 
 func TestOpenAIProvider_ChatWithTools(t *testing.T) {
@@ -221,7 +221,7 @@ func TestOpenAIProvider_ChatWithTools(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 // TestOpenAIProvider_ChatStream tests streaming response
-// AC3: Streaming support
+// Streaming support
 // ---------------------------------------------------------------------------
 
 func TestOpenAIProvider_ChatStream(t *testing.T) {
@@ -307,7 +307,7 @@ func TestOpenAIProvider_EnvPrecedence(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 // TestOpenAIProvider_NoOpenAIEnv tests that Anthropic is used without OPENAI vars
-// AC2: Anthropic backend unchanged when OPENAI_BASE_URL not set
+// Anthropic backend unchanged when OPENAI_BASE_URL not set
 // ---------------------------------------------------------------------------
 
 func TestOpenAIProvider_NoOpenAIEnv(t *testing.T) {
@@ -764,7 +764,7 @@ func TestOpenAIProvider_StreamingCachedTokens(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// TestOpenAIProvider_ReasoningContentRoundTrip tests AC4: reasoning_content
+// TestOpenAIProvider_ReasoningContentRoundTrip tests reasoning_content
 // round-trip for multi-turn OpenAI Chat conversations
 // ---------------------------------------------------------------------------
 
@@ -859,7 +859,7 @@ func TestOpenAIProvider_ReasoningContentRoundTrip(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 // TestOpenAIResponsesProvider_Basic tests basic Responses API response
-// AC1: Responses API selection via OPENAI_WIRE_API=responses
+// Responses API selection via OPENAI_WIRE_API=responses
 // ---------------------------------------------------------------------------
 
 func TestOpenAIResponsesProvider_Basic(t *testing.T) {
@@ -942,7 +942,7 @@ func TestOpenAIResponsesProvider_Basic(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 // TestOpenAIResponsesProvider_ReasoningEffort tests reasoning effort config
-// AC2: --effort flag maps to reasoning_config.effort
+// --effort flag maps to reasoning_config.effort
 // ---------------------------------------------------------------------------
 
 func TestOpenAIResponsesProvider_ReasoningEffort(t *testing.T) {
@@ -1026,7 +1026,7 @@ func TestOpenAIResponsesProvider_ReasoningEffort(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 // TestOpenAIResponsesProvider_ToolCalls tests Responses API with tools
-// AC1: Responses API handles tool calls correctly
+// Responses API handles tool calls correctly
 // ---------------------------------------------------------------------------
 
 func TestOpenAIResponsesProvider_ToolCalls(t *testing.T) {
@@ -1193,7 +1193,7 @@ func TestOpenAIProvider_ReasoningEffortChat(t *testing.T) {
 
 // ---------------------------------------------------------------------------
 // TestOpenAIProvider_DeepSeekThinking tests DeepSeek-specific thinking mode
-// AC2: DeepSeek models get extra_body: {"thinking": {"type": "enabled"}}
+// DeepSeek models get extra_body: {"thinking": {"type": "enabled"}}
 // ---------------------------------------------------------------------------
 
 func TestOpenAIProvider_DeepSeekThinking(t *testing.T) {

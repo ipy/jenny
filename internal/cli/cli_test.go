@@ -57,7 +57,7 @@ func TestParsePFlag(t *testing.T) {
 	}
 }
 
-// AC8: -p may be specified multiple times; values are joined with newlines.
+// -p may be specified multiple times; values are joined with newlines.
 func TestParseMultiplePFlags(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
@@ -498,7 +498,7 @@ func TestParseMCPConfigNoFlag(t *testing.T) {
 }
 
 func TestParseFeatureFlagsRemoved(t *testing.T) {
-	// AC: --ff / --feature-flags no longer exist. Verify they are rejected.
+	// --ff / --feature-flags no longer exist. Verify they are rejected.
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
@@ -541,7 +541,7 @@ func TestStreamMessageToolInputUsesInputKey(t *testing.T) {
 	}
 }
 
-// TestStreamMessageHasNoKindField verifies AC1: stream-json events do NOT include
+// TestStreamMessageHasNoKindField verifies stream-json events do NOT include
 // the 'kind' field. Per spec: 'kind' is a jenny extension not present in Claude
 // Code's SDK format, so it should be absent from all event types.
 func TestStreamMessageHasNoKindField(t *testing.T) {
@@ -572,17 +572,17 @@ func TestStreamMessageHasNoKindField(t *testing.T) {
 				t.Fatalf("json.Unmarshal failed: %v", err)
 			}
 
-			// AC1: 'kind' field should NOT be present
+			// 'kind' field should NOT be present
 			if _, hasKind := parsed["kind"]; hasKind {
-				t.Errorf("AC1 FAIL: 'kind' key found in JSON output for event type %q, got: %s", tt.eventType, string(data))
+				t.Errorf("FAIL: 'kind' key found in JSON output for event type %q, got: %s", tt.eventType, string(data))
 			} else {
-				t.Logf("AC1 PASS: event type %q does not have 'kind' field", tt.eventType)
+				t.Logf("PASS: event type %q does not have 'kind' field", tt.eventType)
 			}
 		})
 	}
 }
 
-// AC6: --help must print the usage block exactly once.
+// --help must print the usage block exactly once.
 // Go's flag package invokes flags.Usage() itself when -h/--help is seen and
 // the flag is undefined; our cli.Parse used to call it again on flag.ErrHelp,
 // doubling the output. This subprocess test runs the test binary with -h

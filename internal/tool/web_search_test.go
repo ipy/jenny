@@ -102,7 +102,7 @@ func TestWebSearchTool_NameAndDescription(t *testing.T) {
 	}
 }
 
-func TestWebSearchTool_AC2_QueryMinLength(t *testing.T) {
+func TestWebSearchTool_QueryMinLength(t *testing.T) {
 	tool := newTestWebSearchTool()
 	ctx := context.Background()
 
@@ -137,7 +137,7 @@ func TestWebSearchTool_AC2_QueryMinLength(t *testing.T) {
 	}
 }
 
-func TestWebSearchTool_AC3_MutualExclusion(t *testing.T) {
+func TestWebSearchTool_MutualExclusion(t *testing.T) {
 	tool := newTestWebSearchTool()
 	ctx := context.Background()
 
@@ -182,7 +182,7 @@ func TestWebSearchTool_AC3_MutualExclusion(t *testing.T) {
 	}
 }
 
-func TestWebSearchTool_AC1_Name(t *testing.T) {
+func TestWebSearchTool_Name(t *testing.T) {
 	tool := newTestWebSearchTool()
 	if tool.Name() != "web_search" {
 		t.Errorf("expected 'web_search', got %q", tool.Name())
@@ -393,8 +393,8 @@ func TestWebSearchTool_ConfigDriven(t *testing.T) {
 	})
 }
 
-// TestWebSearchTool_AC5_ServerErrorCodes tests that Execute() handles various inputs without crashing.
-func TestWebSearchTool_AC5_ServerErrorCodes(t *testing.T) {
+// TestWebSearchTool_ServerErrorCodes tests that Execute() handles various inputs without crashing.
+func TestWebSearchTool_ServerErrorCodes(t *testing.T) {
 	tool := newTestWebSearchTool()
 	ctx := context.Background()
 

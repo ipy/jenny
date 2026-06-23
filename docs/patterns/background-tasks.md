@@ -24,7 +24,7 @@ Long-running shell and agent tasks tracked with progress, output files, and pare
 - Progress events emitted after ~2s.
 - Output written to `.jenny/.../tasks/<id>.output` (append mode).
 - Commands exceeding 120s in foreground receive a tip suggesting `run_in_background: true`.
-- `sleep >=2` is disallowed in foreground mode; requires `run_in_background: true`.
+- `sleep >5` is disallowed in foreground mode; requires `run_in_background: true`.
 
 ## Agent Background
 

@@ -28,5 +28,5 @@ func TestCdTildeExpansion(t *testing.T) {
 		t.Errorf("expected %q, got %q", expected, result)
 	}
 
-	t.Log("AC4 PASS: parseCdTarget uses os.UserHomeDir() for tilde expansion")
+	t.Log("PASS: parseCdTarget uses os.UserHomeDir() for tilde expansion")
 }

@@ -11,8 +11,8 @@ import (
 	"time"
 )
 
-// TestNotebookEditTool_AC1_NonIpynbRejected tests that non-.ipynb files are rejected.
-func TestNotebookEditTool_AC1_NonIpynbRejected(t *testing.T) {
+// TestNotebookEditTool_NonIpynbRejected tests that non-.ipynb files are rejected.
+func TestNotebookEditTool_NonIpynbRejected(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	notebookTool := NewNotebookEditTool(readCache)
@@ -52,8 +52,8 @@ func TestNotebookEditTool_AC1_NonIpynbRejected(t *testing.T) {
 	}
 }
 
-// TestNotebookEditTool_AC1_NoPriorRead tests that editing without prior Read fails.
-func TestNotebookEditTool_AC1_NoPriorRead(t *testing.T) {
+// TestNotebookEditTool_NoPriorRead tests that editing without prior Read fails.
+func TestNotebookEditTool_NoPriorRead(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	notebookTool := NewNotebookEditTool(readCache)
@@ -85,8 +85,8 @@ func TestNotebookEditTool_AC1_NoPriorRead(t *testing.T) {
 	}
 }
 
-// TestNotebookEditTool_AC1_PartialReadRejected tests that partial read blocks edit.
-func TestNotebookEditTool_AC1_PartialReadRejected(t *testing.T) {
+// TestNotebookEditTool_PartialReadRejected tests that partial read blocks edit.
+func TestNotebookEditTool_PartialReadRejected(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	readTool := NewReadTool(PermissionEdit, readCache)
@@ -129,8 +129,8 @@ func TestNotebookEditTool_AC1_PartialReadRejected(t *testing.T) {
 	}
 }
 
-// TestNotebookEditTool_AC2_InsertRequiresCellType tests that insert requires cell_type.
-func TestNotebookEditTool_AC2_InsertRequiresCellType(t *testing.T) {
+// TestNotebookEditTool_InsertRequiresCellType tests that insert requires cell_type.
+func TestNotebookEditTool_InsertRequiresCellType(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	readTool := NewReadTool(PermissionEdit, readCache)
@@ -170,8 +170,8 @@ func TestNotebookEditTool_AC2_InsertRequiresCellType(t *testing.T) {
 	}
 }
 
-// TestNotebookEditTool_AC2_InsertValidCellType tests that insert works with valid cell_type.
-func TestNotebookEditTool_AC2_InsertValidCellType(t *testing.T) {
+// TestNotebookEditTool_InsertValidCellType tests that insert works with valid cell_type.
+func TestNotebookEditTool_InsertValidCellType(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	readTool := NewReadTool(PermissionEdit, readCache)
@@ -218,8 +218,8 @@ func TestNotebookEditTool_AC2_InsertValidCellType(t *testing.T) {
 	}
 }
 
-// TestNotebookEditTool_AC3_StalenessEnforced tests that stale mtime fails before edit.
-func TestNotebookEditTool_AC3_StalenessEnforced(t *testing.T) {
+// TestNotebookEditTool_StalenessEnforced tests that stale mtime fails before edit.
+func TestNotebookEditTool_StalenessEnforced(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	readTool := NewReadTool(PermissionEdit, readCache)
@@ -267,8 +267,8 @@ func TestNotebookEditTool_AC3_StalenessEnforced(t *testing.T) {
 	}
 }
 
-// TestNotebookEditTool_AC4_ValidJSONAfterEdit tests that edit produces valid JSON.
-func TestNotebookEditTool_AC4_ValidJSONAfterEdit(t *testing.T) {
+// TestNotebookEditTool_ValidJSONAfterEdit tests that edit produces valid JSON.
+func TestNotebookEditTool_ValidJSONAfterEdit(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	readTool := NewReadTool(PermissionEdit, readCache)
@@ -322,8 +322,8 @@ func TestNotebookEditTool_AC4_ValidJSONAfterEdit(t *testing.T) {
 	}
 }
 
-// TestNotebookEditTool_AC5_PostEditReadReturnsNewContent tests that Read returns updated content.
-func TestNotebookEditTool_AC5_PostEditReadReturnsNewContent(t *testing.T) {
+// TestNotebookEditTool_PostEditReadReturnsNewContent tests that Read returns updated content.
+func TestNotebookEditTool_PostEditReadReturnsNewContent(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	readTool := NewReadTool(PermissionEdit, readCache)

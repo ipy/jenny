@@ -190,11 +190,8 @@ func (c *MaxTokensController) earlyTurnBudget() TokenBudget {
 // thinkingBudget calculates the thinking token allocation based on complexity and turn state.
 func (c *MaxTokensController) thinkingBudget(cr *ComplexityResult, turn int, level ProgressLevel) int {
 	intensity := cr.ThinkingIntensity() // 1-5
-	// Base: 1K per intensity level, with model-proportional scaling
+	// Base: per intensity level, with model-proportional scaling
 	base := intensity * c.modelMax / 100
-	if base < 1024 {
-		base = 1024
-	}
 
 	// Reduce thinking budget at high progress levels (stuck = think less, act more)
 	switch level {
@@ -209,6 +206,12 @@ func (c *MaxTokensController) thinkingBudget(cr *ComplexityResult, turn int, lev
 	if base > maxThinking {
 		base = maxThinking
 	}
+
+	// Anthropic enforces a minimum of 1024 for budget_tokens.
+	if base < 1024 {
+		base = 1024
+	}
+
 	return base
 }
 

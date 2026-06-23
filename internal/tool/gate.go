@@ -35,7 +35,7 @@ func (g *CommandGate) CheckCommand(command string) error {
 		return nil
 	}
 
-	// Universal Windows Security (AC4)
+	// Universal Windows Security
 	if runtime.GOOS == "windows" {
 		winGate := NewWindowsCommandGate(g.permissionLevel)
 		if err := winGate.CheckCommand(command); err != nil {
@@ -346,7 +346,7 @@ func (g *CommandGate) CheckDevicePath(path string) error {
 		return nil
 	}
 
-	// Universal Windows Security (AC4)
+	// Universal Windows Security
 	if runtime.GOOS == "windows" {
 		winGate := NewWindowsCommandGate(g.permissionLevel)
 		if err := winGate.CheckPath(path); err != nil {

@@ -586,10 +586,10 @@ func TestTurnCounterIsAccurate(t *testing.T) {
 	}
 }
 
-// TestAC3_StreamJsonCallsSetOutput verifies that when stream-json mode is
+// TestStreamJsonCallsSetOutput verifies that when stream-json mode is
 // enabled (StreamConfig.Enabled = true), log.SetOutput(os.Stderr) is called
 // to redirect log output to stderr and prevent it from corrupting NDJSON on stdout.
-func TestAC3_StreamJsonCallsSetOutput(t *testing.T) {
+func TestStreamJsonCallsSetOutput(t *testing.T) {
 	// This test verifies that when stream-json mode is active, log output
 	// is redirected to stderr. This prevents debug/info logs from corrupting
 	// the NDJSON stream on stdout.
@@ -712,7 +712,7 @@ func TestAC3_StreamJsonCallsSetOutput(t *testing.T) {
 	log.SetOutput(os.Stderr)
 }
 
-// TestAC4_QueryEngineWireReadFileCache verifies that QueryEngine.WireReadFileCache
+// TestQueryEngineWireReadFileCache verifies that QueryEngine.WireReadFileCache
 // properly injects the ReadFileCache from StreamConfig into tools that support
 // read-before-write enforcement (Read, Write, Edit, NotebookEdit).
 //
@@ -722,7 +722,7 @@ func TestAC3_StreamJsonCallsSetOutput(t *testing.T) {
 //
 // The test verifies that after WireReadFileCache, the engine's tools have cacheB,
 // proving that the engine's wiring actually propagates the correct cache.
-func TestAC4_QueryEngineWireReadFileCache(t *testing.T) {
+func TestQueryEngineWireReadFileCache(t *testing.T) {
 	// Create two DISTINCT cache instances
 	cacheA := tool.NewReadFileCache() // Used for building tools
 	cacheB := tool.NewReadFileCache() // Used for StreamConfig - this is what engine should wire
@@ -798,11 +798,11 @@ func TestAC4_QueryEngineWireReadFileCache(t *testing.T) {
 	}
 }
 
-// TestAC1_MemdirCreatedAtPromptBuild verifies that memdir.Create() is wired
+// TestMemdirCreatedAtPromptBuild verifies that memdir.Create() is wired
 // into the system-prompt build hook: when AutoMemoryEnabled is true and the
 // session is in a git repository, SubmitMessage must create the per-project
 // memory directory under the config home.
-func TestAC1_MemdirCreatedAtPromptBuild(t *testing.T) {
+func TestMemdirCreatedAtPromptBuild(t *testing.T) {
 	// Isolate config dirs so memdir's config-home resolution points to a temp
 	// dir regardless of platform. os.UserConfigDir() consults:
 	//   - XDG_CONFIG_HOME on Linux/Unix
@@ -936,10 +936,10 @@ func TestAC1_MemdirCreatedAtPromptBuild(t *testing.T) {
 	engine.Drain(drainCtx)
 }
 
-// TestAC1_DenyRuleStructuredOutput tests that when StructuredOutput is denied
+// TestDenyRuleStructuredOutput tests that when StructuredOutput is denied
 // via StructuredDenyRules but a schema is configured, NewQueryEngine panics.
 // This verifies the startup error for deny-rule checking.
-func TestAC1_DenyRuleStructuredOutput(t *testing.T) {
+func TestDenyRuleStructuredOutput(t *testing.T) {
 	cfg := StreamConfig{
 		Enabled:             true,
 		StructuredSchema:    map[string]any{"type": "object"},
@@ -959,10 +959,10 @@ func TestAC1_DenyRuleStructuredOutput(t *testing.T) {
 	t.Errorf("FAIL: expected panic but got engine: %v", engine)
 }
 
-// TestAC4_InteractiveModeNoStructuredOutput tests that when Enabled=false
+// TestInteractiveModeNoStructuredOutput tests that when Enabled=false
 // (interactive mode), the StructuredOutput tool is not registered even
 // if a schema is configured. This verifies non-interactive detection.
-func TestAC4_InteractiveModeNoStructuredOutput(t *testing.T) {
+func TestInteractiveModeNoStructuredOutput(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
 	if err != nil {
@@ -989,10 +989,10 @@ func TestAC4_InteractiveModeNoStructuredOutput(t *testing.T) {
 	}
 }
 
-// TestAC4_NonInteractiveModeHasStructuredOutput tests that when Enabled=true
+// TestNonInteractiveModeHasStructuredOutput tests that when Enabled=true
 // (non-interactive/stream-json mode), the StructuredOutput tool IS registered
 // if a schema is configured. This verifies non-interactive detection.
-func TestAC4_NonInteractiveModeHasStructuredOutput(t *testing.T) {
+func TestNonInteractiveModeHasStructuredOutput(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
 	if err != nil {
@@ -1019,10 +1019,10 @@ func TestAC4_NonInteractiveModeHasStructuredOutput(t *testing.T) {
 	}
 }
 
-// TestAC3_NotEmittedError tests that when StructuredOutput is configured but
+// TestNotEmittedError tests that when StructuredOutput is configured but
 // not called during the turn, the engine returns error "structured output not emitted".
 // This verifies enforcement at the engine level.
-func TestAC3_NotEmittedError(t *testing.T) {
+func TestNotEmittedError(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
 	if err != nil {
@@ -1069,10 +1069,10 @@ func TestAC3_NotEmittedError(t *testing.T) {
 	}
 }
 
-// TestAC3_ResultExtraction tests that when StructuredOutput IS called,
+// TestResultExtraction tests that when StructuredOutput IS called,
 // the engine returns the JSON content from the StructuredOutput tool call
 // rather than the text output. This verifies result extraction.
-func TestAC3_ResultExtraction(t *testing.T) {
+func TestResultExtraction(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
 	if err != nil {
@@ -1243,7 +1243,7 @@ func TestToolCallEvents(t *testing.T) {
 	}
 }
 
-// TestInterruptSyntheticToolResults_AC5 verifies the full matrix for the
+// TestInterruptSyntheticToolResults verifies the full matrix for the
 // interrupt synthetic tool_results feature:
 //   - a tool that didn't complete receives a synthetic "Tool execution
 //     interrupted" result with IsError=true.
@@ -1257,7 +1257,7 @@ func TestToolCallEvents(t *testing.T) {
 // To exercise this, the mock server returns tool_use on the first call and
 // end_turn on the second; the engine must therefore make two API calls and
 // must not propagate the context cancellation back as the SubmitMessage error.
-func TestInterruptSyntheticToolResults_AC5(t *testing.T) {
+func TestInterruptSyntheticToolResults(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
 	if err != nil {
@@ -1975,13 +1975,13 @@ func TestRunLoop_EmptyStopReason_WithToolUse_TreatsAsToolUse(t *testing.T) {
 	}
 }
 
-// stubMemExtractorForAC10 is a mock APIClient that records the TurnContext
+// stubMemExtractor is a mock APIClient that records the TurnContext
 // passed to MemoryExtractor.CheckAndExtract.
-type stubMemExtractorForAC10 struct {
+type stubMemExtractor struct {
 	recordingTurnCtx TurnContext
 }
 
-func (s *stubMemExtractorForAC10) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
+func (s *stubMemExtractor) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 	return &api.Response{}, nil
 }
 
@@ -1995,7 +1995,7 @@ func (s *stubMemExtractorForAC10) SendMessage(ctx context.Context, messages []ap
 // IsSubAgent=false), allowing us to verify the call happened.
 func TestRunLoop_EmptyStopReason_MemExtractorCalledWithEmpty(t *testing.T) {
 	// Set up an isolated git repo so memdir can resolve project root
-	// Use the same isolation pattern as TestAC1_MemdirCreatedAtPromptBuild.
+	// Use the same isolation pattern as TestMemdirCreatedAtPromptBuild.
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpHome, ".config"))
@@ -2487,11 +2487,11 @@ func TestEngine_ContextExhausted_MiniMax_EmitsStructuredError(t *testing.T) {
 	}
 }
 
-// TestAC2_PersistCompactBoundary_LogsError verifies that persistCompactBoundary
+// TestPersistCompactBoundary_LogsError verifies that persistCompactBoundary
 // returns an error when AppendEntry fails (instead of swallowing it) and logs
 // the error via log.Error. This tests both the function behavior and the
 // error and logs it internally.
-func TestAC2_PersistCompactBoundary_LogsError(t *testing.T) {
+func TestPersistCompactBoundary_LogsError(t *testing.T) {
 	// Create a session manager with a valid tmpDir
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
@@ -2582,10 +2582,10 @@ func (m *mockSkillActivatorForTest) GetActivatedTools() []string {
 	return result
 }
 
-// TestAC1_SkillActivatorWiring tests that the skill activator is properly wired
+// TestSkillActivatorWiring tests that the skill activator is properly wired
 // through the engine and syncActiveSkills correctly converts skills.ActivatedSkill
 // to agent.ActivatedSkill.
-func TestAC1_SkillActivatorWiring(t *testing.T) {
+func TestSkillActivatorWiring(t *testing.T) {
 	cfg := StreamConfig{Enabled: false}
 	mockActivator := &mockSkillActivatorForTest{}
 	engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient(t)), WithSkillActivator(mockActivator))
@@ -2620,8 +2620,8 @@ func TestAC1_SkillActivatorWiring(t *testing.T) {
 	t.Log("PASS: skill activator wiring and type conversion work correctly")
 }
 
-// TestAC1_SkillActivatorDeduplication tests that duplicate activations are not added.
-func TestAC1_SkillActivatorDeduplication(t *testing.T) {
+// TestSkillActivatorDeduplication tests that duplicate activations are not added.
+func TestSkillActivatorDeduplication(t *testing.T) {
 	cfg := StreamConfig{Enabled: false}
 	mockActivator := &mockSkillActivatorForTest{}
 	engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient(t)), WithSkillActivator(mockActivator))
@@ -2638,9 +2638,9 @@ func TestAC1_SkillActivatorDeduplication(t *testing.T) {
 	t.Log("PASS: deduplication works correctly")
 }
 
-// TestAC1_SkillActivatorNoOpWhenNil tests that syncActiveSkills is a no-op
+// TestSkillActivatorNoOpWhenNil tests that syncActiveSkills is a no-op
 // when the skill activator is nil.
-func TestAC1_SkillActivatorNoOpWhenNil(t *testing.T) {
+func TestSkillActivatorNoOpWhenNil(t *testing.T) {
 	cfg := StreamConfig{Enabled: false}
 	engine := mustNewQueryEngine(&cfg, nil, "", WithClient(fastClient(t))) // No activator
 
@@ -2653,12 +2653,12 @@ func TestAC1_SkillActivatorNoOpWhenNil(t *testing.T) {
 	t.Log("PASS: syncActiveSkills is no-op when activator is nil")
 }
 
-// TestAC3_TaskCompletionsAsContent verifies that pending background task
+// TestTaskCompletionsAsContent verifies that pending background task
 // completions are injected as virtual user messages with Content (not
 // ToolResults) to avoid violating API protocol. tool_result blocks
 // require their tool_use_id to reference an actual tool_use in a
 // preceding assistant message, which synthetic completions never do.
-func TestAC3_TaskCompletionsAsContent(t *testing.T) {
+func TestTaskCompletionsAsContent(t *testing.T) {
 	// Create a task manager and bash tool wired to it.
 	tm := tool.NewTaskManager()
 	bashTool := tool.NewBashTool(tool.PermissionUnrestricted).WithTaskManager(tm)

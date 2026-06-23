@@ -100,8 +100,8 @@ func TestReadMcpResourceTool_NameAndDescription(t *testing.T) {
 	}
 }
 
-// TestReadMcpResourceTool_AC1_UnknownServer tests AC1: unknown server returns error with available names.
-func TestReadMcpResourceTool_AC1_UnknownServer(t *testing.T) {
+// TestReadMcpResourceTool_UnknownServer tests unknown server returns error with available names.
+func TestReadMcpResourceTool_UnknownServer(t *testing.T) {
 	readTool := NewReadMcpResourceTool()
 
 	result, err := readTool.Execute(context.Background(), map[string]any{
@@ -229,8 +229,8 @@ func TestReadMcpResourceTool_InputSchemaRequiredFields(t *testing.T) {
 	}
 }
 
-// TestReadMcpResourceTool_AC2_TextInline tests AC2: text content is returned inline via fake MCP server.
-func TestReadMcpResourceTool_AC2_TextInline(t *testing.T) {
+// TestReadMcpResourceTool_TextInline tests text content is returned inline via fake MCP server.
+func TestReadMcpResourceTool_TextInline(t *testing.T) {
 	server := startFakeServer(t, "test-server")
 	defer server.close()
 
@@ -274,8 +274,8 @@ func TestReadMcpResourceTool_AC2_TextInline(t *testing.T) {
 	}
 }
 
-// TestReadMcpResourceTool_AC3_BlobPersist tests AC3: binary content is decoded and saved to disk via fake MCP server.
-func TestReadMcpResourceTool_AC3_BlobPersist(t *testing.T) {
+// TestReadMcpResourceTool_BlobPersist tests binary content is decoded and saved to disk via fake MCP server.
+func TestReadMcpResourceTool_BlobPersist(t *testing.T) {
 	server := startFakeServer(t, "blob-server")
 	defer server.close()
 
@@ -337,8 +337,8 @@ func TestReadMcpResourceTool_AC3_BlobPersist(t *testing.T) {
 	}
 }
 
-// TestReadMcpResourceTool_AC4_PersistFailure tests AC4: disk write failure returns error, not base64.
-func TestReadMcpResourceTool_AC4_PersistFailure(t *testing.T) {
+// TestReadMcpResourceTool_PersistFailure tests disk write failure returns error, not base64.
+func TestReadMcpResourceTool_PersistFailure(t *testing.T) {
 	server := startFakeServer(t, "fail-server")
 	defer server.close()
 
@@ -365,14 +365,14 @@ func TestReadMcpResourceTool_AC4_PersistFailure(t *testing.T) {
 	if !strings.Contains(result.Content, "Error saving binary content to disk") {
 		t.Errorf("expected persist error message, got: %s", result.Content)
 	}
-	// AC4: The result must NOT contain the raw base64 data
+	// The result must NOT contain the raw base64 data
 	if strings.Contains(result.Content, "SGVsbG8=") {
 		t.Error("result must NOT contain raw base64 data when persist fails")
 	}
 }
 
-// TestReadMcpResourceTool_AC5_ConcurrentCalls tests AC5: concurrent calls are safe via race detector.
-func TestReadMcpResourceTool_AC5_ConcurrentCalls(t *testing.T) {
+// TestReadMcpResourceTool_ConcurrentCalls tests concurrent calls are safe via race detector.
+func TestReadMcpResourceTool_ConcurrentCalls(t *testing.T) {
 	// Start multiple fake servers, one per client to avoid stdin/stdout conflicts
 	const numServers = 5
 	var servers []*fakeServer
@@ -413,9 +413,9 @@ func TestReadMcpResourceTool_AC5_ConcurrentCalls(t *testing.T) {
 	wg.Wait()
 }
 
-// TestReadMcpResourceTool_AC5_ConcurrentCalls_SingleClient tests AC5 with a single client
+// TestReadMcpResourceTool_ConcurrentCalls_SingleClient tests concurrent calls with a single client
 // to verify the mutex actually protects concurrent access to the transport.
-func TestReadMcpResourceTool_AC5_ConcurrentCalls_SingleClient(t *testing.T) {
+func TestReadMcpResourceTool_ConcurrentCalls_SingleClient(t *testing.T) {
 	server := startFakeServer(t, "single-server")
 	defer server.close()
 

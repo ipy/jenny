@@ -429,9 +429,9 @@ func TestMCPConfigWiring(t *testing.T) {
 	t.Log("PASS: LoadConfig returns correct config for ConnectAll wiring")
 }
 
-// TestAC2_MCPConfigEnvExpansion verifies that environment variable expansion
-// works correctly in MCP server definitions (part of AC2 wiring).
-func TestAC2_MCPConfigEnvExpansion(t *testing.T) {
+// TestMCPConfigEnvExpansion verifies that environment variable expansion
+// works correctly in MCP server definitions.
+func TestMCPConfigEnvExpansion(t *testing.T) {
 	os.Setenv("TEST_MCP_COMMAND", "my-echo")
 	os.Setenv("TEST_MCP_ARG", "world")
 	defer os.Unsetenv("TEST_MCP_COMMAND")
@@ -460,7 +460,7 @@ func TestAC2_MCPConfigEnvExpansion(t *testing.T) {
 		t.Errorf("expected args ['world'] after env expansion, got %v", server.Args)
 	}
 
-	t.Log("AC2 PASS: env expansion works correctly in MCP config")
+	t.Log("PASS: env expansion works correctly in MCP config")
 }
 
 // TestLoadConfigOAuthFields tests the MCPServerDef includes OAuth config fields.

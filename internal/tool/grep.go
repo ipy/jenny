@@ -185,7 +185,7 @@ func (t *GrepTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}, nil
 	}
 
-	// Universal Windows Security (AC4)
+	// Universal Windows Security
 	if runtime.GOOS == "windows" {
 		winGate := NewWindowsCommandGate(PermissionEdit)
 		if err := winGate.CheckPath(path); err != nil {

@@ -9,14 +9,14 @@ import (
 	"time"
 )
 
-// TestEditTool_AC1_NoPriorRead_BlackBox validates that editing without a prior
+// TestEditTool_NoPriorRead_BlackBox validates that editing without a prior
 // Read fails with the correct error message.
-func TestEditTool_AC1_NoPriorRead_BlackBox(t *testing.T) {
+func TestEditTool_NoPriorRead_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
 	et := NewEditTool(cache)
 
-	// AC1: Edit a path never read (file doesn't exist)
+	// Edit a path never read (file doesn't exist)
 	result, err := et.Execute(context.Background(), map[string]any{
 		"file_path":  filepath.Join(tmpDir, "never_read.txt"),
 		"old_string": "hello",
@@ -26,10 +26,10 @@ func TestEditTool_AC1_NoPriorRead_BlackBox(t *testing.T) {
 		t.Fatalf("unexpected error (should be in result.IsError): %v", err)
 	}
 	if !result.IsError {
-		t.Fatal("AC1 FAIL: expected IsError=true when editing without prior Read")
+		t.Fatal("FAIL: expected IsError=true when editing without prior Read")
 	}
 	if !strings.Contains(result.Content, "Cannot edit without reading first") {
-		t.Fatalf("AC1 FAIL: wrong error message. Got: %s", result.Content)
+		t.Fatalf("FAIL: wrong error message. Got: %s", result.Content)
 	}
 
 	// Edit with empty file_path
@@ -42,7 +42,7 @@ func TestEditTool_AC1_NoPriorRead_BlackBox(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !result.IsError {
-		t.Fatal("AC1 FAIL: expected error for empty file_path")
+		t.Fatal("FAIL: expected error for empty file_path")
 	}
 
 	// Edit with non-string file_path
@@ -55,12 +55,12 @@ func TestEditTool_AC1_NoPriorRead_BlackBox(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !result.IsError {
-		t.Fatal("AC1 FAIL: expected error for non-string file_path")
+		t.Fatal("FAIL: expected error for non-string file_path")
 	}
 }
 
-// TestEditTool_AC1_ReadThenEdit_BlackBox validates the full read→edit success path.
-func TestEditTool_AC1_ReadThenEdit_BlackBox(t *testing.T) {
+// TestEditTool_ReadThenEdit_BlackBox validates the full read→edit success path.
+func TestEditTool_ReadThenEdit_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
 	rt := NewReadTool(PermissionEdit, cache)
@@ -87,19 +87,19 @@ func TestEditTool_AC1_ReadThenEdit_BlackBox(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if result.IsError {
-		t.Fatalf("AC1 FAIL: edit after read failed: %s", result.Content)
+		t.Fatalf("FAIL: edit after read failed: %s", result.Content)
 	}
 
 	// Verify content
 	data, _ := os.ReadFile(f)
 	if string(data) != "hi world\n" {
-		t.Fatalf("AC1 FAIL: unexpected content after edit: %q", string(data))
+		t.Fatalf("FAIL: unexpected content after edit: %q", string(data))
 	}
 }
 
-// TestEditTool_AC1_PartialRead_BlackBox validates that partial read blocks edit
+// TestEditTool_PartialRead_BlackBox validates that partial read blocks edit
 // and full read unblocks it.
-func TestEditTool_AC1_PartialRead_BlackBox(t *testing.T) {
+func TestEditTool_PartialRead_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
 	rt := NewReadTool(PermissionEdit, cache)
@@ -130,10 +130,10 @@ func TestEditTool_AC1_PartialRead_BlackBox(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !result.IsError {
-		t.Fatal("AC1 FAIL: expected error after partial read")
+		t.Fatal("FAIL: expected error after partial read")
 	}
 	if !strings.Contains(result.Content, "Cannot edit after partial read") {
-		t.Fatalf("AC1 FAIL: wrong error after partial read. Got: %s", result.Content)
+		t.Fatalf("FAIL: wrong error after partial read. Got: %s", result.Content)
 	}
 
 	// Now do full read (no offset/limit)
@@ -152,18 +152,18 @@ func TestEditTool_AC1_PartialRead_BlackBox(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if result.IsError {
-		t.Fatalf("AC1 FAIL: edit after full re-read failed: %s", result.Content)
+		t.Fatalf("FAIL: edit after full re-read failed: %s", result.Content)
 	}
 
 	data, _ := os.ReadFile(f)
 	if !strings.Contains(string(data), "modified") {
-		t.Fatalf("AC1 FAIL: content not updated after successful edit: %q", string(data))
+		t.Fatalf("FAIL: content not updated after successful edit: %q", string(data))
 	}
 }
 
-// TestEditTool_AC2_StaleMtime_BlackBox validates staleness detection from
+// TestEditTool_StaleMtime_BlackBox validates staleness detection from
 // multiple external modification methods.
-func TestEditTool_AC2_StaleMtime_BlackBox(t *testing.T) {
+func TestEditTool_StaleMtime_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	t.Run("external write changes mtime", func(t *testing.T) {
@@ -198,16 +198,16 @@ func TestEditTool_AC2_StaleMtime_BlackBox(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if !result.IsError {
-			t.Fatal("AC2 FAIL: expected staleness error after external write")
+			t.Fatal("FAIL: expected staleness error after external write")
 		}
 		if !strings.Contains(result.Content, "File has changed since it was read") {
-			t.Fatalf("AC2 FAIL: wrong error message. Got: %s", result.Content)
+			t.Fatalf("FAIL: wrong error message. Got: %s", result.Content)
 		}
 
 		// Verify original content preserved (edit was rejected)
 		data, _ := os.ReadFile(f)
 		if string(data) != "external change\n" {
-			t.Fatalf("AC2 FAIL: file content should be unchanged after rejected edit. Got: %q", string(data))
+			t.Fatalf("FAIL: file content should be unchanged after rejected edit. Got: %q", string(data))
 		}
 	})
 
@@ -242,13 +242,13 @@ func TestEditTool_AC2_StaleMtime_BlackBox(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if !result.IsError {
-			t.Fatal("AC2 FAIL: expected staleness error after touch (mtime change)")
+			t.Fatal("FAIL: expected staleness error after touch (mtime change)")
 		}
 	})
 }
 
-// TestEditTool_AC3_OldEqualsNew_BlackBox validates that old===new is rejected.
-func TestEditTool_AC3_OldEqualsNew_BlackBox(t *testing.T) {
+// TestEditTool_OldEqualsNew_BlackBox validates that old===new is rejected.
+func TestEditTool_OldEqualsNew_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
 	rt := NewReadTool(PermissionEdit, cache)
@@ -275,10 +275,10 @@ func TestEditTool_AC3_OldEqualsNew_BlackBox(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !result.IsError {
-		t.Fatal("AC3 FAIL: expected error when old_string equals new_string")
+		t.Fatal("FAIL: expected error when old_string equals new_string")
 	}
 	if !strings.Contains(result.Content, "old_string and new_string must differ") {
-		t.Fatalf("AC3 FAIL: wrong error message. Got: %s", result.Content)
+		t.Fatalf("FAIL: wrong error message. Got: %s", result.Content)
 	}
 
 	// Both empty strings should also be rejected
@@ -291,12 +291,12 @@ func TestEditTool_AC3_OldEqualsNew_BlackBox(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !result.IsError {
-		t.Fatal("AC3 FAIL: expected error when both strings are empty")
+		t.Fatal("FAIL: expected error when both strings are empty")
 	}
 }
 
-// TestEditTool_AC4_MultipleMatches_BlackBox validates multi-match guard behavior.
-func TestEditTool_AC4_MultipleMatches_BlackBox(t *testing.T) {
+// TestEditTool_MultipleMatches_BlackBox validates multi-match guard behavior.
+func TestEditTool_MultipleMatches_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
 	rt := NewReadTool(PermissionEdit, cache)
@@ -324,10 +324,10 @@ func TestEditTool_AC4_MultipleMatches_BlackBox(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !result.IsError {
-		t.Fatal("AC4 FAIL: expected error when multiple matches found without replace_all")
+		t.Fatal("FAIL: expected error when multiple matches found without replace_all")
 	}
 	if !strings.Contains(result.Content, "Set replace_all=true") {
-		t.Fatalf("AC4 FAIL: wrong error message. Got: %s", result.Content)
+		t.Fatalf("FAIL: wrong error message. Got: %s", result.Content)
 	}
 
 	// Single match scenario - should succeed without replace_all
@@ -340,7 +340,7 @@ func TestEditTool_AC4_MultipleMatches_BlackBox(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if result.IsError {
-		t.Fatalf("AC4 FAIL: single match edit without replace_all failed: %s", result.Content)
+		t.Fatalf("FAIL: single match edit without replace_all failed: %s", result.Content)
 	}
 
 	// Now test replace_all=true - but cache is stale after the above edit, re-read
@@ -364,17 +364,17 @@ func TestEditTool_AC4_MultipleMatches_BlackBox(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if result.IsError {
-		t.Fatalf("AC4 FAIL: edit with replace_all failed: %s", result.Content)
+		t.Fatalf("FAIL: edit with replace_all failed: %s", result.Content)
 	}
 
 	data, _ := os.ReadFile(f2)
 	if string(data) != "bar bar bar\n" {
-		t.Fatalf("AC4 FAIL: expected all 3 occurrences replaced. Got: %q", string(data))
+		t.Fatalf("FAIL: expected all 3 occurrences replaced. Got: %q", string(data))
 	}
 }
 
-// TestEditTool_AC5_IpynbRedirect_BlackBox validates .ipynb redirection.
-func TestEditTool_AC5_IpynbRedirect_BlackBox(t *testing.T) {
+// TestEditTool_IpynbRedirect_BlackBox validates .ipynb redirection.
+func TestEditTool_IpynbRedirect_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
 	rt := NewReadTool(PermissionEdit, cache)
@@ -400,10 +400,10 @@ func TestEditTool_AC5_IpynbRedirect_BlackBox(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !result.IsError {
-		t.Fatal("AC5 FAIL: expected error for .ipynb path")
+		t.Fatal("FAIL: expected error for .ipynb path")
 	}
 	if !strings.Contains(result.Content, "NotebookEdit") {
-		t.Fatalf("AC5 FAIL: expected NotebookEdit redirect error. Got: %s", result.Content)
+		t.Fatalf("FAIL: expected NotebookEdit redirect error. Got: %s", result.Content)
 	}
 
 	// .py file should NOT be redirected
@@ -426,13 +426,13 @@ func TestEditTool_AC5_IpynbRedirect_BlackBox(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if result.IsError {
-		t.Fatalf("AC5 FAIL: .py file should not be redirected: %s", result.Content)
+		t.Fatalf("FAIL: .py file should not be redirected: %s", result.Content)
 	}
 
 	// Verify .py edit worked
 	data, _ := os.ReadFile(pyFile)
 	if !strings.Contains(string(data), "world") {
-		t.Fatalf("AC5 FAIL: .py file not updated correctly: %q", string(data))
+		t.Fatalf("FAIL: .py file not updated correctly: %q", string(data))
 	}
 }
 
@@ -584,7 +584,7 @@ func TestEditTool_PathTraversal_BlackBox(t *testing.T) {
 	cache := NewReadFileCache()
 	et := NewEditTool(cache)
 
-	// Register a path inside tmpDir in cache to bypass AC1
+	// Register a path inside tmpDir in cache to bypass read-before-edit guard
 	insidePath := filepath.Join(tmpDir, "inside.txt")
 	cache.RecordRead(insidePath, "test", time.Now(), true, 0, 0)
 
@@ -618,7 +618,7 @@ func TestEditTool_FileDeletedAfterRead(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Read to satisfy AC1
+	// Read to satisfy read-before-edit guard
 	_, err := rt.Execute(context.Background(), map[string]any{"file_path": f}, tmpDir)
 	if err != nil {
 		t.Fatal(err)

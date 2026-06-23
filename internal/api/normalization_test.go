@@ -10,14 +10,14 @@ import (
 )
 
 // TestNormalization_ToolResultFlattening_EdgeCases verifies the tool_result content
-// flattening pass produces correct wire format for all edge cases (AC1-AC5).
+// flattening pass produces correct wire format for all edge cases.
 // Run: go test ./internal/api/ -run "TestNormalization" -v -count=1
-// Expected: 5 PASS results (all 5 AC subtests pass).
+// Expected: 5 PASS results (all 5 subtests pass).
 //
 // Prior fixes:
 // - 95f5153: flatten tool_result content for DeepSeek compatibility
 // - 4e84e9c: add comprehensive edge-case tests
-// - 514fb98: add t.Cleanup to clear request inspector after AC4
+// - 514fb98: add t.Cleanup to clear request inspector
 // - decdb7c: use LIFO indexing (reqs[len(reqs)-1]) instead of FIFO (reqs[0])
 func TestNormalization_ToolResultFlattening_EdgeCases(t *testing.T) {
 	mock := mockapi.NewMockServer()
@@ -38,7 +38,7 @@ func TestNormalization_ToolResultFlattening_EdgeCases(t *testing.T) {
 	mock.SetContentType("test", "application/json")
 	mock.SetInlineResponse("test", `{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"model":"claude-3-sonnet-20240229","stop_reason":"end_turn"}`)
 
-	t.Run("AC1: Empty tool_result content serializes as empty string", func(t *testing.T) {
+	t.Run("Empty tool_result content serializes as empty string", func(t *testing.T) {
 		provider, _ := setupProvider(t, "test")
 
 		messages := []Message{
@@ -88,7 +88,7 @@ func TestNormalization_ToolResultFlattening_EdgeCases(t *testing.T) {
 		}
 	})
 
-	t.Run("AC2: Multiple tool_results in one user message", func(t *testing.T) {
+	t.Run("Multiple tool_results in one user message", func(t *testing.T) {
 		provider, _ := setupProvider(t, "test")
 
 		messages := []Message{
@@ -126,7 +126,7 @@ func TestNormalization_ToolResultFlattening_EdgeCases(t *testing.T) {
 		}
 	})
 
-	t.Run("AC3: Error tool_result preserves is_error: true", func(t *testing.T) {
+	t.Run("Error tool_result preserves is_error: true", func(t *testing.T) {
 		provider, _ := setupProvider(t, "test")
 
 		messages := []Message{
@@ -161,7 +161,7 @@ func TestNormalization_ToolResultFlattening_EdgeCases(t *testing.T) {
 		}
 	})
 
-	t.Run("AC4: Mock server rejects array content, test passes", func(t *testing.T) {
+	t.Run("Mock server rejects array content, test passes", func(t *testing.T) {
 		provider, _ := setupProvider(t, "test")
 
 		// Inspector that rejects array-formatted tool_results
@@ -199,7 +199,7 @@ func TestNormalization_ToolResultFlattening_EdgeCases(t *testing.T) {
 		// If SendMessage succeeds, the inspector didn't return an error, meaning content was NOT an array.
 	})
 
-	t.Run("AC5: Non-tool_result blocks untouched", func(t *testing.T) {
+	t.Run("Non-tool_result blocks untouched", func(t *testing.T) {
 		provider, _ := setupProvider(t, "test")
 
 		messages := []Message{
@@ -274,7 +274,7 @@ func TestNormalization_ToolResultFlattening_EdgeCases(t *testing.T) {
 // blocks are stripped from message history when a session is resumed with a different
 // API key (SSNF Pass 2.D).
 // Run: go test ./internal/api/ -run "TestNormalization" -v -count=1
-// Expected: 5 PASS results (all 5 AC subtests pass).
+// Expected: 5 PASS results (all 5 subtests pass).
 func TestNormalization_CredentialBoundArtifactStripping(t *testing.T) {
 	findSubstring := func(s, substr string) bool {
 		for i := 0; i <= len(s)-len(substr); i++ {
@@ -293,7 +293,7 @@ func TestNormalization_CredentialBoundArtifactStripping(t *testing.T) {
 		return len(content) > 0 && (containsString(content, `<thinking type="redacted">`) || containsString(content, `"type":"redacted_thinking"`))
 	}
 
-	t.Run("AC1: Single redacted_thinking block stripped", func(t *testing.T) {
+	t.Run("Single redacted_thinking block stripped", func(t *testing.T) {
 		// Set ANTHROPIC_API_KEY to "current-key" to simulate the current environment
 		origKey := os.Getenv("ANTHROPIC_API_KEY")
 		defer os.Setenv("ANTHROPIC_API_KEY", origKey)
@@ -329,7 +329,7 @@ func TestNormalization_CredentialBoundArtifactStripping(t *testing.T) {
 		}
 	})
 
-	t.Run("AC2: Multiple messages with redacted_thinking blocks stripped", func(t *testing.T) {
+	t.Run("Multiple messages with redacted_thinking blocks stripped", func(t *testing.T) {
 		// Set ANTHROPIC_API_KEY to "current-key" to simulate the current environment
 		origKey := os.Getenv("ANTHROPIC_API_KEY")
 		defer os.Setenv("ANTHROPIC_API_KEY", origKey)
@@ -379,7 +379,7 @@ func TestNormalization_CredentialBoundArtifactStripping(t *testing.T) {
 		}
 	})
 
-	t.Run("AC3: Non-redacted thinking preserved (message has text so AC4 keeps it)", func(t *testing.T) {
+	t.Run("Non-redacted thinking preserved (message has text so stripping keeps it)", func(t *testing.T) {
 		// Set ANTHROPIC_API_KEY to "current-key" to simulate the current environment
 		origKey := os.Getenv("ANTHROPIC_API_KEY")
 		defer os.Setenv("ANTHROPIC_API_KEY", origKey)
@@ -391,8 +391,8 @@ func TestNormalization_CredentialBoundArtifactStripping(t *testing.T) {
 			{
 				Role:    "assistant",
 				Content: "My response.<thinking>valid chain of thought</thinking>More text.<thinking type=\"redacted\">SIG</thinking>",
-				// Non-redacted thinking is in the middle (not trailing), so AC3 won't strip it.
-				// Text ensures AC4 doesn't drop; trailing redacted makes AC3 applicable after strip.
+				// Non-redacted thinking is in the middle (not trailing), so it won't be stripped.
+				// Text ensures it doesn't get dropped; trailing redacted makes stripping applicable after strip.
 			},
 		}
 
@@ -417,7 +417,7 @@ func TestNormalization_CredentialBoundArtifactStripping(t *testing.T) {
 		}
 	})
 
-	t.Run("AC4: Stripping inactive when key matches", func(t *testing.T) {
+	t.Run("Stripping inactive when key matches", func(t *testing.T) {
 		// Set ANTHROPIC_API_KEY to "test-key" to simulate the current environment
 		origKey := os.Getenv("ANTHROPIC_API_KEY")
 		defer os.Setenv("ANTHROPIC_API_KEY", origKey)
@@ -430,8 +430,8 @@ func TestNormalization_CredentialBoundArtifactStripping(t *testing.T) {
 			{
 				Role:    "assistant",
 				Content: "\u003cthinking type=\"redacted\"\u003eSIG_DATA\u003c/thinking\u003eMy response.",
-				// Redacted thinking is at the beginning (not trailing), so AC3 won't strip it.
-				// Text ensures AC4 doesn't drop; keys match so Pass 2D stripping is skipped.
+				// Redacted thinking is at the beginning (not trailing), so it won't be stripped.
+				// Text ensures it doesn't get dropped; keys match so Pass 2D stripping is skipped.
 			},
 		}
 
@@ -447,7 +447,7 @@ func TestNormalization_CredentialBoundArtifactStripping(t *testing.T) {
 		}
 	})
 
-	t.Run("AC5: NormalizationLog entry on strip", func(t *testing.T) {
+	t.Run("NormalizationLog entry on strip", func(t *testing.T) {
 		// Test that NormalizationLog is properly populated
 		messages := []Message{
 			{
@@ -710,7 +710,7 @@ func TestNormalizeMessages_CallsNormalizeTools(t *testing.T) {
 // These tests verify the edge cases that occur during session resume.
 // Run: go test ./internal/api/ -run "TestSSNF_ContentBlockValidation" -v -count=1
 func TestSSNF_ContentBlockValidation(t *testing.T) {
-	t.Run("AC1: whitespace-only text block stripped", func(t *testing.T) {
+	t.Run("whitespace-only text block stripped", func(t *testing.T) {
 		messages := []Message{
 			{Role: RoleUser, Content: "Hello"},
 			{Role: RoleAssistant, Content: "   \n\t  "}, // whitespace-only content
@@ -724,7 +724,7 @@ func TestSSNF_ContentBlockValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("AC1: non-whitespace text preserved", func(t *testing.T) {
+	t.Run("non-whitespace text preserved", func(t *testing.T) {
 		messages := []Message{
 			{Role: RoleUser, Content: "Hello"},
 			{Role: RoleAssistant, Content: "  Hello world  "}, // has actual content
@@ -737,7 +737,7 @@ func TestSSNF_ContentBlockValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("AC2: empty content in non-final assistant gets placeholder", func(t *testing.T) {
+	t.Run("empty content in non-final assistant gets placeholder", func(t *testing.T) {
 		messages := []Message{
 			{Role: RoleUser, Content: "Hello"},
 			{Role: RoleAssistant, Content: "", ToolUse: nil}, // empty content, no tool_use
@@ -752,7 +752,7 @@ func TestSSNF_ContentBlockValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("AC2: final assistant message empty allowed", func(t *testing.T) {
+	t.Run("final assistant message empty allowed", func(t *testing.T) {
 		messages := []Message{
 			{Role: RoleUser, Content: "Hello"},
 			{Role: RoleAssistant, Content: "", ToolUse: nil}, // empty, no tool_use
@@ -767,7 +767,7 @@ func TestSSNF_ContentBlockValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("AC2: assistant with tool_use empty content allowed", func(t *testing.T) {
+	t.Run("assistant with tool_use empty content allowed", func(t *testing.T) {
 		messages := []Message{
 			{Role: RoleUser, Content: "Hello"},
 			{Role: RoleAssistant, Content: "", ToolUse: []ToolUseBlock{
@@ -784,7 +784,7 @@ func TestSSNF_ContentBlockValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("AC3: trailing thinking block stripped", func(t *testing.T) {
+	t.Run("trailing thinking block stripped", func(t *testing.T) {
 		messages := []Message{
 			{Role: RoleUser, Content: "Hello"},
 			{Role: RoleAssistant, Content: "Let me think about this.<thinking>analyzing the problem</thinking>"},
@@ -798,7 +798,7 @@ func TestSSNF_ContentBlockValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("AC3: trailing redacted_thinking block stripped", func(t *testing.T) {
+	t.Run("trailing redacted_thinking block stripped", func(t *testing.T) {
 		messages := []Message{
 			{Role: RoleUser, Content: "Hello"},
 			{Role: RoleAssistant, Content: "Here's my response.<thinking type=\"redacted\">SIG_DATA</thinking>"},
@@ -812,7 +812,7 @@ func TestSSNF_ContentBlockValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("AC3: multiple trailing thinking blocks stripped", func(t *testing.T) {
+	t.Run("multiple trailing thinking blocks stripped", func(t *testing.T) {
 		messages := []Message{
 			{Role: RoleUser, Content: "Hello"},
 			{Role: RoleAssistant, Content: "Done.<thinking>thought 1</thinking><thinking>thought 2</thinking>"},
@@ -826,7 +826,7 @@ func TestSSNF_ContentBlockValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("AC3: thinking block in middle preserved", func(t *testing.T) {
+	t.Run("thinking block in middle preserved", func(t *testing.T) {
 		messages := []Message{
 			{Role: RoleUser, Content: "Hello"},
 			{Role: RoleAssistant, Content: "<thinking>thinking</thinking>Here is my response."},
@@ -841,7 +841,7 @@ func TestSSNF_ContentBlockValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("AC4: orphaned thinking-only message dropped", func(t *testing.T) {
+	t.Run("orphaned thinking-only message dropped", func(t *testing.T) {
 		messages := []Message{
 			{Role: RoleUser, Content: "Hello"},
 			{Role: RoleAssistant, Content: "<thinking>only thinking</thinking>"},
@@ -860,7 +860,7 @@ func TestSSNF_ContentBlockValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("AC4: orphaned redacted_thinking-only message dropped", func(t *testing.T) {
+	t.Run("orphaned redacted_thinking-only message dropped", func(t *testing.T) {
 		messages := []Message{
 			{Role: RoleUser, Content: "Hello"},
 			{Role: RoleAssistant, Content: "<thinking type=\"redacted\">SIG</thinking>"},
@@ -875,7 +875,7 @@ func TestSSNF_ContentBlockValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("AC4: assistant with text and thinking preserved", func(t *testing.T) {
+	t.Run("assistant with text and thinking preserved", func(t *testing.T) {
 		messages := []Message{
 			{Role: RoleUser, Content: "Hello"},
 			{Role: RoleAssistant, Content: "<thinking>thinking</thinking>Here is my response."},
@@ -893,7 +893,7 @@ func TestSSNF_ContentBlockValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("AC4: assistant with tool_use preserved even if content is thinking", func(t *testing.T) {
+	t.Run("assistant with tool_use preserved even if content is thinking", func(t *testing.T) {
 		messages := []Message{
 			{Role: RoleUser, Content: "Hello"},
 			{Role: RoleAssistant, Content: "<thinking>thinking</thinking>", ToolUse: []ToolUseBlock{
@@ -910,7 +910,7 @@ func TestSSNF_ContentBlockValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("AC4: orphaned thinking-only message dropped when final in history", func(t *testing.T) {
+	t.Run("orphaned thinking-only message dropped when final in history", func(t *testing.T) {
 		messages := []Message{
 			{Role: RoleUser, Content: "Hello"},
 			{Role: RoleAssistant, Content: "<thinking>only thinking</thinking>"},
@@ -928,7 +928,7 @@ func TestSSNF_ContentBlockValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("AC5: normalization logs include content block validation", func(t *testing.T) {
+	t.Run("normalization logs include content block validation", func(t *testing.T) {
 		messages := []Message{
 			{Role: RoleUser, Content: "Hello"},
 			{Role: RoleAssistant, Content: "   \n\t  "}, // whitespace-only

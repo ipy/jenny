@@ -16,10 +16,10 @@ func TestWindowsProcessTermination(t *testing.T) {
 
 	if runtime.GOOS == "windows" {
 		// Verify killProcessWindows is available (compile-time check)
-		t.Log("AC5 PASS: Windows build includes taskkill-based process termination")
+		t.Log("PASS: Windows build includes taskkill-based process termination")
 	} else {
 		// Verify signal handling is available for Unix
-		t.Log("AC5 PASS: Unix build includes signal-based process termination")
+		t.Log("PASS: Unix build includes signal-based process termination")
 	}
 }
 
@@ -33,5 +33,5 @@ func TestTaskManagerStopPlatformAware(t *testing.T) {
 
 	// Verify the Stop method signature works (can't fully test without a real process)
 	// This is mainly a compile-time verification
-	t.Log("AC5 PASS: TaskManager.Stop uses platform-aware signal handling")
+	t.Log("PASS: TaskManager.Stop uses platform-aware signal handling")
 }

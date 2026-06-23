@@ -54,7 +54,7 @@ func TestNormalize_NoProviderNameStringsInProduction(t *testing.T) {
 }
 
 // TestNormalize_UniversalArchitectureCrossLinked locks in the docs cross-link to
-// universal-normalization-architecture.md (AC8). The spec requires README.md, when
+// universal-normalization-architecture.md. The spec requires README.md, when
 // present, to reference the architecture doc. This test fails if the link is removed
 // from docs/README.md.
 func TestNormalize_UniversalArchitectureCrossLinked(t *testing.T) {
@@ -72,6 +72,6 @@ func TestNormalize_UniversalArchitectureCrossLinked(t *testing.T) {
 	}
 
 	if !strings.Contains(string(contents), "universal-normalization-architecture.md") {
-		t.Errorf("docs/README.md must cross-link to universal-normalization-architecture.md (AC8)")
+		t.Errorf("docs/README.md must cross-link to universal-normalization-architecture.md")
 	}
 }

@@ -214,7 +214,7 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 		t.commandCwd = cwd
 	}
 
-	// Universal Windows Security (AC4)
+	// Universal Windows Security
 	if runtime.GOOS == "windows" {
 		winGate := NewWindowsCommandGate(t.effectiveLevel())
 		// CheckPath with timeout to prevent hanging on slow filesystem/network paths
@@ -245,7 +245,7 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 
 	t.mu.Unlock()
 
-	// AC1: Block all Bash execution at read level
+	// Block all Bash execution at read level
 	if t.effectiveLevel() == PermissionRead {
 		return &ToolResult{
 			Content: "Error: Bash execution is not allowed at read permission level. Use --permission-level analyze or higher.",
@@ -253,7 +253,7 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}, nil
 	}
 
-	// Handle sed simulation (AC5) - after security checks but before timeout/background
+	// Handle sed simulation - after security checks but before timeout/background
 	if isSedInPlace(command) {
 		// Validate path in sed command is within working directory
 		gate := NewCommandGate(t.effectiveLevel())
@@ -266,7 +266,7 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 		return t.executeSed(command, t.commandCwd)
 	}
 
-	// Check for sleep >= 2 in foreground (AC3)
+	// Check for sleep >= 2 in foreground
 	if !isBackgroundExecution(input) {
 		if sleepSeconds := getSleepSeconds(command); sleepSeconds >= 2 {
 			return &ToolResult{
@@ -276,7 +276,7 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}
 	}
 
-	// Handle background execution (AC3)
+	// Handle background execution
 	if isBackgroundExecution(input) {
 		// Security: validate command even for background execution
 		gate := NewCommandGate(t.effectiveLevel())
@@ -308,7 +308,7 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}, nil
 	}
 
-	// Check pipeline segments for read-only compliance (AC1)
+	// Check pipeline segments for read-only compliance
 	if err := gate.CheckPipelineSegments(command); err != nil {
 		return &ToolResult{
 			Content: fmt.Sprintf("Security error: %v", err),
@@ -621,7 +621,7 @@ func (t *BashTool) executeBackground(command string, cwd string, input map[strin
 	tm := t.taskManager
 	projRoot := t.projectRoot
 
-	// Create a background context (NOT for timeout - we handle timeout manually for AC5)
+	// Create a background context (NOT for timeout - we handle timeout manually)
 	ctx := context.Background()
 
 	// Create result channel (buffered to prevent deadlock when outer select is stuck)

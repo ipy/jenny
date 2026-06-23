@@ -370,7 +370,7 @@ func TestReadTool_Dedup(t *testing.T) {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
-	// AC1: First read should return content
+	// First read should return content
 	result, err := tool.Execute(context.Background(), map[string]any{
 		"file_path": testFile,
 	}, tmpDir)
@@ -384,7 +384,7 @@ func TestReadTool_Dedup(t *testing.T) {
 		t.Fatalf("first read should return content, got: %s", result.Content)
 	}
 
-	// AC1: Second read with same path/offset/limit should return stub
+	// Second read with same path/offset/limit should return stub
 	result, err = tool.Execute(context.Background(), map[string]any{
 		"file_path": testFile,
 	}, tmpDir)
@@ -401,7 +401,7 @@ func TestReadTool_Dedup(t *testing.T) {
 		t.Fatalf("second read should indicate file unchanged, got: %s", result.Content)
 	}
 
-	// AC2: Modify file (change mtime), read again should return new content.
+	// Modify file (change mtime), read again should return new content.
 	// WriteFile must come BEFORE Chtimes so the explicit future mtime is not
 	// overwritten by the write syscall updating mtime back to "now" (which
 	// could round to the original creation mtime within filesystem resolution).
@@ -428,7 +428,7 @@ func TestReadTool_Dedup(t *testing.T) {
 		t.Fatalf("read after modification should return new content, got: %s", result.Content)
 	}
 
-	// AC3: Different offset should bypass dedup and return full content
+	// Different offset should bypass dedup and return full content
 	result, err = tool.Execute(context.Background(), map[string]any{
 		"file_path": testFile,
 		"offset":    float64(2),
@@ -454,7 +454,7 @@ func TestReadTool_BlockDeviceGuard(t *testing.T) {
 	tmpDir := t.TempDir()
 	tool := NewReadTool(PermissionEdit, nil)
 
-	// AC4: Test deny list for /dev paths
+	// Test deny list for /dev paths
 	devPaths := []string{
 		"/dev/null",
 		"/dev/zero",
@@ -477,7 +477,7 @@ func TestReadTool_BlockDeviceGuard(t *testing.T) {
 		}
 	}
 
-	// AC5: Regular file at a custom path should work normally
+	// Regular file at a custom path should work normally
 	// Create a file with a name that looks suspicious but isn't a device
 	regularFile := filepath.Join(tmpDir, "regular_file.txt")
 	err := os.WriteFile(regularFile, []byte("regular content\n"), 0644)
@@ -499,7 +499,7 @@ func TestReadTool_BlockDeviceGuard(t *testing.T) {
 	}
 }
 
-// TestReadTool_SkipPermissions tests AC1: cwd bypass with unrestricted level flag
+// TestReadTool_SkipPermissions tests cwd bypass with unrestricted level flag
 func TestReadTool_SkipPermissions(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping hardcoded absolute Unix path test on Windows")
@@ -531,7 +531,7 @@ func TestReadTool_SkipPermissions(t *testing.T) {
 	}
 }
 
-// TestReadTool_ScratchpadAccess tests AC4: scratchpad is always accessible
+// TestReadTool_ScratchpadAccess tests scratchpad is always accessible
 func TestReadTool_ScratchpadAccess(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("/etc/passwd doesn't exist on Windows")
@@ -583,7 +583,7 @@ func TestReadTool_ScratchpadAccess(t *testing.T) {
 	}
 }
 
-// TestReadTool_CacheHitStructuredResponse verifies AC4: cache hit returns structured
+// TestReadTool_CacheHitStructuredResponse verifies cache hit returns structured
 // indicator with CacheHit flag, not ambiguous "file unchanged" string.
 func TestReadTool_CacheHitStructuredResponse(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -608,21 +608,21 @@ func TestReadTool_CacheHitStructuredResponse(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// AC4: CacheHit flag must be set
+	// CacheHit flag must be set
 	if !result.CacheHit {
-		t.Error("AC4 FAIL: CacheHit should be true on duplicate read")
+		t.Error("FAIL: CacheHit should be true on duplicate read")
 	}
 
-	// AC4: Content should be clearly structured, not just "file unchanged"
+	// Content should be clearly structured, not just "file unchanged"
 	if result.Content == "file unchanged" {
-		t.Error("AC4 FAIL: should return structured cache indicator, not bare 'file unchanged'")
+		t.Error("FAIL: should return structured cache indicator, not bare 'file unchanged'")
 	}
 	if !strings.Contains(result.Content, "unchanged") {
-		t.Error("AC4 FAIL: cache hit content should indicate file is unchanged")
+		t.Error("FAIL: cache hit content should indicate file is unchanged")
 	}
 }
 
-// TestReadTool_TOCTOU is the AC1 regression test. It exercises concurrent
+// TestReadTool_TOCTOU is the regression test. It exercises concurrent
 // Read invocations on the same file with a writer that mutates the file
 // between iterations. With the fix in place, the cache mutex atomically
 // stat+compare, so the race detector must report no data races.

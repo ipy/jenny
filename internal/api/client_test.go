@@ -263,7 +263,7 @@ func TestToolToSDK_WebSearchWithoutMaxUses(t *testing.T) {
 }
 
 func TestValidateMessagesMedia_NoMedia(t *testing.T) {
-	// AC6: Pass trivially when no image data is present (backward compat)
+	// Pass trivially when no image data is present (backward compat)
 	messages := []Message{
 		{Role: "user", Content: "Hello, world!"},
 		{Role: "assistant", Content: "Hi there!"},
@@ -275,7 +275,7 @@ func TestValidateMessagesMedia_NoMedia(t *testing.T) {
 }
 
 func TestValidateMessagesMedia_DataURI(t *testing.T) {
-	// AC7: data URI detection
+	// Data URI detection
 	messages := []Message{
 		{
 			Role: "user",
@@ -294,7 +294,7 @@ func TestValidateMessagesMedia_DataURI(t *testing.T) {
 }
 
 func TestValidateMessagesMedia_TooManyImages(t *testing.T) {
-	// AC3: Returns CannotRetryError when total media items exceed 100
+	// Returns CannotRetryError when total media items exceed 100
 	messages := []Message{
 		{
 			Role: "user",
@@ -320,7 +320,7 @@ func TestValidateMessagesMedia_TooManyImages(t *testing.T) {
 }
 
 func TestValidateMessagesMedia_OversizedImage(t *testing.T) {
-	// AC4: Returns CannotRetryError when any base64 image exceeds 5 MB
+	// Returns CannotRetryError when any base64 image exceeds 5 MB
 	// Create a SINGLE large base64 image (one PNG header, one long data line)
 	// 5 MB =5,242,880 bytes; in base64 that needs ~6,990,507 characters
 	// Use a PNG header followed by ~7MB of 'A' chars (valid base64)
@@ -355,7 +355,7 @@ func TestValidateMessagesMedia_OversizedImage(t *testing.T) {
 }
 
 func TestValidateMessagesMedia_MixedContent(t *testing.T) {
-	// AC7: Mixed content with text, tool results, and images
+	// Mixed content with text, tool results, and images
 	messages := []Message{
 		{Role: "user", Content: "What do you see?"},
 		{
@@ -396,7 +396,7 @@ func TestValidateMessagesMedia_RawBase64Headers(t *testing.T) {
 }
 
 func TestValidateMessagesMedia_ProseTextWithMagicBytes(t *testing.T) {
-	// AC1: Prose text containing a raw image header sequence followed by
+	// Prose text containing a raw image header sequence followed by
 	// alphanumeric text does NOT produce a false positive error.
 	// Prose must be in ToolResultBlock.Content to reach countMediaInContent.
 	messages := []Message{
@@ -417,7 +417,7 @@ func TestValidateMessagesMedia_ProseTextWithMagicBytes(t *testing.T) {
 }
 
 func TestValidateMessagesMedia_MultilineRawBase64(t *testing.T) {
-	// AC2: A multiline (MIME-formatted with \n separators) raw-base64 image
+	// A multiline (MIME-formatted with \n separators) raw-base64 image
 	// is correctly detected as one image item
 	messages := []Message{
 		{
@@ -437,7 +437,7 @@ func TestValidateMessagesMedia_MultilineRawBase64(t *testing.T) {
 }
 
 func TestValidateMessagesMedia_MultilineDataURI(t *testing.T) {
-	// AC3: Data URIs with multiline base64 payloads are counted and sized correctly
+	// Data URIs with multiline base64 payloads are counted and sized correctly
 	messages := []Message{
 		{
 			Role: "user",
@@ -468,7 +468,7 @@ func TestMaxBase64ImageSizeConstant(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC2: Beta header sent on the wire (non-streaming)
+// Beta header sent on the wire (non-streaming)
 // ---------------------------------------------------------------------------
 
 func TestClient_NonStreaming_SendsPromptCachingBetaHeader(t *testing.T) {
@@ -513,7 +513,7 @@ func TestClient_NonStreaming_SendsPromptCachingBetaHeader(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC2: Additional ANTHROPIC_BETAS env var headers
+// Additional ANTHROPIC_BETAS env var headers
 // ---------------------------------------------------------------------------
 
 func TestClient_ANTHROPIC_BETAS_AdditionalHeaders(t *testing.T) {
@@ -617,7 +617,7 @@ func TestClient_ANTHROPIC_BETAS_Streaming(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC3: API_TIMEOUT_MS env var
+// API_TIMEOUT_MS env var
 // ---------------------------------------------------------------------------
 
 func TestResolveTimeout(t *testing.T) {
@@ -687,7 +687,7 @@ func TestClient_API_TIMEOUT_MS_NegativeValue(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC3: Beta header sent on the wire (streaming)
+// Beta header sent on the wire (streaming)
 // ---------------------------------------------------------------------------
 
 func TestClient_Streaming_SendsPromptCachingBetaHeader(t *testing.T) {
@@ -780,7 +780,7 @@ func TestClient_Streaming_ThinkingAccumulation(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC4: System prompt cache_control regression (non-streaming)
+// System prompt cache_control regression (non-streaming)
 // ---------------------------------------------------------------------------
 
 func TestClient_SystemPrompt_HasCacheControl_Ephemeral(t *testing.T) {
@@ -828,7 +828,7 @@ func TestClient_SystemPrompt_HasCacheControl_Ephemeral(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC5: Tools-array cache breakpoint (last entry only)
+// Tools-array cache breakpoint (last entry only)
 // ---------------------------------------------------------------------------
 
 func TestClient_Tools_LastEntryHasCacheControl_Ephemeral(t *testing.T) {
@@ -894,7 +894,7 @@ func TestClient_Tools_LastEntryHasCacheControl_Ephemeral(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC6: Zero tools is safe
+// Zero tools is safe
 // ---------------------------------------------------------------------------
 
 func TestClient_NoTools_NoToolsCacheControl_NoPanic(t *testing.T) {
@@ -932,7 +932,7 @@ func TestClient_NoTools_NoToolsCacheControl_NoPanic(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC6b: Message rolling cache — last message's last content block has cache_control
+// Message rolling cache — last message's last content block has cache_control
 // ---------------------------------------------------------------------------
 
 func TestClient_Messages_LastBlockHasCacheControl(t *testing.T) {
@@ -1006,7 +1006,7 @@ func TestClient_Messages_LastBlockHasCacheControl(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC7: Usage tokens regression (cache_read and cache_creation)
+// Usage tokens regression (cache_read and cache_creation)
 // ---------------------------------------------------------------------------
 
 func TestClient_NonStreaming_UsageTokensRegression(t *testing.T) {
@@ -1039,7 +1039,7 @@ func TestClient_NonStreaming_UsageTokensRegression(t *testing.T) {
 }
 
 func TestToolToSDK_ExtraFields(t *testing.T) {
-	// AC3: Verify extra fields are preserved
+	// Verify extra fields are preserved
 	extraFields := map[string]any{
 		"$defs": map[string]any{
 			"item": map[string]any{
@@ -1095,7 +1095,7 @@ func TestToolToSDK_ExtraFields(t *testing.T) {
 }
 
 func TestToolToSDK_EmptyProperties(t *testing.T) {
-	// AC2: Universal behavior - empty properties get __arg__ placeholder
+	// Universal behavior - empty properties get __arg__ placeholder
 	// This is now handled by NormalizeMessages before toolToSDK is called
 	// This test verifies toolToSDK works with pre-normalized tools (already have __arg__)
 	tool := ToolParam{
@@ -1139,7 +1139,7 @@ func TestToolToSDK_EmptyProperties(t *testing.T) {
 }
 
 func TestClient_ToolResultDedup(t *testing.T) {
-	// AC3: API serialization deduplicates tool_results as safety net
+	// API serialization deduplicates tool_results as safety net
 	var capturedBody []byte
 	ms := mockapi.NewMockServer()
 	ms.SetPathHandler("POST /v1/messages", func(w http.ResponseWriter, r *http.Request) {

@@ -13,10 +13,10 @@ import (
 )
 
 // ============================================================================
-// AC1: Background bash writes to output file
+// Background bash writes to output file
 // ============================================================================
 
-func TestAC1_BackgroundBash_WritesOutputFile(t *testing.T) {
+func TestBackgroundBash_WritesOutputFile(t *testing.T) {
 	// Launch a background bash command, wait for completion, verify the output
 	// file exists at the expected path and contains valid JSONL with the command output.
 
@@ -97,7 +97,7 @@ func TestAC1_BackgroundBash_WritesOutputFile(t *testing.T) {
 	}
 }
 
-func TestAC1_OutputFile_PathIsProjectRelative(t *testing.T) {
+func TestOutputFile_PathIsProjectRelative(t *testing.T) {
 	// The output file path should be under .jenny/tasks/ relative to project root
 
 	tmpDir := t.TempDir()
@@ -126,7 +126,7 @@ func TestAC1_OutputFile_PathIsProjectRelative(t *testing.T) {
 	}
 }
 
-func TestAC1_PartialOutput_FlushedAfterInterrupt(t *testing.T) {
+func TestPartialOutput_FlushedAfterInterrupt(t *testing.T) {
 	// When a task is still running when the agent loop ends, partial output
 	// should be flushed. We simulate this by checking FlushPartialOutput.
 
@@ -161,10 +161,10 @@ func TestAC1_PartialOutput_FlushedAfterInterrupt(t *testing.T) {
 }
 
 // ============================================================================
-// AC2: Progress event emitted for tasks lasting >2s
+// Progress event emitted for tasks lasting >2s
 // ============================================================================
 
-func TestAC2_ProgressEvent_EmittedAfter2s(t *testing.T) {
+func TestProgressEvent_EmittedAfter2s(t *testing.T) {
 	// Launch a long-running background command, capture stdout, verify
 	// a task_progress event is emitted after ~2s.
 
@@ -213,7 +213,7 @@ func TestAC2_ProgressEvent_EmittedAfter2s(t *testing.T) {
 	}
 }
 
-func TestAC2_ProgressEvent_NotEmittedForShortTasks(t *testing.T) {
+func TestProgressEvent_NotEmittedForShortTasks(t *testing.T) {
 	// Tasks completing before 2s should NOT emit a progress event.
 
 	tmpDir := t.TempDir()
@@ -257,7 +257,7 @@ func TestAC2_ProgressEvent_NotEmittedForShortTasks(t *testing.T) {
 	}
 }
 
-func TestAC2_ProgressEvent_Format(t *testing.T) {
+func TestProgressEvent_Format(t *testing.T) {
 	// Verify the progress event format: type, task_id, duration_seconds, output_preview (max 200 chars)
 
 	tmpDir := t.TempDir()
@@ -335,10 +335,10 @@ func TestAC2_ProgressEvent_Format(t *testing.T) {
 }
 
 // ============================================================================
-// AC3: Completion notification sent to parent agent
+// Completion notification sent to parent agent
 // ============================================================================
 
-func TestAC3_CompletionNotification_Queued(t *testing.T) {
+func TestCompletionNotification_Queued(t *testing.T) {
 	// Launch a background command, wait for completion, verify that
 	// a completion notification is queued in the task manager.
 
@@ -384,7 +384,7 @@ func TestAC3_CompletionNotification_Queued(t *testing.T) {
 	}
 }
 
-func TestAC3_CompletionNotification_Format(t *testing.T) {
+func TestCompletionNotification_Format(t *testing.T) {
 	// Verify the completion notification produces the correct XML format.
 
 	tmpDir := t.TempDir()

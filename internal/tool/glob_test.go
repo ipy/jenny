@@ -182,7 +182,7 @@ func TestGlobTool_Execute(t *testing.T) {
 	}
 }
 
-func TestGlobTool_AC1_Max100Results(t *testing.T) {
+func TestGlobTool_Max100Results(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create 150 files
@@ -217,7 +217,7 @@ func TestGlobTool_AC1_Max100Results(t *testing.T) {
 	}
 }
 
-func TestGlobTool_AC2_RelativePaths(t *testing.T) {
+func TestGlobTool_RelativePaths(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a file
@@ -247,7 +247,7 @@ func TestGlobTool_AC2_RelativePaths(t *testing.T) {
 	}
 }
 
-func TestGlobTool_AC3_EmptyResult(t *testing.T) {
+func TestGlobTool_EmptyResult(t *testing.T) {
 	tmpDir := t.TempDir()
 	tool := NewGlobTool()
 
@@ -266,7 +266,7 @@ func TestGlobTool_AC3_EmptyResult(t *testing.T) {
 	}
 }
 
-func TestGlobTool_AC4_NonDirectoryPathError(t *testing.T) {
+func TestGlobTool_NonDirectoryPathError(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a file
@@ -319,7 +319,7 @@ func TestGlobTool_AC4_NonDirectoryPathError(t *testing.T) {
 	}
 }
 
-func TestGlobTool_AC5_ConcurrencySafe(t *testing.T) {
+func TestGlobTool_ConcurrencySafe(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create some files
@@ -416,7 +416,7 @@ func TestGlobTool_SortedByMtime(t *testing.T) {
 	}
 }
 
-// AC7: GlobTool respects .gitignore. Files matched by .gitignore are filtered
+// GlobTool respects .gitignore. Files matched by .gitignore are filtered
 // out of the result. The .gitignore file itself is also walked but not
 // matched by the pattern, so it does not appear either.
 func TestGlobTool_HonorsGitignore(t *testing.T) {
@@ -442,7 +442,7 @@ func TestGlobTool_HonorsGitignore(t *testing.T) {
 	}
 }
 
-// AC7: GlobTool respects .jennyignore (additive to .gitignore).
+// GlobTool respects .jennyignore (additive to .gitignore).
 func TestGlobTool_HonorsJennyignore(t *testing.T) {
 	tmpDir := t.TempDir()
 	mustWrite(t, filepath.Join(tmpDir, "keep.go"), "package x")

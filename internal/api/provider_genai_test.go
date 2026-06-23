@@ -106,7 +106,7 @@ func readBodyJSON(r *http.Request) map[string]any {
 }
 
 // ---------------------------------------------------------------------------
-// AC1: genaiProvider implements Provider
+// GenaiProvider implements Provider
 // ---------------------------------------------------------------------------
 
 func TestGenAIProvider_ImplementsProvider(t *testing.T) {
@@ -129,7 +129,7 @@ func TestGenAIProvider_ImplementsProvider(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC2: non-streaming SendMessage translates messages, tools, and system prompt
+// Non-streaming SendMessage translates messages, tools, and system prompt
 // ---------------------------------------------------------------------------
 
 func TestGenAIProvider_SendMessage_Basic(t *testing.T) {
@@ -189,7 +189,7 @@ func TestGenAIProvider_SendMessage_Basic(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC3: system prompt suffix is concatenated with the main system prompt
+// System prompt suffix is concatenated with the main system prompt
 // ---------------------------------------------------------------------------
 
 func TestGenAIProvider_SendMessage_SystemPromptSuffix(t *testing.T) {
@@ -225,7 +225,7 @@ func TestGenAIProvider_SendMessage_SystemPromptSuffix(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC4: tools are translated to genai function declarations
+// Tools are translated to genai function declarations
 // ---------------------------------------------------------------------------
 
 func TestGenAIProvider_SendMessage_Tools(t *testing.T) {
@@ -290,7 +290,7 @@ func TestGenAIProvider_SendMessage_Tools(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC5: tool results
+// Tool results
 // ---------------------------------------------------------------------------
 
 func TestGenAIProvider_SendMessage_ToolResults(t *testing.T) {
@@ -332,7 +332,7 @@ func TestGenAIProvider_SendMessage_ToolResults(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC6: max_tokens
+// Max_tokens
 // ---------------------------------------------------------------------------
 
 func TestGenAIProvider_SendMessage_MaxTokens(t *testing.T) {
@@ -357,7 +357,7 @@ func TestGenAIProvider_SendMessage_MaxTokens(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC7: API errors are wrapped as *RetryableHTTPError
+// API errors are wrapped as *RetryableHTTPError
 // ---------------------------------------------------------------------------
 
 func TestGenAIProvider_SendMessage_ErrorMapping(t *testing.T) {
@@ -400,7 +400,7 @@ func TestGenAIProvider_SendMessage_ErrorMapping(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC8: streaming yields incremental text blocks
+// Streaming yields incremental text blocks
 // ---------------------------------------------------------------------------
 
 func TestGenAIProvider_Stream_Basic(t *testing.T) {
@@ -444,7 +444,7 @@ func TestGenAIProvider_Stream_Basic(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC9: streaming function call
+// Streaming function call
 // ---------------------------------------------------------------------------
 
 func TestGenAIProvider_Stream_FunctionCall(t *testing.T) {
@@ -483,7 +483,7 @@ func TestGenAIProvider_Stream_FunctionCall(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC10: thinking parts
+// Thinking parts
 // ---------------------------------------------------------------------------
 
 func TestGenAIProvider_Stream_Thinking(t *testing.T) {
@@ -520,7 +520,7 @@ func TestGenAIProvider_Stream_Thinking(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC11: stream usage tokens
+// Stream usage tokens
 // ---------------------------------------------------------------------------
 
 func TestGenAIProvider_Stream_Usage(t *testing.T) {
@@ -552,7 +552,7 @@ func TestGenAIProvider_Stream_Usage(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC12: streaming error
+// Streaming error
 // ---------------------------------------------------------------------------
 
 func TestGenAIProvider_Stream_Error(t *testing.T) {
@@ -580,7 +580,7 @@ func TestGenAIProvider_Stream_Error(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC13: ProviderWithRetryConfig
+// ProviderWithRetryConfig
 // ---------------------------------------------------------------------------
 
 func TestGenAIProvider_RetryConfig(t *testing.T) {
@@ -596,7 +596,7 @@ func TestGenAIProvider_RetryConfig(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC14: ProviderKind constant
+// ProviderKind constant
 // ---------------------------------------------------------------------------
 
 func TestGenAIProvider_KindConstant(t *testing.T) {

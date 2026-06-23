@@ -224,7 +224,7 @@ func removeEmptyInputToolPairsNonFinal(messages []Message, logs *[]Normalization
 				msg.ToolUse = filtered
 				// If only empty-input tool_use blocks were removed and nothing
 				// else remains, and content is empty, insert placeholder to
-				// avoid empty assistant message (AC2 consistency).
+				// avoid empty assistant message.
 				if len(filtered) == 0 && msg.Content == "" {
 					msg.Content = "[No content]"
 				}
@@ -383,10 +383,10 @@ func stripCredentialBoundArtifacts(messages []Message, caps Capabilities) ([]Mes
 
 // validateContentBlocks applies SSNF Pass 2C: Content Block Validation.
 // It handles edge cases from session resume:
-// - AC1: Strip whitespace-only text blocks
-// - AC2: Insert placeholder for empty content in non-final assistant messages
-// - AC3: Strip trailing thinking/redacted_thinking blocks
-// - AC4: Drop messages that contain only thinking/redacted_thinking blocks (unconditional)
+// - Strip whitespace-only text blocks
+// - Insert placeholder for empty content in non-final assistant messages
+// - Strip trailing thinking/redacted_thinking blocks
+// - Drop messages that contain only thinking/redacted_thinking blocks (unconditional)
 //
 // This function operates on the Message.Content string field using regex patterns.
 // The Content field holds the wire-format concatenation of all content blocks (text,
@@ -400,13 +400,13 @@ func validateContentBlocks(messages []Message, logs *[]NormalizationLog) ([]Mess
 
 	var contentLogs []NormalizationLog
 
-	// Pass 1: AC4 — Drop messages with only thinking blocks (unconditional per spec)
+	// Pass 1: Drop messages with only thinking blocks (unconditional per spec)
 	messages = dropOrphanedThinkingMessages(messages, &contentLogs)
 
-	// Pass 2: AC3 — Strip trailing thinking/redacted_thinking blocks
+	// Pass 2: Strip trailing thinking/redacted_thinking blocks
 	messages = stripTrailingThinkingBlocks(messages, &contentLogs)
 
-	// Pass 3: AC1 — Strip whitespace-only text content blocks
+	// Pass 3: Strip whitespace-only text content blocks
 	for i := range messages {
 		if messages[i].Role != RoleAssistant {
 			continue
@@ -421,7 +421,7 @@ func validateContentBlocks(messages []Message, logs *[]NormalizationLog) ([]Mess
 		}
 	}
 
-	// Pass 4: AC2 — Insert placeholder for empty content in non-final assistant messages
+	// Pass 4: Insert placeholder for empty content in non-final assistant messages
 	for i := 0; i < len(messages)-1; i++ {
 		if messages[i].Role == RoleAssistant && messages[i].Content == "" && len(messages[i].ToolUse) == 0 {
 			messages[i].Content = "[No content]"
@@ -437,7 +437,7 @@ func validateContentBlocks(messages []Message, logs *[]NormalizationLog) ([]Mess
 
 // dropOrphanedThinkingMessages removes assistant messages that contain only
 // thinking and/or redacted_thinking blocks (with no text or tool_use).
-// Per AC4: drop unconditionally — applies regardless of message position or
+// Drop unconditionally — applies regardless of message position or
 // any other derived state such as credential-stripping decisions.
 func dropOrphanedThinkingMessages(messages []Message, logs *[]NormalizationLog) []Message {
 	var result []Message

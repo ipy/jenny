@@ -12,8 +12,8 @@ import (
 	"github.com/ipy/jenny/internal/constants"
 )
 
-// TestEditTool_AC1_NoPriorRead tests that Edit without prior Read fails.
-func TestEditTool_AC1_NoPriorRead(t *testing.T) {
+// TestEditTool_NoPriorRead tests that Edit without prior Read fails.
+func TestEditTool_NoPriorRead(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	editTool := NewEditTool(readCache)
@@ -43,8 +43,8 @@ func TestEditTool_AC1_NoPriorRead(t *testing.T) {
 	}
 }
 
-// TestEditTool_AC1_ReadThenEditWorks tests that Read then Edit works.
-func TestEditTool_AC1_ReadThenEditWorks(t *testing.T) {
+// TestEditTool_ReadThenEditWorks tests that Read then Edit works.
+func TestEditTool_ReadThenEditWorks(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	readTool := NewReadTool(PermissionEdit, readCache)
@@ -88,8 +88,8 @@ func TestEditTool_AC1_ReadThenEditWorks(t *testing.T) {
 	}
 }
 
-// TestEditTool_AC1_PartialReadRejected tests that partial read blocks edit.
-func TestEditTool_AC1_PartialReadRejected(t *testing.T) {
+// TestEditTool_PartialReadRejected tests that partial read blocks edit.
+func TestEditTool_PartialReadRejected(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	readTool := NewReadTool(PermissionEdit, readCache)
@@ -129,8 +129,8 @@ func TestEditTool_AC1_PartialReadRejected(t *testing.T) {
 	}
 }
 
-// TestEditTool_AC2_StaleMtime tests that stale mtime fails before edit.
-func TestEditTool_AC2_StaleMtime(t *testing.T) {
+// TestEditTool_StaleMtime tests that stale mtime fails before edit.
+func TestEditTool_StaleMtime(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	readTool := NewReadTool(PermissionEdit, readCache)
@@ -175,8 +175,8 @@ func TestEditTool_AC2_StaleMtime(t *testing.T) {
 	}
 }
 
-// TestEditTool_AC3_OldEqualsNew tests that old_string === new_string is rejected.
-func TestEditTool_AC3_OldEqualsNew(t *testing.T) {
+// TestEditTool_OldEqualsNew tests that old_string === new_string is rejected.
+func TestEditTool_OldEqualsNew(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	readTool := NewReadTool(PermissionEdit, readCache)
@@ -214,8 +214,8 @@ func TestEditTool_AC3_OldEqualsNew(t *testing.T) {
 	}
 }
 
-// TestEditTool_AC4_MultipleMatches tests that multiple matches require replace_all.
-func TestEditTool_AC4_MultipleMatches(t *testing.T) {
+// TestEditTool_MultipleMatches tests that multiple matches require replace_all.
+func TestEditTool_MultipleMatches(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	readTool := NewReadTool(PermissionEdit, readCache)
@@ -277,8 +277,8 @@ func TestEditTool_AC4_MultipleMatches(t *testing.T) {
 	}
 }
 
-// TestEditTool_AC5_IpynbRedirect tests that .ipynb paths are redirected.
-func TestEditTool_AC5_IpynbRedirect(t *testing.T) {
+// TestEditTool_IpynbRedirect tests that .ipynb paths are redirected.
+func TestEditTool_IpynbRedirect(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	readTool := NewReadTool(PermissionEdit, readCache)
@@ -386,8 +386,8 @@ func TestEditTool_ZeroMatches(t *testing.T) {
 	}
 }
 
-// TestEditTool_AC4_SingleMatchNoReplaceAll tests that single match works without replace_all.
-func TestEditTool_AC4_SingleMatchNoReplaceAll(t *testing.T) {
+// TestEditTool_SingleMatchNoReplaceAll tests that single match works without replace_all.
+func TestEditTool_SingleMatchNoReplaceAll(t *testing.T) {
 	tmpDir := t.TempDir()
 	readCache := NewReadFileCache()
 	readTool := NewReadTool(PermissionEdit, readCache)
@@ -1102,7 +1102,7 @@ func TestEditTool_ScopedEditLargeAfterSection(t *testing.T) {
 	}
 }
 
-// TestEditOOM verifies the AC4 1 GiB size guard. Without the fix, an
+// TestEditOOM verifies the 1 GiB size guard. Without the fix, an
 // attempt to edit a file larger than 1 GiB would load the entire file
 // into memory before rejecting it. With the fix, the size check runs
 // before os.ReadFile and the edit returns a clear "File exceeds maximum
@@ -1156,14 +1156,14 @@ func TestEditOOM(t *testing.T) {
 		t.Fatalf("Execute returned Go error: %v", err)
 	}
 	if !result.IsError {
-		t.Fatal("AC4 FAIL: expected IsError=true for >1GiB file")
+		t.Fatal("FAIL: expected IsError=true for >1GiB file")
 	}
 	if !strings.Contains(result.Content, "File exceeds maximum size of 1 GiB") {
-		t.Errorf("AC4 FAIL: error message %q does not contain the spec string", result.Content)
+		t.Errorf("FAIL: error message %q does not contain the spec string", result.Content)
 	}
 }
 
-// TestEditAtomic verifies the AC5 atomic edit behavior. We perform a
+// TestEditAtomic verifies the atomic edit behavior. We perform a
 // scoped edit on a real file and assert:
 //  1. The edit succeeds (file content reflects the replacement).
 //  2. No leftover .edit-* temp files remain in the file's directory.
@@ -1196,7 +1196,7 @@ func TestEditAtomic(t *testing.T) {
 		t.Fatalf("Execute error: %v", err)
 	}
 	if result.IsError {
-		t.Fatalf("AC5 FAIL: edit returned error: %s", result.Content)
+		t.Fatalf("FAIL: edit returned error: %s", result.Content)
 	}
 
 	// Verify file content reflects the edit.
@@ -1206,7 +1206,7 @@ func TestEditAtomic(t *testing.T) {
 	}
 	want := "line 1\nLINE TWO\nline 3\n"
 	if string(got) != want {
-		t.Errorf("AC5 FAIL: file content = %q, want %q", got, want)
+		t.Errorf("FAIL: file content = %q, want %q", got, want)
 	}
 
 	// Verify no leftover .edit-* temp files remain.
@@ -1216,7 +1216,7 @@ func TestEditAtomic(t *testing.T) {
 	}
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), ".edit-") {
-			t.Errorf("AC5 FAIL: leftover temp file %q", e.Name())
+			t.Errorf("FAIL: leftover temp file %q", e.Name())
 		}
 	}
 
@@ -1239,10 +1239,10 @@ func TestEditAtomic(t *testing.T) {
 		t.Fatalf("read dst after copy: %v", err)
 	}
 	if string(got) != string(payload) {
-		t.Errorf("AC5 fallback FAIL: dst = %q, want %q", got, payload)
+		t.Errorf("fallback FAIL: dst = %q, want %q", got, payload)
 	}
 	if _, err := os.Stat(src); !os.IsNotExist(err) {
-		t.Errorf("AC5 fallback FAIL: src should be removed after copy; stat err = %v", err)
+		t.Errorf("fallback FAIL: src should be removed after copy; stat err = %v", err)
 	}
 }
 

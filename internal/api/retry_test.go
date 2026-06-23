@@ -300,8 +300,8 @@ func createTestClient(ts *testServer) *Client {
 	return client
 }
 
-// AC1: 429 retried with backoff up to max retries
-func TestRetry_AC1_429Retry(t *testing.T) {
+// 429 retried with backoff up to max retries
+func TestRetry_429Retry(t *testing.T) {
 	// Create a mock provider to test retry logic directly
 	attemptCount := 0
 	baseDelay := 500 * time.Millisecond
@@ -492,8 +492,8 @@ func (p *mockRetryProvider) sendWithRetry(ctx context.Context, fn func(context.C
 	return nil, errors.New("max retries exhausted")
 }
 
-// AC1: Max retries exhausted
-func TestRetry_AC1_MaxRetriesExhausted(t *testing.T) {
+// Max retries exhausted
+func TestRetry_MaxRetriesExhausted(t *testing.T) {
 	attemptCount := 0
 
 	_, err := sendWithRetryDirect(func(ctx context.Context) (*Response, error) {
@@ -512,8 +512,8 @@ func TestRetry_AC1_MaxRetriesExhausted(t *testing.T) {
 	}
 }
 
-// AC2: Fourth consecutive 529 fails with distinct error
-func TestRetry_AC2_Fourth529Fails(t *testing.T) {
+// Fourth consecutive 529 fails with distinct error
+func TestRetry_Fourth529Fails(t *testing.T) {
 	attemptCount := 0
 
 	_, err := sendWithRetryDirect(func(ctx context.Context) (*Response, error) {
@@ -541,8 +541,8 @@ func TestRetry_AC2_Fourth529Fails(t *testing.T) {
 	}
 }
 
-// AC2: Three 529s then success (cap not exceeded)
-func TestRetry_AC2_Three529ThenSuccess(t *testing.T) {
+// Three 529s then success (cap not exceeded)
+func TestRetry_Three529ThenSuccess(t *testing.T) {
 	attemptCount := 0
 
 	result, err := sendWithRetryDirect(func(ctx context.Context) (*Response, error) {
@@ -566,8 +566,8 @@ func TestRetry_AC2_Three529ThenSuccess(t *testing.T) {
 	}
 }
 
-// AC3: Background classifiers do not retry 529
-func TestRetry_AC3_BackgroundNo529Retry(t *testing.T) {
+// Background classifiers do not retry 529
+func TestRetry_BackgroundNo529Retry(t *testing.T) {
 	attemptCount := 0
 
 	_, err := sendWithRetryDirect(func(ctx context.Context) (*Response, error) {
@@ -591,8 +591,8 @@ func TestRetry_AC3_BackgroundNo529Retry(t *testing.T) {
 	}
 }
 
-// AC3: Background still retries 429
-func TestRetry_AC3_BackgroundRetriesOther(t *testing.T) {
+// Background still retries 429
+func TestRetry_BackgroundRetriesOther(t *testing.T) {
 	attemptCount := 0
 
 	result, err := sendWithRetryDirect(func(ctx context.Context) (*Response, error) {
@@ -616,8 +616,8 @@ func TestRetry_AC3_BackgroundRetriesOther(t *testing.T) {
 	}
 }
 
-// AC4: Retry-After honored
-func TestRetry_AC4_RetryAfter(t *testing.T) {
+// Retry-After honored
+func TestRetry_RetryAfter(t *testing.T) {
 	var firstAttemptTime time.Time
 	var secondAttemptTime time.Time
 	attemptCount := 0
@@ -649,8 +649,8 @@ func TestRetry_AC4_RetryAfter(t *testing.T) {
 	}
 }
 
-// AC4: Retry-After 0 uses minimum backoff
-func TestRetry_AC4_RetryAfterZero(t *testing.T) {
+// Retry-After 0 uses minimum backoff
+func TestRetry_RetryAfterZero(t *testing.T) {
 	start := time.Now()
 	attemptCount := 0
 
@@ -684,8 +684,8 @@ func TestRetry_AC4_RetryAfterZero(t *testing.T) {
 	}
 }
 
-// AC5: Model and max_tokens preserved across retries
-func TestRetry_AC5_PreservesParams(t *testing.T) {
+// Model and max_tokens preserved across retries
+func TestRetry_PreservesParams(t *testing.T) {
 	// Track requests to verify model/max_tokens are preserved
 	var requests []map[string]any
 	var mu sync.Mutex

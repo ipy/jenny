@@ -44,7 +44,7 @@ func TestWindowsCommandGate_CheckPath(t *testing.T) {
 		}
 	}
 
-	t.Log("AC3 PASS: WindowsCommandGate blocks restricted paths")
+	t.Log("PASS: WindowsCommandGate blocks restricted paths")
 }
 
 // TestWindowsCommandGate_CheckCommand tests command validation for Windows.
@@ -85,7 +85,7 @@ func TestWindowsCommandGate_CheckCommand(t *testing.T) {
 		}
 	}
 
-	t.Log("AC3 PASS: WindowsCommandGate blocks restricted commands")
+	t.Log("PASS: WindowsCommandGate blocks restricted commands")
 }
 
 // TestWindowsCommandGate_SkipPermissions tests that unrestricted level bypasses checks.

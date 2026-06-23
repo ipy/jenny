@@ -31,7 +31,7 @@ func isGitRepo(searchRoot string) bool {
 
 const (
 	maxResults = 100
-	// AC8: maxDepth limits directory traversal depth (default 64).
+	// maxDepth limits directory traversal depth (default 64).
 	maxDepth = 64
 )
 
@@ -214,7 +214,7 @@ func (t *GlobTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}, nil
 	}
 
-	// Universal Windows Security (AC4)
+	// Universal Windows Security
 	if runtime.GOOS == "windows" {
 		winGate := NewWindowsCommandGate(PermissionEdit)
 		if err := winGate.CheckPath(searchRoot); err != nil {

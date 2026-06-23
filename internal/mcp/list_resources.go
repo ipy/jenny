@@ -188,7 +188,7 @@ func (t *ListMcpResourcesTool) executeForAllServers(ctx context.Context) (*toolr
 		}
 	}
 
-	// AC4: Empty result includes tools-may-exist note
+	// Empty result includes tools-may-exist note
 	if !hasResources && len(serverErrors) == 0 {
 		return &toolresult.ToolResult{
 			Content: "[]\nNote: No resources found. Resources may be empty while tools still exist.",

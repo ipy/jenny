@@ -53,7 +53,7 @@ func TestSkillTool_InputSchema(t *testing.T) {
 	}
 }
 
-func TestSkillTool_AC1_ActivationReturnsContentAndPath(t *testing.T) {
+func TestSkillTool_ActivationReturnsContentAndPath(t *testing.T) {
 	// Create a test skill
 	testSkill := skills.Skill{
 		Name:        "test-skill",
@@ -90,7 +90,7 @@ func TestSkillTool_AC1_ActivationReturnsContentAndPath(t *testing.T) {
 	}
 }
 
-func TestSkillTool_AC5_UnknownSkillError(t *testing.T) {
+func TestSkillTool_UnknownSkillError(t *testing.T) {
 	// Create a test skill
 	testSkill := skills.Skill{
 		Name:        "existing-skill",
@@ -120,7 +120,7 @@ func TestSkillTool_AC5_UnknownSkillError(t *testing.T) {
 	}
 }
 
-func TestSkillTool_AC5_NoSkillsAvailable(t *testing.T) {
+func TestSkillTool_NoSkillsAvailable(t *testing.T) {
 	tool := NewSkillTool(nil)
 	ctx := context.Background()
 
@@ -138,7 +138,7 @@ func TestSkillTool_AC5_NoSkillsAvailable(t *testing.T) {
 	}
 }
 
-func TestSkillTool_AC3_PathResolution(t *testing.T) {
+func TestSkillTool_PathResolution(t *testing.T) {
 	// Test that root_path is returned correctly for path resolution
 	testSkill := skills.Skill{
 		Name:        "path-test",
@@ -208,7 +208,7 @@ func TestSkillTool_NameRequired(t *testing.T) {
 	}
 }
 
-func TestSkillTool_AC6_DiscoveryFromMultipleDirs(t *testing.T) {
+func TestSkillTool_DiscoveryFromMultipleDirs(t *testing.T) {
 	// This test verifies that skills discovered from multiple directories
 	// are correctly passed to the tool and can be activated.
 	// We'll simulate this by creating skills with different root paths.

@@ -48,7 +48,7 @@ func (t *StructuredOutputTool) Description() string {
 // The input is wrapped in an envelope with a "value" field containing the user schema
 // and a "format" field indicating "json" or "text".
 func (t *StructuredOutputTool) InputSchema() map[string]any {
-	// AC1: Dynamically incorporate user schema into the "value" property
+	// Dynamically incorporate user schema into the "value" property
 	valueSchema := map[string]any{
 		"description": "The structured output value conforming to the schema",
 	}
@@ -62,7 +62,7 @@ func (t *StructuredOutputTool) InputSchema() map[string]any {
 	if _, hasType := valueSchema["type"]; !hasType {
 		valueSchema["type"] = "object"
 	}
-	// AC1: value.required is always ["value"] - the value field itself is required
+	// value.required is always ["value"] - the value field itself is required
 	valueSchema["required"] = []any{"value"}
 
 	return map[string]any{

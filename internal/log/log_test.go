@@ -59,7 +59,7 @@ func TestSetOutputAcceptsIOWriter(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC4: DEBUG env var alias
+// DEBUG env var alias
 // ---------------------------------------------------------------------------
 
 func TestIsTruthy(t *testing.T) {
@@ -188,7 +188,7 @@ func TestDebug_Output(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC5: --verbose flag enables debug logging
+// --verbose flag enables debug logging
 // ---------------------------------------------------------------------------
 
 func TestVerbose_Flag_EmitsDebugMessages(t *testing.T) {
@@ -361,7 +361,7 @@ func TestRingBuffer_EmptyBuffer(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC4: Last-Request Capture
+// Last-Request Capture
 // ---------------------------------------------------------------------------
 
 func TestLastRequest_SetAndGet(t *testing.T) {

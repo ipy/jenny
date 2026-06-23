@@ -1346,15 +1346,15 @@ func TestStreamJSON_FieldOrderMatchesReference(t *testing.T) {
 				t.Errorf("FAIL: line %d (%s) 'session_id' does not follow 'parent_tool_use_id'", li, eventType)
 			}
 			if sessionIdx != -1 && uuidIdx != -1 && sessionIdx >= uuidIdx {
-				t.Errorf("AC5 FAIL: line %d (%s) 'uuid' does not follow 'session_id'", li, eventType)
+				t.Errorf("FAIL: line %d (%s) 'uuid' does not follow 'session_id'", li, eventType)
 			}
 		}
 	}
-	t.Log("AC5 PASS: key order matches reference format for all event types")
+	t.Log("PASS: key order matches reference format for all event types")
 }
 
 // TestStreamJSON_CostOnlyOnResult verifies that total_cost_usd appears on
-// exactly one line (the terminal result) and not on mid-stream events (AC6).
+// exactly one line (the terminal result) and not on mid-stream events.
 func TestStreamJSON_CostOnlyOnResult(t *testing.T) {
 	server := makeMockStreamServer(t, nil)
 	defer server.Close()
@@ -1380,9 +1380,9 @@ func TestStreamJSON_CostOnlyOnResult(t *testing.T) {
 		}
 	}
 	if costLineCount != 1 {
-		t.Errorf("AC6 FAIL: total_cost_usd appears on %d lines, expected exactly 1", costLineCount)
+		t.Errorf("FAIL: total_cost_usd appears on %d lines, expected exactly 1", costLineCount)
 	} else {
-		t.Log("AC6 PASS: total_cost_usd appears on exactly 1 line (result event)")
+		t.Log("PASS: total_cost_usd appears on exactly 1 line (result event)")
 	}
 }
 
@@ -1439,7 +1439,7 @@ func TestStreamJSON_HasNoKindField(t *testing.T) {
 	}
 }
 
-// TestInitEvent_HasFastModeState verifies AC1: init event includes fast_mode_state field with value "off".
+// TestInitEvent_HasFastModeState verifies init event includes fast_mode_state field with value "off".
 func TestInitEvent_HasFastModeState(t *testing.T) {
 	server := makeMockStreamServer(t, nil)
 	defer server.Close()
@@ -1468,21 +1468,21 @@ func TestInitEvent_HasFastModeState(t *testing.T) {
 	}
 
 	if initEvent == nil {
-		t.Fatal("AC1 FAIL: no init event found in output")
+		t.Fatal("FAIL: no init event found in output")
 	}
 
-	// AC1: Verify fast_mode_state field exists and equals "off"
+	// Verify fast_mode_state field exists and equals "off"
 	fastModeState, hasField := initEvent["fast_mode_state"].(string)
 	if !hasField {
-		t.Error("AC1 FAIL: init event missing fast_mode_state field")
+		t.Error("FAIL: init event missing fast_mode_state field")
 	} else if fastModeState != "off" {
-		t.Errorf("AC1 FAIL: fast_mode_state = %q, want \"off\"", fastModeState)
+		t.Errorf("FAIL: fast_mode_state = %q, want \"off\"", fastModeState)
 	} else {
-		t.Log("AC1 PASS: init event has fast_mode_state=\"off\"")
+		t.Log("PASS: init event has fast_mode_state=\"off\"")
 	}
 }
 
-// TestInitEvent_HasOutputStyle verifies AC2: init event includes output_style field with value "default".
+// TestInitEvent_HasOutputStyle verifies init event includes output_style field with value "default".
 func TestInitEvent_HasOutputStyle(t *testing.T) {
 	server := makeMockStreamServer(t, nil)
 	defer server.Close()
@@ -1511,21 +1511,21 @@ func TestInitEvent_HasOutputStyle(t *testing.T) {
 	}
 
 	if initEvent == nil {
-		t.Fatal("AC2 FAIL: no init event found in output")
+		t.Fatal("FAIL: no init event found in output")
 	}
 
-	// AC2: Verify output_style field exists and equals "default"
+	// Verify output_style field exists and equals "default"
 	outputStyle, hasField := initEvent["output_style"].(string)
 	if !hasField {
-		t.Error("AC2 FAIL: init event missing output_style field")
+		t.Error("FAIL: init event missing output_style field")
 	} else if outputStyle != "default" {
-		t.Errorf("AC2 FAIL: output_style = %q, want \"default\"", outputStyle)
+		t.Errorf("FAIL: output_style = %q, want \"default\"", outputStyle)
 	} else {
-		t.Log("AC2 PASS: init event has output_style=\"default\"")
+		t.Log("PASS: init event has output_style=\"default\"")
 	}
 }
 
-// TestInitEvent_HasMCPServers verifies AC3: init event includes mcp_servers field as an array.
+// TestInitEvent_HasMCPServers verifies init event includes mcp_servers field as an array.
 func TestInitEvent_HasMCPServers(t *testing.T) {
 	server := makeMockStreamServer(t, nil)
 	defer server.Close()
@@ -1554,33 +1554,33 @@ func TestInitEvent_HasMCPServers(t *testing.T) {
 	}
 
 	if initEvent == nil {
-		t.Fatal("AC3 FAIL: no init event found in output")
+		t.Fatal("FAIL: no init event found in output")
 	}
 
-	// AC3: Verify mcp_servers field exists and is an array
+	// Verify mcp_servers field exists and is an array
 	mcpServers, hasField := initEvent["mcp_servers"]
 	if !hasField {
-		t.Error("AC3 FAIL: init event missing mcp_servers field")
+		t.Error("FAIL: init event missing mcp_servers field")
 		return
 	}
 
 	mcpArray, ok := mcpServers.([]any)
 	if !ok {
-		t.Error("AC3 FAIL: mcp_servers is not an array")
+		t.Error("FAIL: mcp_servers is not an array")
 		return
 	}
 
 	// Verify it's an empty array (no MCP servers configured)
 	if len(mcpArray) != 0 {
-		t.Logf("AC3: mcp_servers has %d server(s) (expected empty array)", len(mcpArray))
+		t.Logf("mcp_servers has %d server(s) (expected empty array)", len(mcpArray))
 	} else {
-		t.Log("AC3 PASS: init event has mcp_servers=[] (empty array)")
+		t.Log("PASS: init event has mcp_servers=[] (empty array)")
 	}
 
 	// Also verify all elements are strings
 	for i, item := range mcpArray {
 		if _, ok := item.(string); !ok {
-			t.Errorf("AC3 FAIL: mcp_servers[%d] is not a string", i)
+			t.Errorf("FAIL: mcp_servers[%d] is not a string", i)
 		}
 	}
 }
@@ -1617,43 +1617,43 @@ func TestResultEvent_HasNewFields(t *testing.T) {
 		t.Fatal("FAIL: no result event found in output")
 	}
 
-	// AC1: Verify ttft_ms is present when non-zero (omitted when zero per spec)
+	// Verify ttft_ms is present when non-zero (omitted when zero per spec)
 	if _, hasTTFT := resultEvent["ttft_ms"]; hasTTFT {
 		// Field present - verify value is >= 0
 		if ttftMs, ok := resultEvent["ttft_ms"].(float64); ok {
 			if ttftMs < 0 {
-				t.Errorf("AC1 FAIL: ttft_ms = %f, want >= 0", ttftMs)
+				t.Errorf("FAIL: ttft_ms = %f, want >= 0", ttftMs)
 			} else {
-				t.Logf("AC1 PASS: ttft_ms = %f (valid non-negative value)", ttftMs)
+				t.Logf("PASS: ttft_ms = %f (valid non-negative value)", ttftMs)
 			}
 		} else if ttftMs, ok := resultEvent["ttft_ms"].(int64); ok {
 			if ttftMs < 0 {
-				t.Errorf("AC1 FAIL: ttft_ms = %d, want >= 0", ttftMs)
+				t.Errorf("FAIL: ttft_ms = %d, want >= 0", ttftMs)
 			} else {
-				t.Logf("AC1 PASS: ttft_ms = %d (valid non-negative value)", ttftMs)
+				t.Logf("PASS: ttft_ms = %d (valid non-negative value)", ttftMs)
 			}
 		}
 	} else {
-		t.Log("AC1 PASS: ttft_ms correctly omitted when zero (no timing data in mock)")
+		t.Log("PASS: ttft_ms correctly omitted when zero (no timing data in mock)")
 	}
-	// AC2: Verify terminal_reason is present and has correct value for end_turn
+	// Verify terminal_reason is present and has correct value for end_turn
 	terminalReason, hasTerminalReason := resultEvent["terminal_reason"].(string)
 	if !hasTerminalReason {
-		t.Error("AC2 FAIL: result event missing terminal_reason field")
+		t.Error("FAIL: result event missing terminal_reason field")
 	} else if terminalReason != "completed" {
-		t.Errorf("AC2 FAIL: terminal_reason = %q, want \"completed\" for end_turn", terminalReason)
+		t.Errorf("FAIL: terminal_reason = %q, want \"completed\" for end_turn", terminalReason)
 	} else {
-		t.Log("AC2 PASS: result event has terminal_reason=\"completed\"")
+		t.Log("PASS: result event has terminal_reason=\"completed\"")
 	}
 
-	// AC3: Verify api_error_status is present and is null on success
+	// Verify api_error_status is present and is null on success
 	apiErrorStatus, hasAPIErrorStatus := resultEvent["api_error_status"]
 	if !hasAPIErrorStatus {
-		t.Error("AC3 FAIL: result event missing api_error_status field")
+		t.Error("FAIL: result event missing api_error_status field")
 	} else if apiErrorStatus != nil {
-		t.Errorf("AC3 FAIL: api_error_status = %v, want null on success", apiErrorStatus)
+		t.Errorf("FAIL: api_error_status = %v, want null on success", apiErrorStatus)
 	} else {
-		t.Log("AC3 PASS: result event has api_error_status=null on success")
+		t.Log("PASS: result event has api_error_status=null on success")
 	}
 }
 

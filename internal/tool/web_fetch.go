@@ -27,7 +27,7 @@ const (
 	webFetchTimeout          = 60 * time.Second // request timeout
 	webFetchMaxRedirects     = 10               // max redirect hops
 	webFetchMaxURLLength     = 2000             // max URL length
-	webFetchBlocklistTimeout = 10 * time.Second // DNS resolution timeout (AC3)
+	webFetchBlocklistTimeout = 10 * time.Second // DNS resolution timeout
 	webFetchCacheSize        = 50 * 1024 * 1024 // 50 MB LRU cache
 	webFetchCacheTTL         = 15 * time.Minute // cache TTL
 	webFetchHostnameTTL      = 5 * time.Minute  // hostname blocklist cache TTL
@@ -247,7 +247,7 @@ func (t *WebFetchTool) Execute(ctx context.Context, input map[string]any, cwd st
 		}, nil
 	}
 
-	// AC5: Reject credentials in URL.
+	// Reject credentials in URL.
 	if parsedURL.User != nil {
 		return &ToolResult{
 			Content: "URL must not contain embedded credentials (user:password@host). This is a security measure.",
@@ -257,7 +257,7 @@ func (t *WebFetchTool) Execute(ctx context.Context, input map[string]any, cwd st
 
 	hostname := parsedURL.Hostname()
 
-	// AC3: Blocklist preflight — also returns resolved IPs to pin in dialer.
+	// Blocklist preflight — also returns resolved IPs to pin in dialer.
 	resolvedAddrs, blErr := t.checkBlocklist(ctx, hostname)
 	if blErr != nil {
 		return &ToolResult{
@@ -324,7 +324,7 @@ func (t *WebFetchTool) fetch(ctx context.Context, parsedURL *url.URL, urlStr str
 			if len(via) >= webFetchMaxRedirects {
 				return fmt.Errorf("too many redirects (max %d)", webFetchMaxRedirects)
 			}
-			// AC4: Cross-host redirect — do not follow.
+			// Cross-host redirect — do not follow.
 			if req.URL.Host != parsedURL.Host {
 				return &redirectError{targetURL: req.URL.String()}
 			}
@@ -440,7 +440,7 @@ func (t *WebFetchTool) saveBinaryToDisk(data []byte) (string, error) {
 	return filePath, nil
 }
 
-// checkBlocklist verifies that a hostname is not on the blocklist (AC3).
+// checkBlocklist verifies that a hostname is not on the blocklist.
 // It checks hardcoded SSRF targets and resolves DNS to detect private/loopback ranges.
 // Returns the resolved IP addresses (if any) for use in a pinned dialer to prevent DNS rebinding.
 func (t *WebFetchTool) checkBlocklist(ctx context.Context, hostname string) ([]string, error) {

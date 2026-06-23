@@ -192,7 +192,7 @@ func TestLSPTool_NameAndDescription(t *testing.T) {
 	}
 }
 
-func TestLSPTool_AC1_OneBasedCoordinates(t *testing.T) {
+func TestLSPTool_OneBasedCoordinates(t *testing.T) {
 	mockClient := newMockLSPClient()
 	mockClient.setGoToDefResult([]lsp.Location{
 		{URI: "file:///test.go", Line: 0, Start: 0, End: 0},
@@ -200,7 +200,7 @@ func TestLSPTool_AC1_OneBasedCoordinates(t *testing.T) {
 	tool := NewLSPTool(mockClient)
 	ctx := context.Background()
 
-	// AC1: Input line=1, character=1 should be converted to LSP line=0, character=0
+	// Input line=1, character=1 should be converted to LSP line=0, character=0
 	result, err := tool.Execute(ctx, map[string]any{
 		"operation": "goToDefinition",
 		"uri":       "file:///test.go",
@@ -222,13 +222,13 @@ func TestLSPTool_AC1_OneBasedCoordinates(t *testing.T) {
 	}
 }
 
-func TestLSPTool_AC2_DisconnectedError(t *testing.T) {
+func TestLSPTool_DisconnectedError(t *testing.T) {
 	mockClient := newMockLSPClient()
 	mockClient.setConnected(false)
 	tool := NewLSPTool(mockClient)
 	ctx := context.Background()
 
-	// AC2: When not connected, should return clear error
+	// When not connected, should return clear error
 	result, err := tool.Execute(ctx, map[string]any{
 		"operation": "hover",
 		"uri":       "file:///test.go",
@@ -246,7 +246,7 @@ func TestLSPTool_AC2_DisconnectedError(t *testing.T) {
 	}
 }
 
-func TestLSPTool_AC3_FileSizeLimit(t *testing.T) {
+func TestLSPTool_FileSizeLimit(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping large file test on Windows (file path handling differs)")
 	}
@@ -269,7 +269,7 @@ func TestLSPTool_AC3_FileSizeLimit(t *testing.T) {
 	f.Write(data)
 	f.Close()
 
-	// AC3: Files >10MB should be rejected
+	// Files >10MB should be rejected
 	result, err := tool.Execute(ctx, map[string]any{
 		"operation": "hover",
 		"uri":       "file://" + largeFile,
@@ -287,7 +287,7 @@ func TestLSPTool_AC3_FileSizeLimit(t *testing.T) {
 	}
 }
 
-func TestLSPTool_AC4_ConcurrencySafety(t *testing.T) {
+func TestLSPTool_ConcurrencySafety(t *testing.T) {
 	mockClient := newMockLSPClient()
 	tool := NewLSPTool(mockClient)
 	ctx := context.Background()
@@ -302,7 +302,7 @@ func TestLSPTool_AC4_ConcurrencySafety(t *testing.T) {
 		{URI: "file:///test.go", Line: 5, Start: 10, End: 20},
 	})
 
-	// AC4: Concurrent calls should work without race conditions
+	// Concurrent calls should work without race conditions
 	var wg sync.WaitGroup
 	errors := make(chan error, 20)
 
@@ -356,7 +356,7 @@ func TestLSPTool_AC4_ConcurrencySafety(t *testing.T) {
 	}
 }
 
-func TestLSPTool_AC5_GitignoreFiltering_WorkspaceSymbol(t *testing.T) {
+func TestLSPTool_GitignoreFiltering_WorkspaceSymbol(t *testing.T) {
 	// Create a temp directory with a .gitignore
 	tmpDir := t.TempDir()
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
@@ -376,7 +376,7 @@ func TestLSPTool_AC5_GitignoreFiltering_WorkspaceSymbol(t *testing.T) {
 		{Name: "AlsoBad", Kind: "Function", URI: "file:///debug.log", Line: 1, Start: 0, FilePath: filepath.Join(tmpDir, "debug.log")},
 	})
 
-	// AC5: Gitignored paths should be filtered from results
+	// Gitignored paths should be filtered from results
 	result, err := tool.Execute(ctx, map[string]any{
 		"operation": "workspaceSymbol",
 		"query":     "test",
@@ -401,7 +401,7 @@ func TestLSPTool_AC5_GitignoreFiltering_WorkspaceSymbol(t *testing.T) {
 	}
 }
 
-func TestLSPTool_AC5_GitignoreFiltering_FindReferences(t *testing.T) {
+func TestLSPTool_GitignoreFiltering_FindReferences(t *testing.T) {
 	// Create a temp directory with a .gitignore
 	tmpDir := t.TempDir()
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
@@ -421,7 +421,7 @@ func TestLSPTool_AC5_GitignoreFiltering_FindReferences(t *testing.T) {
 		{URI: "file://" + filepath.Join(tmpDir, "secret.go"), Line: 5, Start: 10},
 	})
 
-	// AC5: Gitignored paths should be filtered from findReferences
+	// Gitignored paths should be filtered from findReferences
 	result, err := tool.Execute(ctx, map[string]any{
 		"operation": "findReferences",
 		"uri":       "file:///test.go",

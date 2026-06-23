@@ -23,7 +23,7 @@ func TestRegistryWindowsToolRegistration(t *testing.T) {
 			t.Error("expected 'PowerShell' tool on Windows")
 		}
 		// BashTool may or may not be present (depends on bash.exe in PATH)
-		t.Log("AC1 PASS: PowerShellTool registered on Windows")
+		t.Log("PASS: PowerShellTool registered on Windows")
 	} else {
 		// On Unix, BashTool should be present, PowerShellTool should not
 		if names["PowerShell"] {
@@ -32,7 +32,7 @@ func TestRegistryWindowsToolRegistration(t *testing.T) {
 		if !names["Bash"] {
 			t.Error("expected 'Bash' tool on Unix")
 		}
-		t.Log("AC1 PASS: BashTool registered, PowerShellTool absent on Unix")
+		t.Log("PASS: BashTool registered, PowerShellTool absent on Unix")
 	}
 }
 

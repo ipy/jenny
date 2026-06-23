@@ -76,7 +76,7 @@ func (p *openAIProvider) SetRetryConfig(cfg RetryConfig) {
 }
 
 // SetThinkingConfig sets the thinking configuration.
-// Maps Effort to reasoning_effort for o-series models via Chat API (AC2).
+// Maps Effort to reasoning_effort for o-series models via Chat API.
 func (p *openAIProvider) SetThinkingConfig(cfg ThinkingConfig) {
 	if cfg.Effort != "" {
 		p.thinkingEffort = cfg.Effort

@@ -296,10 +296,10 @@ func TestRegistry_CombinedFilters(t *testing.T) {
 	}
 }
 
-// TestAC4_RegistryBuildReceivesReadFileCache verifies that when a ReadFileCache
+// TestRegistryBuildReceivesReadFileCache verifies that when a ReadFileCache
 // is passed to WithReadFileCache, the Registry.Build() method properly configures
 // the cache for tools that support read-before-write enforcement.
-func TestAC4_RegistryBuildReceivesReadFileCache(t *testing.T) {
+func TestRegistryBuildReceivesReadFileCache(t *testing.T) {
 	// Create a ReadFileCache
 	readCache := NewReadFileCache()
 
@@ -349,12 +349,12 @@ func TestAC4_RegistryBuildReceivesReadFileCache(t *testing.T) {
 		t.Error("'notebook_edit' should not be present without ReadFileCache")
 	}
 
-	t.Log("AC4 PASS: Registry.Build properly gates write/edit/notebook_edit based on ReadFileCache presence")
+	t.Log("Registry.Build properly gates write/edit/notebook_edit based on ReadFileCache presence")
 }
 
-// TestAC4_ReadFileCacheWireToTools verifies that the ReadFileCache is properly
+// TestReadFileCacheWireToTools verifies that the ReadFileCache is properly
 // passed through to the Read tool when configured.
-func TestAC4_ReadFileCacheWireToTools(t *testing.T) {
+func TestReadFileCacheWireToTools(t *testing.T) {
 	readCache := NewReadFileCache()
 
 	tools := NewRegistry().
@@ -379,11 +379,11 @@ func TestAC4_ReadFileCacheWireToTools(t *testing.T) {
 	// We can't directly access the private cache field, but we can verify behavior
 	// by checking that the tool was created with cache support
 
-	t.Log("AC4 PASS: ReadTool created with ReadFileCache support")
+	t.Log("ReadTool created with ReadFileCache support")
 }
 
-// TestAC3_TaskCreateAppearsByDefault verifies that TaskCreate is always registered.
-func TestAC3_TaskCreateAppearsByDefault(t *testing.T) {
+// TestTaskCreateAppearsByDefault verifies that TaskCreate is always registered.
+func TestTaskCreateAppearsByDefault(t *testing.T) {
 	tools := NewRegistry().
 		WithBaseTools().
 		Build()
@@ -397,12 +397,12 @@ func TestAC3_TaskCreateAppearsByDefault(t *testing.T) {
 		t.Error("expected 'TaskCreate' tool by default")
 	}
 
-	t.Log("AC3 PASS: TaskCreate tool appears by default")
+	t.Log("TaskCreate tool appears by default")
 }
 
-// TestAC10_TaskGetListUpdateAppearByDefault verifies that TaskGet, TaskList, and
+// TestTaskGetListUpdateAppearByDefault verifies that TaskGet, TaskList, and
 // TaskUpdate are always registered.
-func TestAC10_TaskGetListUpdateAppearByDefault(t *testing.T) {
+func TestTaskGetListUpdateAppearByDefault(t *testing.T) {
 	tools := NewRegistry().
 		WithBaseTools().
 		Build()
@@ -422,10 +422,10 @@ func TestAC10_TaskGetListUpdateAppearByDefault(t *testing.T) {
 		t.Error("expected 'TaskUpdate' tool by default")
 	}
 
-	t.Log("AC10 PASS: TaskGet, TaskList, TaskUpdate appear by default")
+	t.Log("TaskGet, TaskList, TaskUpdate appear by default")
 }
 
-// AC3: --strict-mcp-config suppresses all built-in tools. With WithStrictMCP
+// --strict-mcp-config suppresses all built-in tools. With WithStrictMCP
 // set, even if WithBaseTools / WebFetch / WebSearch are requested, none of
 // them appear in the result. MCP tools (provided via WithMCPTools) still flow
 // through.

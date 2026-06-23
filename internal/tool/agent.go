@@ -11,7 +11,7 @@ import (
 var ForkChildKey = "agent.forkChild"
 
 // NamedAgentKey is the context key for checking if we're in a named swarm agent.
-// Used to block nested named agents (AC1).
+// Used to block nested named agents.
 var NamedAgentKey = "agent.namedAgent"
 
 // SubagentParams holds parameters for running a subagent.
@@ -25,7 +25,7 @@ type SubagentParams struct {
 	RunInBackground bool
 	Name            string   // Swarm agent name (empty means unnamed subagent)
 	Profile         string   // Router profile name for multi-provider routing (e.g., "vision")
-	AllowedTools    []string // Skill-specific allowed tools (AC4)
+	AllowedTools    []string // Skill-specific allowed tools
 }
 
 // SubagentResult holds the result of a subagent execution.
@@ -134,7 +134,7 @@ func (t *AgentTool) InputSchema() map[string]any {
 			"description": "Working directory override for the subagent",
 		},
 	}
-	// AC2: Only include name parameter when swarm mode is enabled
+	// Only include name parameter when swarm mode is enabled
 	if t.swarmsEnabled {
 		props["name"] = map[string]any{
 			"type":        "string",
@@ -149,7 +149,7 @@ func (t *AgentTool) InputSchema() map[string]any {
 }
 
 // isForkChild checks if the current execution context indicates we're in a subagent.
-// This is used to block recursive fork (AC1).
+// This is used to block recursive fork.
 func isForkChild(ctx context.Context) bool {
 	if v := ctx.Value(ForkChildKey); v != nil {
 		if b, ok := v.(bool); ok && b {
@@ -160,7 +160,7 @@ func isForkChild(ctx context.Context) bool {
 }
 
 // isNamedAgent checks if the current execution context indicates we're in a named swarm agent.
-// This is used to block nested named agents (AC1).
+// This is used to block nested named agents.
 func isNamedAgent(ctx context.Context) bool {
 	if v := ctx.Value(NamedAgentKey); v != nil {
 		if b, ok := v.(bool); ok && b {
@@ -172,7 +172,7 @@ func isNamedAgent(ctx context.Context) bool {
 
 // Execute runs the agent tool with the given input.
 func (t *AgentTool) Execute(ctx context.Context, input map[string]any, cwd string) (*ToolResult, error) {
-	// AC1: Check for recursive fork blocking via context
+	// Check for recursive fork blocking via context
 	if isForkChild(ctx) {
 		return &ToolResult{
 			Content: "recursive fork not allowed",
@@ -235,7 +235,7 @@ func (t *AgentTool) Execute(ctx context.Context, input map[string]any, cwd strin
 		profile = p
 	}
 
-	// AC2: Check swarm mode feature flag
+	// Check swarm mode feature flag
 	if name != "" && !t.swarmsEnabled {
 		return &ToolResult{
 			Content: "swarm mode not enabled",
@@ -243,7 +243,7 @@ func (t *AgentTool) Execute(ctx context.Context, input map[string]any, cwd strin
 		}, nil
 	}
 
-	// AC1: Block nested named agents
+	// Block nested named agents
 	if name != "" && isNamedAgent(ctx) {
 		return &ToolResult{
 			Content: "nested named agents not allowed",
@@ -264,7 +264,7 @@ func (t *AgentTool) Execute(ctx context.Context, input map[string]any, cwd strin
 		Profile:         profile,
 	}
 
-	// AC4: Pass active skill's allowed tools if available
+	// Pass active skill's allowed tools if available
 	if t.skillActivator != nil {
 		params.AllowedTools = t.skillActivator.GetActivatedTools()
 	}

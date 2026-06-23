@@ -88,10 +88,10 @@ func newMockClientForToolTest(t *testing.T) (api.Requester, func()) {
 }
 
 // ============================================================================
-// AC1: No nested named teammates
+// No nested named teammates
 // ============================================================================
 
-func TestAC1_NamedAgent_CannotSpawnNamedAgent(t *testing.T) {
+func TestNamedAgent_CannotSpawnNamedAgent(t *testing.T) {
 	// Create an AgentTool with swarms enabled
 	agentTool := tool.NewAgentToolWithSwarms(nil, nil, true)
 
@@ -116,7 +116,7 @@ func TestAC1_NamedAgent_CannotSpawnNamedAgent(t *testing.T) {
 	}
 }
 
-func TestAC1_NamedAgent_CanSpawnUnnamedAgent(t *testing.T) {
+func TestNamedAgent_CanSpawnUnnamedAgent(t *testing.T) {
 	// Create an AgentTool with swarms enabled
 	// We need a mock runner since we're testing the context check, not actual execution
 	mockRunner := &mockSubagentRunnerForAC1{}
@@ -143,23 +143,23 @@ func TestAC1_NamedAgent_CanSpawnUnnamedAgent(t *testing.T) {
 	}
 }
 
-// mockSubagentRunnerForAC1 implements SubagentRunner for testing
-type mockSubagentRunnerForAC1 struct{}
+// mockSubagentRunnerForNestedCheck implements SubagentRunner for testing
+type mockSubagentRunnerForNestedCheck struct{}
 
-func (m *mockSubagentRunnerForAC1) RunSubagent(ctx context.Context, params tool.SubagentParams) (*tool.SubagentResult, error) {
+func (m *mockSubagentRunnerForNestedCheck) RunSubagent(ctx context.Context, params tool.SubagentParams) (*tool.SubagentResult, error) {
 	// Return a successful result - we only care that the nested name check passes
 	return &tool.SubagentResult{Output: "success"}, nil
 }
 
-func (m *mockSubagentRunnerForAC1) GetCapturedStreamConfigInfo() map[string]any {
+func (m *mockSubagentRunnerForNestedCheck) GetCapturedStreamConfigInfo() map[string]any {
 	return nil
 }
 
 // ============================================================================
-// AC2: Swarm feature flag gates all team tools
+// Swarm feature flag gates all team tools
 // ============================================================================
 
-func TestAC2_SwarmModeDisabled_NameParameterReturnsError(t *testing.T) {
+func TestSwarmModeDisabled_NameParameterReturnsError(t *testing.T) {
 	// Create an AgentTool with swarms DISABLED (default)
 	agentTool := tool.NewAgentTool(nil, nil) // swarmsEnabled = false by default
 
@@ -181,7 +181,7 @@ func TestAC2_SwarmModeDisabled_NameParameterReturnsError(t *testing.T) {
 	}
 }
 
-func TestAC2_SwarmModeEnabled_NameParameterAccepted(t *testing.T) {
+func TestSwarmModeEnabled_NameParameterAccepted(t *testing.T) {
 	// Create an AgentTool with swarms ENABLED
 	mockRunner := &mockSubagentRunnerForAC3{}
 	agentTool := tool.NewAgentToolWithSwarms(mockRunner, nil, true)

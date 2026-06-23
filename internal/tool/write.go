@@ -125,7 +125,7 @@ func (t *WriteTool) Execute(ctx context.Context, input map[string]any, cwd strin
 		}, nil
 	}
 
-	// Universal Windows Security (AC4)
+	// Universal Windows Security
 	if runtime.GOOS == "windows" {
 		winGate := NewWindowsCommandGate(t.effectiveLevel())
 		if err := winGate.CheckPath(filePath); err != nil {
@@ -177,8 +177,8 @@ func (t *WriteTool) Execute(ctx context.Context, input map[string]any, cwd strin
 		t.activator.ActivateForPath(filePath)
 	}
 
-	// AC1: Check readFileState cache for the path
-	// AC9: At unrestricted level, skip read-before-write check
+	// Check readFileState cache for the path
+	// At unrestricted level, skip read-before-write check
 	var entry *ReadFileEntry
 	if t.effectiveLevel().ReadBeforeWrite() {
 		var exists bool
@@ -190,7 +190,7 @@ func (t *WriteTool) Execute(ctx context.Context, input map[string]any, cwd strin
 			}, nil
 		}
 
-		// AC2: Check staleness
+		// Check staleness
 		info, err := os.Stat(filePath)
 		if err == nil {
 			// File exists, check mtime
@@ -202,7 +202,7 @@ func (t *WriteTool) Execute(ctx context.Context, input map[string]any, cwd strin
 			}
 		}
 
-		// AC1 continued: Check if entry was a partial read
+		// Check if entry was a partial read
 		if !entry.IsFullRead {
 			return &ToolResult{
 				Content: "Cannot write after partial read. Use Read tool without offset/limit to get the full file first.",
@@ -211,7 +211,7 @@ func (t *WriteTool) Execute(ctx context.Context, input map[string]any, cwd strin
 		}
 	}
 
-	// Create parent directories (AC3)
+	// Create parent directories
 	parentDir := filepath.Dir(filePath)
 	if parentDir != "" && parentDir != "." {
 		if err := os.MkdirAll(parentDir, 0755); err != nil {
@@ -222,7 +222,7 @@ func (t *WriteTool) Execute(ctx context.Context, input map[string]any, cwd strin
 		}
 	}
 
-	// AC4: Atomic write — write to temp file in same directory, sync, rename.
+	// Atomic write — write to temp file in same directory, sync, rename.
 	// This guarantees that a crash never leaves a partially-written target.
 	tmpFile, err := os.CreateTemp(filepath.Dir(filePath), ".write-*")
 	if err != nil {
@@ -291,7 +291,7 @@ func (t *WriteTool) Execute(ctx context.Context, input map[string]any, cwd strin
 		newMtime = newInfo.ModTime()
 	}
 
-	// Update readFileCache after successful write (AC5)
+	// Update readFileCache after successful write
 	t.readCache.UpdateAfterWrite(filePath, content, newMtime)
 
 	return &ToolResult{

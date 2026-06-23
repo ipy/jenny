@@ -9,14 +9,14 @@ import (
 	"time"
 )
 
-// TestWriteTool_AC1_NoPriorRead_BlackBox validates that writing without a prior Read fails.
+// TestWriteTool_NoPriorRead_BlackBox validates that writing without a prior Read fails.
 // Also validates the exact error message per spec.
-func TestWriteTool_AC1_NoPriorRead_BlackBox(t *testing.T) {
+func TestWriteTool_NoPriorRead_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
 	wt := NewWriteTool(cache)
 
-	// AC1: Write to a path never read
+	// Write to a path never read
 	result, err := wt.Execute(context.Background(), map[string]any{
 		"file_path": filepath.Join(tmpDir, "never_read.txt"),
 		"content":   "should fail",
@@ -25,10 +25,10 @@ func TestWriteTool_AC1_NoPriorRead_BlackBox(t *testing.T) {
 		t.Fatalf("unexpected error (should be in result.IsError): %v", err)
 	}
 	if !result.IsError {
-		t.Fatal("AC1 FAIL: expected IsError=true when writing without prior Read")
+		t.Fatal("FAIL: expected IsError=true when writing without prior Read")
 	}
 	if !strings.Contains(result.Content, "Cannot write without reading first") {
-		t.Fatalf("AC1 FAIL: wrong error message. Got: %s", result.Content)
+		t.Fatalf("FAIL: wrong error message. Got: %s", result.Content)
 	}
 
 	// Write with empty file_path
@@ -40,7 +40,7 @@ func TestWriteTool_AC1_NoPriorRead_BlackBox(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !result.IsError {
-		t.Fatal("AC1 FAIL: expected error for empty file_path")
+		t.Fatal("FAIL: expected error for empty file_path")
 	}
 
 	// Write with non-string file_path
@@ -52,13 +52,13 @@ func TestWriteTool_AC1_NoPriorRead_BlackBox(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !result.IsError {
-		t.Fatal("AC1 FAIL: expected error for non-string file_path")
+		t.Fatal("FAIL: expected error for non-string file_path")
 	}
 }
 
-// TestWriteTool_AC2_StaleMtime_BlackBox validates staleness detection from
+// TestWriteTool_StaleMtime_BlackBox validates staleness detection from
 // multiple external modification methods.
-func TestWriteTool_AC2_StaleMtime_BlackBox(t *testing.T) {
+func TestWriteTool_StaleMtime_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Run("external write changes mtime", func(t *testing.T) {
 		cache := NewReadFileCache()
@@ -91,16 +91,16 @@ func TestWriteTool_AC2_StaleMtime_BlackBox(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if !result.IsError {
-			t.Fatal("AC2 FAIL: expected staleness error after external write")
+			t.Fatal("FAIL: expected staleness error after external write")
 		}
 		if !strings.Contains(result.Content, "File has changed since it was read") {
-			t.Fatalf("AC2 FAIL: wrong error message. Got: %s", result.Content)
+			t.Fatalf("FAIL: wrong error message. Got: %s", result.Content)
 		}
 
 		// Verify original content preserved (write was rejected)
 		data, _ := os.ReadFile(f)
 		if string(data) != "external change\n" {
-			t.Fatalf("AC2 FAIL: file content should be unchanged after rejected write. Got: %s", string(data))
+			t.Fatalf("FAIL: file content should be unchanged after rejected write. Got: %s", string(data))
 		}
 	})
 
@@ -134,14 +134,14 @@ func TestWriteTool_AC2_StaleMtime_BlackBox(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if !result.IsError {
-			t.Fatal("AC2 FAIL: expected staleness error after touch (mtime change)")
+			t.Fatal("FAIL: expected staleness error after touch (mtime change)")
 		}
 	})
 }
 
-// TestWriteTool_AC3_ParentDirs_BlackBox validates parent directory creation.
+// TestWriteTool_ParentDirs_BlackBox validates parent directory creation.
 // Covers: deep path creation, already-existing parents, and single-level parents.
-func TestWriteTool_AC3_ParentDirs_BlackBox(t *testing.T) {
+func TestWriteTool_ParentDirs_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
 	rt := NewReadTool(PermissionEdit, cache)
@@ -156,7 +156,7 @@ func TestWriteTool_AC3_ParentDirs_BlackBox(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Read to satisfy AC1
+	// Read to satisfy prior-read requirement
 	_, err := rt.Execute(context.Background(), map[string]any{"file_path": deepPath}, tmpDir)
 	if err != nil {
 		t.Fatal(err)
@@ -176,26 +176,26 @@ func TestWriteTool_AC3_ParentDirs_BlackBox(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if result.IsError {
-		t.Fatalf("AC3 FAIL: write returned error: %s", result.Content)
+		t.Fatalf("FAIL: write returned error: %s", result.Content)
 	}
 
 	// Verify file exists with correct content
 	data, err := os.ReadFile(deepPath)
 	if err != nil {
-		t.Fatalf("AC3 FAIL: file not found after write: %v", err)
+		t.Fatalf("FAIL: file not found after write: %v", err)
 	}
 	if string(data) != "new content here" {
-		t.Fatalf("AC3 FAIL: unexpected content: %q", string(data))
+		t.Fatalf("FAIL: unexpected content: %q", string(data))
 	}
 
 	// Verify intermediate directories were created
 	if _, err := os.Stat(filepath.Join(tmpDir, "a", "b", "c", "d")); err != nil {
-		t.Fatalf("AC3 FAIL: intermediate dirs not created: %v", err)
+		t.Fatalf("FAIL: intermediate dirs not created: %v", err)
 	}
 }
 
-// TestWriteTool_AC4_PatchDiff_BlackBox validates success message output format.
-func TestWriteTool_AC4_PatchDiff_BlackBox(t *testing.T) {
+// TestWriteTool_PatchDiff_BlackBox validates success message output format.
+func TestWriteTool_PatchDiff_BlackBox(t *testing.T) {
 	t.Run("modified file produces success message", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		cache := NewReadFileCache()
@@ -255,7 +255,7 @@ func TestWriteTool_AC4_PatchDiff_BlackBox(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Read empty file to satisfy AC1
+		// Read empty file to satisfy prior-read requirement
 		_, err := rt.Execute(context.Background(), map[string]any{"file_path": f}, tmpDir)
 		if err != nil {
 			t.Fatal(err)
@@ -278,15 +278,15 @@ func TestWriteTool_AC4_PatchDiff_BlackBox(t *testing.T) {
 	})
 }
 
-// TestWriteTool_AC5_CacheUpdated_BlackBox validates that the readFileState is
+// TestWriteTool_CacheUpdated_BlackBox validates that the readFileState is
 // refreshed after write, enabling subsequent writes without re-read.
-func TestWriteTool_AC5_CacheUpdated_BlackBox(t *testing.T) {
+func TestWriteTool_CacheUpdated_BlackBox(t *testing.T) {
 	tmpDir := t.TempDir()
 	cache := NewReadFileCache()
 	rt := NewReadTool(PermissionEdit, cache)
 	wt := NewWriteTool(cache)
 
-	f := filepath.Join(tmpDir, "ac5_test.txt")
+	f := filepath.Join(tmpDir, "cache_test.txt")
 	if err := os.WriteFile(f, []byte("version 1\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -322,13 +322,13 @@ func TestWriteTool_AC5_CacheUpdated_BlackBox(t *testing.T) {
 		t.Fatalf("second write error: %v", err)
 	}
 	if result.IsError {
-		t.Fatalf("AC5 FAIL: second write (no re-read) failed: %s", result.Content)
+		t.Fatalf("FAIL: second write (no re-read) failed: %s", result.Content)
 	}
 
 	// Verify final content
 	data, _ := os.ReadFile(f)
 	if string(data) != "version 3\n" {
-		t.Fatalf("AC5 FAIL: unexpected final content: %q", string(data))
+		t.Fatalf("FAIL: unexpected final content: %q", string(data))
 	}
 }
 
@@ -338,7 +338,7 @@ func TestWriteTool_PathTraversal_BlackBox(t *testing.T) {
 	cache := NewReadFileCache()
 	wt := NewWriteTool(cache)
 
-	// Register a path inside tmpDir in cache to bypass AC1
+	// Register a path inside tmpDir in cache to bypass prior-read requirement
 	insidePath := filepath.Join(tmpDir, "inside.txt")
 	cache.RecordRead(insidePath, "test", time.Now(), true, 0, 0)
 
@@ -371,7 +371,7 @@ func TestWriteTool_FileDeletedAfterRead(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Read to satisfy AC1
+	// Read to satisfy prior-read requirement
 	_, err := rt.Execute(context.Background(), map[string]any{"file_path": f}, tmpDir)
 	if err != nil {
 		t.Fatal(err)

@@ -181,7 +181,7 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}, nil
 	}
 
-	// Universal Windows Security (AC4)
+	// Universal Windows Security
 	if runtime.GOOS == "windows" {
 		winGate := NewWindowsCommandGate(t.effectiveLevel())
 		if err := winGate.CheckPath(resolvedPath); err != nil {
@@ -236,7 +236,7 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 		t.activator.ActivateForPath(filePath)
 	}
 
-	// AC5: Check .ipynb extension
+	// Check .ipynb extension
 	if strings.HasSuffix(filePath, ".ipynb") {
 		return &ToolResult{
 			Content: "Editing .ipynb files requires NotebookEdit tool. Use .py source file instead.",
@@ -244,8 +244,8 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}, nil
 	}
 
-	// AC1: Check readFileState cache for the path
-	// AC9: At unrestricted level, skip read-before-write check
+	// Check readFileState cache for the path
+	// At unrestricted level, skip read-before-write check
 	var entry *ReadFileEntry
 	if t.effectiveLevel().ReadBeforeWrite() {
 		var exists bool
@@ -257,7 +257,7 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 			}, nil
 		}
 
-		// AC2: Check staleness
+		// Check staleness
 		info, err := os.Stat(filePath)
 		if err == nil {
 			// File exists, check mtime
@@ -269,7 +269,7 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 			}
 		}
 
-		// AC1 continued: For partial reads, require scoped range contained within read range
+		// For partial reads, require scoped range contained within read range
 		if !entry.IsFullRead {
 			if !isScoped {
 				return &ToolResult{
@@ -292,7 +292,7 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}
 	}
 
-	// AC3: Check old === new
+	// Check old === new
 	if oldString == newString {
 		return &ToolResult{
 			Content: "old_string and new_string must differ",
@@ -309,7 +309,7 @@ func (t *EditTool) Execute(ctx context.Context, input map[string]any, cwd string
 
 // executeGlobal performs the original in-memory replacement (full file read).
 func (t *EditTool) executeGlobal(filePath, oldString, newString string, replaceAll bool, numExpected int, entry *ReadFileEntry) (*ToolResult, error) {
-	// AC4: 1 GiB size guard — stat the file before reading
+	// 1 GiB size guard — stat the file before reading
 	info, _ := os.Stat(filePath)
 	if info != nil && info.Size() > 1<<30 {
 		return &ToolResult{
@@ -363,7 +363,7 @@ func (t *EditTool) executeGlobal(filePath, oldString, newString string, replaceA
 		return zeroMatchError(content), nil
 	}
 
-	// AC4: Multiple matches require replace_all
+	// Multiple matches require replace_all
 	if count > 1 && !replaceAll {
 		return &ToolResult{
 			Content: fmt.Sprintf("String found %d times. Set replace_all=true to replace all occurrences.", count),
@@ -387,7 +387,7 @@ func (t *EditTool) executeGlobal(filePath, oldString, newString string, replaceA
 		newContent = strings.Replace(content, oldString, newString, 1)
 	}
 
-	// AC4: Atomic write — write to temp file in same directory, sync, rename.
+	// Atomic write — write to temp file in same directory, sync, rename.
 	// This guarantees that a crash never leaves a partially-written target.
 	tmpFile, err := os.CreateTemp(filepath.Dir(filePath), ".edit-*")
 	if err != nil {
@@ -556,7 +556,7 @@ func (t *EditTool) executeScoped(filePath, oldString, newString string, replaceA
 		return zeroMatchError(scopedContent), nil
 	}
 
-	// AC4: Multiple matches require replace_all
+	// Multiple matches require replace_all
 	if count > 1 && !replaceAll {
 		tmpFile.Close()
 		return &ToolResult{
@@ -624,7 +624,7 @@ func (t *EditTool) executeScoped(filePath, oldString, newString string, replaceA
 		}
 	}
 
-	// AC5: Atomic edit with fsync and cross-device fallback.
+	// Atomic edit with fsync and cross-device fallback.
 	//
 	// 1. Sync the temp file's contents to disk before closing so the rename
 	//    is durable across power loss / crash. Without Sync, a crash between

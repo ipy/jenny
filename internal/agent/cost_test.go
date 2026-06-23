@@ -161,7 +161,7 @@ func TestSaveCostStatePersistsToDotJennyConfig(t *testing.T) {
 		t.Fatalf("FAIL: config is not valid JSON: %v", err)
 	}
 
-	// Check lastSessionId (AC2 requires lastSessionId)
+	// Check lastSessionId (requires lastSessionId)
 	if _, ok := parsed["LastSessionID"]; !ok {
 		t.Error("FAIL: .jenny/config missing LastSessionID field")
 	}
@@ -196,7 +196,7 @@ func TestSaveCostStatePersistsToDotJennyConfig(t *testing.T) {
 	}
 }
 
-func TestAC2_SaveCostStateEmptyModelUsage(t *testing.T) {
+func TestSaveCostStateEmptyModelUsage(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	os.Chdir(tmpDir)
@@ -236,7 +236,7 @@ func TestAC2_SaveCostStateEmptyModelUsage(t *testing.T) {
 	}
 }
 
-func TestAC2_PersistsEndTurnPath(t *testing.T) {
+func TestPersistsEndTurnPath(t *testing.T) {
 	// This test verifies SaveCostState is called on the end_turn path
 	// by running RunStream with a mock server that returns end_turn
 	server := makeMockStreamServerWithCacheTokens(t)
@@ -301,7 +301,7 @@ func TestAC2_PersistsEndTurnPath(t *testing.T) {
 // Resume cost restore
 // ---------------------------------------------------------------------------
 
-func TestAC3_RestoreCostStateWithMatchingSessionID(t *testing.T) {
+func TestRestoreCostStateWithMatchingSessionID(t *testing.T) {
 	tmpDir := t.TempDir()
 	origWd, _ := os.Getwd()
 	os.Chdir(tmpDir)
@@ -322,28 +322,28 @@ func TestAC3_RestoreCostStateWithMatchingSessionID(t *testing.T) {
 		TotalCostUSD: 0.0015,
 	}
 	if err := SaveCostState(saved); err != nil {
-		t.Fatalf("AC3 FAIL: SaveCostState error = %v", err)
+		t.Fatalf("FAIL: SaveCostState error = %v", err)
 	}
 
 	// Restore with matching session ID
 	restored, ok, err := RestoreCostState("sess_match")
 	if err != nil {
-		t.Fatalf("AC3 FAIL: RestoreCostState error = %v", err)
+		t.Fatalf("FAIL: RestoreCostState error = %v", err)
 	}
 	if !ok {
-		t.Fatal("AC3 FAIL: RestoreCostState returned ok=false for matching session ID")
+		t.Fatal("FAIL: RestoreCostState returned ok=false for matching session ID")
 	}
 	if restored.TotalCostUSD != 0.0015 {
-		t.Errorf("AC3 FAIL: restored TotalCostUSD = %f, want 0.0015", restored.TotalCostUSD)
+		t.Errorf("FAIL: restored TotalCostUSD = %f, want 0.0015", restored.TotalCostUSD)
 	}
 	mu := restored.ModelUsage["deepseek-v4-flash"]
 	if mu.InputTokens != 100 {
-		t.Errorf("AC3 FAIL: restored InputTokens = %d, want 100", mu.InputTokens)
+		t.Errorf("FAIL: restored InputTokens = %d, want 100", mu.InputTokens)
 	}
 	t.Log("PASS: cost state restored correctly on session ID match")
 }
 
-func TestAC3_RestoreCostStateWithMismatchedSessionID(t *testing.T) {
+func TestRestoreCostStateWithMismatchedSessionID(t *testing.T) {
 	tmpDir := t.TempDir()
 	origWd, _ := os.Getwd()
 	os.Chdir(tmpDir)
@@ -358,24 +358,24 @@ func TestAC3_RestoreCostStateWithMismatchedSessionID(t *testing.T) {
 		TotalCostUSD: 0.005,
 	}
 	if err := SaveCostState(saved); err != nil {
-		t.Fatalf("AC3 FAIL: SaveCostState error = %v", err)
+		t.Fatalf("FAIL: SaveCostState error = %v", err)
 	}
 
 	// Restore with DIFFERENT session ID
 	restored, ok, err := RestoreCostState("sess_different")
 	if err != nil {
-		t.Fatalf("AC3 FAIL: RestoreCostState error = %v", err)
+		t.Fatalf("FAIL: RestoreCostState error = %v", err)
 	}
 	if ok {
-		t.Fatal("AC3 FAIL: RestoreCostState returned ok=true for mismatched session ID, want false")
+		t.Fatal("FAIL: RestoreCostState returned ok=true for mismatched session ID, want false")
 	}
 	if restored != nil {
-		t.Error("AC3 FAIL: RestoreCostState returned non-nil state on mismatch, want nil")
+		t.Error("FAIL: RestoreCostState returned non-nil state on mismatch, want nil")
 	}
 	t.Log("PASS: cost state not restored on session ID mismatch")
 }
 
-func TestAC3_RestoreNoConfigFile(t *testing.T) {
+func TestRestoreNoConfigFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	origWd, _ := os.Getwd()
 	os.Chdir(tmpDir)
@@ -384,17 +384,17 @@ func TestAC3_RestoreNoConfigFile(t *testing.T) {
 	// No .jenny/config exists
 	state, ok, err := RestoreCostState("sess_any")
 	if err != nil {
-		t.Fatalf("AC3 FAIL: RestoreCostState error = %v", err)
+		t.Fatalf("FAIL: RestoreCostState error = %v", err)
 	}
 	if ok {
-		t.Fatal("AC3 FAIL: RestoreCostState returned ok=true when no config file exists")
+		t.Fatal("FAIL: RestoreCostState returned ok=true when no config file exists")
 	}
 	if state != nil {
-		t.Error("AC3 FAIL: RestoreCostState returned non-nil state when no config exists")
+		t.Error("FAIL: RestoreCostState returned non-nil state when no config exists")
 	}
 }
 
-func TestAC3_AccumulateOnRestoredState(t *testing.T) {
+func TestAccumulateOnRestoredState(t *testing.T) {
 	tmpDir := t.TempDir()
 	origWd, _ := os.Getwd()
 	os.Chdir(tmpDir)
@@ -413,7 +413,7 @@ func TestAC3_AccumulateOnRestoredState(t *testing.T) {
 	// Restore
 	restored, ok, err := RestoreCostState("sess_accum")
 	if err != nil || !ok || restored == nil {
-		t.Fatalf("AC3 FAIL: could not restore cost state: ok=%v err=%v", ok, err)
+		t.Fatalf("FAIL: could not restore cost state: ok=%v err=%v", ok, err)
 	}
 
 	// Accumulate more usage on top of restored
@@ -423,10 +423,10 @@ func TestAC3_AccumulateOnRestoredState(t *testing.T) {
 
 	mu := restored.ModelUsage["test-model"]
 	if mu.InputTokens != 150 {
-		t.Errorf("AC3 FAIL: accumulated InputTokens = %d, want 150 (100 restored + 50 new)", mu.InputTokens)
+		t.Errorf("FAIL: accumulated InputTokens = %d, want 150 (100 restored + 50 new)", mu.InputTokens)
 	}
 	if restored.TotalCostUSD <= 0.001 {
-		t.Errorf("AC3 FAIL: accumulated TotalCostUSD = %f, want > 0.001 (was 0.001 before accumulation)", restored.TotalCostUSD)
+		t.Errorf("FAIL: accumulated TotalCostUSD = %f, want > 0.001 (was 0.001 before accumulation)", restored.TotalCostUSD)
 	}
 	t.Log("PASS: accumulated usage on restored state correctly adds to restored values")
 }
@@ -435,7 +435,7 @@ func TestAC3_AccumulateOnRestoredState(t *testing.T) {
 // Stream-json result.usage
 // ---------------------------------------------------------------------------
 
-func TestAC4_UsageStructHasCorrectJSONTags(t *testing.T) {
+func TestUsageStructHasCorrectJSONTags(t *testing.T) {
 	usage := Usage{
 		InputTokens:              10,
 		OutputTokens:             20,
@@ -445,40 +445,40 @@ func TestAC4_UsageStructHasCorrectJSONTags(t *testing.T) {
 
 	data, err := json.Marshal(usage)
 	if err != nil {
-		t.Fatalf("AC4 FAIL: json.Marshal(usage) error = %v", err)
+		t.Fatalf("FAIL: json.Marshal(usage) error = %v", err)
 	}
 
 	var parsed map[string]any
 	if err := json.Unmarshal(data, &parsed); err != nil {
-		t.Fatalf("AC4 FAIL: cannot unmarshal usage JSON: %v", err)
+		t.Fatalf("FAIL: cannot unmarshal usage JSON: %v", err)
 	}
 
 	// Check for snake_case keys
 	if _, ok := parsed["input_tokens"]; !ok {
-		t.Error("AC4 FAIL: missing 'input_tokens' in JSON output")
+		t.Error("FAIL: missing 'input_tokens' in JSON output")
 	}
 	if _, ok := parsed["output_tokens"]; !ok {
-		t.Error("AC4 FAIL: missing 'output_tokens' in JSON output")
+		t.Error("FAIL: missing 'output_tokens' in JSON output")
 	}
 	if _, ok := parsed["cache_read_input_tokens"]; !ok {
-		t.Error("AC4 FAIL: missing 'cache_read_input_tokens' in JSON output")
+		t.Error("FAIL: missing 'cache_read_input_tokens' in JSON output")
 	}
 	if _, ok := parsed["cache_creation_input_tokens"]; !ok {
-		t.Error("AC4 FAIL: missing 'cache_creation_input_tokens' in JSON output")
+		t.Error("FAIL: missing 'cache_creation_input_tokens' in JSON output")
 	}
 
 	// Verify values
 	if parsed["input_tokens"] != float64(10) {
-		t.Errorf("AC4 FAIL: input_tokens = %v, want 10", parsed["input_tokens"])
+		t.Errorf("FAIL: input_tokens = %v, want 10", parsed["input_tokens"])
 	}
 	if parsed["cache_read_input_tokens"] != float64(5) {
-		t.Errorf("AC4 FAIL: cache_read_input_tokens = %v, want 5", parsed["cache_read_input_tokens"])
+		t.Errorf("FAIL: cache_read_input_tokens = %v, want 5", parsed["cache_read_input_tokens"])
 	}
 
 	t.Log("PASS: all JSON tags are snake_case and present")
 }
 
-func TestAC4_ResultLineContainsCacheAndCostFields(t *testing.T) {
+func TestResultLineContainsCacheAndCostFields(t *testing.T) {
 	server := makeMockStreamServerWithCacheTokens(t)
 	defer server.Close()
 
@@ -525,30 +525,30 @@ func TestAC4_ResultLineContainsCacheAndCostFields(t *testing.T) {
 		}
 	}
 	if resultLine == "" {
-		t.Fatal("AC4 FAIL: no result line found in output")
+		t.Fatal("FAIL: no result line found in output")
 	}
 
 	var result map[string]any
 	if err := json.Unmarshal([]byte(resultLine), &result); err != nil {
-		t.Fatalf("AC4 FAIL: cannot unmarshal result line: %v", err)
+		t.Fatalf("FAIL: cannot unmarshal result line: %v", err)
 	}
 
 	usage, ok := result["usage"].(map[string]any)
 	if !ok {
-		t.Fatal("AC4 FAIL: result.usage is not an object or missing")
+		t.Fatal("FAIL: result.usage is not an object or missing")
 	}
 
 	// Verify cache fields are present in usage
 	if _, ok := usage["cache_read_input_tokens"]; !ok {
-		t.Error("AC4 FAIL: result.usage missing cache_read_input_tokens")
+		t.Error("FAIL: result.usage missing cache_read_input_tokens")
 	}
 	if _, ok := usage["cache_creation_input_tokens"]; !ok {
-		t.Error("AC4 FAIL: result.usage missing cache_creation_input_tokens")
+		t.Error("FAIL: result.usage missing cache_creation_input_tokens")
 	}
 
 	// Verify total_cost_usd is at top level
 	if _, ok := result["total_cost_usd"]; !ok {
-		t.Error("AC4 FAIL: result missing total_cost_usd")
+		t.Error("FAIL: result missing total_cost_usd")
 	}
 
 	t.Logf("PASS: result.usage = %+v, total_cost_usd = %v", usage, result["total_cost_usd"])
@@ -558,51 +558,51 @@ func TestAC4_ResultLineContainsCacheAndCostFields(t *testing.T) {
 // Budget enforcement
 // ---------------------------------------------------------------------------
 
-func TestAC5_CheckBudgetExceededWithLimit(t *testing.T) {
+func TestCheckBudgetExceededWithLimit(t *testing.T) {
 	state := &CostState{TotalCostUSD: 0.05}
 
 	// Budget not exceeded
 	exceeded, total := CheckBudgetExceeded(state, 0.10)
 	if exceeded {
-		t.Error("AC5 FAIL: budget exceeded when 0.05 <= 0.10")
+		t.Error("FAIL: budget exceeded when 0.05 <= 0.10")
 	}
 	if total != 0.05 {
-		t.Errorf("AC5 FAIL: returned total = %f, want 0.05", total)
+		t.Errorf("FAIL: returned total = %f, want 0.05", total)
 	}
 
 	// Budget exceeded
 	exceeded, total = CheckBudgetExceeded(state, 0.02)
 	if !exceeded {
-		t.Error("AC5 FAIL: budget NOT exceeded when 0.05 > 0.02")
+		t.Error("FAIL: budget NOT exceeded when 0.05 > 0.02")
 	}
 	if total != 0.05 {
-		t.Errorf("AC5 FAIL: returned total = %f, want 0.05", total)
+		t.Errorf("FAIL: returned total = %f, want 0.05", total)
 	}
 }
 
-func TestAC5_CheckBudgetExceededZeroLimit(t *testing.T) {
+func TestCheckBudgetExceededZeroLimit(t *testing.T) {
 	state := &CostState{TotalCostUSD: 100.0}
 
 	// Zero budget = no limit
 	exceeded, total := CheckBudgetExceeded(state, 0)
 	if exceeded {
-		t.Error("AC5 FAIL: budget exceeded when maxBudgetUSD=0 (should be no limit)")
+		t.Error("FAIL: budget exceeded when maxBudgetUSD=0 (should be no limit)")
 	}
 	if total != 100.0 {
-		t.Errorf("AC5 FAIL: returned total = %f, want 100.0", total)
+		t.Errorf("FAIL: returned total = %f, want 100.0", total)
 	}
 }
 
-func TestAC5_CheckBudgetExceededNegativeLimit(t *testing.T) {
+func TestCheckBudgetExceededNegativeLimit(t *testing.T) {
 	state := &CostState{TotalCostUSD: 0.01}
 
 	exceeded, _ := CheckBudgetExceeded(state, -1)
 	if exceeded {
-		t.Error("AC5 FAIL: budget exceeded when maxBudgetUSD < 0 (should be no limit)")
+		t.Error("FAIL: budget exceeded when maxBudgetUSD < 0 (should be no limit)")
 	}
 }
 
-func TestAC5_BudgetStopInRunStream(t *testing.T) {
+func TestBudgetStopInRunStream(t *testing.T) {
 	server := makeMockStreamServerWithCacheTokens(t)
 	defer server.Close()
 
@@ -675,10 +675,10 @@ func TestAC5_BudgetStopInRunStream(t *testing.T) {
 
 	// Should get budget exceeded error (pre-seeded cost exceeds budget)
 	if err == nil {
-		t.Fatal("AC5 FAIL: RunStream should return error when restored cost exceeds budget")
+		t.Fatal("FAIL: RunStream should return error when restored cost exceeds budget")
 	}
 	if !strings.Contains(err.Error(), "budget") && !strings.Contains(err.Error(), "Budget") {
-		t.Errorf("AC5 FAIL: error message should mention budget, got: %v", err)
+		t.Errorf("FAIL: error message should mention budget, got: %v", err)
 	}
 
 	// Verify result line is emitted
@@ -690,15 +690,15 @@ func TestAC5_BudgetStopInRunStream(t *testing.T) {
 		}
 	}
 	if resultLine == "" {
-		t.Error("AC5 FAIL: no result line emitted on budget exceeded")
+		t.Error("FAIL: no result line emitted on budget exceeded")
 	} else {
-		t.Logf("AC5: result line = %s", resultLine)
+		t.Logf("result line = %s", resultLine)
 	}
 
 	t.Logf("PASS: RunStream returned budget error: %v", err)
 }
 
-func TestAC5_BudgetNoLimitWhenMaxBudgetUSDIsZero(t *testing.T) {
+func TestBudgetNoLimitWhenMaxBudgetUSDIsZero(t *testing.T) {
 	server := makeMockStreamServerWithCacheTokens(t)
 	defer server.Close()
 
@@ -712,7 +712,7 @@ func TestAC5_BudgetNoLimitWhenMaxBudgetUSDIsZero(t *testing.T) {
 
 	sessMgr, err := session.NewManager(filepath.Join(tmpDir, "transcripts"), false)
 	if err != nil {
-		t.Fatalf("AC5 FAIL: NewManager error = %v", err)
+		t.Fatalf("FAIL: NewManager error = %v", err)
 	}
 
 	// No budget limit (MaxBudgetUSD = 0)
@@ -723,7 +723,7 @@ func TestAC5_BudgetNoLimitWhenMaxBudgetUSDIsZero(t *testing.T) {
 	}
 	_, _, _, err = RunStream(context.Background(), "test", nil, tmpDir, &cfg, "test-model", WithClient(fastClient(t)))
 	if err != nil {
-		t.Fatalf("AC5 FAIL: RunStream should not fail with no budget limit: %v", err)
+		t.Fatalf("FAIL: RunStream should not fail with no budget limit: %v", err)
 	}
 	t.Log("PASS: RunStream completes normally with no budget limit")
 }
@@ -732,8 +732,8 @@ func TestAC5_BudgetNoLimitWhenMaxBudgetUSDIsZero(t *testing.T) {
 // Pricing Table Verification Tests
 // ---------------------------------------------------------------------------
 
-// TestPricing_AC1_ClaudeUSDRates verifies AC1: Claude USD rates match reference.
-func TestPricing_AC1_ClaudeUSDRates(t *testing.T) {
+// TestPricing_ClaudeUSDRates verifies Claude USD rates match reference.
+func TestPricing_ClaudeUSDRates(t *testing.T) {
 	state := &CostState{}
 
 	// 1M input tokens for claude-sonnet-4-20250514 → $3
@@ -741,7 +741,7 @@ func TestPricing_AC1_ClaudeUSDRates(t *testing.T) {
 	AccumulateUsage(state, "claude-sonnet-4-20250514", usage)
 	mu := state.ModelUsage["claude-sonnet-4-20250514"]
 	if mu.CostUSD != 3.0 {
-		t.Errorf("AC1 FAIL: claude-sonnet-4 USD input 1M = %f, want 3.0", mu.CostUSD)
+		t.Errorf("FAIL: claude-sonnet-4 USD input 1M = %f, want 3.0", mu.CostUSD)
 	}
 
 	// 1M input tokens for claude-opus-4-20250514 → $5
@@ -749,7 +749,7 @@ func TestPricing_AC1_ClaudeUSDRates(t *testing.T) {
 	AccumulateUsage(state, "claude-opus-4-20250514", usage2)
 	mu2 := state.ModelUsage["claude-opus-4-20250514"]
 	if mu2.CostUSD != 5.0 {
-		t.Errorf("AC1 FAIL: claude-opus-4 USD input 1M = %f, want 5.0", mu2.CostUSD)
+		t.Errorf("FAIL: claude-opus-4 USD input 1M = %f, want 5.0", mu2.CostUSD)
 	}
 
 	// 1M output tokens for claude-sonnet-4-20250514 → $15
@@ -758,14 +758,14 @@ func TestPricing_AC1_ClaudeUSDRates(t *testing.T) {
 	AccumulateUsage(state2, "claude-sonnet-4-20250514", usage3)
 	mu3 := state2.ModelUsage["claude-sonnet-4-20250514"]
 	if mu3.CostUSD != 15.0 {
-		t.Errorf("AC1 FAIL: claude-sonnet-4 USD output 1M = %f, want 15.0", mu3.CostUSD)
+		t.Errorf("FAIL: claude-sonnet-4 USD output 1M = %f, want 15.0", mu3.CostUSD)
 	}
 
 	t.Log("PASS: Claude USD rates correct")
 }
 
-// TestPricing_AC2_NewModelFamilies verifies AC2: new model families are present.
-func TestPricing_AC2_NewModelFamilies(t *testing.T) {
+// TestPricing_NewModelFamilies verifies new model families are present.
+func TestPricing_NewModelFamilies(t *testing.T) {
 	newModels := []string{
 		"deepseek-v4-pro",
 		"gemini-3.5-flash",
@@ -786,9 +786,9 @@ func TestPricing_AC2_NewModelFamilies(t *testing.T) {
 	t.Log("PASS: new model families present")
 }
 
-// TestPricing_AC3_DeepSeekUSDRates verifies AC3: native USD models have correct rates.
+// TestPricing_DeepSeekUSDRates verifies native USD models have correct rates.
 // Source: api-docs.deepseek.com/quick_start/pricing
-func TestPricing_AC3_DeepSeekUSDRates(t *testing.T) {
+func TestPricing_DeepSeekUSDRates(t *testing.T) {
 	state := &CostState{}
 
 	// 1M input tokens for deepseek-v4-flash → $0.14 (cache miss)
@@ -796,7 +796,7 @@ func TestPricing_AC3_DeepSeekUSDRates(t *testing.T) {
 	AccumulateUsage(state, "deepseek-v4-flash", usage)
 	mu := state.ModelUsage["deepseek-v4-flash"]
 	if mu.CostUSD != 0.14 {
-		t.Errorf("AC3 FAIL: deepseek-v4-flash USD input 1M = %f, want 0.14", mu.CostUSD)
+		t.Errorf("FAIL: deepseek-v4-flash USD input 1M = %f, want 0.14", mu.CostUSD)
 	}
 
 	// 1M output tokens for deepseek-v4-flash → $0.28
@@ -805,7 +805,7 @@ func TestPricing_AC3_DeepSeekUSDRates(t *testing.T) {
 	AccumulateUsage(state2, "deepseek-v4-flash", usage2)
 	mu2 := state2.ModelUsage["deepseek-v4-flash"]
 	if mu2.CostUSD != 0.28 {
-		t.Errorf("AC3 FAIL: deepseek-v4-flash USD output 1M = %f, want 0.28", mu2.CostUSD)
+		t.Errorf("FAIL: deepseek-v4-flash USD output 1M = %f, want 0.28", mu2.CostUSD)
 	}
 
 	// 1M input tokens for deepseek-v4-pro → $0.435 (cache miss)
@@ -814,26 +814,26 @@ func TestPricing_AC3_DeepSeekUSDRates(t *testing.T) {
 	AccumulateUsage(state3, "deepseek-v4-pro", usage3)
 	mu3 := state3.ModelUsage["deepseek-v4-pro"]
 	if mu3.CostUSD != 0.435 {
-		t.Errorf("AC3 FAIL: deepseek-v4-pro USD input 1M = %f, want 0.435", mu3.CostUSD)
+		t.Errorf("FAIL: deepseek-v4-pro USD input 1M = %f, want 0.435", mu3.CostUSD)
 	}
 
 	t.Log("PASS: native USD model rates correct")
 }
 
-// TestPricing_AC4_UnknownModelFallback verifies AC4: unknown model returns conservative defaults.
-func TestPricing_AC4_UnknownModelFallback(t *testing.T) {
+// TestPricing_UnknownModelFallback verifies unknown model returns conservative defaults.
+func TestPricing_UnknownModelFallback(t *testing.T) {
 	pricing := GetModelPricing("nonexistent-model")
 	if !pricing.UnknownModel {
-		t.Error("AC4 FAIL: unknown model UnknownModel = false, want true")
+		t.Error("FAIL: unknown model UnknownModel = false, want true")
 	}
 	if pricing.InputUSD <= 0 || pricing.OutputUSD <= 0 {
-		t.Error("AC4 FAIL: unknown model has zero rates")
+		t.Error("FAIL: unknown model has zero rates")
 	}
 
 	t.Log("PASS: unknown model fallback correct")
 }
 
-// TestPricing_Gemini35Flash verifies Gemini 3.5 Flash pricing (AC2).
+// TestPricing_Gemini35Flash verifies Gemini 3.5 Flash pricing.
 func TestPricing_Gemini35Flash(t *testing.T) {
 	p := GetModelPricing("gemini-3.5-flash")
 
@@ -853,7 +853,7 @@ func TestPricing_Gemini35Flash(t *testing.T) {
 	t.Log("PASS: Gemini 3.5 Flash pricing correct")
 }
 
-// TestPricing_Gemini31Pro verifies Gemini 3.1 Pro pricing (AC3).
+// TestPricing_Gemini31Pro verifies Gemini 3.1 Pro pricing.
 func TestPricing_Gemini31Pro(t *testing.T) {
 	p := GetModelPricing("gemini-3.1-pro")
 
@@ -873,7 +873,7 @@ func TestPricing_Gemini31Pro(t *testing.T) {
 	t.Log("PASS: Gemini 3.1 Pro pricing correct")
 }
 
-// TestPricing_Qwen37Plus verifies Qwen 3.7 Plus pricing (AC4).
+// TestPricing_Qwen37Plus verifies Qwen 3.7 Plus pricing.
 func TestPricing_Qwen37Plus(t *testing.T) {
 	p := GetModelPricing("qwen-3.7-plus")
 
@@ -889,7 +889,7 @@ func TestPricing_Qwen37Plus(t *testing.T) {
 	t.Log("PASS: Qwen 3.7 Plus pricing correct")
 }
 
-// TestPricing_Qwen36Flash verifies Qwen 3.6 Flash pricing (AC5).
+// TestPricing_Qwen36Flash verifies Qwen 3.6 Flash pricing.
 func TestPricing_Qwen36Flash(t *testing.T) {
 	p := GetModelPricing("qwen-3.6-flash")
 
@@ -905,7 +905,7 @@ func TestPricing_Qwen36Flash(t *testing.T) {
 	t.Log("PASS: Qwen 3.6 Flash pricing correct")
 }
 
-// TestPricing_ClaudeOpus4CacheCreation verifies Opus 4 CacheCreation is $6.25/MTok (AC6).
+// TestPricing_ClaudeOpus4CacheCreation verifies Opus 4 CacheCreation is $6.25/MTok.
 func TestPricing_ClaudeOpus4CacheCreation(t *testing.T) {
 	p := GetModelPricing("claude-opus-4-20250514")
 
@@ -917,7 +917,7 @@ func TestPricing_ClaudeOpus4CacheCreation(t *testing.T) {
 	t.Log("PASS: Claude Opus 4 CacheCreationUSD correct at $6.25/MTok")
 }
 
-// TestPricing_AnthropicAliases verifies new Anthropic model aliases (AC7).
+// TestPricing_AnthropicAliases verifies new Anthropic model aliases.
 func TestPricing_AnthropicAliases(t *testing.T) {
 	// claude-sonnet-4.6 → same as claude-sonnet-4-20250514
 	sonnet46 := GetModelPricing("claude-sonnet-4.6")
@@ -952,7 +952,7 @@ func TestPricing_AnthropicAliases(t *testing.T) {
 	t.Log("PASS: Anthropic model aliases correct")
 }
 
-// TestPricing_CNYConversionRate verifies CNY models converted at 6.77 (AC1).
+// TestPricing_CNYConversionRate verifies CNY models converted at 6.77.
 func TestPricing_CNYConversionRate(t *testing.T) {
 	cnyRate := 6.77
 
@@ -980,8 +980,8 @@ func TestPricing_CNYConversionRate(t *testing.T) {
 	t.Log("PASS: CNY models converted at 6.77 CNY/USD")
 }
 
-// TestPricing_AC7_CustomPricingOverride verifies config-based pricing override (AC7).
-func TestPricing_AC7_CustomPricingOverride(t *testing.T) {
+// TestPricing_CustomPricingOverride verifies config-based pricing override.
+func TestPricing_CustomPricingOverride(t *testing.T) {
 	tmpDir := t.TempDir()
 	origWd, _ := os.Getwd()
 	os.Chdir(tmpDir)
@@ -998,13 +998,13 @@ func TestPricing_AC7_CustomPricingOverride(t *testing.T) {
 	LoadCustomPricing(tmpDir)
 	p := GetModelPricing("claude-sonnet-4-20250514")
 	if p.InputUSD != 0.000001 {
-		t.Errorf("AC7 FAIL: override InputUSD = %f, want 0.000001", p.InputUSD)
+		t.Errorf("FAIL: override InputUSD = %f, want 0.000001", p.InputUSD)
 	}
 
 	// Unaffected model
 	p2 := GetModelPricing("claude-opus-4-20250514")
 	if p2.InputUSD != 0.000005 {
-		t.Errorf("AC7 FAIL: unaffected opus InputUSD = %f, want 0.000005", p2.InputUSD)
+		t.Errorf("FAIL: unaffected opus InputUSD = %f, want 0.000005", p2.InputUSD)
 	}
 
 	// Malformed JSON
@@ -1013,7 +1013,7 @@ func TestPricing_AC7_CustomPricingOverride(t *testing.T) {
 	LoadCustomPricing(tmpDir)
 	p3 := GetModelPricing("claude-sonnet-4-20250514")
 	if p3.InputUSD != 0.000003 {
-		t.Errorf("AC7 FAIL: after bad JSON, InputUSD = %f, want 0.000003", p3.InputUSD)
+		t.Errorf("FAIL: after bad JSON, InputUSD = %f, want 0.000003", p3.InputUSD)
 	}
 	t.Log("PASS: pricing override works correctly")
 }
