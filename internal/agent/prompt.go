@@ -255,12 +255,12 @@ func buildSystemPrompt(cfg *StreamConfig, tools []tool.Tool, cwd string) []strin
 			prompt := "This session has secret redaction enabled."
 			switch redact.ParseRedactMode(string(cfg.RedactMode)) {
 			case redact.ModeRecover:
-				prompt += " Sensitive text in tool results are reducted as `[REDACTED:<hex>]` placeholders (e.g. `[REDACTED:a3f1b2c9]`)." +
+				prompt += " Sensitive text in tool results is redacted as `[REDACTED:<hex>]` placeholders (e.g. `[REDACTED:a3f1b2c9]`)." +
 					" They will be automatically recovered when you use them in tool calls, so you can refer to them directly as needed." +
 					" Copy them verbatim - including the full hex suffix - and never simplify, abbreviate, or otherwise modify them."
 			case redact.ModeRedact:
-				prompt += " Sensitive text in tool results are reducted as `[REDACTED:<hex>]` markers." +
-					" You can still use the original content internally (e.g., through local scripts), but you are strictly prohibited from exposing it in any way."
+				prompt += " Sensitive text in tool results is redacted as `[REDACTED:<hex>]` markers." +
+					" Please use them (e.g., echo as env variables) without reading them, and avoid printing or exposing them to external systems in any way."
 			}
 			sections = append(sections, prompt)
 		}
