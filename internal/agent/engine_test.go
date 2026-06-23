@@ -1021,7 +1021,7 @@ func TestAC4_NonInteractiveModeHasStructuredOutput(t *testing.T) {
 
 // TestAC3_NotEmittedError tests that when StructuredOutput is configured but
 // not called during the turn, the engine returns error "structured output not emitted".
-// This verifies AC3 enforcement at the engine level.
+// This verifies enforcement at the engine level.
 func TestAC3_NotEmittedError(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
@@ -1061,17 +1061,17 @@ func TestAC3_NotEmittedError(t *testing.T) {
 
 	_, err = engine.SubmitMessage(ctx, "test prompt")
 	if err == nil {
-		t.Error("AC3 FAIL: expected error 'structured output not emitted' but got nil")
+		t.Error("FAIL: expected error 'structured output not emitted' but got nil")
 	} else if !strings.Contains(err.Error(), "structured output not emitted") {
-		t.Errorf("AC3 FAIL: expected error 'structured output not emitted', got: %v", err)
+		t.Errorf("FAIL: expected error 'structured output not emitted', got: %v", err)
 	} else {
-		t.Log("AC3 PASS: got expected 'structured output not emitted' error")
+		t.Log("PASS: got expected 'structured output not emitted' error")
 	}
 }
 
 // TestAC3_ResultExtraction tests that when StructuredOutput IS called,
 // the engine returns the JSON content from the StructuredOutput tool call
-// rather than the text output. This verifies AC3 result extraction.
+// rather than the text output. This verifies result extraction.
 func TestAC3_ResultExtraction(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
@@ -1123,20 +1123,20 @@ func TestAC3_ResultExtraction(t *testing.T) {
 		t.Fatalf("SubmitMessage returned error: %v", err)
 	}
 
-	// AC3: Result should be the structured JSON from the StructuredOutput call
+	// Result should be the structured JSON from the StructuredOutput call
 	// Parse both JSONs to compare values (key order may differ)
 	if result == "" {
-		t.Error("AC3 FAIL: expected non-empty result")
+		t.Error("FAIL: expected non-empty result")
 	} else {
 		var resultVal, expectedVal any
 		if err := json.Unmarshal([]byte(result), &resultVal); err != nil {
-			t.Errorf("AC3 FAIL: result is not valid JSON: %v", err)
+			t.Errorf("FAIL: result is not valid JSON: %v", err)
 		} else if err := json.Unmarshal([]byte(structuredJSON), &expectedVal); err != nil {
-			t.Errorf("AC3 FAIL: expected result is not valid JSON: %v", err)
+			t.Errorf("FAIL: expected result is not valid JSON: %v", err)
 		} else if fmt.Sprintf("%v", resultVal) != fmt.Sprintf("%v", expectedVal) {
-			t.Errorf("AC3 FAIL: expected result %v, got %v", expectedVal, resultVal)
+			t.Errorf("FAIL: expected result %v, got %v", expectedVal, resultVal)
 		} else {
-			t.Log("AC3 PASS: result correctly extracted from StructuredOutput call")
+			t.Log("PASS: result correctly extracted from StructuredOutput call")
 		}
 	}
 }
@@ -1144,7 +1144,7 @@ func TestAC3_ResultExtraction(t *testing.T) {
 // TestToolCallEvents verifies that when stream-json mode is enabled and
 // the model requests tool use, the engine emits tool_call started events before
 // execution and tool_call completed events after each tool completes.
-// This covers AC1 (started event), AC2 (completed event), and AC4 (both event types).
+// This covers the started event and the completed event.
 func TestToolCallEvents(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
@@ -1209,52 +1209,52 @@ func TestToolCallEvents(t *testing.T) {
 
 	// Verify tool_progress started event exists
 	if !strings.Contains(stdoutOutput, `"type":"tool_progress"`) {
-		t.Error("AC1 FAIL: stdout does not contain tool_progress event")
+		t.Error("FAIL: stdout does not contain tool_progress event")
 	} else {
-		t.Log("AC1 PASS: stdout contains tool_progress event")
+		t.Log("PASS: stdout contains tool_progress event")
 	}
 
 	// Verify tool_progress started subtype
 	if !strings.Contains(stdoutOutput, `"subtype":"started"`) {
-		t.Error("AC1 FAIL: stdout does not contain tool_progress started event")
+		t.Error("FAIL: stdout does not contain tool_progress started event")
 	} else {
-		t.Log("AC1 PASS: stdout contains tool_progress started event")
+		t.Log("PASS: stdout contains tool_progress started event")
 	}
 
 	// Verify tool_progress complete subtype
 	if !strings.Contains(stdoutOutput, `"subtype":"complete"`) {
-		t.Error("AC1 FAIL: stdout does not contain tool_progress complete event")
+		t.Error("FAIL: stdout does not contain tool_progress complete event")
 	} else {
-		t.Log("AC1 PASS: stdout contains tool_progress complete event")
+		t.Log("PASS: stdout contains tool_progress complete event")
 	}
 
 	// Verify tool_name is present
 	if !strings.Contains(stdoutOutput, `"tool_name":"Bash"`) {
-		t.Error("AC1 FAIL: stdout does not contain tool_name in tool_call event")
+		t.Error("FAIL: stdout does not contain tool_name in tool_call event")
 	} else {
-		t.Log("AC1 PASS: stdout contains tool_name in tool_call event")
+		t.Log("PASS: stdout contains tool_name in tool_call event")
 	}
 
 	// Verify tool_use_id is present
 	if !strings.Contains(stdoutOutput, `"tool_use_id":"tool_1"`) {
-		t.Error("AC1 FAIL: stdout does not contain tool_use_id in tool_call event")
+		t.Error("FAIL: stdout does not contain tool_use_id in tool_call event")
 	} else {
-		t.Log("AC1 PASS: stdout contains tool_use_id in tool_call event")
+		t.Log("PASS: stdout contains tool_use_id in tool_call event")
 	}
 }
 
-// TestInterruptSyntheticToolResults_AC5 verifies the full AC matrix for the
+// TestInterruptSyntheticToolResults_AC5 verifies the full matrix for the
 // interrupt synthetic tool_results feature:
-//   - AC1: a tool that didn't complete receives a synthetic "Tool execution
+//   - a tool that didn't complete receives a synthetic "Tool execution
 //     interrupted" result with IsError=true.
-//   - AC2: a tool that completed before cancellation retains its real result
+//   - a tool that completed before cancellation retains its real result
 //     (not replaced with a synthetic).
-//   - AC3: when stop_reason=tool_use the loop continues to the next iteration,
+//   - when stop_reason=tool_use the loop continues to the next iteration,
 //     delivering the bundled real + synthetic results to a second API call
 //     instead of returning the context error immediately.
-//   - AC5: a single test exercises both the interrupted and completed branches.
+//   - a single test exercises both the interrupted and completed branches.
 //
-// To exercise AC3, the mock server returns tool_use on the first call and
+// To exercise this, the mock server returns tool_use on the first call and
 // end_turn on the second; the engine must therefore make two API calls and
 // must not propagate the context cancellation back as the SubmitMessage error.
 func TestInterruptSyntheticToolResults_AC5(t *testing.T) {
@@ -1343,26 +1343,26 @@ func TestInterruptSyntheticToolResults_AC5(t *testing.T) {
 	elapsed := time.Since(start)
 	t.Logf("SubmitMessage returned after %v with error: %v", elapsed, err)
 
-	// AC3: SubmitMessage must NOT propagate the context cancellation back as
+	// SubmitMessage must NOT propagate the context cancellation back as
 	// its error — the engine should detach the loop context after generating
 	// synthetic results so the next iteration can deliver them.
 	if err != nil && (strings.Contains(err.Error(), "context deadline exceeded") ||
 		strings.Contains(err.Error(), "context canceled")) {
-		t.Errorf("AC3 FAIL: SubmitMessage returned context error: %v", err)
+		t.Errorf("FAIL: SubmitMessage returned context error: %v", err)
 	} else {
-		t.Logf("AC3 PASS: SubmitMessage did not return a context error (err=%v)", err)
+		t.Logf("PASS: SubmitMessage did not return a context error (err=%v)", err)
 	}
 
-	// AC3: API must have been called twice — once for the tool_use turn that
+	// API must have been called twice — once for the tool_use turn that
 	// generated synthetic results, then again with those results delivered.
 	gotCalls := apiCallCount.Load()
 	if gotCalls < 2 {
-		t.Errorf("AC3 FAIL: expected at least 2 API calls (loop continued), got %d", gotCalls)
+		t.Errorf("FAIL: expected at least 2 API calls (loop continued), got %d", gotCalls)
 	} else {
-		t.Logf("AC3 PASS: API was called %d times (loop continued past interrupt)", gotCalls)
+		t.Logf("PASS: API was called %d times (loop continued past interrupt)", gotCalls)
 	}
 
-	// AC1/AC2: inspect transcript to verify both branches.
+	// Inspect transcript to verify both branches.
 	entries, err := sessMgr.LoadTranscript(sessionID)
 	if err != nil {
 		t.Fatalf("LoadTranscript error: %v", err)
@@ -1384,14 +1384,14 @@ func TestInterruptSyntheticToolResults_AC5(t *testing.T) {
 	}
 
 	if !syntheticForSlow {
-		t.Error("AC1 FAIL: expected synthetic 'Tool execution interrupted' result for blocking tool tool_slow")
+		t.Error("FAIL: expected synthetic 'Tool execution interrupted' result for blocking tool tool_slow")
 	} else {
-		t.Log("AC1 PASS: blocking tool received synthetic interrupted result")
+		t.Log("PASS: blocking tool received synthetic interrupted result")
 	}
 	if !realForFast {
-		t.Error("AC2 FAIL: expected completed tool tool_fast to retain real content 'fast-tool-real-content'")
+		t.Error("FAIL: expected completed tool tool_fast to retain real content 'fast-tool-real-content'")
 	} else {
-		t.Log("AC2 PASS: completed tool retained its real result content")
+		t.Log("PASS: completed tool retained its real result content")
 	}
 
 	// Also verify there is no duplicate ToolUseID in the transcript — the
@@ -1409,7 +1409,7 @@ func TestInterruptSyntheticToolResults_AC5(t *testing.T) {
 	}
 }
 
-// TestEngine_InterruptedField_TriggersSynthetic verifies AC4: when execResults
+// TestEngine_InterruptedField_TriggersSynthetic verifies that when execResults
 // has Interrupted=true, the engine emits "Tool execution interrupted" synthetic
 // regardless of the original content.
 //
@@ -1525,13 +1525,13 @@ func TestEngine_InterruptedField_TriggersSynthetic(t *testing.T) {
 	}
 
 	if !foundSynthetic {
-		t.Error("AC4 FAIL: expected synthetic 'Tool execution interrupted' result for interrupted tool")
+		t.Error("FAIL: expected synthetic 'Tool execution interrupted' result for interrupted tool")
 	} else {
-		t.Log("AC4 PASS: engine emitted synthetic interrupt result")
+		t.Log("PASS: engine emitted synthetic interrupt result")
 	}
 }
 
-// TestEngine_BenignContent_NotInterpretedAsInterrupt verifies AC5: when a tool
+// TestEngine_BenignContent_NotInterpretedAsInterrupt verifies that when a tool
 // returns content containing "aborted" or "interrupted" but Interrupted=false,
 // the engine passes the original content through (no synthetic rewrite).
 // This is a regression test: the old substring-based detection would false-positive
@@ -1596,15 +1596,15 @@ func TestEngine_BenignContent_NotInterpretedAsInterrupt(t *testing.T) {
 	}
 
 	if foundSynthetic {
-		t.Error("AC5 FAIL: engine emitted synthetic interrupt for benign content (should not)")
+		t.Error("FAIL: engine emitted synthetic interrupt for benign content (should not)")
 	} else {
-		t.Log("AC5 PASS: engine did NOT emit synthetic interrupt for benign content")
+		t.Log("PASS: engine did NOT emit synthetic interrupt for benign content")
 	}
 
 	if !foundBenign {
-		t.Error("AC5 FAIL: expected original benign content 'make: *** [build] aborted', got something else")
+		t.Error("FAIL: expected original benign content 'make: *** [build] aborted', got something else")
 	} else {
-		t.Log("AC5 PASS: original benign content preserved")
+		t.Log("PASS: original benign content preserved")
 	}
 }
 
@@ -1656,7 +1656,7 @@ func (b *benignAbortedTool) Execute(ctx context.Context, input map[string]any, c
 }
 
 // TestToolCallEvents_Negative verifies that when stream-json mode is DISABLED
-// (Enabled=false), no tool_call events are emitted on stdout. This is the AC3
+// (Enabled=false), no tool_call events are emitted on stdout. This is the
 // negative path - verifying the absence of events when the feature is off.
 func TestToolCallEvents_Negative(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -1720,11 +1720,11 @@ func TestToolCallEvents_Negative(t *testing.T) {
 	io.Copy(&stdoutBuf, stdoutR)
 	stdoutOutput := stdoutBuf.String()
 
-	// AC3 negative: Verify NO tool_progress events appear when stream-json is disabled
+	// Negative: Verify NO tool_progress events appear when stream-json is disabled
 	if strings.Contains(stdoutOutput, `"type":"tool_progress"`) {
-		t.Error("AC3 FAIL: stdout contains tool_progress event even though stream-json mode is disabled")
+		t.Error("FAIL: stdout contains tool_progress event even though stream-json mode is disabled")
 	} else {
-		t.Log("AC3 PASS: no tool_progress events emitted when stream-json mode is disabled")
+		t.Log("PASS: no tool_progress events emitted when stream-json mode is disabled")
 	}
 }
 

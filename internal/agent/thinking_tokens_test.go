@@ -280,7 +280,7 @@ func TestThinkingTokens_FinalEmission(t *testing.T) {
 	lastET := int(events[len(events)-1]["estimated_tokens"].(float64))
 	lastETD := int(events[len(events)-1]["estimated_tokens_delta"].(float64))
 
-	// estimated_tokens_delta >= 1 for final event
+	// Estimated_tokens_delta >= 1 for final event
 	if lastETD < 1 {
 		t.Errorf("FAIL: final event estimated_tokens_delta=%d, want >= 1", lastETD)
 	} else {
@@ -371,12 +371,12 @@ func TestThinkingTokens_EmissionWithin200ms(t *testing.T) {
 		}
 	}
 
-	// thinking_tokens event must appear (verifies hook fires at all)
+	// Thinking_tokens event must appear (verifies hook fires at all)
 	if !hasEvent {
 		t.Fatal("FAIL: no thinking_tokens event found - emission hook not firing")
 	}
 
-	// total elapsed time must be < 200ms.
+	// Total elapsed time must be < 200ms.
 	// The mock server sends the thinking block immediately; the engine's first
 	// emit has zero LastEmitTime so fires without the 100ms wait, making the
 	// total time well under the 200ms spec threshold even on slow CI runners.

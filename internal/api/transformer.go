@@ -42,19 +42,22 @@ func deepSeekOpenAITransform(body any) {
 	}
 }
 
-// deepSeekAnthropicTransform injects DeepSeek-specific fields into Anthropic-format requests.
-// DeepSeek's Anthropic-compatible endpoint uses output_config.effort for thinking effort.
-// It ignores budget_tokens, so we map the effort level from the ThinkingConfig.
+// deepSeekAnthropicTransform adapts Anthropic-format requests for DeepSeek.
+// DeepSeek uses a unified max_tokens budget (set via SetMaxTokensOverride) and
+// does not support separate budget_tokens. This transform:
+//  1. Copies the original --effort value to output_config.effort (static, preserves cache)
+//  2. Removes the Thinking field (budget_tokens is Anthropic-only)
 func deepSeekAnthropicTransform(body any) {
 	req, ok := body.(*AnthropicRequest)
 	if !ok {
 		return
 	}
-	if req.Thinking != nil {
+	if req.Thinking != nil && req.Thinking.Effort != "" {
 		req.OutputConfig = &OutputConfig{
-			Effort: budgetToEffort(req.Thinking.BudgetTokens),
+			Effort: req.Thinking.Effort,
 		}
 	}
+	req.Thinking = nil
 }
 
 // deepSeekOpenAIResponsesTransform injects DeepSeek-specific fields into
@@ -103,21 +106,6 @@ func normalizeDeepSeekEffort(effort string) string {
 		return effort
 	default:
 		return "high"
-	}
-}
-
-// budgetToEffort maps budget tokens to an effort string for DeepSeek's Anthropic endpoint.
-// This is the inverse of effortToBudgetTokens.
-func budgetToEffort(tokens int) string {
-	switch {
-	case tokens <= 4096:
-		return "low"
-	case tokens <= 16000:
-		return "medium"
-	case tokens <= 32000:
-		return "high"
-	default:
-		return "max"
 	}
 }
 

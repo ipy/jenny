@@ -79,7 +79,14 @@ func (p *anthropicProvider) SetThinkingConfig(cfg ThinkingConfig) {
 
 // SetDynamicThinkingBudget updates the thinking budget tokens per-turn.
 // Only changes BudgetTokens, preserving Effort to avoid cache invalidation.
+// Enforces Anthropic's minimum of 1024 for budget_tokens.
+// For DeepSeek via the Anthropic endpoint, the request transformer removes the
+// Thinking field entirely (DeepSeek uses unified max_tokens), so this value
+// only takes effect on genuine Anthropic requests.
 func (p *anthropicProvider) SetDynamicThinkingBudget(n int) {
+	if n > 0 && n < 1024 {
+		n = 1024
+	}
 	p.thinkingConfig.BudgetTokens = n
 }
 
@@ -214,6 +221,7 @@ func (p *anthropicProvider) doSendMessage(ctx context.Context, messages []Messag
 		reqBody.Thinking = &AnthropicThinkingConfig{
 			Type:         "enabled",
 			BudgetTokens: p.thinkingConfig.BudgetTokens,
+			Effort:       p.thinkingConfig.Effort,
 		}
 	}
 
@@ -474,6 +482,7 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 			reqBody.Thinking = &AnthropicThinkingConfig{
 				Type:         "enabled",
 				BudgetTokens: p.thinkingConfig.BudgetTokens,
+				Effort:       p.thinkingConfig.Effort,
 			}
 		}
 

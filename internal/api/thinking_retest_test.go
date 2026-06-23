@@ -1687,19 +1687,16 @@ func TestAC3_AnthropicProvider_OutputConfigEffort(t *testing.T) {
 			name:             "deepseek effort only",
 			model:            "deepseek-v4-pro",
 			cfg:              ThinkingConfig{Effort: "high"},
-			wantThinking:     true,
+			wantThinking:     false, // deepSeekAnthropicTransform removes Thinking, replaces with output_config
 			wantOutputConfig: true,
 			wantEffort:       "high",
-			wantBudget:       32000,
 		},
 		{
-			name:             "deepseek budget only (output_config from budget mapping)",
+			name:             "deepseek budget only (no output_config without effort)",
 			model:            "deepseek-v4-pro",
 			cfg:              ThinkingConfig{BudgetTokens: 8000},
-			wantThinking:     true,
-			wantOutputConfig: true,
-			wantEffort:       "medium", // budgetToEffort: 8000 -> medium
-			wantBudget:       8000,
+			wantThinking:     false, // deepSeekAnthropicTransform removes Thinking
+			wantOutputConfig: false, // no effort configured → no output_config
 		},
 		{
 			name:             "deepseek neither set",

@@ -1445,7 +1445,7 @@ func (c *Client) doRequest(ctx context.Context, req jsonRPCRequest) (*jsonRPCRes
 	if c.transport != nil {
 		resp, err := c.transport.SendRequest(ctx, req)
 		if err != nil && IsSessionExpired(err) {
-			// re-initialize on session expiry, then retry once
+			// Re-initialize on session expiry, then retry once
 			if reinitErr := c.initializeViaTransport(ctx); reinitErr != nil {
 				return nil, fmt.Errorf("re-initialization after session expiry failed: %w", reinitErr)
 			}

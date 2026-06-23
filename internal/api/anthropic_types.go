@@ -63,6 +63,7 @@ type OutputConfig struct {
 type AnthropicThinkingConfig struct {
 	Type         string `json:"type"`
 	BudgetTokens int    `json:"budget_tokens"`
+	Effort       string `json:"-"` // not serialized; carries the original --effort for transform use
 }
 
 // AnthropicMessage represents a message in the Anthropic Messages API.
