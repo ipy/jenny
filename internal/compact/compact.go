@@ -243,7 +243,7 @@ func writeArchive(srcDir, id, dst string) error {
 			}
 		case info.IsDir():
 			// Skip directory entries so `tar -tzf` lists exactly the files,
-			// matching the AC6 expected listing. The tar reader will recreate
+			// matching the expected listing. The tar reader will recreate
 			// any needed parent directories during extraction.
 			return nil
 		default:

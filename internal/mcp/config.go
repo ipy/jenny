@@ -108,7 +108,7 @@ func LoadConfig(paths []string, strict bool) (map[string]MCPServerDef, error) {
 		}
 	}
 
-	// AC3: strict mode only honours CLI-supplied config. The --strict-mcp-config
+	// Strict mode only honours CLI-supplied config. The --strict-mcp-config
 	// flag is also wired through the tool Registry to suppress built-in tools
 	// (see internal/tool/registry.go WithStrictMCP). MCP config loading itself
 	// never pulls from plugin sources, so the flag is a no-op at this layer.

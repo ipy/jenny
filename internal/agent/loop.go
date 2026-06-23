@@ -368,10 +368,10 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 		cfg.SessionID = sessionID
 	}
 
-	// AC1: Store IsForkChild in context so tools can check it
+	// Store IsForkChild in context so tools can check it
 	ctx = context.WithValue(ctx, tool.ForkChildKey, cfg.IsForkChild)
 
-	// AC1: Store IsNamedAgent in context so tools can check it (blocks nested named agents)
+	// Store IsNamedAgent in context so tools can check it (blocks nested named agents)
 	ctx = context.WithValue(ctx, tool.NamedAgentKey, cfg.IsNamedAgent)
 
 	// Create QueryEngine - it handles API client creation, cost state restoration,
@@ -388,7 +388,7 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 		}
 	}
 
-	// Emit system/init line once at start of stream-json mode (AC1-AC6)
+	// Emit system/init line once at start of stream-json mode
 	if cfg.Enabled {
 		toolNames := make([]string, len(tools))
 		for i, t := range tools {
@@ -444,12 +444,12 @@ func RunStream(ctx context.Context, prompt string, tools []tool.Tool, cwd string
 		_ = cli.WriteStreamJSON(initMsg)
 	}
 
-	// AC4: Delegate to QueryEngine.SubmitMessage which handles:
-	// - Persist-before-API ordering (AC1)
-	// - Turn counter management (AC5)
-	// - MaxTurns enforcement (AC2)
-	// - Budget enforcement (AC2)
-	// - Cost accumulation and flush (AC3)
+	// Delegate to QueryEngine.SubmitMessage which handles:
+	// - Persist-before-API ordering
+	// - Turn counter management
+	// - MaxTurns enforcement
+	// - Budget enforcement
+	// - Cost accumulation and flush
 	// - Stream-json emission, SSE streaming, tool execution
 	result, err := engine.SubmitMessage(ctx, prompt)
 

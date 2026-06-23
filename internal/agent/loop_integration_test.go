@@ -218,7 +218,7 @@ func TestTranscriptPersistenceOnDisk(t *testing.T) {
 
 	sessionID := "sess_persistence_test"
 
-	// AC4-isolation: Override JennyHomeDirFunc to use tmpDir for session-specific directory structure
+	// Override JennyHomeDirFunc to use tmpDir for session-specific directory structure
 	origFunc := constants.JennyHomeDirFunc
 	constants.JennyHomeDirFunc = func() string { return tmpDir }
 	defer func() { constants.JennyHomeDirFunc = origFunc }()

@@ -46,9 +46,9 @@ func makeMockStreamServerHelper(t *testing.T, events []string) *httptest.Server 
 	return makeMockStreamServerWithEvents(t, events)
 }
 
-// TestAC1_PersistBeforeAPI verifies that the user message is persisted to
+// TestPersistBeforeAPI verifies that the user message is persisted to
 // transcript BEFORE any API call is made.
-func TestAC1_PersistBeforeAPI(t *testing.T) {
+func TestPersistBeforeAPI(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
 	if err != nil {
@@ -99,15 +99,15 @@ func TestAC1_PersistBeforeAPI(t *testing.T) {
 	}
 
 	if !foundUserMessage {
-		t.Error("AC1 FAIL: user message not found in transcript")
+		t.Error("FAIL: user message not found in transcript")
 	} else {
-		t.Log("AC1 PASS: user message persisted to transcript")
+		t.Log("PASS: user message persisted to transcript")
 	}
 }
 
-// TestAC2_MaxTurnsEnforcement verifies that when maxTurns is set,
+// TestMaxTurnsEnforcement verifies that when maxTurns is set,
 // the engine stops before exceeding the limit.
-func TestAC2_MaxTurnsEnforcement(t *testing.T) {
+func TestMaxTurnsEnforcement(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
 	if err != nil {
@@ -145,17 +145,17 @@ func TestAC2_MaxTurnsEnforcement(t *testing.T) {
 
 	// Should get error_max_turns when limit is exceeded
 	if err == nil {
-		t.Error("AC2 FAIL: expected error when maxTurns exceeded, got nil")
+		t.Error("FAIL: expected error when maxTurns exceeded, got nil")
 	} else if !strings.Contains(err.Error(), "error_max_turns") {
-		t.Errorf("AC2 FAIL: expected error_max_turns, got: %v", err)
+		t.Errorf("FAIL: expected error_max_turns, got: %v", err)
 	} else {
-		t.Log("AC2 PASS: engine stopped at maxTurns limit")
+		t.Log("PASS: engine stopped at maxTurns limit")
 	}
 }
 
-// TestAC5_TurnCounterResets verifies that the turn counter resets
+// TestTurnCounterResets verifies that the turn counter resets
 // on each SubmitMessage call.
-func TestAC5_TurnCounterResets(t *testing.T) {
+func TestTurnCounterResets(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
 	if err != nil {
@@ -198,20 +198,20 @@ func TestAC5_TurnCounterResets(t *testing.T) {
 	secondTurnCount := engine.TurnCount()
 	t.Logf("After second SubmitMessage, turnCount = %d", secondTurnCount)
 
-	// AC5: Turn counter resets at the start of each SubmitMessage
+	// Turn counter resets at the start of each SubmitMessage
 	// After SubmitMessage returns, counter reflects iterations run
 	// For a single iteration, it would be 1 (incremented then check fails maxTurns)
 	// The key verification is that both calls should have the same behavior
 	if firstTurnCount != secondTurnCount {
-		t.Errorf("AC5 FAIL: turn counts differ between calls: first=%d, second=%d", firstTurnCount, secondTurnCount)
+		t.Errorf("FAIL: turn counts differ between calls: first=%d, second=%d", firstTurnCount, secondTurnCount)
 	} else {
-		t.Log("AC5 PASS: turn counter behavior is consistent between SubmitMessage calls")
+		t.Log("PASS: turn counter behavior is consistent between SubmitMessage calls")
 	}
 }
 
-// TestAC3_CostStateFlushed verifies that cost state is persisted after
+// TestCostStateFlushed verifies that cost state is persisted after
 // each SubmitMessage call completes.
-func TestAC3_CostStateFlushed(t *testing.T) {
+func TestCostStateFlushed(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Override JennyHomeDir to use tmpDir so cost state is written/read from predictable location
@@ -258,11 +258,11 @@ func TestAC3_CostStateFlushed(t *testing.T) {
 		t.Fatalf("RestoreCostState error: %v", err)
 	}
 	if !ok {
-		t.Error("AC3 FAIL: cost state was not flushed after SubmitMessage")
+		t.Error("FAIL: cost state was not flushed after SubmitMessage")
 	} else if restored.TotalCostUSD == 0 {
-		t.Error("AC3 FAIL: cost state was flushed but has zero cost")
+		t.Error("FAIL: cost state was flushed but has zero cost")
 	} else {
-		t.Logf("AC3 PASS: cost state flushed with total cost %.6f USD", restored.TotalCostUSD)
+		t.Logf("PASS: cost state flushed with total cost %.6f USD", restored.TotalCostUSD)
 	}
 }
 
@@ -312,9 +312,9 @@ func TestQueryEngine_SetMaxTurns(t *testing.T) {
 	}
 }
 
-// TestAC1_SubmitMessageWithoutSessionManager verifies that SubmitMessage
-// works correctly when no session manager is configured (AC1 edge case).
-func TestAC1_SubmitMessageWithoutSessionManager(t *testing.T) {
+// TestSubmitMessageWithoutSessionManager verifies that SubmitMessage
+// works correctly when no session manager is configured (edge case).
+func TestSubmitMessageWithoutSessionManager(t *testing.T) {
 	server := makeMockStreamServer(t, []string{
 		sseLine("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"test","stop_reason":null,"usage":{"input_tokens":1,"output_tokens":1}}}`),
 		sseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
@@ -337,18 +337,18 @@ func TestAC1_SubmitMessageWithoutSessionManager(t *testing.T) {
 
 	result, err := engine.SubmitMessage(ctx, "test")
 	if err != nil {
-		t.Errorf("AC1 FAIL: SubmitMessage with nil sessionManager returned error: %v", err)
+		t.Errorf("FAIL: SubmitMessage with nil sessionManager returned error: %v", err)
 	}
 	if result == "" {
-		t.Error("AC1 FAIL: expected non-empty result from SubmitMessage")
+		t.Error("FAIL: expected non-empty result from SubmitMessage")
 	} else {
-		t.Log("AC1 PASS: SubmitMessage works without session manager")
+		t.Log("PASS: SubmitMessage works without session manager")
 	}
 }
 
-// TestAC1_ResumeDoesNotDuplicateUserMessage verifies that on resume
+// TestResumeDoesNotDuplicateUserMessage verifies that on resume
 // the user message is not duplicated in the transcript.
-func TestAC1_ResumeDoesNotDuplicateUserMessage(t *testing.T) {
+func TestResumeDoesNotDuplicateUserMessage(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
 	if err != nil {
@@ -408,15 +408,15 @@ func TestAC1_ResumeDoesNotDuplicateUserMessage(t *testing.T) {
 		}
 	}
 	if userCount != 1 {
-		t.Errorf("AC1 FAIL: expected 1 user message in transcript, got %d", userCount)
+		t.Errorf("FAIL: expected 1 user message in transcript, got %d", userCount)
 	} else {
-		t.Log("AC1 PASS: no duplicate user message on resume")
+		t.Log("PASS: no duplicate user message on resume")
 	}
 }
 
-// TestAC2_MaxTurnsZeroIsUnlimited verifies that default maxTurns=0
+// TestMaxTurnsZeroIsUnlimited verifies that default maxTurns=0
 // allows the engine to complete normally without artificial limits.
-func TestAC2_MaxTurnsZeroIsUnlimited(t *testing.T) {
+func TestMaxTurnsZeroIsUnlimited(t *testing.T) {
 	server := makeMockStreamServer(t, []string{
 		sseLine("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"test","stop_reason":null,"usage":{"input_tokens":1,"output_tokens":1}}}`),
 		sseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
@@ -439,15 +439,15 @@ func TestAC2_MaxTurnsZeroIsUnlimited(t *testing.T) {
 
 	_, err := engine.SubmitMessage(ctx, "test")
 	if err != nil {
-		t.Errorf("AC2 FAIL: SubmitMessage should complete normally with maxTurns=0: %v", err)
+		t.Errorf("FAIL: SubmitMessage should complete normally with maxTurns=0: %v", err)
 	} else {
-		t.Log("AC2 PASS: maxTurns=0 allows unlimited turns")
+		t.Log("PASS: maxTurns=0 allows unlimited turns")
 	}
 }
 
-// TestAC3_CostFlushOnMaxTurnsError verifies cost state is persisted even when
+// TestCostFlushOnMaxTurnsError verifies cost state is persisted even when
 // SubmitMessage returns an error (e.g., maxTurns exceeded).
-func TestAC3_CostFlushOnMaxTurnsError(t *testing.T) {
+func TestCostFlushOnMaxTurnsError(t *testing.T) {
 	// Isolate cost state to a temp directory
 	tmpDir := t.TempDir()
 	origWd, _ := os.Getwd()
@@ -496,18 +496,18 @@ func TestAC3_CostFlushOnMaxTurnsError(t *testing.T) {
 		t.Fatalf("RestoreCostState error: %v", restoreErr)
 	}
 	if !ok {
-		t.Fatal("AC3 FAIL: cost state was not flushed after maxTurns error")
+		t.Fatal("FAIL: cost state was not flushed after maxTurns error")
 	}
 	if restored.TotalCostUSD == 0 {
-		t.Error("AC3 FAIL: cost state flushed but has zero cost")
+		t.Error("FAIL: cost state flushed but has zero cost")
 	} else {
-		t.Logf("AC3 PASS: cost state flushed after error, total cost = %.6f USD", restored.TotalCostUSD)
+		t.Logf("PASS: cost state flushed after error, total cost = %.6f USD", restored.TotalCostUSD)
 	}
 }
 
-// TestAC4_RunStreamReturnsTextContent verifies that RunStream returns the
+// TestRunStreamReturnsTextContent verifies that RunStream returns the
 // correct text result from the model after the refactor to use QueryEngine.
-func TestAC4_RunStreamReturnsTextContent(t *testing.T) {
+func TestRunStreamReturnsTextContent(t *testing.T) {
 	server := makeMockStreamServer(t, nil)
 	defer server.Close()
 
@@ -534,16 +534,16 @@ func TestAC4_RunStreamReturnsTextContent(t *testing.T) {
 		t.Fatalf("RunStream error: %v", err)
 	}
 	if result != "Hello from stream" {
-		t.Errorf("AC4 FAIL: expected result 'Hello from stream', got %q", result)
+		t.Errorf("FAIL: expected result 'Hello from stream', got %q", result)
 	} else {
-		t.Log("AC4 PASS: RunStream returns correct text content")
+		t.Log("PASS: RunStream returns correct text content")
 	}
 }
 
-// TestAC5_TurnCounterIsAccurate verifies that TurnCount() returns the
+// TestTurnCounterIsAccurate verifies that TurnCount() returns the
 // correct number of API iterations after SubmitMessage completes, and
 // that the counter resets on subsequent calls.
-func TestAC5_TurnCounterIsAccurate(t *testing.T) {
+func TestTurnCounterIsAccurate(t *testing.T) {
 	server := makeMockStreamServer(t, []string{
 		sseLine("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"test","stop_reason":null,"usage":{"input_tokens":1,"output_tokens":1}}}`),
 		sseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
@@ -569,9 +569,9 @@ func TestAC5_TurnCounterIsAccurate(t *testing.T) {
 		t.Fatalf("SubmitMessage error: %v", err)
 	}
 	if tc := engine.TurnCount(); tc != 1 {
-		t.Errorf("AC5 FAIL: expected TurnCount()=1 after one iteration, got %d", tc)
+		t.Errorf("FAIL: expected TurnCount()=1 after one iteration, got %d", tc)
 	} else {
-		t.Log("AC5 PASS: turn counter accurately reflects one API iteration")
+		t.Log("PASS: turn counter accurately reflects one API iteration")
 	}
 
 	// Second SubmitMessage — counter should reset and count from 0
@@ -580,9 +580,9 @@ func TestAC5_TurnCounterIsAccurate(t *testing.T) {
 		t.Fatalf("Second SubmitMessage error: %v", err)
 	}
 	if tc := engine.TurnCount(); tc != 1 {
-		t.Errorf("AC5 FAIL: expected TurnCount()=1 after second SubmitMessage, got %d", tc)
+		t.Errorf("FAIL: expected TurnCount()=1 after second SubmitMessage, got %d", tc)
 	} else {
-		t.Log("AC5 PASS: turn counter resets to 0 on each SubmitMessage")
+		t.Log("PASS: turn counter resets to 0 on each SubmitMessage")
 	}
 }
 
@@ -675,14 +675,14 @@ func TestAC3_StreamJsonCallsSetOutput(t *testing.T) {
 	io.Copy(&stdoutBuf, stdoutR)
 	stdoutOutput := stdoutBuf.String()
 
-	// AC3: Verify log.SetOutput(os.Stderr) was actually called
+	// Verify log.SetOutput(os.Stderr) was actually called
 	// If the capture buffer is empty, it means logs went elsewhere (stderr) = SetOutput was called
 	// If the capture buffer has content, it means logs were captured here = SetOutput was NOT called
 	if logCapture.Len() > 0 {
-		t.Errorf("AC3 FAIL: log.SetOutput(os.Stderr) was NOT called; found %d bytes in log capture buffer", logCapture.Len())
+		t.Errorf("FAIL: log.SetOutput(os.Stderr) was NOT called; found %d bytes in log capture buffer", logCapture.Len())
 		t.Logf("Log output that should have been redirected: %s", logCapture.String())
 	} else {
-		t.Log("AC3 PASS: log.SetOutput(os.Stderr) was called (no logs in capture buffer)")
+		t.Log("PASS: log.SetOutput(os.Stderr) was called (no logs in capture buffer)")
 	}
 
 	// Also verify no log output appears on stdout
@@ -700,12 +700,12 @@ func TestAC3_StreamJsonCallsSetOutput(t *testing.T) {
 	}
 
 	if len(logLines) > 0 {
-		t.Errorf("AC3 FAIL: found %d log line(s) on stdout, expected 0 (logs should go to stderr)", len(logLines))
+		t.Errorf("FAIL: found %d log line(s) on stdout, expected 0 (logs should go to stderr)", len(logLines))
 		for _, ll := range logLines {
 			t.Logf("  stdout log: %s", ll)
 		}
 	} else {
-		t.Log("AC3 PASS: no log output found on stdout")
+		t.Log("PASS: no log output found on stdout")
 	}
 
 	// Reset log output to stderr for subsequent tests
@@ -776,25 +776,25 @@ func TestAC4_QueryEngineWireReadFileCache(t *testing.T) {
 		t.Fatal("ReadTool not found in engine")
 	}
 
-	// AC4: Verify the engine wired cacheB to tools (not cacheA)
+	// Verify the engine wired cacheB to tools (not cacheA)
 	// This is the key assertion that makes the test non-tautological:
 	// We check that the engine's tools have cacheB by verifying the cache
 	// that was pre-populated with testPath is accessible through the engine's tool.
 	if entry, ok := engineReadTool.GetReadFileCache().GetRead(testPath); !ok {
-		t.Fatal("AC4 FAIL: engine's ReadTool does not have cacheB - WireReadFileCache did not wire the correct cache")
+		t.Fatal("FAIL: engine's ReadTool does not have cacheB - WireReadFileCache did not wire the correct cache")
 	} else {
 		if entry.Content != testContent {
-			t.Errorf("AC4 FAIL: cache content mismatch: got %q, want %q", entry.Content, testContent)
+			t.Errorf("FAIL: cache content mismatch: got %q, want %q", entry.Content, testContent)
 		}
-		t.Log("AC4 PASS: QueryEngine.WireReadFileCache correctly wires StreamConfig.ReadFileCache (cacheB) to tools")
+		t.Log("PASS: QueryEngine.WireReadFileCache correctly wires StreamConfig.ReadFileCache (cacheB) to tools")
 	}
 
 	// Also verify cacheA was NOT wired to the engine's tools
 	// (if cacheA had the entry, it would be a different cache instance)
 	if _, ok := cacheA.GetRead(testPath); ok {
-		t.Error("AC4 FAIL: engine's tools appear to have cacheA instead of cacheB")
+		t.Error("FAIL: engine's tools appear to have cacheA instead of cacheB")
 	} else {
-		t.Log("AC4 PASS: cacheA correctly NOT wired to engine's tools")
+		t.Log("PASS: cacheA correctly NOT wired to engine's tools")
 	}
 }
 
@@ -912,19 +912,19 @@ func TestAC1_MemdirCreatedAtPromptBuild(t *testing.T) {
 		t.Fatalf("SubmitMessage() error: %v", err)
 	}
 
-	// AC1: memdir directory exists at the project-scoped config-home path.
+	// memdir directory exists at the project-scoped config-home path.
 	if _, err := os.Stat(expectedPath); err != nil {
-		t.Errorf("AC1 FAIL: memdir directory %q was not created at prompt build time: %v", expectedPath, err)
+		t.Errorf("FAIL: memdir directory %q was not created at prompt build time: %v", expectedPath, err)
 	} else {
-		t.Logf("AC1 PASS: memdir directory created at %q", expectedPath)
+		t.Logf("PASS: memdir directory created at %q", expectedPath)
 	}
 
 	// MEMORY.md should also be created by Create().
 	indexPath := expectedMem.IndexPath()
 	if _, err := os.Stat(indexPath); err != nil {
-		t.Errorf("AC1 FAIL: MEMORY.md index was not created: %v", err)
+		t.Errorf("FAIL: MEMORY.md index was not created: %v", err)
 	} else {
-		t.Logf("AC1 PASS: MEMORY.md created at %q", indexPath)
+		t.Logf("PASS: MEMORY.md created at %q", indexPath)
 	}
 
 	// Drain the memory extractor so the background extraction goroutine
@@ -948,20 +948,20 @@ func TestAC1_DenyRuleStructuredOutput(t *testing.T) {
 
 	defer func() {
 		if r := recover(); r == nil {
-			t.Error("AC1 FAIL: expected panic when StructuredOutput is denied but schema is set")
+			t.Error("FAIL: expected panic when StructuredOutput is denied but schema is set")
 		} else {
-			t.Log("AC1 PASS: panic occurred as expected")
+			t.Log("PASS: panic occurred as expected")
 		}
 	}()
 
 	engine := mustNewQueryEngine(&cfg, nil, "test-model", WithClient(fastClient(t)))
 	// If we get here without panic, fail
-	t.Errorf("AC1 FAIL: expected panic but got engine: %v", engine)
+	t.Errorf("FAIL: expected panic but got engine: %v", engine)
 }
 
 // TestAC4_InteractiveModeNoStructuredOutput tests that when Enabled=false
 // (interactive mode), the StructuredOutput tool is not registered even
-// if a schema is configured. This verifies AC4 non-interactive detection.
+// if a schema is configured. This verifies non-interactive detection.
 func TestAC4_InteractiveModeNoStructuredOutput(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
@@ -981,17 +981,17 @@ func TestAC4_InteractiveModeNoStructuredOutput(t *testing.T) {
 		t.Fatal("NewQueryEngine returned nil unexpectedly")
 	}
 
-	// AC4: StructuredOutput tool should NOT be registered in interactive mode
+	// StructuredOutput tool should NOT be registered in interactive mode
 	if engine.structuredOutputTool != nil {
-		t.Error("AC4 FAIL: structuredOutputTool should be nil in interactive mode (Enabled=false)")
+		t.Error("FAIL: structuredOutputTool should be nil in interactive mode (Enabled=false)")
 	} else {
-		t.Log("AC4 PASS: structuredOutputTool is nil in interactive mode")
+		t.Log("PASS: structuredOutputTool is nil in interactive mode")
 	}
 }
 
 // TestAC4_NonInteractiveModeHasStructuredOutput tests that when Enabled=true
 // (non-interactive/stream-json mode), the StructuredOutput tool IS registered
-// if a schema is configured. This verifies AC4 non-interactive detection.
+// if a schema is configured. This verifies non-interactive detection.
 func TestAC4_NonInteractiveModeHasStructuredOutput(t *testing.T) {
 	tmpDir := t.TempDir()
 	sessMgr, err := session.NewManager(tmpDir, false)
@@ -1011,11 +1011,11 @@ func TestAC4_NonInteractiveModeHasStructuredOutput(t *testing.T) {
 		t.Fatal("NewQueryEngine returned nil unexpectedly")
 	}
 
-	// AC4: StructuredOutput tool should be registered in non-interactive mode
+	// StructuredOutput tool should be registered in non-interactive mode
 	if engine.structuredOutputTool == nil {
-		t.Error("AC4 FAIL: structuredOutputTool should NOT be nil in non-interactive mode (Enabled=true)")
+		t.Error("FAIL: structuredOutputTool should NOT be nil in non-interactive mode (Enabled=true)")
 	} else {
-		t.Log("AC4 PASS: structuredOutputTool is not nil in non-interactive mode")
+		t.Log("PASS: structuredOutputTool is not nil in non-interactive mode")
 	}
 }
 

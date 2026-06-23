@@ -242,8 +242,8 @@ type LocalSubagentRunner struct {
 	tools             []tool.Tool
 	denyRules         map[string]bool
 	sessionMgr        *session.Manager
-	parentConfig      *StreamConfig // Parent's StreamConfig for inheritance when Name is set (AC3)
-	capturedStreamCfg *StreamConfig // Captured StreamConfig for testing verification (AC2, AC4)
+	parentConfig      *StreamConfig // Parent's StreamConfig for inheritance when Name is set
+	capturedStreamCfg *StreamConfig // Captured StreamConfig for testing verification
 	parentSessionID   string        // Parent session ID for transcript/cost integration
 }
 
@@ -269,7 +269,7 @@ func (r *LocalSubagentRunner) SetSessionManager(mgr *session.Manager) {
 	r.sessionMgr = mgr
 }
 
-// SetParentConfig sets the parent StreamConfig for inheritance when Name is set (AC3).
+// SetParentConfig sets the parent StreamConfig for inheritance when Name is set.
 func (r *LocalSubagentRunner) SetParentConfig(cfg *StreamConfig) {
 	r.parentConfig = cfg
 }
@@ -280,7 +280,7 @@ func (r *LocalSubagentRunner) SetParentSessionID(sessionID string) {
 }
 
 // GetCapturedStreamConfig returns the StreamConfig most recently constructed in RunSubagent.
-// Used by tests to verify IsNamedAgent and inherited field propagation (AC2, AC4).
+// Used by tests to verify IsNamedAgent and inherited field propagation.
 func (r *LocalSubagentRunner) GetCapturedStreamConfig() *StreamConfig {
 	return r.capturedStreamCfg
 }
@@ -327,7 +327,7 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 	// Build the tool list for the subagent
 	var subagentTools []tool.Tool
 
-	// AC3-tool-inheritance: Named agents (params.Name != "") get the parent's full tool registry
+	// Tool inheritance: Named agents (params.Name != "") get the parent's full tool registry
 	// Unnamed subagents get the subagent-type-filtered tool list
 	if params.Name != "" {
 		// Named agent: inherit parent's full tool registry (no filtering)
@@ -336,7 +336,7 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 		// Unnamed subagent: filter by subagent type
 		allowedToolNames := subagentType.FilterTools(denyList)
 
-		// AC4: Intersect with skill-specific allowed tools if provided
+		// Intersect with skill-specific allowed tools if provided
 		if len(params.AllowedTools) > 0 {
 			var intersected []string
 			skillAllowed := make(map[string]bool)
@@ -364,7 +364,7 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 	var worktreePath string
 	var cleanupWorktree bool
 
-	// AC2: Worktree isolation - mutually exclusive with cwd
+	// Worktree isolation - mutually exclusive with cwd
 	if params.Isolation == "worktree" {
 		if params.CWD != "" {
 			return nil, fmt.Errorf("worktree isolation is mutually exclusive with cwd")
@@ -383,7 +383,7 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 		cwd = worktreePath
 		cleanupWorktree = true
 
-		// Persist worktree state to transcript if session manager available (AC5)
+		// Persist worktree state to transcript if session manager available
 		if r.sessionMgr != nil {
 			// Generate a session ID for the subagent to track worktree state
 			subagentSessionID := "subagent-" + params.SubagentType
@@ -401,10 +401,10 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 		Enabled:      false, // Subagent runs without streaming
 		Verbose:      false,
 		IsForkChild:  true,              // Mark as fork child for recursive fork detection
-		IsNamedAgent: params.Name != "", // Mark as named agent for nested name blocking (AC1)
+		IsNamedAgent: params.Name != "", // Mark as named agent for nested name blocking
 	}
 
-	// AC3-streamconfig-inheritance: Named agents inherit parent config fields
+	// Named agents inherit parent config fields
 	if params.Name != "" && r.parentConfig != nil {
 		streamCfg.MCPConfig = r.parentConfig.MCPConfig
 		streamCfg.AutoMemoryEnabled = r.parentConfig.AutoMemoryEnabled
@@ -419,7 +419,7 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 		streamCfg.OverrideSystemPrompt = r.parentConfig.OverrideSystemPrompt
 		streamCfg.StructuredSchema = r.parentConfig.StructuredSchema
 		streamCfg.StructuredDenyRules = r.parentConfig.StructuredDenyRules
-		// AC7: Subagent inherits parent's PermissionLevel and cannot escalate.
+		// Subagent inherits parent's PermissionLevel and cannot escalate.
 		// The subagent's tool instances are shared from the parent, so the
 		// permission level is enforced at the tool level regardless. This field
 		// ensures that nested subagent spawns also inherit the correct level.
@@ -431,10 +431,10 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 		streamCfg.SessionID = r.parentSessionID
 	}
 
-	// Capture streamCfg for test verification (AC2, AC4)
+	// Capture streamCfg for test verification
 	r.capturedStreamCfg = streamCfg
 
-	// Ensure cleanup of worktree on exit (AC2)
+	// Ensure cleanup of worktree on exit
 	if cleanupWorktree {
 		defer func() {
 			_ = git.RemoveWorktree(worktreePath)
@@ -454,7 +454,7 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 	}
 	_, output, _, err := RunStream(ctx, params.Prompt, subagentTools, cwd, streamCfg, resolveSubagentModel(params.Model, streamCfg.SubagentModel, r.client), WithClient(r.client))
 
-	// AC4: Interrupt yields partial result - capture output even on cancellation
+	// Interrupt yields partial result - capture output even on cancellation
 	if ctx.Err() != nil {
 		return &tool.SubagentResult{
 			Output:  output,
@@ -520,7 +520,7 @@ func (r *AsyncSubagentRunner) SetSessionManager(mgr *session.Manager) {
 	r.runner.sessionMgr = mgr
 }
 
-// SetParentConfig sets the parent StreamConfig for inheritance when Name is set (AC3).
+// SetParentConfig sets the parent StreamConfig for inheritance when Name is set.
 func (r *AsyncSubagentRunner) SetParentConfig(cfg *StreamConfig) {
 	r.runner.parentConfig = cfg
 }

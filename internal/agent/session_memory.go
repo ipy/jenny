@@ -95,12 +95,12 @@ func (sm *SessionMemory) MemoryFilePath() string {
 // accumulated token count and tool call count.
 // Returns (shouldAct, action) where action is "init", "update", or "".
 func (sm *SessionMemory) CheckThreshold(turnTokens int, toolCallCount int) (bool, string) {
-	// AC6: Gate on EnableSessionMemory flag — must be explicitly enabled
+	// Gate on EnableSessionMemory flag — must be explicitly enabled
 	if !sm.compactCfg.SessionMemoryEnabled {
 		return false, "disabled"
 	}
 
-	// AC5: Gate on auto-compact enabled — session memory shares lifecycle with auto-compact
+	// Gate on auto-compact enabled — session memory shares lifecycle with auto-compact
 	if sm.compactCfg.DisableAutoCompact || sm.compactCfg.DisableCompact {
 		return false, "disabled"
 	}
@@ -165,13 +165,13 @@ func (sm *SessionMemory) Init() error {
 // Update invokes a forked sub-agent to update the session memory file.
 // It uses a 15-second timeout (or override) and Edit-only tool access.
 func (sm *SessionMemory) Update(ctx context.Context) error {
-	// AC4: Stale in-flight check - skip if last update was >60s ago
+	// Stale in-flight check - skip if last update was >60s ago
 	if !sm.lastUpdateTime.IsZero() && time.Since(sm.lastUpdateTime) > 60*time.Second {
 		log.Debug("Session memory update skipped: stale in-flight")
 		return nil
 	}
 
-	// AC5: Coalescing window check - skip if last update was <15s ago
+	// Coalescing window check - skip if last update was <15s ago
 	if !sm.lastUpdateTime.IsZero() && time.Since(sm.lastUpdateTime) < sm.effectiveTimeout() {
 		log.Debug("Session memory update skipped: within coalescing window")
 		return nil
@@ -263,7 +263,7 @@ func (sm *SessionMemory) Update(ctx context.Context) error {
 		// Check if context deadline exceeded
 		if ctx.Err() == context.DeadlineExceeded {
 			log.Warn("Session memory update timed out after 15 seconds")
-			return nil // AC3: Don't block main loop on timeout
+			return nil // Don't block main loop on timeout
 		}
 		return fmt.Errorf("forked agent call: %w", err)
 	}

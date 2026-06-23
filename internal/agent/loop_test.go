@@ -920,8 +920,8 @@ func TestRecursiveForkBlocked_AllSubagentTypes(t *testing.T) {
 	}
 }
 
-func TestAC1_ForkChildInStreamConfig(t *testing.T) {
-	// AC1: Verify that RunStream sets the ForkChildKey in context based on StreamConfig.IsForkChild
+func TestForkChildInStreamConfig(t *testing.T) {
+	// Verify that RunStream sets the ForkChildKey in context based on StreamConfig.IsForkChild
 	// This is the mechanism that propagates the fork marker.
 
 	// When IsForkChild is true, the context passed to RunStream should have ForkChildKey=true
@@ -958,11 +958,11 @@ func TestAC1_ForkChildInStreamConfig(t *testing.T) {
 }
 
 // ============================================================================
-// AC2: Worktree isolation exclusive with cwd
+// Worktree isolation exclusive with cwd
 // ============================================================================
 
-func TestAC2_WorktreeIsolation_MutuallyExclusiveWithCWD(t *testing.T) {
-	// AC2: When both isolation=worktree and cwd are set,
+func TestWorktreeIsolation_MutuallyExclusiveWithCWD(t *testing.T) {
+	// When both isolation=worktree and cwd are set,
 	// RunSubagent must return error "worktree isolation is mutually exclusive with cwd"
 
 	client, cleanup := newMockClient(t)
@@ -989,8 +989,8 @@ func TestAC2_WorktreeIsolation_MutuallyExclusiveWithCWD(t *testing.T) {
 	}
 }
 
-func TestAC2_WorktreeIsolation_AloneWithoutCWD_Validates(t *testing.T) {
-	// AC2: When isolation=worktree is set WITHOUT cwd, the validation should pass.
+func TestWorktreeIsolation_AloneWithoutCWD_Validates(t *testing.T) {
+	// When isolation=worktree is set WITHOUT cwd, the validation should pass.
 	// It then requires a git repo. Run from a non-git temp dir so git.GetRoot fails.
 
 	client, cleanup := newMockClient(t)
@@ -1020,8 +1020,8 @@ func TestAC2_WorktreeIsolation_AloneWithoutCWD_Validates(t *testing.T) {
 	}
 }
 
-func TestAC2_NoCWD_NoIsolation_Passes(t *testing.T) {
-	// AC2: Without isolation and without cwd, normal validation passes
+func TestNoCWD_NoIsolation_Passes(t *testing.T) {
+	// Without isolation and without cwd, normal validation passes
 	// (will fail later due to no API client, not due to validation)
 
 	client, cleanup := newMockClient(t)
@@ -1048,11 +1048,11 @@ func TestAC2_NoCWD_NoIsolation_Passes(t *testing.T) {
 }
 
 // ============================================================================
-// AC3: Async returns outputFile with actual result
+// Async returns outputFile with actual result
 // ============================================================================
 
-func TestAC3_AsyncSubagentOutputFile_ReturnsPath(t *testing.T) {
-	// AC3: RunSubagentAsync returns an AsyncResult with a non-empty OutputFile path
+func TestAsyncSubagentOutputFile_ReturnsPath(t *testing.T) {
+	// RunSubagentAsync returns an AsyncResult with a non-empty OutputFile path
 
 	client, cleanup := newMockClient(t)
 	defer cleanup()
@@ -1082,8 +1082,8 @@ func TestAC3_AsyncSubagentOutputFile_ReturnsPath(t *testing.T) {
 	}
 }
 
-func TestAC3_AsyncSubagentCompletes(t *testing.T) {
-	// AC3: After async subagent completes, Done is closed and subagent_result
+func TestAsyncSubagentCompletes(t *testing.T) {
+	// After async subagent completes, Done is closed and subagent_result
 	// entry is written to the parent's transcript.
 
 	client, cleanup := newMockClient(t)
@@ -1112,8 +1112,8 @@ func TestAC3_AsyncSubagentCompletes(t *testing.T) {
 	}
 }
 
-func TestAC3_AsyncSubagentErrorContent(t *testing.T) {
-	// AC3: When the subagent fails, Done is still closed and error is recorded.
+func TestAsyncSubagentErrorContent(t *testing.T) {
+	// When the subagent fails, Done is still closed and error is recorded.
 
 	client, cleanup := newMockClient(t)
 	defer cleanup()
@@ -1143,11 +1143,11 @@ func TestAC3_AsyncSubagentErrorContent(t *testing.T) {
 }
 
 // ============================================================================
-// AC4: Interrupt yields partial result
+// Interrupt yields partial result
 // ============================================================================
 
-func TestAC4_InterruptCancelledContext_ReturnsOutputPlusError(t *testing.T) {
-	// AC4: When context is cancelled, RunSubagent returns a SubagentResult (with
+func TestInterruptCancelledContext_ReturnsOutputPlusError(t *testing.T) {
+	// When context is cancelled, RunSubagent returns a SubagentResult (with
 	// whatever output was accumulated) AND the cancellation error.
 	// Output is NOT discarded.
 
@@ -1187,8 +1187,8 @@ func TestAC4_InterruptCancelledContext_ReturnsOutputPlusError(t *testing.T) {
 	t.Logf("SubagentResult.Output = %q (expected empty since no API call was made)", result.Output)
 }
 
-func TestAC4_InterruptTimeoutContext_ReturnsOutputPlusError(t *testing.T) {
-	// AC4: When context times out, RunSubagent returns a SubagentResult with output
+func TestInterruptTimeoutContext_ReturnsOutputPlusError(t *testing.T) {
+	// When context times out, RunSubagent returns a SubagentResult with output
 	// AND the DeadlineExceeded error.
 
 	client, cleanup := newMockClient(t)
@@ -1226,8 +1226,8 @@ func TestAC4_InterruptTimeoutContext_ReturnsOutputPlusError(t *testing.T) {
 	}
 }
 
-func TestAC4_InterruptNormalContext_ReturnsNoCancelError(t *testing.T) {
-	// AC4: When context is NOT cancelled, no cancellation error should be returned.
+func TestInterruptNormalContext_ReturnsNoCancelError(t *testing.T) {
+	// When context is NOT cancelled, no cancellation error should be returned.
 	// (Verifies baseline behavior - uses mock API client)
 
 	client, cleanup := newMockClient(t)
@@ -1255,11 +1255,11 @@ func TestAC4_InterruptNormalContext_ReturnsNoCancelError(t *testing.T) {
 }
 
 // ============================================================================
-// AC5: Resume restores worktree state
+// Resume restores worktree state
 // ============================================================================
 
-func TestAC5_WorktreeStatePersistedToTranscript(t *testing.T) {
-	// AC5: Worktree state (WorktreePath, Branch, CWD) is persisted as a
+func TestWorktreeStatePersistedToTranscript(t *testing.T) {
+	// Worktree state (WorktreePath, Branch, CWD) is persisted as a
 	// transcript entry of type "worktree_state"
 
 	tmpDir := t.TempDir()
@@ -1270,7 +1270,7 @@ func TestAC5_WorktreeStatePersistedToTranscript(t *testing.T) {
 
 	sessionID := "sess_ac5_test"
 
-	// Append a worktree_state entry (as done by RunSubagent for AC5)
+	// Append a worktree_state entry (as done by RunSubagent for worktree state persistence)
 	worktreePath := "/tmp/test-worktree"
 	branch := "worktree-explore"
 	cwd := "/tmp/test-worktree"
@@ -1310,8 +1310,8 @@ func TestAC5_WorktreeStatePersistedToTranscript(t *testing.T) {
 	}
 }
 
-func TestAC5_WorktreeStatePreservedAcrossSessions(t *testing.T) {
-	// AC5: Worktree state entries survive session save/load cycle
+func TestWorktreeStatePreservedAcrossSessions(t *testing.T) {
+	// Worktree state entries survive session save/load cycle
 	// and are not filtered out as progress/ephemeral entries
 
 	tmpDir := t.TempDir()
@@ -1368,8 +1368,8 @@ func TestAC5_WorktreeStatePreservedAcrossSessions(t *testing.T) {
 	}
 }
 
-func TestAC5_MultipleWorktreeStateEntries(t *testing.T) {
-	// AC5: Multiple worktree_state entries can be stored sequentially
+func TestMultipleWorktreeStateEntries(t *testing.T) {
+	// Multiple worktree_state entries can be stored sequentially
 	// (e.g., for multiple subagent invocations in a session)
 
 	tmpDir := t.TempDir()
@@ -1418,8 +1418,8 @@ func TestAC5_MultipleWorktreeStateEntries(t *testing.T) {
 	}
 }
 
-func TestAC5_TranscriptFileFormat(t *testing.T) {
-	// AC5: Verify the worktree_state entry produces valid JSONL on disk
+func TestTranscriptFileFormat(t *testing.T) {
+	// Verify the worktree_state entry produces valid JSONL on disk
 	// that contains all the worktree fields
 
 	tmpDir := t.TempDir()
@@ -1482,8 +1482,8 @@ func TestAC5_TranscriptFileFormat(t *testing.T) {
 	}
 }
 
-func TestAC5_WorktreeFieldsInTranscriptEntry(t *testing.T) {
-	// AC5: Verify the TranscriptEntry struct has the worktree fields with correct JSON tags
+func TestWorktreeFieldsInTranscriptEntry(t *testing.T) {
+	// Verify the TranscriptEntry struct has the worktree fields with correct JSON tags
 
 	entry := session.TranscriptEntry{
 		Type:           "worktree_state",
@@ -1509,7 +1509,7 @@ func TestAC5_WorktreeFieldsInTranscriptEntry(t *testing.T) {
 
 func TestForkChildFlagSetInSubagent(t *testing.T) {
 	// Verify that when RunSubagent creates a child stream config, IsForkChild is true.
-	// This is the mechanism that enables AC1 (recursive fork blocking).
+	// This is the mechanism that enables recursive fork blocking.
 	// The value is set at internal/agent/subagent.go:283.
 	// We verify this by checking RunStream's context propagation behavior.
 
@@ -1591,14 +1591,14 @@ func TestMaxIterations_EngineConfigWired(t *testing.T) {
 }
 
 // ============================================================================
-// AC3: Compaction boundary marker in resumed API chain
+// Compaction boundary marker in resumed API chain
 // ============================================================================
 
-// TestAC3_RebuildMessages_PreservesSystemBoundary verifies that when a transcript
+// TestRebuildMessages_PreservesSystemBoundary verifies that when a transcript
 // contains a system entry with compact_boundary subtype, RebuildMessages produces
 // a role:system API message that becomes the first message in the resumed chain.
 // This ensures the boundary marker reaches the API, preserving token savings from compaction.
-func TestAC3_RebuildMessages_PreservesSystemBoundary(t *testing.T) {
+func TestRebuildMessages_PreservesSystemBoundary(t *testing.T) {
 	// Simulate a compacted session transcript with a compact_boundary entry
 	entries := []session.TranscriptEntry{
 		// Pre-compaction entries (would be excluded by LoadPostBoundaryMessages)
@@ -1626,7 +1626,7 @@ func TestAC3_RebuildMessages_PreservesSystemBoundary(t *testing.T) {
 	postBoundaryEntries := entries[4:] // compact_boundary + post-compaction entries
 	msgs := RebuildMessages(postBoundaryEntries)
 
-	// AC3: First message should be a role:system message with the boundary content
+	// First message should be a role:system message with the boundary content
 	if len(msgs) < 1 {
 		t.Fatalf("expected at least 1 message, got %d", len(msgs))
 	}
@@ -1652,12 +1652,12 @@ func TestAC3_RebuildMessages_PreservesSystemBoundary(t *testing.T) {
 		t.Errorf("msgs[1] content = %q, want %q", msgs[1].Content, "new message")
 	}
 
-	t.Log("AC3 PASS: RebuildMessages preserves system boundary marker as role:system message")
+	t.Log("PASS: RebuildMessages preserves system boundary marker as role:system message")
 }
 
-// TestAC3_RebuildMessages_EmptyContentSystemEntriesSkipped verifies that system entries
+// TestRebuildMessages_EmptyContentSystemEntriesSkipped verifies that system entries
 // with empty content are skipped (they don't produce empty API messages).
-func TestAC3_RebuildMessages_EmptyContentSystemEntriesSkipped(t *testing.T) {
+func TestRebuildMessages_EmptyContentSystemEntriesSkipped(t *testing.T) {
 	entries := []session.TranscriptEntry{
 		{Type: "system", Content: ""}, // Empty content - should be skipped
 		{Type: "user", Content: "hello"},
@@ -1673,12 +1673,12 @@ func TestAC3_RebuildMessages_EmptyContentSystemEntriesSkipped(t *testing.T) {
 		t.Errorf("msgs[0] role = %q, want %q", msgs[0].Role, "user")
 	}
 
-	t.Log("AC3 PASS: empty content system entries are skipped")
+	t.Log("PASS: empty content system entries are skipped")
 }
 
-// TestAC3_RebuildMessages_MultipleSystemEntriesOrdered verifies that multiple system
+// TestRebuildMessages_MultipleSystemEntriesOrdered verifies that multiple system
 // entries are preserved in order.
-func TestAC3_RebuildMessages_MultipleSystemEntriesOrdered(t *testing.T) {
+func TestRebuildMessages_MultipleSystemEntriesOrdered(t *testing.T) {
 	entries := []session.TranscriptEntry{
 		{Type: "user", Content: "first"},
 		{Type: "system", Content: "[marker 1]"},
@@ -1711,5 +1711,5 @@ func TestAC3_RebuildMessages_MultipleSystemEntriesOrdered(t *testing.T) {
 		t.Errorf("msgs[4] unexpected: %+v", msgs[4])
 	}
 
-	t.Log("AC3 PASS: multiple system entries preserved in order")
+	t.Log("PASS: multiple system entries preserved in order")
 }

@@ -27,8 +27,8 @@ func TestListMcpResourcesTool_NameAndDescription(t *testing.T) {
 	}
 }
 
-// TestListMcpResourcesTool_AC2_InvalidServer tests that an invalid server returns error with available names.
-func TestListMcpResourcesTool_AC2_InvalidServer(t *testing.T) {
+// TestListMcpResourcesTool_InvalidServer tests that an invalid server returns error with available names.
+func TestListMcpResourcesTool_InvalidServer(t *testing.T) {
 	// Save and restore global state
 	origClients := clients
 	t.Cleanup(func() {
@@ -62,8 +62,8 @@ func TestListMcpResourcesTool_AC2_InvalidServer(t *testing.T) {
 	}
 }
 
-// TestListMcpResourcesTool_AC4_EmptyResultNote tests that empty result includes tools-may-exist note.
-func TestListMcpResourcesTool_AC4_EmptyResultNote(t *testing.T) {
+// TestListMcpResourcesTool_EmptyResultNote tests that empty result includes tools-may-exist note.
+func TestListMcpResourcesTool_EmptyResultNote(t *testing.T) {
 	// Save and restore global state
 	origClients := clients
 	t.Cleanup(func() {
@@ -89,8 +89,8 @@ func TestListMcpResourcesTool_AC4_EmptyResultNote(t *testing.T) {
 	}
 }
 
-// TestListMcpResourcesTool_AC1_MultiServerAggregation tests AC1: no filter returns all servers' resources.
-func TestListMcpResourcesTool_AC1_MultiServerAggregation(t *testing.T) {
+// TestListMcpResourcesTool_MultiServerAggregation tests that no filter returns all servers' resources.
+func TestListMcpResourcesTool_MultiServerAggregation(t *testing.T) {
 	// Save and restore global state
 	origClients := clients
 	origHook := listResourcesHook
@@ -146,8 +146,8 @@ func TestListMcpResourcesTool_AC1_MultiServerAggregation(t *testing.T) {
 	}
 }
 
-// TestListMcpResourcesTool_AC3_PartialFailure tests AC3: one server failure returns partial results.
-func TestListMcpResourcesTool_AC3_PartialFailure(t *testing.T) {
+// TestListMcpResourcesTool_PartialFailure tests that one server failure returns partial results.
+func TestListMcpResourcesTool_PartialFailure(t *testing.T) {
 	// Save and restore global state
 	origClients := clients
 	origHook := listResourcesHook
@@ -213,8 +213,8 @@ func TestListMcpResourcesTool_AC3_PartialFailure(t *testing.T) {
 	}
 }
 
-// TestListMcpResourcesTool_AC5_ServerFieldPerEntry tests AC5: each entry includes server field.
-func TestListMcpResourcesTool_AC5_ServerFieldPerEntry(t *testing.T) {
+// TestListMcpResourcesTool_ServerFieldPerEntry tests that each entry includes server field.
+func TestListMcpResourcesTool_ServerFieldPerEntry(t *testing.T) {
 	// Save and restore global state
 	origClients := clients
 	origHook := listResourcesHook

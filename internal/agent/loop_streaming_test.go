@@ -73,7 +73,7 @@ func TestNoStreamRequestStart(t *testing.T) {
 
 	t.Logf("RunStream completed with: %v", err)
 
-	// verification: stream_request_start should NOT be present
+	// Verification: stream_request_start should NOT be present
 	if strings.Contains(output, "stream_request_start") {
 		t.Error("FAIL: stream_request_start found in stdout output - jenny extension should be removed")
 	} else {
@@ -206,7 +206,7 @@ func TestStreamEvent_EmittedWhenFlagOn(t *testing.T) {
 		t.Log("PASS: stream_event emitted")
 	}
 
-	// message_start, content_block_delta, and message_stop must appear
+	// Message_start, content_block_delta, and message_stop must appear
 	requiredTypes := []string{"message_start", "content_block_delta", "message_stop"}
 	for _, et := range requiredTypes {
 		if eventTypes[et] > 0 {
@@ -437,7 +437,7 @@ func TestStreamEvent_ThinkingAndSignature(t *testing.T) {
 	<-done // wait for the pipe drainer
 	output := outputBuf.String()
 
-	// check thinking_delta in stream_event
+	// Check thinking_delta in stream_event
 	if !strings.Contains(output, `"type":"thinking_delta"`) {
 		t.Error("FAIL: thinking_delta not found in stream_event output")
 	}
@@ -445,7 +445,7 @@ func TestStreamEvent_ThinkingAndSignature(t *testing.T) {
 		t.Error("FAIL: thinking content not found in stream_event output")
 	}
 
-	// check signature_delta in stream_event
+	// Check signature_delta in stream_event
 	if !strings.Contains(output, `"type":"signature_delta"`) {
 		t.Error("FAIL: signature_delta not found in stream_event output")
 	}
@@ -453,7 +453,7 @@ func TestStreamEvent_ThinkingAndSignature(t *testing.T) {
 		t.Error("FAIL: signature content not found in stream_event output")
 	}
 
-	// engine loop should return only the text content as the result.
+	// Engine loop should return only the text content as the result.
 	// Iteration 108 fixes the doc-code-thinking-mismatch: thinking content
 	// is now emitted as its own `type: "thinking"` block (visible in the
 	// stream_event/assistant envelopes) and is NOT concatenated into the
@@ -924,7 +924,7 @@ func TestStreamingToolUseOnlyTurn(t *testing.T) {
 		t.Fatalf("RunStream error: %v", runErr)
 	}
 
-	// AC4: Exactly one assistant line. The turn-2 assistant carries the
+	// Exactly one assistant line. The turn-2 assistant carries the
 	// "done" text — we identify the turn-1 assistant by the presence of the
 	// tool_use block with id=t1.
 	assistantEvents := parseAssistantEvents(t, output)
@@ -944,27 +944,27 @@ func TestStreamingToolUseOnlyTurn(t *testing.T) {
 		}
 	}
 	if turn1Assistant == nil {
-		t.Fatalf("AC4 FAIL: no assistant event with tool_use id=t1 found; assistant events=%d\noutput:\n%s", len(assistantEvents), output)
+		t.Fatalf("FAIL: no assistant event with tool_use id=t1 found; assistant events=%d\noutput:\n%s", len(assistantEvents), output)
 	}
-	t.Log("AC4 PASS: exactly one assistant event contains the tool_use block from turn 1")
+	t.Log("PASS: exactly one assistant event contains the tool_use block from turn 1")
 
-	// AC4: Content contains only the tool_use block(s) — no text, no empty
+	// Content contains only the tool_use block(s) — no text, no empty
 	// text block.
 	inner := turn1Assistant["message"].(map[string]any)
 	content := inner["content"].([]any)
 	if len(content) == 0 {
-		t.Fatal("AC4 FAIL: content array is empty")
+		t.Fatal("FAIL: content array is empty")
 	}
 	for i, item := range content {
 		b, ok := item.(map[string]any)
 		if !ok {
-			t.Fatalf("AC4 FAIL: content[%d] is not a map: %T", i, item)
+			t.Fatalf("FAIL: content[%d] is not a map: %T", i, item)
 		}
 		if b["type"] == "text" {
-			t.Errorf("AC4 FAIL: content[%d] is a text block (tool-use-only turn must not emit text)", i)
+			t.Errorf("FAIL: content[%d] is a text block (tool-use-only turn must not emit text)", i)
 		}
 	}
-	t.Log("AC4 PASS: content array contains only tool_use blocks, no text block")
+	t.Log("PASS: content array contains only tool_use blocks, no text block")
 }
 
 // captureStreamOutput runs RunStream and captures stdout. It returns the
@@ -1002,7 +1002,7 @@ func captureStreamOutput(t *testing.T, cfg *StreamConfig) (string, error) {
 
 // TestStreamJSON_HasParentToolUseID verifies that parent_tool_use_id is
 // present when non-nil and correctly omitted when nil (matching Claude Code
-// behavior per AC1 and AC2).
+// behavior).
 func TestStreamJSON_HasParentToolUseID(t *testing.T) {
 	server := makeMockStreamServer(t, nil)
 	defer server.Close()
@@ -1018,7 +1018,7 @@ func TestStreamJSON_HasParentToolUseID(t *testing.T) {
 
 	lines := parseNDJSONLines(t, output)
 	if len(lines) == 0 {
-		t.Fatal("AC4 FAIL: no output lines found")
+		t.Fatal("FAIL: no output lines found")
 	}
 
 	for i, m := range lines {
@@ -1026,39 +1026,39 @@ func TestStreamJSON_HasParentToolUseID(t *testing.T) {
 		// Result events do NOT have parent_tool_use_id per reference format
 		if eventType == "result" {
 			if _, ok := m["parent_tool_use_id"]; ok {
-				t.Errorf("AC4 FAIL: line %d (result) should NOT have parent_tool_use_id", i)
+				t.Errorf("FAIL: line %d (result) should NOT have parent_tool_use_id", i)
 			} else {
-				t.Logf("AC4 PASS: result line %d correctly omits parent_tool_use_id", i)
+				t.Logf("PASS: result line %d correctly omits parent_tool_use_id", i)
 			}
 			continue
 		}
-		// Init event (first, ParentToolUseID=nil) should NOT have parent_tool_use_id (AC1)
+		// Init event (first, ParentToolUseID=nil) should NOT have parent_tool_use_id
 		if i == 0 && eventType == "system" {
 			if _, ok := m["parent_tool_use_id"]; ok {
-				t.Errorf("AC1 FAIL: line %d (init/system) should NOT have parent_tool_use_id when nil", i)
+				t.Errorf("FAIL: line %d (init/system) should NOT have parent_tool_use_id when nil", i)
 			} else {
-				t.Logf("AC1 PASS: init line %d correctly omits parent_tool_use_id", i)
+				t.Logf("PASS: init line %d correctly omits parent_tool_use_id", i)
 			}
 			continue
 		}
-		// For tool_progress events (ParentToolUseID is non-nil), the field should be present (AC2)
+		// For tool_progress events (ParentToolUseID is non-nil), the field should be present
 		if eventType == "tool_progress" || eventType == "user" {
 			if _, ok := m["parent_tool_use_id"]; !ok {
-				t.Errorf("AC2 FAIL: line %d (%s) should have parent_tool_use_id when non-nil", i, eventType)
+				t.Errorf("FAIL: line %d (%s) should have parent_tool_use_id when non-nil", i, eventType)
 			} else {
-				t.Logf("AC2 PASS: line %d (%s) has parent_tool_use_id", i, eventType)
+				t.Logf("PASS: line %d (%s) has parent_tool_use_id", i, eventType)
 			}
 		}
-		// Assistant events may have parent_tool_use_id if after a tool_use (AC2)
+		// Assistant events may have parent_tool_use_id if after a tool_use
 		// but it's optional for text-only turns
-		t.Logf("AC1/AC2: line %d (%s) checked", i, eventType)
+		t.Logf("parent_tool_use_id: line %d (%s) checked", i, eventType)
 	}
-	t.Logf("AC1 PASS: init event omits parent_tool_use_id when nil")
-	t.Logf("AC2 PASS: tool_call/user events include parent_tool_use_id when non-nil")
+	t.Logf("PASS: init event omits parent_tool_use_id when nil")
+	t.Logf("PASS: tool_call/user events include parent_tool_use_id when non-nil")
 }
 
 // TestStreamJSON_EmitsAggregatedAssistant verifies that exactly one aggregated
-// assistant event is emitted per turn after content_block_stop (AC1).
+// assistant event is emitted per turn after content_block_stop.
 func TestStreamJSON_EmitsAggregatedAssistant(t *testing.T) {
 	server := makeMockStreamServer(t, nil)
 	defer server.Close()
@@ -1080,15 +1080,15 @@ func TestStreamJSON_EmitsAggregatedAssistant(t *testing.T) {
 			// Verify message structure
 			msg, ok := m["message"].(map[string]any)
 			if !ok {
-				t.Errorf("AC1 FAIL: assistant message is not a map")
+				t.Errorf("FAIL: assistant message is not a map")
 				continue
 			}
 			if msg["role"] != "assistant" {
-				t.Errorf("AC1 FAIL: assistant role is not 'assistant'")
+				t.Errorf("FAIL: assistant role is not 'assistant'")
 			}
 			content, ok := msg["content"].([]any)
 			if !ok {
-				t.Errorf("AC1 FAIL: assistant content is not an array")
+				t.Errorf("FAIL: assistant content is not an array")
 				continue
 			}
 			// Final usage event has empty content, so only check non-empty for the first ones
@@ -1096,14 +1096,14 @@ func TestStreamJSON_EmitsAggregatedAssistant(t *testing.T) {
 		}
 	}
 	if assistantCount < 1 {
-		t.Errorf("AC1 FAIL: expected at least 1 assistant event, got %d", assistantCount)
+		t.Errorf("FAIL: expected at least 1 assistant event, got %d", assistantCount)
 	} else {
-		t.Logf("AC1 PASS: %d assistant events emitted", assistantCount)
+		t.Logf("PASS: %d assistant events emitted", assistantCount)
 	}
 }
 
 // TestStreamJSON_EmitsAggregatedUser verifies that an aggregated user event
-// with tool_result blocks is emitted after tool execution (AC2).
+// with tool_result blocks is emitted after tool execution.
 func TestStreamJSON_EmitsAggregatedUser(t *testing.T) {
 	server := makeMockStreamServer(t, nil)
 	defer server.Close()
@@ -1124,19 +1124,19 @@ func TestStreamJSON_EmitsAggregatedUser(t *testing.T) {
 			userCount++
 			msg, ok := m["message"].(map[string]any)
 			if !ok {
-				t.Errorf("AC2 FAIL: user message is not a map")
+				t.Errorf("FAIL: user message is not a map")
 				continue
 			}
 			if msg["role"] != "user" {
-				t.Errorf("AC2 FAIL: user role is not 'user'")
+				t.Errorf("FAIL: user role is not 'user'")
 			}
 		}
 	}
-	t.Logf("AC2: %d user event(s) emitted", userCount)
+	t.Logf("%d user event(s) emitted", userCount)
 }
 
 // TestStreamJSON_EmitsTerminalResult verifies that exactly one terminal result
-// event is emitted at the end (AC3).
+// event is emitted at the end.
 func TestStreamJSON_EmitsTerminalResult(t *testing.T) {
 	server := makeMockStreamServer(t, nil)
 	defer server.Close()
@@ -1160,14 +1160,14 @@ func TestStreamJSON_EmitsTerminalResult(t *testing.T) {
 		}
 	}
 	if resultCount != 1 {
-		t.Errorf("AC3 FAIL: expected exactly 1 terminal result event, got %d", resultCount)
+		t.Errorf("FAIL: expected exactly 1 terminal result event, got %d", resultCount)
 	} else {
-		t.Logf("AC3 PASS: exactly 1 terminal result event emitted (subtype=%s)", lastResultType)
+		t.Logf("PASS: exactly 1 terminal result event emitted (subtype=%s)", lastResultType)
 	}
 }
 
 // TestStreamJSON_FieldOrderMatchesReference verifies that JSON key order matches
-// the reference format per event type (AC5).
+// the reference format per event type.
 // - assistant events: type, message, parent_tool_use_id, session_id, uuid
 // - result events: type, subtype, is_error, ... (no parent_tool_use_id)
 // - other events: type, parent_tool_use_id, session_id, uuid
@@ -1194,13 +1194,13 @@ func TestStreamJSON_FieldOrderMatchesReference(t *testing.T) {
 		// Parse the line to get the event type and full key order
 		var msg map[string]any
 		if err := json.Unmarshal([]byte(line), &msg); err != nil {
-			t.Errorf("AC5 FAIL: line %d is not valid JSON: %v", li, err)
+			t.Errorf("FAIL: line %d is not valid JSON: %v", li, err)
 			continue
 		}
 
 		eventType, hasType := msg["type"].(string)
 		if !hasType {
-			t.Errorf("AC5 FAIL: line %d missing 'type' field", li)
+			t.Errorf("FAIL: line %d missing 'type' field", li)
 			continue
 		}
 
@@ -1247,25 +1247,25 @@ func TestStreamJSON_FieldOrderMatchesReference(t *testing.T) {
 		}
 
 		if !hasSessionID {
-			t.Errorf("AC5 FAIL: line %d (%s) missing 'session_id'", li, eventType)
+			t.Errorf("FAIL: line %d (%s) missing 'session_id'", li, eventType)
 		}
 		if eventType == "result" {
 			// result events should NOT have parent_tool_use_id
 			if hasParentToolUseID {
-				t.Errorf("AC5 FAIL: line %d (result) should NOT have parent_tool_use_id", li)
+				t.Errorf("FAIL: line %d (result) should NOT have parent_tool_use_id", li)
 			}
 		} else if li == 0 && eventType == "system" {
-			// Init event (first, ParentToolUseID=nil) should NOT have parent_tool_use_id (AC1)
+			// Init event (first, ParentToolUseID=nil) should NOT have parent_tool_use_id
 			if hasParentToolUseID {
-				t.Errorf("AC1 FAIL: line %d (init/system) should NOT have parent_tool_use_id when nil", li)
+				t.Errorf("FAIL: line %d (init/system) should NOT have parent_tool_use_id when nil", li)
 			}
 		} else {
-			// For assistant events with ParentToolUseID non-nil, the field should be present (AC2)
+			// For assistant events with ParentToolUseID non-nil, the field should be present
 			// For text-only turns, it's optional
-			t.Logf("AC1/AC2: line %d (%s) parent_tool_use_id check passed", li, eventType)
+			t.Logf("parent_tool_use_id check: line %d (%s) passed", li, eventType)
 		}
 		if !hasUUID {
-			t.Errorf("AC5 FAIL: line %d (%s) missing 'uuid'", li, eventType)
+			t.Errorf("FAIL: line %d (%s) missing 'uuid'", li, eventType)
 		}
 
 		// Verify order based on event type
@@ -1296,13 +1296,13 @@ func TestStreamJSON_FieldOrderMatchesReference(t *testing.T) {
 
 		// Verify all required fields are present
 		if typeIdx == -1 {
-			t.Errorf("AC5 FAIL: line %d (%s) missing 'type'", li, eventType)
+			t.Errorf("FAIL: line %d (%s) missing 'type'", li, eventType)
 		}
 		if sessionIdx == -1 {
-			t.Errorf("AC5 FAIL: line %d (%s) missing 'session_id'", li, eventType)
+			t.Errorf("FAIL: line %d (%s) missing 'session_id'", li, eventType)
 		}
 		if uuidIdx == -1 {
-			t.Errorf("AC5 FAIL: line %d (%s) missing 'uuid'", li, eventType)
+			t.Errorf("FAIL: line %d (%s) missing 'uuid'", li, eventType)
 		}
 
 		// Verify order based on event type
@@ -1317,22 +1317,22 @@ func TestStreamJSON_FieldOrderMatchesReference(t *testing.T) {
 				}
 			}
 			if typeIdx != -1 && msgIdx != -1 && typeIdx >= msgIdx {
-				t.Errorf("AC5 FAIL: line %d (assistant) 'message' does not follow 'type'", li)
+				t.Errorf("FAIL: line %d (assistant) 'message' does not follow 'type'", li)
 			}
 			if msgIdx != -1 && parentIdx != -1 && msgIdx >= parentIdx {
-				t.Errorf("AC5 FAIL: line %d (assistant) 'parent_tool_use_id' does not follow 'message'", li)
+				t.Errorf("FAIL: line %d (assistant) 'parent_tool_use_id' does not follow 'message'", li)
 			}
 			if parentIdx != -1 && sessionIdx != -1 && parentIdx >= sessionIdx {
-				t.Errorf("AC5 FAIL: line %d (assistant) 'session_id' does not follow 'parent_tool_use_id'", li)
+				t.Errorf("FAIL: line %d (assistant) 'session_id' does not follow 'parent_tool_use_id'", li)
 			}
 			if sessionIdx != -1 && uuidIdx != -1 && sessionIdx >= uuidIdx {
-				t.Errorf("AC5 FAIL: line %d (assistant) 'uuid' does not follow 'session_id'", li)
+				t.Errorf("FAIL: line %d (assistant) 'uuid' does not follow 'session_id'", li)
 			}
 		} else if eventType == "result" {
 			// result: type < subtype < is_error < ... (no parent_tool_use_id)
 			// Already verified no parent_tool_use_id above
 			if typeIdx != -1 && uuidIdx != -1 && typeIdx >= uuidIdx {
-				t.Errorf("AC5 FAIL: line %d (result) 'uuid' does not follow 'type'", li)
+				t.Errorf("FAIL: line %d (result) 'uuid' does not follow 'type'", li)
 			}
 		} else if eventType == "system" {
 			// system events use cli.StreamMessage with session_id before parent_tool_use_id
@@ -1340,10 +1340,10 @@ func TestStreamJSON_FieldOrderMatchesReference(t *testing.T) {
 		} else {
 			// other events: type < parent_tool_use_id < session_id < uuid
 			if typeIdx != -1 && parentIdx != -1 && typeIdx >= parentIdx {
-				t.Errorf("AC5 FAIL: line %d (%s) 'parent_tool_use_id' does not follow 'type'", li, eventType)
+				t.Errorf("FAIL: line %d (%s) 'parent_tool_use_id' does not follow 'type'", li, eventType)
 			}
 			if parentIdx != -1 && sessionIdx != -1 && parentIdx >= sessionIdx {
-				t.Errorf("AC5 FAIL: line %d (%s) 'session_id' does not follow 'parent_tool_use_id'", li, eventType)
+				t.Errorf("FAIL: line %d (%s) 'session_id' does not follow 'parent_tool_use_id'", li, eventType)
 			}
 			if sessionIdx != -1 && uuidIdx != -1 && sessionIdx >= uuidIdx {
 				t.Errorf("AC5 FAIL: line %d (%s) 'uuid' does not follow 'session_id'", li, eventType)

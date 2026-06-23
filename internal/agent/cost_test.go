@@ -20,7 +20,7 @@ import (
 // All four token types
 // ---------------------------------------------------------------------------
 
-func TestAC1_AccumulateUsageCapturesAllFourTokenTypes(t *testing.T) {
+func TestAccumulateUsageCapturesAllFourTokenTypes(t *testing.T) {
 	state := &CostState{}
 	usage := api.Usage{
 		InputTokens:              100,
@@ -33,24 +33,24 @@ func TestAC1_AccumulateUsageCapturesAllFourTokenTypes(t *testing.T) {
 
 	mu, ok := state.ModelUsage["deepseek-v4-flash"]
 	if !ok {
-		t.Fatal("AC1 FAIL: model usage not recorded for deepseek-v4-flash")
+		t.Fatal("FAIL: model usage not recorded for deepseek-v4-flash")
 	}
 
 	if mu.InputTokens != 100 {
-		t.Errorf("AC1 FAIL: InputTokens = %d, want 100", mu.InputTokens)
+		t.Errorf("FAIL: InputTokens = %d, want 100", mu.InputTokens)
 	}
 	if mu.OutputTokens != 50 {
-		t.Errorf("AC1 FAIL: OutputTokens = %d, want 50", mu.OutputTokens)
+		t.Errorf("FAIL: OutputTokens = %d, want 50", mu.OutputTokens)
 	}
 	if mu.CacheReadInputTokens != 30 {
-		t.Errorf("AC1 FAIL: CacheReadInputTokens = %d, want 30", mu.CacheReadInputTokens)
+		t.Errorf("FAIL: CacheReadInputTokens = %d, want 30", mu.CacheReadInputTokens)
 	}
 	if mu.CacheCreationInputTokens != 10 {
-		t.Errorf("AC1 FAIL: CacheCreationInputTokens = %d, want 10", mu.CacheCreationInputTokens)
+		t.Errorf("FAIL: CacheCreationInputTokens = %d, want 10", mu.CacheCreationInputTokens)
 	}
 }
 
-func TestAC1_AccumulateUsageMultipleCallsSumTokens(t *testing.T) {
+func TestAccumulateUsageMultipleCallsSumTokens(t *testing.T) {
 	state := &CostState{}
 	usage1 := api.Usage{InputTokens: 50, OutputTokens: 20, CacheReadInputTokens: 10, CacheCreationInputTokens: 5}
 	usage2 := api.Usage{InputTokens: 30, OutputTokens: 10, CacheReadInputTokens: 5, CacheCreationInputTokens: 2}
@@ -60,17 +60,17 @@ func TestAC1_AccumulateUsageMultipleCallsSumTokens(t *testing.T) {
 
 	mu := state.ModelUsage["test-model"]
 	if mu.InputTokens != 80 {
-		t.Errorf("AC1 FAIL: InputTokens sum = %d, want 80", mu.InputTokens)
+		t.Errorf("FAIL: InputTokens sum = %d, want 80", mu.InputTokens)
 	}
 	if mu.CacheReadInputTokens != 15 {
-		t.Errorf("AC1 FAIL: CacheReadInputTokens sum = %d, want 15", mu.CacheReadInputTokens)
+		t.Errorf("FAIL: CacheReadInputTokens sum = %d, want 15", mu.CacheReadInputTokens)
 	}
 	if mu.CacheCreationInputTokens != 7 {
-		t.Errorf("AC1 FAIL: CacheCreationInputTokens sum = %d, want 7", mu.CacheCreationInputTokens)
+		t.Errorf("FAIL: CacheCreationInputTokens sum = %d, want 7", mu.CacheCreationInputTokens)
 	}
 }
 
-func TestAC1_AccumulateUsageZeroTokens(t *testing.T) {
+func TestAccumulateUsageZeroTokens(t *testing.T) {
 	state := &CostState{}
 	usage := api.Usage{} // All zero
 
@@ -78,17 +78,17 @@ func TestAC1_AccumulateUsageZeroTokens(t *testing.T) {
 
 	mu, ok := state.ModelUsage["test-model"]
 	if !ok {
-		t.Fatal("AC1 FAIL: model usage should be created even with zero tokens")
+		t.Fatal("FAIL: model usage should be created even with zero tokens")
 	}
 	if mu.InputTokens != 0 || mu.OutputTokens != 0 || mu.CacheReadInputTokens != 0 || mu.CacheCreationInputTokens != 0 {
-		t.Errorf("AC1 FAIL: expected all zeros, got %+v", mu)
+		t.Errorf("FAIL: expected all zeros, got %+v", mu)
 	}
 	if state.TotalCostUSD != 0 {
-		t.Errorf("AC1 FAIL: expected TotalCostUSD=0, got %f", state.TotalCostUSD)
+		t.Errorf("FAIL: expected TotalCostUSD=0, got %f", state.TotalCostUSD)
 	}
 }
 
-func TestAC1_SendMessageNonStreamingUsageStruct(t *testing.T) {
+func TestSendMessageNonStreamingUsageStruct(t *testing.T) {
 	// Verify the api.Usage struct has all four fields
 	usage := api.Usage{
 		InputTokens:              10,
@@ -98,16 +98,16 @@ func TestAC1_SendMessageNonStreamingUsageStruct(t *testing.T) {
 	}
 
 	if usage.InputTokens != 10 {
-		t.Error("AC1 FAIL: InputTokens field missing or wrong")
+		t.Error("FAIL: InputTokens field missing or wrong")
 	}
 	if usage.OutputTokens != 20 {
-		t.Error("AC1 FAIL: OutputTokens field missing or wrong")
+		t.Error("FAIL: OutputTokens field missing or wrong")
 	}
 	if usage.CacheReadInputTokens != 5 {
-		t.Error("AC1 FAIL: CacheReadInputTokens field missing or wrong")
+		t.Error("FAIL: CacheReadInputTokens field missing or wrong")
 	}
 	if usage.CacheCreationInputTokens != 3 {
-		t.Error("AC1 FAIL: CacheCreationInputTokens field missing or wrong")
+		t.Error("FAIL: CacheCreationInputTokens field missing or wrong")
 	}
 }
 
@@ -115,7 +115,7 @@ func TestAC1_SendMessageNonStreamingUsageStruct(t *testing.T) {
 // Cost persistence
 // ---------------------------------------------------------------------------
 
-func TestAC2_SaveCostStatePersistsToDotJennyConfig(t *testing.T) {
+func TestSaveCostStatePersistsToDotJennyConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
 	os.Chdir(tmpDir)
@@ -145,54 +145,54 @@ func TestAC2_SaveCostStatePersistsToDotJennyConfig(t *testing.T) {
 	}
 
 	if err := SaveCostState(state); err != nil {
-		t.Fatalf("AC2 FAIL: SaveCostState() error = %v", err)
+		t.Fatalf("FAIL: SaveCostState() error = %v", err)
 	}
 
 	// Verify file exists
 	configPath := filepath.Join(constants.ProjectDirName, "sessions", "sess_test_ac2", "config")
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		t.Fatalf("AC2 FAIL: cannot read .jenny/sessions/sess_test_ac2/config: %v", err)
+		t.Fatalf("FAIL: cannot read .jenny/sessions/sess_test_ac2/config: %v", err)
 	}
 
 	// Parse JSON and verify required fields
 	var parsed map[string]any
 	if err := json.Unmarshal(data, &parsed); err != nil {
-		t.Fatalf("AC2 FAIL: config is not valid JSON: %v", err)
+		t.Fatalf("FAIL: config is not valid JSON: %v", err)
 	}
 
 	// Check lastSessionId (AC2 requires lastSessionId)
 	if _, ok := parsed["LastSessionID"]; !ok {
-		t.Error("AC2 FAIL: .jenny/config missing LastSessionID field")
+		t.Error("FAIL: .jenny/config missing LastSessionID field")
 	}
 	if parsed["LastSessionID"] != "sess_test_ac2" {
-		t.Errorf("AC2 FAIL: LastSessionID = %v, want 'sess_test_ac2'", parsed["LastSessionID"])
+		t.Errorf("FAIL: LastSessionID = %v, want 'sess_test_ac2'", parsed["LastSessionID"])
 	}
 
 	// Check TotalCostUSD
 	if _, ok := parsed["TotalCostUSD"]; !ok {
-		t.Error("AC2 FAIL: .jenny/config missing TotalCostUSD field")
+		t.Error("FAIL: .jenny/config missing TotalCostUSD field")
 	}
 
 	// Check per-model usage
 	modelUsage, ok := parsed["ModelUsage"]
 	if !ok {
-		t.Fatal("AC2 FAIL: .jenny/config missing ModelUsage field")
+		t.Fatal("FAIL: .jenny/config missing ModelUsage field")
 	}
 	muMap, ok := modelUsage.(map[string]any)
 	if !ok {
-		t.Fatal("AC2 FAIL: ModelUsage is not a map")
+		t.Fatal("FAIL: ModelUsage is not a map")
 	}
 	testModel, ok := muMap["test-model"]
 	if !ok {
-		t.Fatal("AC2 FAIL: ModelUsage missing 'test-model' entry")
+		t.Fatal("FAIL: ModelUsage missing 'test-model' entry")
 	}
 	testModelMap, ok := testModel.(map[string]any)
 	if !ok {
-		t.Fatal("AC2 FAIL: test-model entry is not a map")
+		t.Fatal("FAIL: test-model entry is not a map")
 	}
 	if testModelMap["InputTokens"] != float64(100) {
-		t.Errorf("AC2 FAIL: test-model InputTokens = %v, want 100", testModelMap["InputTokens"])
+		t.Errorf("FAIL: test-model InputTokens = %v, want 100", testModelMap["InputTokens"])
 	}
 }
 
@@ -217,22 +217,22 @@ func TestAC2_SaveCostStateEmptyModelUsage(t *testing.T) {
 	}
 
 	if err := SaveCostState(state); err != nil {
-		t.Fatalf("AC2 FAIL: SaveCostState() error = %v", err)
+		t.Fatalf("FAIL: SaveCostState() error = %v", err)
 	}
 
 	// Verify the file was created in the session directory
 	configPath := filepath.Join(tmpDir, "sessions", "sess_empty", "config")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		t.Fatalf("AC2 FAIL: .jenny/sessions/sess_empty/config not created")
+		t.Fatalf("FAIL: .jenny/sessions/sess_empty/config not created")
 	}
 
 	// Verify it loads back correctly
 	loaded, err := LoadCostState("sess_empty")
 	if err != nil {
-		t.Fatalf("AC2 FAIL: LoadCostState() error = %v", err)
+		t.Fatalf("FAIL: LoadCostState() error = %v", err)
 	}
 	if loaded.LastSessionID != "sess_empty" {
-		t.Errorf("AC2 FAIL: loaded LastSessionID = %q, want 'sess_empty'", loaded.LastSessionID)
+		t.Errorf("FAIL: loaded LastSessionID = %q, want 'sess_empty'", loaded.LastSessionID)
 	}
 }
 
@@ -261,7 +261,7 @@ func TestAC2_PersistsEndTurnPath(t *testing.T) {
 
 	sessMgr, err := session.NewManager(filepath.Join(tmpDir, "transcripts"), false)
 	if err != nil {
-		t.Fatalf("AC2 FAIL: NewManager error = %v", err)
+		t.Fatalf("FAIL: NewManager error = %v", err)
 	}
 
 	sessionID := "sess_runstream_persist"
@@ -274,27 +274,27 @@ func TestAC2_PersistsEndTurnPath(t *testing.T) {
 
 	_, _, _, err = RunStream(ctx, "test prompt", nil, tmpDir, &cfg, "test-model", WithClient(fastClient(t)))
 	if err != nil {
-		t.Fatalf("AC2 FAIL: RunStream error = %v", err)
+		t.Fatalf("FAIL: RunStream error = %v", err)
 	}
 
 	// Verify .jenny/sessions/<id>/config was created
 	configPath := filepath.Join(tmpDir, constants.ProjectDirName, "sessions", sessionID, "config")
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		t.Fatalf("AC2 FAIL: .jenny/sessions/%s/config not created after RunStream end_turn", sessionID)
+		t.Fatalf("FAIL: .jenny/sessions/%s/config not created after RunStream end_turn", sessionID)
 	}
 
 	var state CostState
 	if err := json.Unmarshal(data, &state); err != nil {
-		t.Fatalf("AC2 FAIL: .jenny/config is not valid JSON: %v", err)
+		t.Fatalf("FAIL: .jenny/config is not valid JSON: %v", err)
 	}
 	if state.LastSessionID == "" {
-		t.Error("AC2 FAIL: LastSessionID is empty in persisted config")
+		t.Error("FAIL: LastSessionID is empty in persisted config")
 	}
 	if state.TotalCostUSD == 0 {
-		t.Error("AC2 FAIL: TotalCostUSD is 0 in persisted config — cost may not have been accumulated")
+		t.Error("FAIL: TotalCostUSD is 0 in persisted config — cost may not have been accumulated")
 	}
-	t.Logf("AC2 PASS: persisted cost state: session=%q, total=%.6f, models=%d", state.LastSessionID, state.TotalCostUSD, len(state.ModelUsage))
+	t.Logf("PASS: persisted cost state: session=%q, total=%.6f, models=%d", state.LastSessionID, state.TotalCostUSD, len(state.ModelUsage))
 }
 
 // ---------------------------------------------------------------------------
@@ -340,7 +340,7 @@ func TestAC3_RestoreCostStateWithMatchingSessionID(t *testing.T) {
 	if mu.InputTokens != 100 {
 		t.Errorf("AC3 FAIL: restored InputTokens = %d, want 100", mu.InputTokens)
 	}
-	t.Log("AC3 PASS: cost state restored correctly on session ID match")
+	t.Log("PASS: cost state restored correctly on session ID match")
 }
 
 func TestAC3_RestoreCostStateWithMismatchedSessionID(t *testing.T) {
@@ -372,7 +372,7 @@ func TestAC3_RestoreCostStateWithMismatchedSessionID(t *testing.T) {
 	if restored != nil {
 		t.Error("AC3 FAIL: RestoreCostState returned non-nil state on mismatch, want nil")
 	}
-	t.Log("AC3 PASS: cost state not restored on session ID mismatch")
+	t.Log("PASS: cost state not restored on session ID mismatch")
 }
 
 func TestAC3_RestoreNoConfigFile(t *testing.T) {
@@ -779,7 +779,7 @@ func TestPricing_AC2_NewModelFamilies(t *testing.T) {
 	for _, model := range newModels {
 		pricing := GetModelPricing(model)
 		if pricing.InputUSD <= 0 {
-			t.Errorf("AC2 FAIL: %s USD InputUSD = %f, want > 0", model, pricing.InputUSD)
+			t.Errorf("FAIL: %s USD InputUSD = %f, want > 0", model, pricing.InputUSD)
 		}
 	}
 

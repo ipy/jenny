@@ -54,7 +54,7 @@ type MemoryExtractor struct {
 	pendingCtx context.Context
 	mu         sync.RWMutex
 
-	// AC3: wg tracks in-flight extraction goroutines so Drain can wait for
+	// wg tracks in-flight extraction goroutines so Drain can wait for
 	// them to complete during shutdown. Add(1) is called immediately
 	// before the goroutine is launched; Done() runs via defer inside the
 	// goroutine. Drain waits on this group after the in-progress flag
@@ -104,13 +104,13 @@ func (me *MemoryExtractor) getCursor() (uuid string, count int) {
 
 // CheckAndExtract determines whether to run memory extraction after a turn.
 // It returns immediately if:
-// - Sub-agent (AC4: main agent only)
+// - Sub-agent (main agent only)
 // - Auto-memory disabled
-// - Stop reason was tool_use (AC1: only run on end_turn or stop_sequence)
+// - Stop reason was tool_use (only run on end_turn or stop_sequence)
 // - Throttle not yet exceeded
-// - Extraction already in progress (AC5: coalescing)
+// - Extraction already in progress (coalescing)
 func (me *MemoryExtractor) CheckAndExtract(ctx context.Context, turnCtx TurnContext) {
-	// AC4: Skip for sub-agents
+	// Skip for sub-agents
 	if me.config.IsSubAgent {
 		return
 	}
@@ -120,7 +120,7 @@ func (me *MemoryExtractor) CheckAndExtract(ctx context.Context, turnCtx TurnCont
 		return
 	}
 
-	// AC1: Only run on end_turn or stop_sequence, not max_tokens, tool_use, etc.
+	// Only run on end_turn or stop_sequence, not max_tokens, tool_use, etc.
 	if turnCtx.StopReason != api.StopReasonEndTurn && turnCtx.StopReason != api.StopReasonStopSeq {
 		return
 	}
@@ -139,13 +139,13 @@ func (me *MemoryExtractor) CheckAndExtract(ctx context.Context, turnCtx TurnCont
 	}
 	me.mu.Unlock()
 
-	// AC2: Check if main agent already wrote to auto-mem paths
+	// Check if main agent already wrote to auto-mem paths
 	if me.mainAgentWroteToAutoMem(turnCtx) {
 		me.advanceCursor(turnCtx)
 		return
 	}
 
-	// AC5: Coalescing - if in progress, stash context for trailing run
+	// Coalescing - if in progress, stash context for trailing run
 	me.mu.Lock()
 	if me.inProgress {
 		me.pendingCtx = ctx
@@ -162,7 +162,7 @@ func (me *MemoryExtractor) CheckAndExtract(ctx context.Context, turnCtx TurnCont
 		msgID = turnCtx.AssistantMessage.ID
 	}
 
-	// AC3: capture turnCtx by value so the goroutine does not race on
+	// Capture turnCtx by value so the goroutine does not race on
 	// caller-mutated state (e.g. the AgentLoop reusing the same struct
 	// across turns). wg.Add is called here, immediately before the goroutine
 	// is launched, so Drain.Wait can never miss a still-pending Done.
@@ -203,7 +203,7 @@ func (me *MemoryExtractor) extractEvery() int {
 }
 
 // mainAgentWroteToAutoMem checks if the main agent wrote to auto-mem paths.
-// AC2: Skip extraction if main agent already updated memory.
+// Skip extraction if main agent already updated memory.
 func (me *MemoryExtractor) mainAgentWroteToAutoMem(turnCtx TurnContext) bool {
 	if turnCtx.AssistantMessage == nil {
 		return false
@@ -253,7 +253,7 @@ func (me *MemoryExtractor) advanceCursor(turnCtx TurnContext) {
 	if turnCtx.AssistantMessage.ID != "" {
 		me.lastMemoryMessageUuid = turnCtx.AssistantMessage.ID
 	} else {
-		// AC3: UUID missing after compaction - fall back to count
+		// UUID missing after compaction - fall back to count
 		me.lastMemoryMessageCount = turnCtx.TotalMessages
 		me.lastMemoryMessageUuid = ""
 	}
@@ -428,7 +428,7 @@ func (me *MemoryExtractor) buildExtractionPrompt(turnCtx TurnContext, manifest s
 	sb.WriteString("\nRecent conversation:\n")
 
 	// Include recent messages (up to message limit)
-	// AC3: If cursor UUID is missing (after compaction), fall back to counting
+	// If cursor UUID is missing (after compaction), fall back to counting
 	me.mu.RLock()
 	cursorUuid := me.lastMemoryMessageUuid
 	cursorCount := me.lastMemoryMessageCount
@@ -469,7 +469,7 @@ func (me *MemoryExtractor) processExtractionResponse(ctx context.Context, resp *
 				continue
 			}
 
-			// AC4: Explicit path guard - reject Edit/Write outside auto-mem
+			// Explicit path guard - reject Edit/Write outside auto-mem
 			if t.Name() == "Edit" || t.Name() == "Write" {
 				if filePath, ok := block.ToolUse.Args["file_path"].(string); ok {
 					if !me.isUnderAutoMem(filePath) {
@@ -504,7 +504,7 @@ func (me *MemoryExtractor) finalizeExtraction() {
 		// Unlock BEFORE spawning goroutine so it can acquire the lock independently
 		me.mu.Unlock()
 
-		// AC3: register the trailing extraction with the waitgroup so Drain
+		// Register the trailing extraction with the waitgroup so Drain
 		// blocks on it too. The defer wg.Done() in the spawned goroutine
 		// pairs with the Add(1) here.
 		me.wg.Add(1)
@@ -531,7 +531,7 @@ func (me *MemoryExtractor) finalizeExtraction() {
 }
 
 // Drain waits for any in-progress extraction to complete during shutdown.
-// AC3: replaced the busy-polling loop with a WaitGroup-aware channel. The
+// Replaced the busy-polling loop with a WaitGroup-aware channel. The
 // wait group covers both the initial extraction goroutine and any trailing
 // run that finalizeExtraction may have spawned. After Drain returns and a
 // brief settle, runtime.NumGoroutine() must be at baseline.

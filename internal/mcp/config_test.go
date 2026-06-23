@@ -368,9 +368,9 @@ func TestLoadConfig(t *testing.T) {
 	})
 }
 
-// TestAC2_MCPConfigWiring verifies that LoadConfig followed by ConnectAll
+// TestMCPConfigWiring verifies that LoadConfig followed by ConnectAll
 // properly initializes MCP clients from the config file.
-// AC2: When --mcp-config /path/to/mcp.json is passed, the flag value is passed
+// When --mcp-config /path/to/mcp.json is passed, the flag value is passed
 // to mcp.LoadConfig and MCP servers are initialized before the agent loop runs.
 //
 // This test verifies the wiring path by checking:
@@ -381,7 +381,7 @@ func TestLoadConfig(t *testing.T) {
 // Note: We cannot call ConnectAll directly in this test because it requires
 // a valid MCP server process (echo is not a valid MCP server). The full
 // integration would be tested in an E2E test with a real MCP server.
-func TestAC2_MCPConfigWiring(t *testing.T) {
+func TestMCPConfigWiring(t *testing.T) {
 	content := `{"mcpServers": {"test-server": {"command": "echo", "args": ["hello"]}}}`
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.json")
@@ -423,10 +423,10 @@ func TestAC2_MCPConfigWiring(t *testing.T) {
 		t.Errorf("expected client.cmd 'echo', got %q", client.cmd)
 	}
 
-	// AC2 PASS: LoadConfig returns correct config for ConnectAll wiring
+	// PASS: LoadConfig returns correct config for ConnectAll wiring
 	// The full integration test would verify ConnectAll creates MCP clients
 	// when --mcp-config flag is passed, but that requires a real MCP server
-	t.Log("AC2 PASS: LoadConfig returns correct config for ConnectAll wiring")
+	t.Log("PASS: LoadConfig returns correct config for ConnectAll wiring")
 }
 
 // TestAC2_MCPConfigEnvExpansion verifies that environment variable expansion

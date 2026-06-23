@@ -23,7 +23,7 @@ func withJennyHome(t *testing.T, dir string) {
 	t.Cleanup(func() { constants.JennyHomeDirFunc = orig })
 }
 
-// makeFullSessionLayout creates the exact layout described in AC5/AC6.
+// makeFullSessionLayout creates the exact layout described in the spec.
 // Returns the session directory path.
 func makeFullSessionLayout(t *testing.T, home, id string) string {
 	t.Helper()
@@ -79,7 +79,7 @@ func listArchive(t *testing.T, path string) []string {
 	return names
 }
 
-// TestCompactDryRun_NoMutation (AC5)
+// TestCompactDryRun_NoMutation
 func TestCompactDryRun_NoMutation(t *testing.T) {
 	home := t.TempDir()
 	withJennyHome(t, home)
@@ -110,7 +110,7 @@ func TestCompactDryRun_NoMutation(t *testing.T) {
 	}
 }
 
-// TestCompactSingle_ProducesArchiveAndRemovesDir (AC6)
+// TestCompactSingle_ProducesArchiveAndRemovesDir
 func TestCompactSingle_ProducesArchiveAndRemovesDir(t *testing.T) {
 	home := t.TempDir()
 	withJennyHome(t, home)
@@ -169,7 +169,7 @@ func TestCompactSingle_ProducesArchiveAndRemovesDir(t *testing.T) {
 	}
 }
 
-// TestCompactBatch_SkipsArchivesAndUnrecognized (AC7)
+// TestCompactBatch_SkipsArchivesAndUnrecognized
 func TestCompactBatch_SkipsArchivesAndUnrecognized(t *testing.T) {
 	home := t.TempDir()
 	withJennyHome(t, home)
@@ -224,7 +224,7 @@ func TestCompactBatch_SkipsArchivesAndUnrecognized(t *testing.T) {
 	}
 }
 
-// TestCompact_ArchiveNameCollision_Refuses (AC9)
+// TestCompact_ArchiveNameCollision_Refuses
 func TestCompact_ArchiveNameCollision_Refuses(t *testing.T) {
 	home := t.TempDir()
 	withJennyHome(t, home)
@@ -259,7 +259,7 @@ func TestCompact_ArchiveNameCollision_Refuses(t *testing.T) {
 	}
 }
 
-// TestCompact_ArchiveNameCollision_ForceOverwrites (AC9)
+// TestCompact_ArchiveNameCollision_ForceOverwrites
 func TestCompact_ArchiveNameCollision_ForceOverwrites(t *testing.T) {
 	home := t.TempDir()
 	withJennyHome(t, home)
@@ -284,7 +284,7 @@ func TestCompact_ArchiveNameCollision_ForceOverwrites(t *testing.T) {
 	}
 }
 
-// TestCompact_HonorsJennyHome (AC10)
+// TestCompact_HonorsJennyHome
 func TestCompact_HonorsJennyHome(t *testing.T) {
 	realHome := t.TempDir()
 	altHome := t.TempDir()
@@ -326,7 +326,7 @@ func TestCompact_HonorsJennyHome(t *testing.T) {
 	}
 }
 
-// TestExtractArchive_RestoresContents (AC8)
+// TestExtractArchive_RestoresContents
 func TestExtractArchive_RestoresContents(t *testing.T) {
 	home := t.TempDir()
 	withJennyHome(t, home)
@@ -376,7 +376,7 @@ func TestExtractArchive_RestoresContents(t *testing.T) {
 	}
 }
 
-// TestExtractArchive_KeepArchiveEnv (AC8 — keepArchive=true)
+// TestExtractArchive_KeepArchiveEnv (keepArchive=true)
 func TestExtractArchive_KeepArchiveEnv(t *testing.T) {
 	home := t.TempDir()
 	withJennyHome(t, home)

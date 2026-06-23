@@ -17,7 +17,7 @@ import (
 	"github.com/ipy/jenny/internal/skills"
 )
 
-// TestResume_QueueOnlyTranscript_Error tests AC1: queue-only transcript rejected on -r
+// TestResume_QueueOnlyTranscript_Error tests queue-only transcript rejected on -r
 func TestResume_QueueOnlyTranscript_Error(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -51,13 +51,13 @@ func TestResume_QueueOnlyTranscript_Error(t *testing.T) {
 		t.Errorf("LoadTranscript() returned %d entries, want 0 (progress filtered)", len(loaded))
 	}
 
-	// AC1: HasChainMessages returns false for queue-only transcript
+	// HasChainMessages returns false for queue-only transcript
 	if agent.HasChainMessages(loaded) {
 		t.Errorf("HasChainMessages(loaded) = true, want false (queue-only)")
 	}
 }
 
-// TestResume_EmptyTranscript_Error tests AC2: empty transcript file rejected on -r
+// TestResume_EmptyTranscript_Error tests empty transcript file rejected on -r
 func TestResume_EmptyTranscript_Error(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -87,13 +87,13 @@ func TestResume_EmptyTranscript_Error(t *testing.T) {
 		t.Errorf("LoadTranscript() returned %d entries, want 0", len(loaded))
 	}
 
-	// AC2: HasChainMessages returns false for empty transcript
+	// HasChainMessages returns false for empty transcript
 	if agent.HasChainMessages(loaded) {
 		t.Errorf("HasChainMessages(loaded) = true, want false (empty)")
 	}
 }
 
-// TestResume_NormalTranscript_NoError tests AC3: normal transcript with user entry works
+// TestResume_NormalTranscript_NoError tests normal transcript with user entry works
 func TestResume_NormalTranscript_NoError(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -128,13 +128,13 @@ func TestResume_NormalTranscript_NoError(t *testing.T) {
 		t.Errorf("loaded entry = %+v, want {Type:user, Content:Hello}", loaded[0])
 	}
 
-	// AC3: HasChainMessages returns true for normal transcript with user entry
+	// HasChainMessages returns true for normal transcript with user entry
 	if !agent.HasChainMessages(loaded) {
 		t.Errorf("HasChainMessages(loaded) = false, want true (normal)")
 	}
 }
 
-// TestResume_ForkSession_NoFileCreated tests AC4: --fork-session with queue-only
+// TestResume_ForkSession_NoFileCreated tests --fork-session with queue-only
 // session does not create a new transcript file
 func TestResume_ForkSession_NoFileCreated(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -167,12 +167,12 @@ func TestResume_ForkSession_NoFileCreated(t *testing.T) {
 		t.Errorf("LoadTranscript() returned %d entries, want 0", len(loaded))
 	}
 
-	// AC4a: HasChainMessages returns false for queue-only transcript
+	// HasChainMessages returns false for queue-only transcript
 	if agent.HasChainMessages(loaded) {
 		t.Errorf("HasChainMessages(loaded) = true, want false (queue-only)")
 	}
 
-	// AC4b: Verify no fork transcript file is created (sessions dir has exactly one entry)
+	// Verify no fork transcript file is created (sessions dir has exactly one entry)
 	dirEntries, err := os.ReadDir(filepath.Join(tmpDir, "sessions"))
 	if err != nil {
 		t.Fatalf("ReadDir() error = %v", err)
@@ -191,7 +191,7 @@ func TestResume_ForkSession_NoFileCreated(t *testing.T) {
 	}
 }
 
-// TestResume_NormalTranscript_ForkSession_CreatesFile tests AC5: --fork-session with
+// TestResume_NormalTranscript_ForkSession_CreatesFile tests --fork-session with
 // normal transcript (has chain participants) creates a new transcript file
 func TestResume_NormalTranscript_ForkSession_CreatesFile(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -223,7 +223,7 @@ func TestResume_NormalTranscript_ForkSession_CreatesFile(t *testing.T) {
 		t.Errorf("LoadTranscript() returned %d entries, want 1", len(loaded))
 	}
 
-	// AC5: HasChainMessages returns true for normal transcript
+	// HasChainMessages returns true for normal transcript
 	if !agent.HasChainMessages(loaded) {
 		t.Errorf("HasChainMessages(loaded) = false, want true (normal)")
 	}
@@ -239,7 +239,7 @@ func TestResume_NormalTranscript_ForkSession_CreatesFile(t *testing.T) {
 		}
 	}
 
-	// AC5: Verify fork transcript file was created (sessions dir has exactly two session dirs)
+	// Verify fork transcript file was created (sessions dir has exactly two session dirs)
 	dirEntries, err := os.ReadDir(filepath.Join(tmpDir, "sessions"))
 	if err != nil {
 		t.Fatalf("ReadDir() error = %v", err)
@@ -255,7 +255,7 @@ func TestResume_NormalTranscript_ForkSession_CreatesFile(t *testing.T) {
 	}
 }
 
-// TestPluginSkillsWiring tests AC7: plugin skills are discoverable at runtime
+// TestPluginSkillsWiring tests plugin skills are discoverable at runtime
 // and merged with project skills.
 func TestPluginSkillsWiring(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -340,7 +340,7 @@ A plugin-level skill.
 	}
 }
 
-// TestPluginSkillsDedup tests AC3: plugin skills with duplicate names are skipped.
+// TestPluginSkillsDedup tests plugin skills with duplicate names are skipped.
 func TestPluginSkillsDedup(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -667,9 +667,9 @@ func TestPluginMCPServersWiring(t *testing.T) {
 	}
 }
 
-// AC4: --version and the stream-json claude_code_version field must agree.
+// --version and the stream-json claude_code_version field must agree.
 // The two values flow through different paths: one through main.version, one
-// through constants.Version. With AC4 applied, both read from the same
+// through constants.Version. Both read from the same
 // constants.Version var.
 func TestVersionUnified(t *testing.T) {
 	if version != constants.Version {
@@ -677,7 +677,7 @@ func TestVersionUnified(t *testing.T) {
 	}
 }
 
-// AC9: loadEnvFiles applies .env to the process environment without
+// loadEnvFiles applies .env to the process environment without
 // overwriting variables already exported in the shell.
 func TestLoadEnvFiles_AppliesDotEnv(t *testing.T) {
 	dir := t.TempDir()
@@ -698,7 +698,7 @@ func TestLoadEnvFiles_AppliesDotEnv(t *testing.T) {
 	}
 }
 
-// AC9: loadEnvFiles does NOT overwrite already-set env vars.
+// loadEnvFiles does NOT overwrite already-set env vars.
 func TestLoadEnvFiles_DoesNotOverwriteExisting(t *testing.T) {
 	dir := t.TempDir()
 	envPath := filepath.Join(dir, ".env")
@@ -714,13 +714,13 @@ func TestLoadEnvFiles_DoesNotOverwriteExisting(t *testing.T) {
 	}
 }
 
-// AC9: missing .env is not an error.
+// Missing .env is not an error.
 func TestLoadEnvFiles_MissingIsFine(t *testing.T) {
 	dir := t.TempDir() // empty
 	loadEnvFiles(dir)  // must not panic / error
 }
 
-// AC9: loadEnvFiles also picks up .jenny/.env.
+// loadEnvFiles also picks up .jenny/.env.
 func TestLoadEnvFiles_PicksUpJennyEnv(t *testing.T) {
 	dir := t.TempDir()
 	jennyDir := filepath.Join(dir, constants.ProjectDirName)
@@ -741,7 +741,7 @@ func TestLoadEnvFiles_PicksUpJennyEnv(t *testing.T) {
 	}
 }
 
-// TestShouldLaunchPortal_ExplicitPortal tests AC2: jenny portal launches the portal.
+// TestShouldLaunchPortal_ExplicitPortal tests jenny portal launches the portal.
 func TestShouldLaunchPortal_ExplicitPortal(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
@@ -752,7 +752,7 @@ func TestShouldLaunchPortal_ExplicitPortal(t *testing.T) {
 	}
 }
 
-// TestShouldLaunchPortal_NoArgs tests AC1: jenny with no arguments does NOT launch portal.
+// TestShouldLaunchPortal_NoArgs tests jenny with no arguments does NOT launch portal.
 // Note: macOS double-clicking a bare executable ALWAYS opens Terminal - this is a
 // macOS limitation. Users who want no-Terminal launch must use the optional .app bundle.
 func TestShouldLaunchPortal_NoArgs(t *testing.T) {
@@ -765,7 +765,7 @@ func TestShouldLaunchPortal_NoArgs(t *testing.T) {
 	}
 }
 
-// TestShouldLaunchPortal_OtherArgs tests AC3: other arguments stay in CLI mode.
+// TestShouldLaunchPortal_OtherArgs tests other arguments stay in CLI mode.
 func TestShouldLaunchPortal_OtherArgs(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
@@ -784,13 +784,13 @@ func TestShouldLaunchPortal_OtherArgs(t *testing.T) {
 	}
 }
 
-// TestSignalContext_Cancellable tests AC1/AC2: signal.NotifyContext creates a
+// TestSignalContext_Cancellable tests signal.NotifyContext creates a
 // cancellable context that cancels on SIGINT/SIGTERM.
 func TestSignalContext_Cancellable(t *testing.T) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// AC1: context should not be cancelled initially
+	// Context should not be cancelled initially
 	if ctx.Err() != nil {
 		t.Errorf("ctx.Err() = %v, want nil (not cancelled)", ctx.Err())
 	}
@@ -798,7 +798,7 @@ func TestSignalContext_Cancellable(t *testing.T) {
 	// Simulate signal by calling stop()
 	stop()
 
-	// AC1: context should be cancelled after signal
+	// Context should be cancelled after signal
 	if ctx.Err() != context.Canceled {
 		t.Errorf("ctx.Err() = %v, want context.Canceled", ctx.Err())
 	}

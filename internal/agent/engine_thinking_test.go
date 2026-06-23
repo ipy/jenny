@@ -172,10 +172,10 @@ func TestThinkingBlockEmittedSeparately(t *testing.T) {
 	}
 }
 
-// TestAC2_ThinkingSignatureIncluded verifies AC2: when the API returns a
+// TestThinkingSignatureIncluded verifies that when the API returns a
 // signature on the thinking block, the emitted envelope includes
 // `"signature": "<value>"`.
-func TestAC2_ThinkingSignatureIncluded(t *testing.T) {
+func TestThinkingSignatureIncluded(t *testing.T) {
 	signature := "sig-included-123"
 	server := makeMockStreamServer(t, thinkingTextToolEvents("thought", signature, "answer"))
 	defer server.Close()
@@ -204,20 +204,20 @@ func TestAC2_ThinkingSignatureIncluded(t *testing.T) {
 
 	content := findAssistantContentBlock(t, stdout)
 	if len(content) < 1 {
-		t.Fatal("AC2 FAIL: no assistant content blocks found")
+		t.Fatal("FAIL: no assistant content blocks found")
 	}
 	if content[0]["type"] != "thinking" {
-		t.Fatalf("AC2 FAIL: first block type = %v, want \"thinking\"", content[0]["type"])
+		t.Fatalf("FAIL: first block type = %v, want \"thinking\"", content[0]["type"])
 	}
 	if content[0]["signature"] != signature {
-		t.Errorf("AC2 FAIL: signature = %v, want %q", content[0]["signature"], signature)
+		t.Errorf("FAIL: signature = %v, want %q", content[0]["signature"], signature)
 	}
 }
 
-// TestAC2_ThinkingSignatureOmittedWhenEmpty verifies AC2 (negative case):
+// TestThinkingSignatureOmittedWhenEmpty verifies (negative case):
 // when the API returns no signature on a thinking block, the emitted envelope
 // must NOT include a "signature" key on the thinking block (omitempty).
-func TestAC2_ThinkingSignatureOmittedWhenEmpty(t *testing.T) {
+func TestThinkingSignatureOmittedWhenEmpty(t *testing.T) {
 	server := makeMockStreamServer(t, thinkingTextToolEvents("thought", "", "answer"))
 	defer server.Close()
 
@@ -245,17 +245,17 @@ func TestAC2_ThinkingSignatureOmittedWhenEmpty(t *testing.T) {
 
 	content := findAssistantContentBlock(t, stdout)
 	if len(content) < 1 {
-		t.Fatal("AC2 FAIL: no assistant content blocks found")
+		t.Fatal("FAIL: no assistant content blocks found")
 	}
 	if _, hasSig := content[0]["signature"]; hasSig {
-		t.Errorf("AC2 FAIL: signature key present in emitted JSON despite empty signature: %v", content[0])
+		t.Errorf("FAIL: signature key present in emitted JSON despite empty signature: %v", content[0])
 	}
 }
 
-// TestAC3_ContentOrdering_ThinkingTextToolUse verifies AC3: when a turn
+// TestContentOrdering_ThinkingTextToolUse verifies that when a turn
 // contains thinking, text, and tool_use, the assistant envelope's content
 // array lists them in that order.
-func TestAC3_ContentOrdering_ThinkingTextToolUse(t *testing.T) {
+func TestContentOrdering_ThinkingTextToolUse(t *testing.T) {
 	server := makeMockStreamServer(t, thinkingTextToolUseEvents("reasoning", "sig", "summary", "tool_1", "Bash"))
 	defer server.Close()
 
@@ -283,25 +283,25 @@ func TestAC3_ContentOrdering_ThinkingTextToolUse(t *testing.T) {
 
 	content := findAssistantContentBlock(t, stdout)
 	if content == nil {
-		t.Fatal("AC3 FAIL: no assistant content blocks found")
+		t.Fatal("FAIL: no assistant content blocks found")
 	}
 	if len(content) != 3 {
-		t.Fatalf("AC3 FAIL: expected 3 content blocks (thinking, text, tool_use), got %d: %v", len(content), content)
+		t.Fatalf("FAIL: expected 3 content blocks (thinking, text, tool_use), got %d: %v", len(content), content)
 	}
 	if content[0]["type"] != "thinking" {
-		t.Errorf("AC3 FAIL: content[0].type = %v, want \"thinking\"", content[0]["type"])
+		t.Errorf("FAIL: content[0].type = %v, want \"thinking\"", content[0]["type"])
 	}
 	if content[1]["type"] != "text" {
-		t.Errorf("AC3 FAIL: content[1].type = %v, want \"text\"", content[1]["type"])
+		t.Errorf("FAIL: content[1].type = %v, want \"text\"", content[1]["type"])
 	}
 	if content[2]["type"] != "tool_use" {
-		t.Errorf("AC3 FAIL: content[2].type = %v, want \"tool_use\"", content[2]["type"])
+		t.Errorf("FAIL: content[2].type = %v, want \"tool_use\"", content[2]["type"])
 	}
 }
 
-// TestAC4_TextOnlyUnaffected verifies AC4: a text-only response emits
+// TestTextOnlyUnaffected verifies that a text-only response emits
 // exactly one content block of type "text" with no regression.
-func TestAC4_TextOnlyUnaffected(t *testing.T) {
+func TestTextOnlyUnaffected(t *testing.T) {
 	server := makeMockStreamServer(t, []string{
 		sseLine("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"test","stop_reason":null,"usage":{"input_tokens":1,"output_tokens":1}}}`),
 		sseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
@@ -336,22 +336,22 @@ func TestAC4_TextOnlyUnaffected(t *testing.T) {
 
 	content := findAssistantContentBlock(t, stdout)
 	if content == nil {
-		t.Fatal("AC4 FAIL: no assistant content blocks found")
+		t.Fatal("FAIL: no assistant content blocks found")
 	}
 	if len(content) != 1 {
-		t.Fatalf("AC4 FAIL: expected 1 content block, got %d: %v", len(content), content)
+		t.Fatalf("FAIL: expected 1 content block, got %d: %v", len(content), content)
 	}
 	if content[0]["type"] != "text" {
-		t.Errorf("AC4 FAIL: content[0].type = %v, want \"text\"", content[0]["type"])
+		t.Errorf("FAIL: content[0].type = %v, want \"text\"", content[0]["type"])
 	}
 	if content[0]["text"] != "just text" {
-		t.Errorf("AC4 FAIL: text = %v, want \"just text\"", content[0]["text"])
+		t.Errorf("FAIL: text = %v, want \"just text\"", content[0]["text"])
 	}
 }
 
-// TestAC5_ToolUseOnlyNoEmptyText verifies AC5: a tool_use-only response
+// TestToolUseOnlyNoEmptyText verifies that a tool_use-only response
 // emits only tool_use blocks, with no spurious empty text block.
-func TestAC5_ToolUseOnlyNoEmptyText(t *testing.T) {
+func TestToolUseOnlyNoEmptyText(t *testing.T) {
 	server := makeMockStreamServer(t, []string{
 		sseLine("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"test","stop_reason":null,"usage":{"input_tokens":1,"output_tokens":1}}}`),
 		sseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"tool_1","name":"Bash","input":{}}}`),
@@ -385,13 +385,13 @@ func TestAC5_ToolUseOnlyNoEmptyText(t *testing.T) {
 
 	content := findAssistantContentBlock(t, stdout)
 	if content == nil {
-		t.Fatal("AC5 FAIL: no assistant content blocks found")
+		t.Fatal("FAIL: no assistant content blocks found")
 	}
 	if len(content) != 1 {
-		t.Fatalf("AC5 FAIL: expected 1 content block (tool_use), got %d: %v", len(content), content)
+		t.Fatalf("FAIL: expected 1 content block (tool_use), got %d: %v", len(content), content)
 	}
 	if content[0]["type"] != "tool_use" {
-		t.Errorf("AC5 FAIL: content[0].type = %v, want \"tool_use\"", content[0]["type"])
+		t.Errorf("FAIL: content[0].type = %v, want \"tool_use\"", content[0]["type"])
 	}
 	// No empty text block must be present.
 	for i, c := range content {
@@ -399,12 +399,12 @@ func TestAC5_ToolUseOnlyNoEmptyText(t *testing.T) {
 			continue
 		}
 		if text, _ := c["text"].(string); text == "" {
-			t.Errorf("AC5 FAIL: empty text block at index %d must not be emitted", i)
+			t.Errorf("FAIL: empty text block at index %d must not be emitted", i)
 		}
 	}
 }
 
-// TestAC6_FallbackPathThinkingBlock verifies AC6: when the streaming
+// TestFallbackPathThinkingBlock verifies that when the streaming
 // blocksChan drains empty but streamResult.Blocks (from the non-streaming
 // fallback) contains a thinking block, the engine still emits the thinking
 // block correctly (own type, signature preserved, ordering honoured).
@@ -413,7 +413,7 @@ func TestAC5_ToolUseOnlyNoEmptyText(t *testing.T) {
 // truncation) on the first request, forcing the engine to call the
 // non-streaming fallback. The fallback request returns a complete JSON
 // response with thinking + text.
-func TestAC6_FallbackPathThinkingBlock(t *testing.T) {
+func TestFallbackPathThinkingBlock(t *testing.T) {
 	var calls atomic.Int32
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -477,12 +477,12 @@ func TestAC6_FallbackPathThinkingBlock(t *testing.T) {
 
 	// If the fallback was actually exercised, calls should be >= 2.
 	if calls.Load() < 2 {
-		t.Skipf("AC6: fallback path not exercised under these conditions (calls=%d)", calls.Load())
+		t.Skipf("Fallback path not exercised under these conditions (calls=%d)", calls.Load())
 	}
 
 	content := findAssistantContentBlock(t, stdout)
 	if content == nil {
-		t.Fatal("AC6 FAIL: no assistant content blocks found despite fallback")
+		t.Fatal("FAIL: no assistant content blocks found despite fallback")
 	}
 
 	// Verify the thinking block (if any) is shaped correctly — i.e., if the
@@ -494,22 +494,22 @@ func TestAC6_FallbackPathThinkingBlock(t *testing.T) {
 		case "thinking":
 			foundThinking = true
 			if _, hasText := c["text"]; hasText {
-				t.Errorf("AC6 FAIL: thinking block at index %d has text field (should be omitted)", i)
+				t.Errorf("FAIL: thinking block at index %d has text field (should be omitted)", i)
 			}
 			if c["thinking"] == nil || c["thinking"] == "" {
-				t.Errorf("AC6 FAIL: thinking block at index %d has empty thinking field", i)
+				t.Errorf("FAIL: thinking block at index %d has empty thinking field", i)
 			}
 			if c["signature"] != "fb-sig" {
-				t.Errorf("AC6 FAIL: thinking block signature = %v, want \"fb-sig\"", c["signature"])
+				t.Errorf("FAIL: thinking block signature = %v, want \"fb-sig\"", c["signature"])
 			}
 		case "text":
 			foundText = true
 		}
 	}
 	if !foundThinking {
-		t.Error("AC6 FAIL: no thinking block emitted from fallback path")
+		t.Error("FAIL: no thinking block emitted from fallback path")
 	}
 	if !foundText {
-		t.Error("AC6 FAIL: no text block emitted from fallback path")
+		t.Error("FAIL: no text block emitted from fallback path")
 	}
 }

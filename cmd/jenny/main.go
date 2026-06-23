@@ -30,7 +30,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// AC4: --version and the stream-json claude_code_version field must agree.
+// --version and the stream-json claude_code_version field must agree.
 // `version` defaults to constants.Version. To override at build time use
 // `-ldflags '-X main.version=<value>'`.
 var version = constants.Version
@@ -131,7 +131,7 @@ func run() error {
 		os.Exit(runCompact())
 	}
 
-	// AC9: load .env files (and .jenny/.env) before parsing flags so any
+	// Load .env files (and .jenny/.env) before parsing flags so any
 	// env-driven flag behaviour or pre-flight checks see the merged env.
 	// Best-effort: missing or malformed .env is not an error.
 	if cwd, err := os.Getwd(); err == nil {
@@ -300,7 +300,7 @@ func run() error {
 			return err
 		}
 
-		// AC8: transparently rebuild the session directory from a sibling
+		// Transparently rebuild the session directory from a sibling
 		// <id>.tar.gz archive produced by `jenny compact` before checking
 		// for existence. After this call the regular session lookup flow
 		// runs against the freshly extracted directory. The keepArchive flag
@@ -428,7 +428,7 @@ func run() error {
 	}
 
 	// Build tool registry
-	// AC4: ReadFileCache is wired through StreamConfig -> QueryEngine -> tools
+	// ReadFileCache is wired through StreamConfig -> QueryEngine -> tools
 	// But Registry.Build() also needs it to create Write/Edit/NotebookEdit tools
 	readFileCache := tool.NewReadFileCache()
 
@@ -436,7 +436,7 @@ func run() error {
 	var discoveredSkills []skills.Skill
 	var pluginInfo []cli.PluginInitInfo
 
-	// AC4: Bare mode skips all skill discovery
+	// Bare mode skips all skill discovery
 	if !flags.Bare {
 		// Project-level skills: .jenny/skills/ (highest) then .agents/skills/
 		projectSkillsDir := filepath.Join(constants.ProjectJennyDir(cwd), "skills")
@@ -451,7 +451,7 @@ func run() error {
 			userSkillsDirs = append(userSkillsDirs, filepath.Join(agentsHome, "skills"))
 		}
 
-		// Discover from all directories (AC6: discovery from multiple directories)
+		// Discover from all directories (discovery from multiple directories)
 		// Priority (highest first): project/.jenny > project/.agents > ~/.jenny > ~/.agents
 		discoveredSkills, err = skills.Discover(
 			append([]string{projectSkillsDir, projectAgentsDir}, userSkillsDirs...)...,
@@ -570,7 +570,7 @@ func run() error {
 	}
 
 	// Build stream config
-	// AC4: Create ReadFileCache and pass it through StreamConfig for engine-level wiring
+	// Create ReadFileCache and pass it through StreamConfig for engine-level wiring
 	streamCfg := agent.StreamConfig{
 		Enabled:             flags.OutputFormat == "stream-json",
 		Verbose:             flags.Verbose,
@@ -605,7 +605,7 @@ func run() error {
 		TaskStore:           taskStore,
 	}
 
-	// AC3-streamconfig-inheritance: Set parent config on runner for named agent inheritance
+	// Set parent config on runner for named agent inheritance
 	localRunner.SetParentConfig(&streamCfg)
 	asyncRunner.SetParentConfig(&streamCfg)
 

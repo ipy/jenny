@@ -198,7 +198,7 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
-// TestMCPToolExecuteUnknownServer tests AC4: unknown server returns error tool_result without connecting.
+// TestMCPToolExecuteUnknownServer tests unknown server returns error tool_result without connecting.
 func TestMCPToolExecuteUnknownServer(t *testing.T) {
 	// Save and restore global state
 	origClients := clients
@@ -231,7 +231,7 @@ func TestMCPToolExecuteUnknownServer(t *testing.T) {
 	}
 }
 
-// TestMCPToolExecuteDisconnectedServer tests AC5: disconnected server returns error tool_result, no crash.
+// TestMCPToolExecuteDisconnectedServer tests disconnected server returns error tool_result, no crash.
 func TestMCPToolExecuteDisconnectedServer(t *testing.T) {
 	// Save and restore global state
 	origClients := clients
@@ -272,7 +272,7 @@ func TestMCPToolExecuteDisconnectedServer(t *testing.T) {
 	}
 }
 
-// TestIntegrationMCPSubprocess tests AC1-AC5 with a real MCP server subprocess.
+// TestIntegrationMCPSubprocess tests with a real MCP server subprocess.
 // This verifies the full JSON-RPC message exchange, tool discovery registration,
 // and tool call dispatch using the stdio transport.
 func TestIntegrationMCPSubprocess(t *testing.T) {
@@ -281,7 +281,7 @@ func TestIntegrationMCPSubprocess(t *testing.T) {
 		t.Skip("skipping MCP subprocess integration test on Windows (requires Unix shell)")
 	}
 
-	// AC3: JENNY_HOME isolation - override to use temp dir
+	// JENNY_HOME isolation - override to use temp dir
 	origFunc := constants.JennyHomeDirFunc
 	constants.JennyHomeDirFunc = func() string { return t.TempDir() }
 	t.Cleanup(func() { constants.JennyHomeDirFunc = origFunc })
@@ -303,14 +303,14 @@ func TestIntegrationMCPSubprocess(t *testing.T) {
 	// Create client connected to fake server
 	client := NewClient("test-server", serverBin, nil, nil)
 
-	// Connect (tests AC1: initialize and handshake)
+	// Connect (tests initialize and handshake)
 	ctx := context.Background()
 	if err := client.Connect(ctx); err != nil {
 		t.Fatalf("failed to connect to fake MCP server: %v", err)
 	}
 	defer client.Disconnect()
 
-	// List tools (tests AC2: tool discovery and registration)
+	// List tools (tests tool discovery and registration)
 	mcpTools, err := client.ListTools(ctx)
 	if err != nil {
 		t.Fatalf("failed to list tools: %v", err)
@@ -327,7 +327,7 @@ func TestIntegrationMCPSubprocess(t *testing.T) {
 		}
 	}
 
-	// Call a tool (tests AC3: tool call dispatch)
+	// Call a tool (tests tool call dispatch)
 	result, err := client.CallTool(context.Background(), "test-tool", map[string]any{})
 	if err != nil {
 		t.Fatalf("failed to call tool: %v", err)
@@ -357,7 +357,7 @@ func TestMaxMCPOutputChars(t *testing.T) {
 	}
 }
 
-// TestHandleNotificationResourceListChanged tests AC1: resource cache invalidation on list_changed.
+// TestHandleNotificationResourceListChanged tests resource cache invalidation on list_changed.
 func TestHandleNotificationResourceListChanged(t *testing.T) {
 	// Record initial cache generation
 	initialGen := atomic.LoadInt64(&cacheGen)
@@ -380,7 +380,7 @@ func TestHandleNotificationResourceListChanged(t *testing.T) {
 	}
 }
 
-// TestHandleNotificationServerLog tests AC2: server logging notifications routed to internal log.
+// TestHandleNotificationServerLog tests server logging notifications routed to internal log.
 // Also tests the silent-unmarshal-drop fix: malformed params should not panic.
 func TestHandleNotificationServerLog(t *testing.T) {
 	client := &Client{Name: "test-server"}
@@ -419,7 +419,7 @@ func TestHandleNotificationServerLog(t *testing.T) {
 	})
 }
 
-// TestClientCapabilitiesInInitializeRequest tests AC3: initialize requests include roots and sampling capabilities.
+// TestClientCapabilitiesInInitializeRequest tests initialize requests include roots and sampling capabilities.
 func TestClientCapabilitiesInInitializeRequest(t *testing.T) {
 	// Test that the initialize request includes proper capabilities
 	req := jsonRPCRequest{
@@ -497,7 +497,7 @@ func TestLogMessageParams(t *testing.T) {
 	}
 }
 
-// TestClientSubscribeResource tests AC1: SubscribeResource sends resources/subscribe JSON-RPC request.
+// TestClientSubscribeResource tests SubscribeResource sends resources/subscribe JSON-RPC request.
 func TestClientSubscribeResource(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping MCP subprocess integration test on Windows")
@@ -571,7 +571,7 @@ func TestClientSubscribeResource(t *testing.T) {
 	}
 }
 
-// TestClientUnsubscribeResource tests AC2: UnsubscribeResource sends resources/unsubscribe JSON-RPC request.
+// TestClientUnsubscribeResource tests UnsubscribeResource sends resources/unsubscribe JSON-RPC request.
 func TestClientUnsubscribeResource(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping MCP subprocess integration test on Windows")
@@ -645,7 +645,7 @@ func TestClientUnsubscribeResource(t *testing.T) {
 	}
 }
 
-// TestHandleNotificationResourceUpdated tests AC3: notifications/resources/updated invalidates cache.
+// TestHandleNotificationResourceUpdated tests notifications/resources/updated invalidates cache.
 func TestHandleNotificationResourceUpdated(t *testing.T) {
 	// Record initial cache generation
 	initialGen := atomic.LoadInt64(&cacheGen)
@@ -668,7 +668,7 @@ func TestHandleNotificationResourceUpdated(t *testing.T) {
 	}
 }
 
-// TestClientSubscribeResourceDisconnected tests AC4: subscribe fails when not connected.
+// TestClientSubscribeResourceDisconnected tests subscribe fails when not connected.
 func TestClientSubscribeResourceDisconnected(t *testing.T) {
 	client := NewClient("test-server", "nonexistent-command", nil, nil)
 
@@ -678,7 +678,7 @@ func TestClientSubscribeResourceDisconnected(t *testing.T) {
 	}
 }
 
-// TestClientUnsubscribeResourceDisconnected tests AC4: unsubscribe fails when not connected.
+// TestClientUnsubscribeResourceDisconnected tests unsubscribe fails when not connected.
 func TestClientUnsubscribeResourceDisconnected(t *testing.T) {
 	client := NewClient("test-server", "nonexistent-command", nil, nil)
 
@@ -688,7 +688,7 @@ func TestClientUnsubscribeResourceDisconnected(t *testing.T) {
 	}
 }
 
-// TestClientIcons_Stdio tests AC2: Client.Icons() returns correct icons from stdio fake server.
+// TestClientIcons_Stdio tests Client.Icons() returns correct icons from stdio fake server.
 func TestClientIcons_Stdio(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping MCP subprocess integration test on Windows")
@@ -728,7 +728,7 @@ func TestClientIcons_Stdio(t *testing.T) {
 	}
 }
 
-// TestClientIcons_HTTP tests AC2: Client.Icons() returns correct icons from HTTP fake server.
+// TestClientIcons_HTTP tests Client.Icons() returns correct icons from HTTP fake server.
 func TestClientIcons_HTTP(t *testing.T) {
 	server := newFakeHTTPMCPServer(t)
 	defer server.Close()
@@ -764,7 +764,7 @@ func TestClientIcons_NoIcons(t *testing.T) {
 	}
 }
 
-// TestGetServerIcons tests AC3: GetServerIcons returns icons for registered server.
+// TestGetServerIcons tests GetServerIcons returns icons for registered server.
 func TestGetServerIcons(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping MCP subprocess integration test on Windows")
@@ -838,7 +838,7 @@ func TestGetServerIcons_NotFound(t *testing.T) {
 	}
 }
 
-// TestClientListTasks tests AC1: ListTasks discovers task templates from the MCP server.
+// TestClientListTasks tests ListTasks discovers task templates from the MCP server.
 func TestClientListTasks(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping MCP subprocess integration test on Windows")
@@ -891,7 +891,7 @@ func TestClientListTasks(t *testing.T) {
 	}
 }
 
-// TestClientCreateTask tests AC2: CreateTask creates a task instance and returns the ID.
+// TestClientCreateTask tests CreateTask creates a task instance and returns the ID.
 func TestClientCreateTask(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping MCP subprocess integration test on Windows")
@@ -929,7 +929,7 @@ func TestClientCreateTask(t *testing.T) {
 	}
 }
 
-// TestClientGetTask tests AC3: GetTask queries task status.
+// TestClientGetTask tests GetTask queries task status.
 func TestClientGetTask(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping MCP subprocess integration test on Windows")
@@ -975,7 +975,7 @@ func TestClientGetTask(t *testing.T) {
 	}
 }
 
-// TestClientCancelTask tests AC4: CancelTask cancels a task.
+// TestClientCancelTask tests CancelTask cancels a task.
 func TestClientCancelTask(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping MCP subprocess integration test on Windows")

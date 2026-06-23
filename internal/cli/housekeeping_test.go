@@ -99,15 +99,14 @@ func selfFile(t *testing.T) string {
 	return abs
 }
 
-// TestAC1_NoDeadCleanCompactHelpers encodes AC1 of the clean-compact
-// tech-debt spec: after this iteration, IsCleanSubcommand and
+// TestNoDeadCleanCompactHelpers verifies that IsCleanSubcommand and
 // IsCompactSubcommand must not be defined anywhere in the repository.
 //
 // Note: if a future contributor revives the helpers under a different name
 // (e.g. cli.IsCleanCmd), extend the regex below. If the helpers are
 // intentionally reintroduced, update or delete this test as part of that
 // change — do not silently let the regex drift.
-func TestAC1_NoDeadCleanCompactHelpers(t *testing.T) {
+func TestNoDeadCleanCompactHelpers(t *testing.T) {
 	root := repoRoot(t)
 	self := selfFile(t)
 	re := regexp.MustCompile(`func\s+(IsCleanSubcommand|IsCompactSubcommand)\s*\(`)

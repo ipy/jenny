@@ -48,7 +48,7 @@ func (e *QueryEngine) executeAndProcessTools(ctx context.Context, toolUseBlocks 
 		})
 	}
 
-	// AC2: Emit tool_progress started events before execution begins
+	// Emit tool_progress started events before execution begins
 	if e.streamCfg.Enabled {
 		for _, block := range execBlocks {
 			msg := StreamMessage{
@@ -65,7 +65,7 @@ func (e *QueryEngine) executeAndProcessTools(ctx context.Context, toolUseBlocks 
 		}
 	}
 
-	// AC8: Recover secrets from tool inputs before execution
+	// Recover secrets from tool inputs before execution
 	if e.secretRedactor != nil && e.secretRedactor.Enabled() {
 		for i, block := range execBlocks {
 			if inputJSON, err := json.Marshal(block.Input); err == nil {
@@ -120,7 +120,7 @@ func (e *QueryEngine) executeAndProcessTools(ctx context.Context, toolUseBlocks 
 	// Sync active skills after tool execution (they may have changed)
 	e.syncActiveSkills()
 
-	// AC1/AC2: Pre-compute per-tool interrupt status so we can decide whether
+	// Pre-compute per-tool interrupt status so we can decide whether
 	// to emit the executor's partial result or a synthetic "interrupted"
 	// replacement. We need this decision BEFORE appending to toolResults to
 	// avoid duplicate ToolUseID entries in the user message (fixes
@@ -136,12 +136,12 @@ func (e *QueryEngine) executeAndProcessTools(ctx context.Context, toolUseBlocks 
 	var toolResults []api.ToolResult
 	hasSynthetic := false
 	for i, res := range execResults {
-		// AC3: Capture structured output result if StructuredOutput was called
+		// Capture structured output result if StructuredOutput was called
 		if i < len(execBlocks) && execBlocks[i].Name == "StructuredOutput" && !res.IsError {
 			e.structuredOutputResult = res.Content
 		}
 
-		// AC1: For interrupted tools, replace executor's partial result with a
+		// For interrupted tools, replace executor's partial result with a
 		// single synthetic "Tool execution interrupted" entry. This both
 		// preserves the model-facing contract (one tool_result per tool_use)
 		// and avoids duplicates in the user message.
@@ -155,7 +155,7 @@ func (e *QueryEngine) executeAndProcessTools(ctx context.Context, toolUseBlocks 
 			hasSynthetic = true
 		}
 
-		// AC1: Redact secrets from tool result content before emitting
+		// Redact secrets from tool result content before emitting
 		if e.secretRedactor != nil && e.secretRedactor.Enabled() {
 			emitContent = e.secretRedactor.Redact(emitContent)
 		}
@@ -179,7 +179,7 @@ func (e *QueryEngine) executeAndProcessTools(ctx context.Context, toolUseBlocks 
 		}
 
 		if e.streamCfg.Enabled {
-			// AC2: Emit tool_progress complete event before tool_result wrapper
+			// Emit tool_progress complete event before tool_result wrapper
 			completedMsg := StreamMessage{
 				Type:            "tool_progress",
 				Subtype:         "complete",
@@ -192,7 +192,7 @@ func (e *QueryEngine) executeAndProcessTools(ctx context.Context, toolUseBlocks 
 			data, _ := json.Marshal(completedMsg)
 			fmt.Fprintln(os.Stdout, string(data))
 
-			// Output user message wrapper for the tool result (AC3)
+			// Output user message wrapper for the tool result
 			userContent := []map[string]any{
 				{"type": api.BlockTypeToolResult, "tool_use_id": emitToolUseID, "content": emitContent, "is_error": emitIsError},
 			}
@@ -289,13 +289,13 @@ func (e *QueryEngine) handleStreamError(streamResult api.StreamResult, messages 
 		fmt.Fprintln(os.Stdout, string(data))
 	}
 
-	// AC4: Check if this is a media error - if so, strip the offending tool_result and retry
+	// Check if this is a media error - if so, strip the offending tool_result and retry
 	var wasMediaError bool
 	*messages, wasMediaError = HandleMediaErrorOnRetry(*messages, streamResult.Error)
 	if wasMediaError {
 		return true, nil // Retry with modified messages
 	}
-	// AC2: Non-user-abort error - increment compaction failure counter
+	// Non-user-abort error - increment compaction failure counter
 	// Skip increment for user-initiated aborts (context cancellation, Esc, SIGINT, etc.)
 	if !utils.IsUserAbortError(streamResult.Error) {
 		e.incrementCompactFailCount()

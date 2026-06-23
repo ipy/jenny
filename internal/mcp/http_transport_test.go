@@ -18,7 +18,7 @@ import (
 	"github.com/ipy/jenny/internal/constants"
 )
 
-// TestHTTPTransportConnect tests AC2: HTTP transport connects and completes initialization.
+// TestHTTPTransportConnect tests HTTP transport connects and completes initialization.
 func TestHTTPTransportConnect(t *testing.T) {
 	server := newFakeHTTPMCPServer(t)
 	defer server.Close()
@@ -57,7 +57,7 @@ func TestHTTPTransportConnect(t *testing.T) {
 	}
 }
 
-// TestHTTPTransportSessionID tests AC4: session ID is included after initialization.
+// TestHTTPTransportSessionID tests session ID is included after initialization.
 func TestHTTPTransportSessionID(t *testing.T) {
 	sessionID := "test-session-abc123"
 	var receivedHeaders []http.Header
@@ -135,7 +135,7 @@ func TestHTTPTransportSessionID(t *testing.T) {
 	}
 }
 
-// TestHTTPTransportCustomHeaders tests AC5: custom headers from config are included.
+// TestHTTPTransportCustomHeaders tests custom headers from config are included.
 func TestHTTPTransportCustomHeaders(t *testing.T) {
 	var receivedAuth string
 	var mu sync.Mutex
@@ -181,7 +181,7 @@ func TestHTTPTransportCustomHeaders(t *testing.T) {
 	}
 }
 
-// TestHTTPTransportSSEResponse tests AC3: HTTP transport handles SSE response content type.
+// TestHTTPTransportSSEResponse tests HTTP transport handles SSE response content type.
 func TestHTTPTransportSSEResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -238,7 +238,7 @@ func TestHTTPTransportSSEResponse(t *testing.T) {
 	}
 }
 
-// TestHTTPTransportJSONResponse tests AC3: HTTP transport handles JSON response content type.
+// TestHTTPTransportJSONResponse tests HTTP transport handles JSON response content type.
 func TestHTTPTransportJSONResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -336,7 +336,7 @@ func TestHTTPTransportUnexpected202ForRequest(t *testing.T) {
 	}
 }
 
-// TestHTTPTransportSessionExpired tests AC6: transport returns session expired error on 404.
+// TestHTTPTransportSessionExpired tests transport returns session expired error on 404.
 func TestHTTPTransportSessionExpired(t *testing.T) {
 	requestCount := 0
 	var mu sync.Mutex
@@ -395,7 +395,7 @@ func TestHTTPTransportSessionExpired(t *testing.T) {
 	}
 }
 
-// TestHTTPClientAutoReinitOnSessionExpiry tests AC6: Client auto re-inits on 404.
+// TestHTTPClientAutoReinitOnSessionExpiry tests Client auto re-inits on 404.
 func TestHTTPClientAutoReinitOnSessionExpiry(t *testing.T) {
 	postRequestCount := 0
 	var mu sync.Mutex
@@ -704,7 +704,7 @@ func TestHTTPTransportSSEMultipleEvents(t *testing.T) {
 	}
 }
 
-// TestNewHTTPClient tests AC2+AC9: Full client lifecycle via HTTP transport.
+// TestNewHTTPClient tests the full client lifecycle via HTTP transport.
 func TestNewHTTPClient(t *testing.T) {
 	server := newFakeHTTPMCPServer(t)
 	defer server.Close()
@@ -717,7 +717,7 @@ func TestNewHTTPClient(t *testing.T) {
 	}
 	defer client.Disconnect()
 
-	// Discover tools (AC9)
+	// Discover tools
 	tools, err := client.ListTools(ctx)
 	if err != nil {
 		t.Fatalf("ListTools failed: %v", err)
@@ -744,7 +744,7 @@ func TestNewHTTPClient(t *testing.T) {
 	}
 }
 
-// TestConnectAllWithHTTPServer tests AC9: HTTP servers are connected via ConnectAll.
+// TestConnectAllWithHTTPServer tests HTTP servers are connected via ConnectAll.
 func TestConnectAllWithHTTPServer(t *testing.T) {
 	server := newFakeHTTPMCPServer(t)
 	defer server.Close()
@@ -949,7 +949,7 @@ func newFakeHTTPMCPServer(t *testing.T) *httptest.Server {
 	}))
 }
 
-// TestHTTPClientSubscribeResource tests AC2: SubscribeResource over HTTP transport succeeds.
+// TestHTTPClientSubscribeResource tests SubscribeResource over HTTP transport succeeds.
 func TestHTTPClientSubscribeResource(t *testing.T) {
 	server := newFakeHTTPMCPServer(t)
 	defer server.Close()
@@ -967,7 +967,7 @@ func TestHTTPClientSubscribeResource(t *testing.T) {
 	}
 }
 
-// TestHTTPClientUnsubscribeResource tests AC3: UnsubscribeResource over HTTP transport succeeds.
+// TestHTTPClientUnsubscribeResource tests UnsubscribeResource over HTTP transport succeeds.
 func TestHTTPClientUnsubscribeResource(t *testing.T) {
 	server := newFakeHTTPMCPServer(t)
 	defer server.Close()
@@ -985,7 +985,7 @@ func TestHTTPClientUnsubscribeResource(t *testing.T) {
 	}
 }
 
-// TestHTTPClientSubscribeResource_ServerError tests AC4: SubscribeResource returns an error
+// TestHTTPClientSubscribeResource_ServerError tests SubscribeResource returns an error
 // when the server responds with a JSON-RPC error (e.g. MethodNotFound, code -32601).
 func TestHTTPClientSubscribeResource_ServerError(t *testing.T) {
 	postRequestCount := 0
@@ -1061,7 +1061,7 @@ func TestHTTPClientSubscribeResource_ServerError(t *testing.T) {
 
 // --- OAuth Tests ---
 
-// TestOAuthTokenStore tests AC2: OAuthTokenStore Store/Load round-trip.
+// TestOAuthTokenStore tests OAuthTokenStore Store/Load round-trip.
 func TestOAuthTokenStore(t *testing.T) {
 	// Override JennyHomeDir to use temp dir
 	origFunc := constants.JennyHomeDirFunc
@@ -1100,7 +1100,7 @@ func TestOAuthTokenStore(t *testing.T) {
 	}
 }
 
-// TestOAuthTokenStore_NonExistent tests AC2: loading non-existent token returns os.ErrNotExist.
+// TestOAuthTokenStore_NonExistent tests loading non-existent token returns os.ErrNotExist.
 func TestOAuthTokenStore_NonExistent(t *testing.T) {
 	// Override JennyHomeDir to use temp dir
 	origFunc := constants.JennyHomeDirFunc
@@ -1120,7 +1120,7 @@ func TestOAuthTokenStore_NonExistent(t *testing.T) {
 	}
 }
 
-// TestHTTPTransportOAuthRefresh tests AC3: transport refreshes token on 401 and retries.
+// TestHTTPTransportOAuthRefresh tests transport refreshes token on 401 and retries.
 // This test exercises the full config path via SetOAuthConfig, not private field bypass.
 func TestHTTPTransportOAuthRefresh(t *testing.T) {
 	requestCount := 0
@@ -1207,7 +1207,7 @@ func TestHTTPTransportOAuthRefresh(t *testing.T) {
 	mu.Unlock()
 }
 
-// TestHTTPTransportOAuthRefresh_Failure tests AC4: transport returns error when refresh fails.
+// TestHTTPTransportOAuthRefresh_Failure tests transport returns error when refresh fails.
 func TestHTTPTransportOAuthRefresh_Failure(t *testing.T) {
 	requestCount := 0
 	var mu sync.Mutex
@@ -1267,7 +1267,7 @@ func TestHTTPTransportOAuthRefresh_Failure(t *testing.T) {
 	mu.Unlock()
 }
 
-// TestHTTPTransport401_NoOAuth tests AC4: transport returns 401 error without OAuth config.
+// TestHTTPTransport401_NoOAuth tests transport returns 401 error without OAuth config.
 func TestHTTPTransport401_NoOAuth(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -1293,7 +1293,7 @@ func TestHTTPTransport401_NoOAuth(t *testing.T) {
 	}
 }
 
-// TestHTTPTransport500_NoOAuth tests AC4: transport returns 500 error without OAuth behavior.
+// TestHTTPTransport500_NoOAuth tests transport returns 500 error without OAuth behavior.
 func TestHTTPTransport500_NoOAuth(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)

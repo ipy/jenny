@@ -304,7 +304,7 @@ func TestMergeConsecutiveSameRole(t *testing.T) {
 }
 
 func TestMergeConsecutiveSameRole_DedupToolResults(t *testing.T) {
-	// AC1: mergeConsecutiveSameRole dedupes tool_results by ToolUseID (last writer wins)
+	// MergeConsecutiveSameRole dedupes tool_results by ToolUseID (last writer wins)
 	messages := []api.Message{
 		{
 			Role:    "user",
@@ -342,7 +342,7 @@ func TestMergeConsecutiveSameRole_DedupToolResults(t *testing.T) {
 }
 
 func TestMergeConsecutiveSameRole_PreservesUnique(t *testing.T) {
-	// AC2: mergeConsecutiveSameRole preserves unique tool_results
+	// MergeConsecutiveSameRole preserves unique tool_results
 	messages := []api.Message{
 		{
 			Role:    "user",

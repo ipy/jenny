@@ -211,17 +211,17 @@ func AssembleSystemPrompt(cfg *StreamConfig, tools []tool.Tool, cwd string) []st
 // buildSystemPrompt assembles the system prompt sections (the actual builder).
 // Exported for testing; use AssembleSystemPrompt in production.
 func buildSystemPrompt(cfg *StreamConfig, tools []tool.Tool, cwd string) []string {
-	// AC1: Custom prompt replaces all defaults
+	// Custom prompt replaces all defaults
 	if cfg.CustomSystemPrompt != "" {
 		var content strings.Builder
-		// AC5b: Prepend before custom content (unless override)
+		// Prepend before custom content (unless override)
 		if !cfg.OverrideSystemPrompt && cfg.PrependSystemPrompt != "" {
 			content.WriteString(cfg.PrependSystemPrompt)
 			content.WriteString("\n\n")
 		}
 		content.WriteString(cfg.CustomSystemPrompt)
 
-		// AC5: Append section always checked last, independent of custom/default
+		// Append section always checked last, independent of custom/default
 		if !cfg.OverrideSystemPrompt && cfg.AppendSystemPrompt != "" {
 			content.WriteString("\n\n")
 			content.WriteString(cfg.AppendSystemPrompt)
@@ -236,7 +236,7 @@ func buildSystemPrompt(cfg *StreamConfig, tools []tool.Tool, cwd string) []strin
 	// --- Block 1: Global Identity (Most stable) ---
 	{
 		var sections []string
-		// AC5b: Prepend first (unless override), before even the stable intro
+		// Prepend first (unless override), before even the stable intro
 		if !cfg.OverrideSystemPrompt && cfg.PrependSystemPrompt != "" {
 			sections = append(sections, cfg.PrependSystemPrompt)
 		}
@@ -245,12 +245,12 @@ func buildSystemPrompt(cfg *StreamConfig, tools []tool.Tool, cwd string) []strin
 			sections = append(sections, intro)
 		}
 
-		// AC2: Tool list sync
+		// Tool list sync
 		if toolList, ok := toolListSection(tools); ok {
 			sections = append(sections, toolList)
 		}
 
-		// AC9: Redaction instruction in system prompt when enabled
+		// Redaction instruction in system prompt when enabled
 		if cfg.RedactMode != redact.ModeDisabled {
 			prompt := "This session has secret redaction enabled."
 			switch redact.ParseRedactMode(string(cfg.RedactMode)) {
@@ -277,17 +277,17 @@ func buildSystemPrompt(cfg *StreamConfig, tools []tool.Tool, cwd string) []strin
 			sections = append(sections, abilities)
 		}
 
-		// AC4: Platform context (OS/Arch)
+		// Platform context (OS/Arch)
 		if platform, ok := platformSection(); ok {
 			sections = append(sections, platform)
 		}
 
-		// MCP Prompts & Resource Templates (AC3)
+		// MCP Prompts & Resource Templates
 		if mcpInfo, ok := mcpSection(); ok {
 			sections = append(sections, mcpInfo)
 		}
 
-		// Skills manifest (AC2)
+		// Skills manifest
 		if len(cfg.Skills) > 0 {
 			if manifest := skills.SkillsManifest(cfg.Skills); manifest != "" {
 				sections = append(sections, manifest)
@@ -306,7 +306,7 @@ func buildSystemPrompt(cfg *StreamConfig, tools []tool.Tool, cwd string) []strin
 			sections = append(sections, ctx)
 		}
 
-		// AC1: Memory content injected as <system-reminder> block
+		// Memory content injected as <system-reminder> block
 		// MemoryContent is per-session/per-conversation.
 		if cfg.MemoryContent != "" {
 			sections = append(sections, "<system-reminder>\n"+cfg.MemoryContent+"\n</system-reminder>")
@@ -324,7 +324,7 @@ func buildSystemPrompt(cfg *StreamConfig, tools []tool.Tool, cwd string) []strin
 			sections = append(sections, env)
 		}
 
-		// AC3: Git status injection (only inside repo) — captured once at session start
+		// Git status injection (only inside repo) — captured once at session start
 		if gitStatus, ok := gitStatusSection(cwd); ok {
 			sections = append(sections, gitStatus)
 		}
@@ -333,7 +333,7 @@ func buildSystemPrompt(cfg *StreamConfig, tools []tool.Tool, cwd string) []strin
 		}
 	}
 
-	// AC5: Append section must be last (after all blocks, before return)
+	// Append section must be last (after all blocks, before return)
 	if appendContent, ok := appendSection(cfg.AppendSystemPrompt, cfg.OverrideSystemPrompt); ok {
 		blocks = append(blocks, appendContent+"\n")
 	}

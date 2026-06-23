@@ -448,61 +448,61 @@ func TestLocalSubagentRunner_AC4_StreamConfigPropagation(t *testing.T) {
 
 	// Verify IsNamedAgent is true
 	if !capturedCfg.IsNamedAgent {
-		t.Error("AC4 FAIL: IsNamedAgent should be true for named agent")
+		t.Error("FAIL: IsNamedAgent should be true for named agent")
 	} else {
-		t.Log("AC4 PASS: IsNamedAgent is true")
+		t.Log("PASS: IsNamedAgent is true")
 	}
 
 	// Verify all 7 inherited fields
 	if capturedCfg.MaxBudgetUSD != parentCfg.MaxBudgetUSD {
-		t.Errorf("AC4 FAIL: MaxBudgetUSD not inherited, got %v want %v", capturedCfg.MaxBudgetUSD, parentCfg.MaxBudgetUSD)
+		t.Errorf("FAIL: MaxBudgetUSD not inherited, got %v want %v", capturedCfg.MaxBudgetUSD, parentCfg.MaxBudgetUSD)
 	} else {
-		t.Log("AC4 PASS: MaxBudgetUSD inherited")
+		t.Log("PASS: MaxBudgetUSD inherited")
 	}
 
 	if capturedCfg.MaxTurns != parentCfg.MaxTurns {
-		t.Errorf("AC4 FAIL: MaxTurns not inherited, got %v want %v", capturedCfg.MaxTurns, parentCfg.MaxTurns)
+		t.Errorf("FAIL: MaxTurns not inherited, got %v want %v", capturedCfg.MaxTurns, parentCfg.MaxTurns)
 	} else {
-		t.Log("AC4 PASS: MaxTurns inherited")
+		t.Log("PASS: MaxTurns inherited")
 	}
 
 	if capturedCfg.CustomSystemPrompt != parentCfg.CustomSystemPrompt {
-		t.Errorf("AC4 FAIL: CustomSystemPrompt not inherited, got %q want %q", capturedCfg.CustomSystemPrompt, parentCfg.CustomSystemPrompt)
+		t.Errorf("FAIL: CustomSystemPrompt not inherited, got %q want %q", capturedCfg.CustomSystemPrompt, parentCfg.CustomSystemPrompt)
 	} else {
-		t.Log("AC4 PASS: CustomSystemPrompt inherited")
+		t.Log("PASS: CustomSystemPrompt inherited")
 	}
 
 	if capturedCfg.AppendSystemPrompt != parentCfg.AppendSystemPrompt {
-		t.Errorf("AC4 FAIL: AppendSystemPrompt not inherited, got %q want %q", capturedCfg.AppendSystemPrompt, parentCfg.AppendSystemPrompt)
+		t.Errorf("FAIL: AppendSystemPrompt not inherited, got %q want %q", capturedCfg.AppendSystemPrompt, parentCfg.AppendSystemPrompt)
 	} else {
-		t.Log("AC4 PASS: AppendSystemPrompt inherited")
+		t.Log("PASS: AppendSystemPrompt inherited")
 	}
 
 	if capturedCfg.OverrideSystemPrompt != parentCfg.OverrideSystemPrompt {
-		t.Errorf("AC4 FAIL: OverrideSystemPrompt not inherited, got %v want %v", capturedCfg.OverrideSystemPrompt, parentCfg.OverrideSystemPrompt)
+		t.Errorf("FAIL: OverrideSystemPrompt not inherited, got %v want %v", capturedCfg.OverrideSystemPrompt, parentCfg.OverrideSystemPrompt)
 	} else {
-		t.Log("AC4 PASS: OverrideSystemPrompt inherited")
+		t.Log("PASS: OverrideSystemPrompt inherited")
 	}
 
 	if capturedCfg.StructuredSchema == nil {
-		t.Error("AC4 FAIL: StructuredSchema not inherited, got nil")
+		t.Error("FAIL: StructuredSchema not inherited, got nil")
 	} else {
-		t.Log("AC4 PASS: StructuredSchema inherited")
+		t.Log("PASS: StructuredSchema inherited")
 	}
 
 	if len(capturedCfg.StructuredDenyRules) != len(parentCfg.StructuredDenyRules) {
-		t.Errorf("AC4 FAIL: StructuredDenyRules not inherited, got %v want %v", capturedCfg.StructuredDenyRules, parentCfg.StructuredDenyRules)
+		t.Errorf("FAIL: StructuredDenyRules not inherited, got %v want %v", capturedCfg.StructuredDenyRules, parentCfg.StructuredDenyRules)
 	} else {
-		t.Log("AC4 PASS: StructuredDenyRules inherited")
+		t.Log("PASS: StructuredDenyRules inherited")
 	}
 }
 
 // ============================================================================
-// AC7: Subagent Permission Level Inheritance Tests
+// Subagent Permission Level Inheritance Tests
 // ============================================================================
 
-func TestLocalSubagentRunner_AC7_InheritanceAntiEscalation(t *testing.T) {
-	// AC1+AC2 merged: Subagent inherits parent's PermissionLevel across all levels.
+func TestLocalSubagentRunner_InheritanceAntiEscalation(t *testing.T) {
+	// Subagent inherits parent's PermissionLevel across all levels.
 	// Anti-escalation guarantee: SubagentParams has no PermissionLevel field, so
 	// inheritance is the only mechanism. This table-driven test proves the
 	// anti-escalation property for all levels in one pass.
@@ -547,8 +547,8 @@ func TestLocalSubagentRunner_AC7_InheritanceAntiEscalation(t *testing.T) {
 	}
 }
 
-func TestLocalSubagentRunner_AC7_UnrestrictedParentInheritsCorrectly(t *testing.T) {
-	// AC3: Subagent at unrestricted inherits correctly. Parent at
+func TestLocalSubagentRunner_UnrestrictedParentInheritsCorrectly(t *testing.T) {
+	// Subagent at unrestricted inherits correctly. Parent at
 	// PermissionLevel=unrestricted spawns subagent, subagent inherits unrestricted.
 	client, cleanup := newMockClient(t)
 	defer cleanup()
@@ -578,15 +578,15 @@ func TestLocalSubagentRunner_AC7_UnrestrictedParentInheritsCorrectly(t *testing.
 
 	// Verify PermissionLevel is inherited as unrestricted
 	if capturedCfg.PermissionLevel != tool.PermissionUnrestricted {
-		t.Errorf("AC3 FAIL: PermissionLevel not inherited correctly, got %v want %v",
+		t.Errorf("FAIL: PermissionLevel not inherited correctly, got %v want %v",
 			capturedCfg.PermissionLevel, tool.PermissionUnrestricted)
 	} else {
-		t.Logf("AC3 PASS: Subagent inherited PermissionLevel=unrestricted from parent")
+		t.Logf("PASS: Subagent inherited PermissionLevel=unrestricted from parent")
 	}
 }
 
-func TestLocalSubagentRunner_AC7_NestedSubagentCannotEscalate(t *testing.T) {
-	// AC4: Nested subagent cannot escalate beyond original parent.
+func TestLocalSubagentRunner_NestedSubagentCannotEscalate(t *testing.T) {
+	// Nested subagent cannot escalate beyond original parent.
 	// Parent at PermissionLevel=edit spawns subagent (captured level edit),
 	// that subagent spawns its own subagent (grandchild), and grandchild
 	// also has PermissionLevel=edit. Double-inheritance does not allow escalation.
@@ -613,10 +613,10 @@ func TestLocalSubagentRunner_AC7_NestedSubagentCannotEscalate(t *testing.T) {
 	// Capture the parent's config (now level=edit)
 	parentCapturedCfg := runner1.GetCapturedStreamConfig()
 	if parentCapturedCfg == nil {
-		t.Fatal("AC4 FAIL: First runner captured config is nil")
+		t.Fatal("FAIL: First runner captured config is nil")
 	}
 	if parentCapturedCfg.PermissionLevel != tool.PermissionEdit {
-		t.Errorf("AC4 FAIL: First subagent level is %v, expected edit",
+		t.Errorf("FAIL: First subagent level is %v, expected edit",
 			parentCapturedCfg.PermissionLevel)
 	}
 
@@ -638,19 +638,19 @@ func TestLocalSubagentRunner_AC7_NestedSubagentCannotEscalate(t *testing.T) {
 	// Get the grandchild's captured config
 	grandchildCapturedCfg := runner2.GetCapturedStreamConfig()
 	if grandchildCapturedCfg == nil {
-		t.Fatal("AC4 FAIL: Second runner captured config is nil")
+		t.Fatal("FAIL: Second runner captured config is nil")
 	}
 
 	// Verify grandchild level is still edit (not escalated)
 	if grandchildCapturedCfg.PermissionLevel != tool.PermissionEdit {
-		t.Errorf("AC4 FAIL: Grandchild subagent level is %v, expected edit",
+		t.Errorf("FAIL: Grandchild subagent level is %v, expected edit",
 			grandchildCapturedCfg.PermissionLevel)
 	} else {
-		t.Logf("AC4 PASS: Nested subagent (grandchild) correctly inherited PermissionLevel=edit")
+		t.Logf("PASS: Nested subagent (grandchild) correctly inherited PermissionLevel=edit")
 	}
 }
 
-func TestLocalSubagentRunner_AC7_UnnamedSubagentNoInheritance(t *testing.T) {
+func TestLocalSubagentRunner_UnnamedSubagentNoInheritance(t *testing.T) {
 	// Verify that unnamed subagents (params.Name == "") do NOT inherit
 	// PermissionLevel - they get the default zero value.
 	// This is important because only named agents trigger the inheritance code.

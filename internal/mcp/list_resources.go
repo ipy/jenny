@@ -75,7 +75,7 @@ func (t *ListMcpResourcesTool) InputSchema() map[string]any {
 func (t *ListMcpResourcesTool) Execute(ctx context.Context, input map[string]any, cwd string) (*toolresult.ToolResult, error) {
 	serverFilter, _ := input["server"].(string)
 
-	// AC2: Invalid server errors with available names
+	// Invalid server errors with available names
 	if serverFilter != "" {
 		client := GetClient(serverFilter)
 		if client == nil {
@@ -94,7 +94,7 @@ func (t *ListMcpResourcesTool) Execute(ctx context.Context, input map[string]any
 		return t.executeForServer(ctx, serverFilter, client)
 	}
 
-	// AC1: No filter returns all connected servers' resources
+	// No filter returns all connected servers' resources
 	return t.executeForAllServers(ctx)
 }
 
@@ -102,7 +102,7 @@ func (t *ListMcpResourcesTool) Execute(ctx context.Context, input map[string]any
 func (t *ListMcpResourcesTool) executeForServer(ctx context.Context, serverName string, client *Client) (*toolresult.ToolResult, error) {
 	resources, err := t.getResourcesWithCache(ctx, serverName, client)
 	if err != nil {
-		// AC3: Per-server failure returns empty array for that server
+		// Per-server failure returns empty array for that server
 		resources = []MCPResource{}
 	}
 
@@ -113,7 +113,7 @@ func (t *ListMcpResourcesTool) executeForServer(ctx context.Context, serverName 
 func (t *ListMcpResourcesTool) executeForAllServers(ctx context.Context) (*toolresult.ToolResult, error) {
 	clients := GetMCPClients()
 	if len(clients) == 0 {
-		// AC4: Empty result includes tools-may-exist note
+		// Empty result includes tools-may-exist note
 		return &toolresult.ToolResult{
 			Content: "[]\nNote: No MCP servers connected. Resources may be empty while tools still exist.",
 			IsError: false,
@@ -163,8 +163,8 @@ func (t *ListMcpResourcesTool) executeForAllServers(ctx context.Context) (*toolr
 
 	for _, sr := range results {
 		if sr.err != nil {
-			// AC3: Per-server failure returns [] for that server (not whole-call failure)
-			// Record error for observability (AC3)
+			// Per-server failure returns [] for that server (not whole-call failure)
+			// Record error for observability
 			serverErrors[sr.serverName] = sr.err.Error()
 			continue
 		}
@@ -196,7 +196,7 @@ func (t *ListMcpResourcesTool) executeForAllServers(ctx context.Context) (*toolr
 		}, nil
 	}
 
-	// AC3: Include errors map if any servers failed (observability)
+	// Include errors map if any servers failed (observability)
 	if len(serverErrors) > 0 {
 		errBytes, _ := json.Marshal(serverErrors)
 		resBytes, _ := json.Marshal(allOutputs)

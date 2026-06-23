@@ -47,7 +47,7 @@ type Flags struct {
 	MaxTurns               int      `koanf:"max-turns"`             // --max-turns: maximum number of turns (0 = unlimited)
 	MaxBudgetUsd           float64  `koanf:"max-budget-usd"`        // --max-budget-usd: budget limit in USD (0.0 = no limit)
 	Effort                 string   `koanf:"effort"`                // --effort: reasoning effort level (low, medium, high)
-	ThinkingBudget         int      `koanf:"thinking-budget"`       // --thinking-budget: maximum thinking tokens for Anthropic (AC3)
+	ThinkingBudget         int      `koanf:"thinking-budget"`       // --thinking-budget: maximum thinking tokens for Anthropic
 	RedactMode             string   `koanf:"redact"`                // --redact: JENNY_REDACT; one of disabled|redact|recover (empty = default)
 	TranscriptDir          string   `koanf:"transcript-dir"`        // --transcript-dir: JENNY_TRANSCRIPT_DIR
 	MaxToolConcurrency     int      `koanf:"max-tool-concurrency"`  // --max-tool-concurrency: JENNY_MAX_TOOL_CONCURRENCY (0 = default)
@@ -210,7 +210,7 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	flags.StringVarP(&effort, "effort", "", effortDefault, "Reasoning effort level (low, medium, high, max) for OpenAI o-series and DeepSeek models")
 
 	var thinkingBudget int
-	flags.IntVarP(&thinkingBudget, "thinking-budget", "", thinkingBudgetDefault, "Maximum thinking tokens for Anthropic (AC3)")
+	flags.IntVarP(&thinkingBudget, "thinking-budget", "", thinkingBudgetDefault, "Maximum thinking tokens for Anthropic")
 
 	var redactMode string
 	flags.StringVarP(&redactMode, "redact", "", redactModeDefault, "Secret redaction mode (disabled, redact, recover); JENNY_REDACT env var or .jenny/config.json is used when unset")

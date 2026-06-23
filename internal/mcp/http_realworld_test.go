@@ -26,7 +26,7 @@ func TestRealWorldHTTPMCP(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// AC2: Connect and initialize
+	// Connect and initialize
 	t.Run("Connect", func(t *testing.T) {
 		if err := client.Connect(ctx); err != nil {
 			t.Fatalf("Connect failed: %v", err)
@@ -34,7 +34,7 @@ func TestRealWorldHTTPMCP(t *testing.T) {
 	})
 	defer client.Disconnect()
 
-	// AC9: Discover tools
+	// Discover tools
 	t.Run("ListTools", func(t *testing.T) {
 		tools, err := client.ListTools(ctx)
 		if err != nil {

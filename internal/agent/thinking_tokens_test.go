@@ -41,7 +41,7 @@ func thinkingTokensEvents(thinkingDeltas []string, signature string, text string
 	return events
 }
 
-// TestThinkingTokens_EventShape verifies AC3: a thinking_tokens system event
+// TestThinkingTokens_EventShape verifies that a thinking_tokens system event
 // is emitted when the stream receives a thinking block, and has the correct
 // field shape (type, subtype, session_id, uuid, estimated_tokens, estimated_tokens_delta).
 func TestThinkingTokens_EventShape(t *testing.T) {
@@ -81,53 +81,53 @@ func TestThinkingTokens_EventShape(t *testing.T) {
 	}
 
 	if len(thinkingTokensLines) == 0 {
-		t.Fatal("AC3 FAIL: no thinking_tokens events found in output")
+		t.Fatal("FAIL: no thinking_tokens events found in output")
 	}
 
 	// Verify shape of first thinking_tokens event
 	var evt map[string]any
 	if err := json.Unmarshal([]byte(thinkingTokensLines[0]), &evt); err != nil {
-		t.Fatalf("AC3 FAIL: thinking_tokens line is not valid JSON: %v", err)
+		t.Fatalf("FAIL: thinking_tokens line is not valid JSON: %v", err)
 	}
 
 	// Required fields
 	for _, field := range []string{"type", "subtype", "session_id", "uuid", "estimated_tokens", "estimated_tokens_delta"} {
 		if _, ok := evt[field]; !ok {
-			t.Errorf("AC3 FAIL: thinking_tokens event missing field %q", field)
+			t.Errorf("FAIL: thinking_tokens event missing field %q", field)
 		}
 	}
 
 	// Verify correct values
 	if evt["type"] != "system" {
-		t.Errorf("AC3 FAIL: type = %v, want \"system\"", evt["type"])
+		t.Errorf("FAIL: type = %v, want \"system\"", evt["type"])
 	}
 	if evt["subtype"] != "thinking_tokens" {
-		t.Errorf("AC3 FAIL: subtype = %v, want \"thinking_tokens\"", evt["subtype"])
+		t.Errorf("FAIL: subtype = %v, want \"thinking_tokens\"", evt["subtype"])
 	}
 	if evt["session_id"] != "sess_tt_shape" {
-		t.Errorf("AC3 FAIL: session_id = %v, want \"sess_tt_shape\"", evt["session_id"])
+		t.Errorf("FAIL: session_id = %v, want \"sess_tt_shape\"", evt["session_id"])
 	}
 
 	// estimated_tokens should be integer >= 0
 	et, ok := evt["estimated_tokens"].(float64)
 	if !ok {
-		t.Errorf("AC3 FAIL: estimated_tokens is not a number: %T", evt["estimated_tokens"])
+		t.Errorf("FAIL: estimated_tokens is not a number: %T", evt["estimated_tokens"])
 	} else if et < 0 {
-		t.Errorf("AC3 FAIL: estimated_tokens = %v, want >= 0", et)
+		t.Errorf("FAIL: estimated_tokens = %v, want >= 0", et)
 	}
 
 	// estimated_tokens_delta should be integer >= 1
 	etd, ok := evt["estimated_tokens_delta"].(float64)
 	if !ok {
-		t.Errorf("AC3 FAIL: estimated_tokens_delta is not a number: %T", evt["estimated_tokens_delta"])
+		t.Errorf("FAIL: estimated_tokens_delta is not a number: %T", evt["estimated_tokens_delta"])
 	} else if etd < 1 {
-		t.Errorf("AC3 FAIL: estimated_tokens_delta = %v, want >= 1", etd)
+		t.Errorf("FAIL: estimated_tokens_delta = %v, want >= 1", etd)
 	}
 
-	t.Logf("AC3 PASS: thinking_tokens event shape verified, estimated_tokens=%d, estimated_tokens_delta=%d", int(et), int(etd))
+	t.Logf("PASS: thinking_tokens event shape verified, estimated_tokens=%d, estimated_tokens_delta=%d", int(et), int(etd))
 }
 
-// TestThinkingTokens_NoEventWhenDisabled verifies AC5: when stream-json is disabled,
+// TestThinkingTokens_NoEventWhenDisabled verifies that when stream-json is disabled,
 // no thinking_tokens events are emitted even when thinking blocks are present.
 func TestThinkingTokens_NoEventWhenDisabled(t *testing.T) {
 	thinking := "Thinking content here"
@@ -157,13 +157,13 @@ func TestThinkingTokens_NoEventWhenDisabled(t *testing.T) {
 	})
 
 	if strings.Contains(stdout, "thinking_tokens") {
-		t.Error("AC5 FAIL: thinking_tokens found in output when streamCfg.Enabled=false")
+		t.Error("FAIL: thinking_tokens found in output when streamCfg.Enabled=false")
 	} else {
-		t.Log("AC5 PASS: no thinking_tokens when streaming disabled")
+		t.Log("PASS: no thinking_tokens when streaming disabled")
 	}
 }
 
-// TestThinkingTokens_PeriodicEmission verifies AC3: thinking_tokens events
+// TestThinkingTokens_PeriodicEmission verifies that thinking_tokens events
 // are emitted when the stream receives thinking deltas, and that the
 // estimated_tokens is a running total while estimated_tokens_delta reflects
 // the increment since the last event.
@@ -207,7 +207,7 @@ func TestThinkingTokens_PeriodicEmission(t *testing.T) {
 	}
 
 	if len(events) == 0 {
-		t.Fatal("AC3 FAIL: no thinking_tokens events found")
+		t.Fatal("FAIL: no thinking_tokens events found")
 	}
 
 	// Verify estimated_tokens is non-decreasing across events
@@ -215,22 +215,22 @@ func TestThinkingTokens_PeriodicEmission(t *testing.T) {
 		prev := int(events[i-1]["estimated_tokens"].(float64))
 		curr := int(events[i]["estimated_tokens"].(float64))
 		if curr < prev {
-			t.Errorf("AC3 FAIL: estimated_tokens decreased from %d to %d between events %d and %d", prev, curr, i-1, i)
+			t.Errorf("FAIL: estimated_tokens decreased from %d to %d between events %d and %d", prev, curr, i-1, i)
 		}
 	}
 
-	// Verify estimated_tokens_delta >= 1 for all events (AC6)
+	// Verify estimated_tokens_delta >= 1 for all events
 	for i, evt := range events {
 		delta := int(evt["estimated_tokens_delta"].(float64))
 		if delta < 1 {
-			t.Errorf("AC3/AC6 FAIL: event %d estimated_tokens_delta=%d, want >= 1", i, delta)
+			t.Errorf("FAIL: event %d estimated_tokens_delta=%d, want >= 1", i, delta)
 		}
 	}
 
-	t.Logf("AC3 PASS: %d thinking_tokens events emitted, running total verified", len(events))
+	t.Logf("PASS: %d thinking_tokens events emitted, running total verified", len(events))
 }
 
-// TestThinkingTokens_FinalEmission verifies AC4: when a thinking block completes
+// TestThinkingTokens_FinalEmission verifies that when a thinking block completes
 // (content_block_stop), a final thinking_tokens event is emitted with the final
 // accumulated totals, even if the periodic timer has not fired since the last delta.
 func TestThinkingTokens_FinalEmission(t *testing.T) {
@@ -273,22 +273,22 @@ func TestThinkingTokens_FinalEmission(t *testing.T) {
 	}
 
 	if len(events) == 0 {
-		t.Fatal("AC4 FAIL: no thinking_tokens events found - final emission missing")
+		t.Fatal("FAIL: no thinking_tokens events found - final emission missing")
 	}
 
 	// Final event should have the highest estimated_tokens (cumulative total)
 	lastET := int(events[len(events)-1]["estimated_tokens"].(float64))
 	lastETD := int(events[len(events)-1]["estimated_tokens_delta"].(float64))
 
-	// AC6: estimated_tokens_delta >= 1 for final event
+	// estimated_tokens_delta >= 1 for final event
 	if lastETD < 1 {
-		t.Errorf("AC4/AC6 FAIL: final event estimated_tokens_delta=%d, want >= 1", lastETD)
+		t.Errorf("FAIL: final event estimated_tokens_delta=%d, want >= 1", lastETD)
 	} else {
-		t.Logf("AC4/AC6 PASS: final event has estimated_tokens=%d, estimated_tokens_delta=%d", lastET, lastETD)
+		t.Logf("PASS: final event has estimated_tokens=%d, estimated_tokens_delta=%d", lastET, lastETD)
 	}
 }
 
-// TestThinkingTokens_NoKindField verifies AC1: thinking_tokens events do NOT
+// TestThinkingTokens_NoKindField verifies that thinking_tokens events do NOT
 // contain a "kind" field (which was a jenny extension, not in Claude Code SDK).
 func TestThinkingTokens_NoKindField(t *testing.T) {
 	thinking := "Some thinking content"
@@ -326,10 +326,10 @@ func TestThinkingTokens_NoKindField(t *testing.T) {
 			}
 		}
 	}
-	t.Log("AC1 PASS: thinking_tokens events have no 'kind' field")
+	t.Log("PASS: thinking_tokens events have no 'kind' field")
 }
 
-// TestThinkingTokens_EmissionWithin200ms verifies AC3: a thinking_tokens event is
+// TestThinkingTokens_EmissionWithin200ms verifies that a thinking_tokens event is
 // emitted on stdout within 200ms of the stream receiving a thinking_delta.
 // The mock server sends the thinking block immediately on connect, so any delay
 // in the engine processing the block and emitting the event is bounded by the
@@ -371,19 +371,19 @@ func TestThinkingTokens_EmissionWithin200ms(t *testing.T) {
 		}
 	}
 
-	// AC3: thinking_tokens event must appear (verifies hook fires at all)
+	// thinking_tokens event must appear (verifies hook fires at all)
 	if !hasEvent {
-		t.Fatal("AC3 FAIL: no thinking_tokens event found - emission hook not firing")
+		t.Fatal("FAIL: no thinking_tokens event found - emission hook not firing")
 	}
 
-	// AC3: total elapsed time must be < 200ms.
+	// total elapsed time must be < 200ms.
 	// The mock server sends the thinking block immediately; the engine's first
 	// emit has zero LastEmitTime so fires without the 100ms wait, making the
 	// total time well under the 200ms spec threshold even on slow CI runners.
 	if elapsed > 200*time.Millisecond {
-		t.Errorf("AC3 FAIL: total elapsed = %v, want < 200ms", elapsed)
+		t.Errorf("FAIL: total elapsed = %v, want < 200ms", elapsed)
 	} else {
-		t.Logf("AC3 PASS: thinking_tokens event emitted within %v (< 200ms)", elapsed)
+		t.Logf("PASS: thinking_tokens event emitted within %v (< 200ms)", elapsed)
 	}
 }
 

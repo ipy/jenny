@@ -223,7 +223,7 @@ func (t *HTTPTransport) SendRequest(ctx context.Context, req jsonRPCRequest) (*j
 		return nil, &SessionExpiredError{SessionID: sessionID}
 
 	case http.StatusUnauthorized:
-		// AC3: If OAuth is configured, try token refresh
+		// If OAuth is configured, try token refresh
 		if t.tokenEndpoint != "" && t.tokenStore != nil {
 			token, loadErr := t.tokenStore.Load(t.url)
 			if loadErr == nil && token != nil && token.RefreshToken != "" {

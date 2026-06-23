@@ -34,7 +34,7 @@ func makeSessionDir(t *testing.T, home, id string) string {
 	return dir
 }
 
-// TestCleanDryRun_NoMutation (AC1)
+// TestCleanDryRun_NoMutation
 func TestCleanDryRun_NoMutation(t *testing.T) {
 	home := t.TempDir()
 	withJennyHome(t, home)
@@ -65,7 +65,7 @@ func TestCleanDryRun_NoMutation(t *testing.T) {
 	}
 }
 
-// TestCleanDryRun_IgnoresNonSessionFiles (AC1)
+// TestCleanDryRun_IgnoresNonSessionFiles
 // Files outside sessions/ must not be reported.
 func TestCleanDryRun_IgnoresNonSessionFiles(t *testing.T) {
 	home := t.TempDir()
@@ -93,7 +93,7 @@ func TestCleanDryRun_IgnoresNonSessionFiles(t *testing.T) {
 	}
 }
 
-// TestClean_RemovesAllSessions (AC2)
+// TestClean_RemovesAllSessions
 // Without flags, sessions/ is wiped but top-level files survive byte-identical.
 func TestClean_RemovesAllSessions(t *testing.T) {
 	home := t.TempDir()
@@ -165,7 +165,7 @@ func TestClean_RemovesAllSessions(t *testing.T) {
 	}
 }
 
-// TestClean_NothingToClean_EmptySessionsDir (AC3)
+// TestClean_NothingToClean_EmptySessionsDir
 func TestClean_NothingToClean_EmptySessionsDir(t *testing.T) {
 	home := t.TempDir()
 	withJennyHome(t, home)
@@ -185,7 +185,7 @@ func TestClean_NothingToClean_EmptySessionsDir(t *testing.T) {
 	}
 }
 
-// TestClean_NothingToClean_MissingSessionsDir (AC3)
+// TestClean_NothingToClean_MissingSessionsDir
 func TestClean_NothingToClean_MissingSessionsDir(t *testing.T) {
 	home := t.TempDir()
 	withJennyHome(t, home)
@@ -201,7 +201,7 @@ func TestClean_NothingToClean_MissingSessionsDir(t *testing.T) {
 	}
 }
 
-// TestClean_HelpOutput (AC3) — usage must mention `clean`, `compact`, and `--dry-run`.
+// TestClean_HelpOutput — usage must mention `clean`, `compact`, and `--dry-run`.
 func TestClean_HelpOutput(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	rc := RunCleanHelp(&stdout, &stderr)
@@ -216,7 +216,7 @@ func TestClean_HelpOutput(t *testing.T) {
 	}
 }
 
-// TestClean_HonorsJennyHome (AC4) — only JENNY_HOME sessions are touched;
+// TestClean_HonorsJennyHome — only JENNY_HOME sessions are touched;
 // the real ~/.jenny must remain intact.
 func TestClean_HonorsJennyHome(t *testing.T) {
 	// Use two temp dirs: real (never touched) and alt (the JENNY_HOME target).

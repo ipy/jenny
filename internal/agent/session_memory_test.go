@@ -24,9 +24,9 @@ func (m *mockAPIClient) SendMessage(ctx context.Context, messages []api.Message,
 	return &api.Response{}, nil
 }
 
-// TestAC1_SessionMemoryInitAt10KTokens verifies that session memory file is created
+// TestSessionMemoryInitAt10KTokens verifies that session memory file is created
 // after accumulating approximately 10K context tokens when auto-compact is enabled.
-func TestAC1_SessionMemoryInitAt10KTokens(t *testing.T) {
+func TestSessionMemoryInitAt10KTokens(t *testing.T) {
 	// Create compact config with auto-compact enabled
 	compactCfg := CompactConfig{
 		SessionMemoryEnabled: true,
@@ -102,9 +102,9 @@ func TestAC1_SessionMemoryInitAt10KTokens(t *testing.T) {
 	}
 }
 
-// TestAC2_UpdateRequiresBothThresholds verifies that update requires both
+// TestUpdateRequiresBothThresholds verifies that update requires both
 // token growth >= 8K AND tool calls >= 3.
-func TestAC2_UpdateRequiresBothThresholds(t *testing.T) {
+func TestUpdateRequiresBothThresholds(t *testing.T) {
 	compactCfg := CompactConfig{
 		SessionMemoryEnabled: true,
 		DisableAutoCompact:   false,
@@ -152,10 +152,10 @@ func TestAC2_UpdateRequiresBothThresholds(t *testing.T) {
 	}
 }
 
-// TestAC3_15SecondTimeout verifies that forked agent extraction has a 15-second timeout.
+// Test15SecondTimeout verifies that forked agent extraction has a 15-second timeout.
 // When the forked agent takes longer than 15 seconds, the extraction is abandoned
 // and the main agent loop continues without blocking.
-func TestAC3_15SecondTimeout(t *testing.T) {
+func Test15SecondTimeout(t *testing.T) {
 	compactCfg := CompactConfig{
 		SessionMemoryEnabled: true,
 		DisableAutoCompact:   false,
@@ -193,16 +193,16 @@ func TestAC3_15SecondTimeout(t *testing.T) {
 	// Update should not block - it should timeout gracefully
 	err := sm.Update(ctx)
 
-	// The update should return nil (graceful timeout per AC3)
+	// The update should return nil (graceful timeout)
 	// The main loop should continue without error
 	if err != nil {
 		t.Fatalf("Update should not return error on timeout, got: %v", err)
 	}
 }
 
-// TestAC4_ForkedAgentEditOnly verifies that the forked agent is restricted to
+// TestForkedAgentEditOnly verifies that the forked agent is restricted to
 // Edit tool only on the session memory file.
-func TestAC4_ForkedAgentEditOnly(t *testing.T) {
+func TestForkedAgentEditOnly(t *testing.T) {
 	compactCfg := CompactConfig{
 		SessionMemoryEnabled: true,
 		DisableAutoCompact:   false,
@@ -244,9 +244,9 @@ func TestAC4_ForkedAgentEditOnly(t *testing.T) {
 	}
 }
 
-// TestAC5_DisabledWhenAutoCompactOff verifies that session memory is disabled
+// TestDisabledWhenAutoCompactOff verifies that session memory is disabled
 // when auto-compact is disabled.
-func TestAC5_DisabledWhenAutoCompactOff(t *testing.T) {
+func TestDisabledWhenAutoCompactOff(t *testing.T) {
 	// Test with DisableAutoCompact = true
 	compactCfg := CompactConfig{
 		DisableAutoCompact: true,
@@ -289,8 +289,8 @@ func TestAC5_DisabledWhenAutoCompactOff(t *testing.T) {
 	}
 }
 
-// TestAC5_DisabledBothFlags verifies session memory is disabled when both flags are set.
-func TestAC5_DisabledBothFlags(t *testing.T) {
+// TestDisabledBothFlags verifies session memory is disabled when both flags are set.
+func TestDisabledBothFlags(t *testing.T) {
 	compactCfg := CompactConfig{
 		DisableAutoCompact: true,
 		DisableCompact:     true,
@@ -309,9 +309,9 @@ func TestAC5_DisabledBothFlags(t *testing.T) {
 	}
 }
 
-// TestAC6_DisabledWhenSessionMemoryFlagOff verifies that session memory is
+// TestDisabledWhenSessionMemoryFlagOff verifies that session memory is
 // disabled when EnableSessionMemory is false (the default).
-func TestAC6_DisabledWhenSessionMemoryFlagOff(t *testing.T) {
+func TestDisabledWhenSessionMemoryFlagOff(t *testing.T) {
 	compactCfg := CompactConfig{
 		SessionMemoryEnabled: false,
 		DisableAutoCompact:   false,
@@ -411,9 +411,9 @@ func TestSessionMemory_ResetBaselines(t *testing.T) {
 	}
 }
 
-// TestAC4_StaleInFlight verifies that updates are skipped when the last update
+// TestStaleInFlight verifies that updates are skipped when the last update
 // was more than 60 seconds ago (stale in-flight condition).
-func TestAC4_StaleInFlight(t *testing.T) {
+func TestStaleInFlight(t *testing.T) {
 	compactCfg := CompactConfig{
 		DisableAutoCompact: false,
 		DisableCompact:     false,
@@ -453,9 +453,9 @@ func TestAC4_StaleInFlight(t *testing.T) {
 	}
 }
 
-// TestAC5_CoalescingWindow verifies that updates are skipped when the last update
+// TestCoalescingWindow verifies that updates are skipped when the last update
 // was less than 15 seconds ago (coalescing window).
-func TestAC5_CoalescingWindow(t *testing.T) {
+func TestCoalescingWindow(t *testing.T) {
 	compactCfg := CompactConfig{
 		DisableAutoCompact: false,
 		DisableCompact:     false,

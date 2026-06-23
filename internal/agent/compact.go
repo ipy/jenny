@@ -128,7 +128,7 @@ func (c CompactConfig) blockingLimit() int {
 // threshold and auto-compact should trigger.
 // querySource is checked to skip auto-compact for 'compact' and 'session_memory' sources.
 func (c CompactConfig) checkCompactThreshold(estimatedTokens int, querySource string) bool {
-	// AC1: Skip auto-compact when querySource is 'compact' or 'session_memory'
+	// Skip auto-compact when querySource is 'compact' or 'session_memory'
 	if querySource == "compact" || querySource == "session_memory" {
 		return false
 	}
@@ -260,7 +260,7 @@ func readEnvInt(key string, defaultVal int) int {
 func (e *QueryEngine) compactMessages(ctx context.Context, messages []api.Message, cfg CompactConfig, systemPrompt []string) ([]api.Message, error) {
 	log.Debug("Starting context compaction", "messageCount", len(messages))
 
-	// AC1: Pre-flight check — skip in-session compaction if messages are too large.
+	// Pre-flight check — skip in-session compaction if messages are too large.
 	// Reserve MIN_SAFETY_OVERHEAD for system prompt + tools + compaction instruction,
 	// plus SUMMARY_MAX_TOKENS for the summary output.
 	maxMessagesTokens := cfg.effectiveContextWindow() - MIN_SAFETY_OVERHEAD - SUMMARY_MAX_TOKENS
@@ -596,7 +596,7 @@ func dropOldestAPIRoundGroup(messages []api.Message) []api.Message {
 // buildCompactedChain builds the new message chain after compaction.
 // Order: boundaryMarker → summaryMessages → messagesToKeep → attachments → hookResults
 //
-// AC7: The cut point never splits a tool_use/tool_result pair. If the boundary
+// The cut point never splits a tool_use/tool_result pair. If the boundary
 // falls between an assistant with tool_use and its user with tool_results,
 // the boundary is moved earlier to include the full pair.
 func buildCompactedChain(originalMessages []api.Message, summary string) []api.Message {

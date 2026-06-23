@@ -121,7 +121,7 @@ func makeMockStreamServerWithCacheTokens(t *testing.T) *httptest.Server {
 			sseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
 			sseLine("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello from stream"}}`),
 			sseLine("content_block_stop", `{"type":"content_block_stop","index":0}`),
-			// message_delta with all four token types including cache tokens (AC1, AC4)
+			// message_delta with all four token types including cache tokens
 			sseLine("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":5,"output_tokens":2,"cache_read_input_tokens":3,"cache_creation_input_tokens":1}}`),
 			sseLine("message_stop", `{"type":"message_stop"}`),
 		}

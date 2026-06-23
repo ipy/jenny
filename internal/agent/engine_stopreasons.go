@@ -85,11 +85,11 @@ func (e *QueryEngine) handleStopEndTurn(
 	assistantMsg *api.Message,
 	messages *[]api.Message,
 ) (string, error, bool) {
-	// AC3: Enforce structured output at end of turn
+	// Enforce structured output at end of turn
 	if e.structuredOutputTool != nil && !e.structuredOutputTool.IsEmitted() {
 		return "", fmt.Errorf("structured output not emitted"), false
 	}
-	// AC3: Determine final result - use structured output if available
+	// Determine final result - use structured output if available
 	var finalResult string
 	if e.secretRedactor != nil && e.secretRedactor.Enabled() {
 		finalResult = e.secretRedactor.Recover(textOutput.String())
@@ -110,7 +110,7 @@ func (e *QueryEngine) handleStopEndTurn(
 		if e.streamCfg.Enabled {
 			e.emitSuccessResult(resp, finalResult, sessionID)
 		}
-		// AC2: Reset compaction failure counter on successful API response
+		// Reset compaction failure counter on successful API response
 		e.resetCompactFailCount()
 		return finalResult, nil, false
 	}
@@ -118,7 +118,7 @@ func (e *QueryEngine) handleStopEndTurn(
 	if e.streamCfg.Enabled {
 		e.emitSuccessResult(resp, finalResult, sessionID)
 	}
-	// AC2: Reset compaction failure counter on successful API response
+	// Reset compaction failure counter on successful API response
 	e.resetCompactFailCount()
 
 	// Check and run memory extraction before returning
@@ -314,7 +314,7 @@ func (e *QueryEngine) handleStopStopSeq(
 	if e.streamCfg.Enabled {
 		e.emitSuccessResult(resp, textOutput.String(), sessionID)
 	}
-	// AC2: Reset compaction failure counter on successful API response
+	// Reset compaction failure counter on successful API response
 	e.resetCompactFailCount()
 
 	// Check and run memory extraction before returning

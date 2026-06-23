@@ -153,7 +153,7 @@ func (e *ToolExecutor) Execute(ctx context.Context, toolUseBlocks []toolUseBlock
 
 // partitionGroups partitions tool use blocks into parallel and serial groups.
 // Consecutive concurrency-safe tools (read, glob, grep) go into parallel batches.
-// Bash tools are accumulated into serial batches for sibling abort (AC3).
+// Bash tools are accumulated into serial batches for sibling abort.
 // Write/Edit tools are serialized individually.
 func (e *ToolExecutor) partitionGroups(toolUseBlocks []toolUseBlock) []toolGroup {
 	var groups []toolGroup
@@ -280,7 +280,7 @@ func (e *ToolExecutor) executeParallel(parentCtx context.Context, batch []toolUs
 			}
 			defer func() { <-sem }()
 
-			// AC2: Wrap context with progress token (tool_use_id) so MCP tools can report progress
+			// Wrap context with progress token (tool_use_id) so MCP tools can report progress
 			toolCtx := mcp.WithProgressToken(ctx, tw.block.ID)
 
 			// Defensive: ensure Input is never nil — some models return
@@ -339,7 +339,7 @@ func (e *ToolExecutor) executeParallel(parentCtx context.Context, batch []toolUs
 }
 
 // executeSerial runs tools one at a time in request order.
-// For bash batches, failure of one tool aborts subsequent bash tools in the same batch (AC3).
+// For bash batches, failure of one tool aborts subsequent bash tools in the same batch.
 func (e *ToolExecutor) executeSerial(parentCtx context.Context, batch []toolUseWithIndex, results []toolResult) {
 	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
@@ -364,7 +364,7 @@ func (e *ToolExecutor) executeSerial(parentCtx context.Context, batch []toolUseW
 			continue
 		}
 
-		// AC2: Wrap context with progress token (tool_use_id) so MCP tools can report progress
+		// Wrap context with progress token (tool_use_id) so MCP tools can report progress
 		toolCtx := mcp.WithProgressToken(ctx, tw.block.ID)
 
 		// Defensive: ensure Input is never nil — some models return

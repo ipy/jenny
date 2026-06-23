@@ -75,7 +75,7 @@ func TestPortalStart(t *testing.T) {
 	t.Log("PASS: portal started on random high port with valid lockfile")
 }
 
-// TestHealthEndpoint verifies health endpoint with auth token.
+// TestHealthEndpoint verifies the health endpoint with auth token.
 func TestHealthEndpoint(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
@@ -192,7 +192,7 @@ func TestDoubleStart(t *testing.T) {
 	t.Log("PASS: second portal start correctly fails")
 }
 
-// TestSessionList verifies sessions endpoint returns session list.
+// TestSessionList verifies the sessions endpoint returns session list.
 func TestSessionList(t *testing.T) {
 	// Set JENNY_HOME to temp dir so we get a clean session directory
 	tmpDir := t.TempDir()
@@ -262,7 +262,7 @@ func TestSessionList(t *testing.T) {
 	t.Log("PASS: sessions endpoint returns correct session list")
 }
 
-// TestStatsEndpoint verifies stats endpoint returns global stats.
+// TestStatsEndpoint verifies the stats endpoint returns global stats.
 func TestStatsEndpoint(t *testing.T) {
 	// Set JENNY_HOME to temp dir so we get a clean session directory
 	tmpDir := t.TempDir()
@@ -299,7 +299,7 @@ func TestStatsEndpoint(t *testing.T) {
 	t.Log("PASS: stats endpoint returns valid stats structure")
 }
 
-// TestTokenCount verifies stats endpoint correctly counts tokens (not double-counting).
+// TestTokenCount verifies the stats endpoint correctly counts tokens (not double-counting).
 func TestTokenCount(t *testing.T) {
 	// Set JENNY_HOME to temp dir so we get a clean session directory
 	tmpDir := t.TempDir()
@@ -355,7 +355,7 @@ func TestTokenCount(t *testing.T) {
 	t.Log("PASS: token counting is correct (not double-counted)")
 }
 
-// TestKillSession verifies kill endpoint terminates session.
+// TestKillSession verifies the kill endpoint terminates session.
 func TestKillSession(t *testing.T) {
 	// Set JENNY_HOME to temp dir so we get a clean session directory
 	tmpDir := t.TempDir()
@@ -512,7 +512,7 @@ func TestServeHTML(t *testing.T) {
 	t.Log("PASS: GET / serves index.html with correct content-type and title")
 }
 
-// TestEmptyStats verifies stats endpoint returns zeroed JSON when no sessions exist.
+// TestEmptyStats verifies the stats endpoint returns zeroed JSON when no sessions exist.
 func TestEmptyStats(t *testing.T) {
 	// Set JENNY_HOME to temp dir so we get a clean session directory
 	tmpDir := t.TempDir()
@@ -1002,7 +1002,7 @@ func TestStartSession_WithCWD(t *testing.T) {
 	t.Log("PASS: backend accepts optional cwd field on start session")
 }
 
-// TestDeleteSession verifies delete endpoint removes session directory.
+// TestDeleteSession verifies the delete endpoint removes session directory.
 func TestDeleteSession(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
@@ -1272,7 +1272,7 @@ func TestListSkills(t *testing.T) {
 	t.Log("PASS: skills list returns installed skills with metadata")
 }
 
-// TestListSkills_Empty verifies skills endpoint returns [] when no skills installed.
+// TestListSkills_Empty verifies the skills endpoint returns [] when no skills installed.
 func TestListSkills_Empty(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
@@ -1366,7 +1366,7 @@ func TestListSkills_TildePath(t *testing.T) {
 	t.Logf("PASS: skill path uses tilde prefix: %s", skills[0].Path)
 }
 
-// TestListSkills_RequiresAuth verifies skills endpoint requires auth.
+// TestListSkills_RequiresAuth verifies the skills endpoint requires auth.
 func TestListSkills_RequiresAuth(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
@@ -1494,7 +1494,7 @@ func TestListMCPServers(t *testing.T) {
 	t.Log("PASS: mcp servers endpoint returns configured servers")
 }
 
-// TestListMCPServers_Empty verifies mcp servers endpoint returns [] when no mcp.json.
+// TestListMCPServers_Empty verifies the mcp servers endpoint returns [] when no mcp.json.
 func TestListMCPServers_Empty(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
@@ -1529,7 +1529,7 @@ func TestListMCPServers_Empty(t *testing.T) {
 	t.Log("PASS: mcp servers endpoint returns [] when no mcp.json")
 }
 
-// TestListMCPServers_InvalidJSON verifies mcp servers endpoint skips invalid JSON
+// TestListMCPServers_InvalidJSON verifies the mcp servers endpoint skips invalid JSON
 // and returns an empty list (graceful degradation: one bad config doesn't break the endpoint).
 func TestListMCPServers_InvalidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -1571,7 +1571,7 @@ func TestListMCPServers_InvalidJSON(t *testing.T) {
 	t.Log("PASS: mcp servers endpoint skips invalid JSON and returns empty list")
 }
 
-// TestListMCPServers_RequiresAuth verifies mcp servers endpoint requires auth.
+// TestListMCPServers_RequiresAuth verifies the mcp servers endpoint requires auth.
 func TestListMCPServers_RequiresAuth(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
@@ -1827,7 +1827,7 @@ func TestMarketplaceInstall_Skill(t *testing.T) {
 	t.Log("PASS: marketplace install validates URL scheme correctly")
 }
 
-// TestMarketplaceBrowse_RequiresAuth verifies browse endpoint requires auth.
+// TestMarketplaceBrowse_RequiresAuth verifies the browse endpoint requires auth.
 func TestMarketplaceBrowse_RequiresAuth(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
@@ -1857,7 +1857,7 @@ func TestMarketplaceBrowse_RequiresAuth(t *testing.T) {
 	t.Log("PASS: marketplace browse requires auth token")
 }
 
-// TestMarketplaceInstall_RequiresAuth verifies install endpoint requires auth.
+// TestMarketplaceInstall_RequiresAuth verifies the install endpoint requires auth.
 func TestMarketplaceInstall_RequiresAuth(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
@@ -1890,7 +1890,7 @@ func TestMarketplaceInstall_RequiresAuth(t *testing.T) {
 	t.Log("PASS: marketplace install requires auth token")
 }
 
-// TestMarketplaceInstall_Validation verifies install endpoint validates request body.
+// TestMarketplaceInstall_Validation verifies the install endpoint validates request body.
 func TestMarketplaceInstall_Validation(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)

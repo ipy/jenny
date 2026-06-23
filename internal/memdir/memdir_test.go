@@ -206,7 +206,7 @@ func TestMemdir_ReadIndex_Caps(t *testing.T) {
 	}
 	m.Create()
 
-	t.Run("AC2: enforces 200-line cap", func(t *testing.T) {
+	t.Run("enforces 200-line cap", func(t *testing.T) {
 		// Build content exceeding 200 lines
 		var b strings.Builder
 		for i := range 250 {
@@ -239,7 +239,7 @@ func TestMemdir_ReadIndex_Caps(t *testing.T) {
 		}
 	})
 
-	t.Run("AC2: enforces 25KB byte cap", func(t *testing.T) {
+	t.Run("enforces 25KB byte cap", func(t *testing.T) {
 		// Build content exceeding 25KB but under 200 lines
 		// 25600 / 200 = 128 bytes per line minimum, use 140+ bytes per line
 		var b strings.Builder
@@ -280,7 +280,7 @@ func TestMemdir_ReadIndex_Caps(t *testing.T) {
 		}
 	})
 
-	t.Run("AC5: truncation warning identifies which cap fired", func(t *testing.T) {
+	t.Run("truncation warning identifies which cap fired", func(t *testing.T) {
 		t.Run("line cap fires", func(t *testing.T) {
 			// Build content exceeding 200 lines
 			var b strings.Builder
@@ -348,7 +348,7 @@ func TestMemdir_EnsureFresh(t *testing.T) {
 	}
 	m.Create()
 
-	t.Run("AC3: returns false for fresh files", func(t *testing.T) {
+	t.Run("returns false for fresh files", func(t *testing.T) {
 		// Create a topic file with current time
 		path := m.TopicPath(MemoryTypeUser, "test")
 		if err := os.WriteFile(path, []byte("test content"), 0644); err != nil {
@@ -360,7 +360,7 @@ func TestMemdir_EnsureFresh(t *testing.T) {
 		}
 	})
 
-	t.Run("AC3: returns true for stale files (25+ hours old)", func(t *testing.T) {
+	t.Run("returns true for stale files (25+ hours old)", func(t *testing.T) {
 		// Create a topic file
 		path := m.TopicPath(MemoryTypeUser, "stale-test")
 		if err := os.WriteFile(path, []byte("stale content"), 0644); err != nil {
@@ -376,7 +376,7 @@ func TestMemdir_EnsureFresh(t *testing.T) {
 		}
 	})
 
-	t.Run("AC3: prepends system-reminder for stale files on read", func(t *testing.T) {
+	t.Run("prepends system-reminder for stale files on read", func(t *testing.T) {
 		// Create a topic file
 		path := m.TopicPath(MemoryTypeUser, "stale-read-test")
 		if err := os.WriteFile(path, []byte("stale read content"), 0644); err != nil {
@@ -398,7 +398,7 @@ func TestMemdir_EnsureFresh(t *testing.T) {
 	})
 }
 
-func TestMemdir_AC4_DisableChain(t *testing.T) {
+func TestMemdir_DisableChain(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	t.Run("disabled in bare mode", func(t *testing.T) {

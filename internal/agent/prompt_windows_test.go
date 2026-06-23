@@ -24,14 +24,14 @@ func TestWindowsSystemPromptHint(t *testing.T) {
 		if !strings.Contains(prompt, expectedHint) {
 			t.Errorf("expected Windows hint in prompt, got:\n%s", prompt)
 		}
-		t.Log("AC7 PASS: System prompt contains Windows-specific hints")
+		t.Log("PASS: System prompt contains Windows-specific hints")
 	} else {
 		// On Unix, Windows hints should be absent
 		windowsHint := "Use the PowerShell tool"
 		if strings.Contains(prompt, windowsHint) {
 			t.Error("Windows hint should not be present on Unix")
 		}
-		t.Log("AC7 PASS: System prompt does not contain Windows hints on Unix")
+		t.Log("PASS: System prompt does not contain Windows hints on Unix")
 	}
 }
 

@@ -723,7 +723,7 @@ type LogMessageParams struct {
 
 // handleNotification processes an incoming MCP notification.
 func (c *Client) handleNotification(notif Notification) {
-	// Handle specific notifications for AC1/AC2
+	// Handle specific notifications
 	switch notif.Method {
 	case "notifications/progress":
 		var params ProgressParams
@@ -742,11 +742,11 @@ func (c *Client) handleNotification(notif Notification) {
 			bumpCacheGen() // Invalidate resource cache on update
 		}
 	case "notifications/resources/list_changed":
-		// AC1: Invalidate resource cache when server signals list change
+		// Invalidate resource cache when server signals list change
 		log.Debug("MCP resource list changed", "server", c.Name)
 		bumpCacheGen()
 	case "notifications/message":
-		// AC2: Route server logging notifications to internal log system
+		// Route server logging notifications to internal log system
 		var params LogMessageParams
 		if err := json.Unmarshal(notif.Params, &params); err == nil {
 			msg := "MCP server log"
@@ -838,7 +838,7 @@ func (c *Client) RegisterNotificationHandler(handler func(Notification)) {
 // initializeViaTransport performs the MCP handshake using the HTTP transport.
 // Caller must hold c.mu.
 func (c *Client) initializeViaTransport(ctx context.Context) error {
-	// AC3: Advertise roots and sampling capabilities per MCP spec baseline
+	// Advertise roots and sampling capabilities per MCP spec baseline
 	req := jsonRPCRequest{
 		JSONRPC: "2.0",
 		ID:      nextJSONID(),
@@ -893,7 +893,7 @@ func (c *Client) initializeViaTransport(ctx context.Context) error {
 
 // initialize performs the MCP handshake.
 func (c *Client) initialize(ctx context.Context) error {
-	// AC3: Advertise roots and sampling capabilities per MCP spec baseline
+	// Advertise roots and sampling capabilities per MCP spec baseline
 	req := jsonRPCRequest{
 		JSONRPC: "2.0",
 		ID:      nextJSONID(),
@@ -1346,7 +1346,7 @@ func (c *Client) CallTool(ctx context.Context, name string, arguments map[string
 		},
 	}
 
-	// AC2: If a progress token is provided in the context, include it in _meta
+	// If a progress token is provided in the context, include it in _meta
 	if progressToken := GetProgressToken(ctx); progressToken != nil {
 		req.Meta = map[string]any{
 			"progressToken": progressToken,
@@ -1445,7 +1445,7 @@ func (c *Client) doRequest(ctx context.Context, req jsonRPCRequest) (*jsonRPCRes
 	if c.transport != nil {
 		resp, err := c.transport.SendRequest(ctx, req)
 		if err != nil && IsSessionExpired(err) {
-			// AC6: re-initialize on session expiry, then retry once
+			// re-initialize on session expiry, then retry once
 			if reinitErr := c.initializeViaTransport(ctx); reinitErr != nil {
 				return nil, fmt.Errorf("re-initialization after session expiry failed: %w", reinitErr)
 			}

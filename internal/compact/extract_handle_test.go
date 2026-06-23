@@ -39,12 +39,12 @@ func archiveSession(t *testing.T, root, id string, transcriptBytes []byte) strin
 	return filepath.Join(sessionsDir, id+".tar.gz")
 }
 
-// TestAC2_ExtractArchiveClosesHandleBeforeRemove (AC2):
+// TestExtractArchiveClosesHandleBeforeRemove:
 // ExtractArchive must close the underlying file handle before calling
 // os.Remove, so that Windows DeleteFileW does not return
 // ERROR_SHARING_VIOLATION. On POSIX the same code path also succeeds, but
 // the test is portable — it does NOT depend on OS behaviour.
-func TestAC2_ExtractArchiveClosesHandleBeforeRemove(t *testing.T) {
+func TestExtractArchiveClosesHandleBeforeRemove(t *testing.T) {
 	root := t.TempDir()
 	transcript := []byte(`{"type":"user","content":"hello"}` + "\n")
 	archive := archiveSession(t, root, "sess-1", transcript)
@@ -71,7 +71,7 @@ func TestAC2_ExtractArchiveClosesHandleBeforeRemove(t *testing.T) {
 	}
 }
 
-// TestAC3_ExtractArchiveRemoveOrdering (AC3):
+// TestExtractArchiveRemoveOrdering:
 // Regression guard against a future contributor re-introducing the
 // `defer f.Close()` / `defer gz.Close()` pattern that broke Windows resume.
 // Reads compact.go as a string, locates the ExtractArchive function body,
@@ -82,7 +82,7 @@ func TestAC2_ExtractArchiveClosesHandleBeforeRemove(t *testing.T) {
 //     os.Remove point and break Windows resume).
 //   - os.Remove(archivePath) is the last filesystem operation in the
 //     function body when keepArchive=false (no other os.* call follows it).
-func TestAC3_ExtractArchiveRemoveOrdering(t *testing.T) {
+func TestExtractArchiveRemoveOrdering(t *testing.T) {
 	src, err := os.ReadFile(filepath.Join("compact.go"))
 	if err != nil {
 		t.Fatalf("ReadFile(compact.go): %v", err)
@@ -160,11 +160,11 @@ func extractFuncBody(src, name string) string {
 	return ""
 }
 
-// TestAC5_ExtractArchiveKeepArchiveTrue (AC5):
+// TestExtractArchiveKeepArchiveTrue:
 // When keepArchive is true, ExtractArchive MUST leave the archive on disk
 // and its gzip magic header intact. Guards against an over-zealous refactor
 // that removes the archive unconditionally.
-func TestAC5_ExtractArchiveKeepArchiveTrue(t *testing.T) {
+func TestExtractArchiveKeepArchiveTrue(t *testing.T) {
 	root := t.TempDir()
 	transcript := []byte(`{"type":"user","content":"hello"}` + "\n")
 	archive := archiveSession(t, root, "sess-1", transcript)

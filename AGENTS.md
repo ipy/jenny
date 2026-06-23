@@ -19,3 +19,5 @@ If requirements are ambiguous, update the doc first; do not guess in code.
 
 The system is designed to be operated by AI agents. Clear file contracts, structured logs, deterministic state transitions.
 Enforce minimal tech debt. Fewer, well-chosen dependencies. Delete code aggressively. Lowest abstract complexity.
+
+Do not reference AC numbers anywhere in code (comments, test names, strings, variables). AC identifiers belong exclusively in `docs/`.

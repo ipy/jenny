@@ -52,11 +52,11 @@ type QueryEngine struct {
 	// Memory extraction
 	memExtractor *MemoryExtractor
 
-	// Structured output (AC3)
+	// Structured output
 	structuredOutputTool   *tool.StructuredOutputTool
 	structuredOutputResult string // Captured result from StructuredOutput tool call
 
-	// API timing (AC3: duration_api_ms)
+	// API timing (duration_api_ms)
 	lastAPIStartTime   time.Time
 	totalAPIDurationMs int64
 	firstTokenTime     time.Time // Time of first content block received (for ttft_ms calculation)
@@ -69,10 +69,10 @@ type QueryEngine struct {
 	currentStopSequence string
 	currentUsage        api.Usage
 
-	// Thinking tokens state (AC3: thinking_tokens events per SDK alignment)
+	// Thinking tokens state (thinking_tokens events per SDK alignment)
 	thinkingBlockState map[int]*thinkingBlockState // keyed by content block index
 
-	// Secret redaction (AC1: secret redaction)
+	// Secret redaction (secret redaction)
 	secretRedactor *redact.SecretRedactor
 
 	// Skill activator for tracking active skills in system prompt
@@ -156,10 +156,10 @@ func WithSkillActivator(activator tool.SkillActivator) QueryEngineOption {
 
 // NewQueryEngine creates a new QueryEngine with the given configuration.
 func NewQueryEngine(cfg *StreamConfig, tools []tool.Tool, model string, opts ...QueryEngineOption) (*QueryEngine, error) {
-	// AC1/AC4: Inject StructuredOutputTool for non-interactive sessions with schema
+	// Inject StructuredOutputTool for non-interactive sessions with schema
 	var structuredTool *tool.StructuredOutputTool
 	if cfg.StructuredSchema != nil && cfg.Enabled {
-		// AC1: Check deny rules - if StructuredOutput is explicitly denied, return error
+		// Check deny rules - if StructuredOutput is explicitly denied, return error
 		if slices.Contains(cfg.StructuredDenyRules, "StructuredOutput") {
 			return nil, fmt.Errorf("StructuredOutput tool denied but schema is configured")
 		}
@@ -187,7 +187,7 @@ func NewQueryEngine(cfg *StreamConfig, tools []tool.Tool, model string, opts ...
 			}
 		}
 
-		// Extract extra fields ($defs, $schema, etc.) for third-party API compatibility (AC1, AC3)
+		// Extract extra fields ($defs, $schema, etc.) for third-party API compatibility
 		extraFields := make(map[string]any)
 		for k, v := range schema {
 			if k != "type" && k != "properties" && k != "required" {
@@ -229,14 +229,14 @@ func NewQueryEngine(cfg *StreamConfig, tools []tool.Tool, model string, opts ...
 				log.Debug("Compact fail count restored", "sessionID", sessionID, "count", count)
 			}
 		}
-		// AC3: Restore frozen system prompt from transcript for prompt caching
+		// Restore frozen system prompt from transcript for prompt caching
 		if cfg.SessionManager != nil {
 			if sp, err := cfg.SessionManager.LoadSystemPrompt(sessionID); err == nil && sp != "" {
 				cfg.CachedSystemPrompt = []string{sp}
 				log.Debug("System prompt restored from transcript", "sessionID", sessionID, "len", len(sp))
 			}
 		}
-		// AC2: Seed readFileState from transcript for read-before-write optimization on resume
+		// Seed readFileState from transcript for read-before-write optimization on resume
 		if cfg.ReadFileCache != nil {
 			if err := seedReadFileCacheFromTranscript(cfg.ReadFileCache, cfg.SessionManager, sessionID); err != nil {
 				log.Debug("Failed to seed readFileCache from transcript", "sessionID", sessionID, "error", err)
@@ -416,7 +416,7 @@ func (e *QueryEngine) setMemExtractorForTest(memExtractor *MemoryExtractor) {
 }
 
 // resetCompactFailCount resets the compaction failure counter on successful API response.
-// AC2: Circuit breaker resets on success.
+// Circuit breaker resets on success.
 func (e *QueryEngine) resetCompactFailCount() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -426,7 +426,7 @@ func (e *QueryEngine) resetCompactFailCount() {
 }
 
 // incrementCompactFailCount increments the compaction failure counter.
-// AC2: Circuit breaker tracks consecutive failures.
+// Circuit breaker tracks consecutive failures.
 func (e *QueryEngine) incrementCompactFailCount() {
 	e.mu.Lock()
 	defer e.mu.Unlock()

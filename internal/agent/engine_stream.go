@@ -62,7 +62,7 @@ func (e *QueryEngine) Drain(ctx context.Context) {
 }
 
 // drainTaskCompletions drains pending task completions from the TaskManager.
-// AC3: Completions are injected as a virtual user message with Content
+// Completions are injected as a virtual user message with Content
 // (not ToolResults) to avoid violating API protocol: tool_result blocks
 // require their tool_use_id to reference an actual tool_use in a preceding
 // assistant message.
@@ -78,11 +78,11 @@ func (e *QueryEngine) drainTaskCompletions() []tool.TaskCompletion {
 // empty/unrecognized stop_reason values (treated as terminal). It returns the
 // final text result and nil error on success.
 func (e *QueryEngine) finalizeAsEndTurn(ctx context.Context, resp *api.Response, textOutput strings.Builder, sessionID string, assistantMsg *api.Message, messages []api.Message) (string, error) {
-	// AC3: Enforce structured output at end of turn
+	// Enforce structured output at end of turn
 	if e.structuredOutputTool != nil && !e.structuredOutputTool.IsEmitted() {
 		return "", fmt.Errorf("structured output not emitted")
 	}
-	// AC3: Determine final result - use structured output if available
+	// Determine final result - use structured output if available
 	finalResult := textOutput.String()
 	if e.structuredOutputTool != nil && e.structuredOutputTool.IsEmitted() && e.structuredOutputResult != "" {
 		finalResult = e.structuredOutputResult
@@ -151,7 +151,7 @@ func (e *QueryEngine) finalizeAsEndTurn(ctx context.Context, resp *api.Response,
 		data, _ := json.Marshal(msg)
 		fmt.Fprintln(os.Stdout, string(data))
 	}
-	// AC2: Reset compaction failure counter on successful API response
+	// Reset compaction failure counter on successful API response
 	e.resetCompactFailCount()
 
 	// Check and run memory extraction before returning.
@@ -297,7 +297,7 @@ func (e *QueryEngine) emitConsolidatedAssistant(
 }
 
 // emitAssistantEvent emits a single assistant event for a finished content block.
-// AC1: Every content block stop emits a separate assistant event sharing the same message.id.
+// Every content block stop emits a separate assistant event sharing the same message.id.
 func (e *QueryEngine) emitAssistantEvent(sessionID string, block api.ContentBlock, messageID string, model string) {
 	if !e.streamCfg.Enabled {
 		return
@@ -341,7 +341,7 @@ func (e *QueryEngine) emitAssistantEvent(sessionID string, block api.ContentBloc
 	}
 
 	// Include usage if available (input tokens are usually known at start)
-	// AC1: Shared message.id and consistent metadata
+	// Shared message.id and consistent metadata
 	usage := toLoopUsage(e.currentUsage)
 	usageJSON := fmt.Sprintf(`{"input_tokens":%d,"cache_creation_input_tokens":%d,"cache_read_input_tokens":%d,"output_tokens":%d,"service_tier":"standard"}`,
 		usage.InputTokens, usage.CacheCreationInputTokens, usage.CacheReadInputTokens, usage.OutputTokens)
@@ -360,7 +360,7 @@ func (e *QueryEngine) emitAssistantEvent(sessionID string, block api.ContentBloc
 }
 
 // emitAssistantFinalEvent emits a final assistant event with usage and stop reason.
-// Used at the end of a streaming turn to provide usage metadata (AC1).
+// Used at the end of a streaming turn to provide usage metadata.
 func (e *QueryEngine) emitAssistantFinalEvent(sessionID string, messageID string, stopReason string, stopSequence string, usage *Usage, model string) {
 	if !e.streamCfg.Enabled {
 		return
@@ -406,9 +406,9 @@ func (e *QueryEngine) emitAssistantFinalEvent(sessionID string, messageID string
 }
 
 // emitThinkingTokens emits a thinking_tokens system event to stdout.
-// It is guarded by e.streamCfg.Enabled (AC5).
-// AC3: Emits on first thinking delta arrival (no 100ms delay); subsequent emissions
-// are debounced by ≥100ms. AC4: final emission on thinking block stop via emitThinkingTokensFinal.
+// It is guarded by e.streamCfg.Enabled.
+// Emits on first thinking delta arrival (no 100ms delay); subsequent emissions
+// are debounced by ≥100ms. Final emission on thinking block stop via emitThinkingTokensFinal.
 func (e *QueryEngine) emitThinkingTokens(sessionID string, blockIndex int, newThinkingText string) {
 	if !e.streamCfg.Enabled {
 		return
@@ -457,7 +457,7 @@ func (e *QueryEngine) emitThinkingTokens(sessionID string, blockIndex int, newTh
 	state.EstimatedTokens += deltaTokens
 	state.AccumulatedThisCycle += deltaTokens
 
-	// AC3: Emit if first call (LastEmitTime==zero) OR ≥100ms have elapsed since last emit
+	// Emit if first call (LastEmitTime==zero) OR ≥100ms have elapsed since last emit
 	shouldEmit := state.LastEmitTime.IsZero() || now.Sub(state.LastEmitTime) >= 100*time.Millisecond
 	if shouldEmit && state.AccumulatedThisCycle > 0 {
 		msg := StreamMessage{
@@ -478,8 +478,8 @@ func (e *QueryEngine) emitThinkingTokens(sessionID string, blockIndex int, newTh
 }
 
 // emitThinkingTokensFinal emits a final thinking_tokens event when a thinking block stops.
-// AC4: Emits final totals even if the periodic timer has not fired.
-// AC6: estimated_tokens_delta is always ≥ 1 when content was present.
+// Emits final totals even if the periodic timer has not fired.
+// Estimated_tokens_delta is always ≥ 1 when content was present.
 func (e *QueryEngine) emitThinkingTokensFinal(sessionID string, blockIndex int, _ string) {
 	if !e.streamCfg.Enabled {
 		return
@@ -496,13 +496,13 @@ func (e *QueryEngine) emitThinkingTokensFinal(sessionID string, blockIndex int, 
 	// deltaTokens = tokens accumulated since last emission (this cycle's content)
 	deltaTokens := state.AccumulatedThisCycle
 
-	// AC6: If AccumulatedThisCycle == 0 but EstimatedTokens > 0 from prior cycles,
+	// If AccumulatedThisCycle == 0 but EstimatedTokens > 0 from prior cycles,
 	// we still have prior content — emit delta = 1 per spec contract (delta ≥ 1)
 	if deltaTokens == 0 && state.EstimatedTokens > 0 {
 		deltaTokens = 1
 	}
 
-	// AC4: EstimatedTokens already contains all content including this cycle.
+	// EstimatedTokens already contains all content including this cycle.
 	// Emit it as-is; deltaTokens carries only the last-cycle increment for the
 	// delta field contract (delta ≥ 1 when content was present).
 	if state.EstimatedTokens > 0 || deltaTokens > 0 {
@@ -529,7 +529,7 @@ func (e *QueryEngine) resetThinkingBlockState() {
 }
 
 // emitAllFinalThinkingTokens emits final thinking_tokens events for all active thinking blocks.
-// AC4: Called at end of streaming turn to ensure final totals are emitted even if periodic timer hasn't fired.
+// Called at end of streaming turn to ensure final totals are emitted even if periodic timer hasn't fired.
 func (e *QueryEngine) emitAllFinalThinkingTokens(sessionID string) {
 	if !e.streamCfg.Enabled || e.thinkingBlockState == nil {
 		return

@@ -121,7 +121,7 @@ func newMockStreamServerForCompaction(t *testing.T, turn1Events, turn2Events []s
 	return ms
 }
 
-// TestActiveSkills_E2E_ThroughCompaction tests AC1: Full pipeline e2e — tool activation →
+// TestActiveSkills_E2E_ThroughCompaction tests the full pipeline e2e — tool activation →
 // prompt reflection after compaction. Uses real QueryEngine with mock SSE server and
 // actual compact() invocation.
 func TestActiveSkills_E2E_ThroughCompaction(t *testing.T) {
@@ -206,7 +206,7 @@ func TestActiveSkills_E2E_ThroughCompaction(t *testing.T) {
 	// Verify activeSkillsSection produces correct reminder text
 	reminder := activeSkillsSection(engine.streamCfg.ActiveSkills)
 	if !containsSubstring(reminder, "go-developer") {
-		t.Error("AC1 FAIL: activeSkillsSection should contain skill name 'go-developer'")
+		t.Error("FAIL: activeSkillsSection should contain skill name 'go-developer'")
 	}
 
 	// Now simulate compaction by invoking compactMessages directly
@@ -237,25 +237,25 @@ func TestActiveSkills_E2E_ThroughCompaction(t *testing.T) {
 
 	// Verify compaction modified messages
 	if len(compacted) >= len(messages) {
-		t.Errorf("AC1 FAIL: Compaction should reduce message count, before=%d, after=%d", len(messages), len(compacted))
+		t.Errorf("FAIL: Compaction should reduce message count, before=%d, after=%d", len(messages), len(compacted))
 	}
 
 	// CRITICAL: Verify StreamConfig fields (ActiveSkills) are UNCHANGED after compaction
 	// This is the architectural invariant that compaction only touches messages
 	if len(engine.streamCfg.ActiveSkills) != 1 {
-		t.Errorf("AC1 FAIL: ActiveSkills should be unchanged after compaction, got %d", len(engine.streamCfg.ActiveSkills))
+		t.Errorf("FAIL: ActiveSkills should be unchanged after compaction, got %d", len(engine.streamCfg.ActiveSkills))
 	}
 
 	// Active skills survive compaction in StreamConfig and can be re-injected
 	reminderAfter := activeSkillsSection(engine.streamCfg.ActiveSkills)
 	if !containsSubstring(reminderAfter, "go-developer") {
-		t.Error("AC1 FAIL: activeSkillsSection should still contain 'go-developer' after compaction")
+		t.Error("FAIL: activeSkillsSection should still contain 'go-developer' after compaction")
 	}
 
-	t.Log("AC1 PASS: Full pipeline e2e through compaction verified")
+	t.Log("PASS: Full pipeline e2e through compaction verified")
 }
 
-// TestPermissionDenials_SurviveCompaction tests AC2: Cross-turn state survival
+// TestPermissionDenials_SurviveCompaction tests cross-turn state survival
 // after compaction for PermissionDenials using real compaction.
 func TestPermissionDenials_SurviveCompaction(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -268,19 +268,19 @@ func TestPermissionDenials_SurviveCompaction(t *testing.T) {
 
 	// Verify denial is present
 	if !cfg.HasPermissionDenial(denialKey) {
-		t.Fatal("AC2 FAIL: Denial key should be present after AddPermissionDenial")
+		t.Fatal("FAIL: Denial key should be present after AddPermissionDenial")
 	}
 
 	// Verify the same tool+input matches the denial
 	matchingKey := BuildDenialKey("Bash", map[string]any{"command": "rm -rf /"})
 	if !cfg.HasPermissionDenial(matchingKey) {
-		t.Fatal("AC2 FAIL: Matching key should match denial")
+		t.Fatal("FAIL: Matching key should match denial")
 	}
 
 	// Verify different tool does not match
 	differentKey := BuildDenialKey("Read", map[string]any{"file_path": "/etc/passwd"})
 	if cfg.HasPermissionDenial(differentKey) {
-		t.Fatal("AC2 FAIL: Different tool should not match denial")
+		t.Fatal("FAIL: Different tool should not match denial")
 	}
 
 	// Create a QueryEngine and simulate real compaction
@@ -337,28 +337,28 @@ func TestPermissionDenials_SurviveCompaction(t *testing.T) {
 
 	denialCountAfter := len(engine.streamCfg.PermissionDenials)
 	if denialCountBefore != denialCountAfter {
-		t.Errorf("AC2 FAIL: PermissionDenials count changed after compaction: before=%d, after=%d", denialCountBefore, denialCountAfter)
+		t.Errorf("FAIL: PermissionDenials count changed after compaction: before=%d, after=%d", denialCountBefore, denialCountAfter)
 	}
 
 	// Verify denial key still present after real compaction
 	if !engine.streamCfg.HasPermissionDenial(denialKey) {
-		t.Error("AC2 FAIL: Denial key should survive real compaction")
+		t.Error("FAIL: Denial key should survive real compaction")
 	}
 
 	// Verify the matching key still matches
 	if !engine.streamCfg.HasPermissionDenial(matchingKey) {
-		t.Error("AC2 FAIL: Matching key should still match after real compaction")
+		t.Error("FAIL: Matching key should still match after real compaction")
 	}
 
 	// Verify different key still doesn't match
 	if engine.streamCfg.HasPermissionDenial(differentKey) {
-		t.Error("AC2 FAIL: Different key should still not match after real compaction")
+		t.Error("FAIL: Different key should still not match after real compaction")
 	}
 
-	t.Log("AC2 PASS: PermissionDenials survive real compaction")
+	t.Log("PASS: PermissionDenials survive real compaction")
 }
 
-// TestDiscoveredSkillNames_SurviveCompaction_E2E tests AC3: Cross-turn state survival
+// TestDiscoveredSkillNames_SurviveCompaction_E2E tests cross-turn state survival
 // after compaction for DiscoveredSkillNames, including thread safety under concurrent calls.
 // Uses unique strings per goroutine and verifies all entries survived.
 func TestDiscoveredSkillNames_SurviveCompaction_E2E(t *testing.T) {

@@ -85,7 +85,7 @@ func (t *mockTool) Execute(ctx context.Context, input map[string]any, cwd string
 }
 
 func TestAssembleSystemPrompt_CustomReplacesDefaults(t *testing.T) {
-	// AC1: Custom system prompt replaces all default sections
+	// Custom system prompt replaces all default sections
 	cfg := StreamConfig{
 		CustomSystemPrompt: "This is my custom system prompt that should replace everything.",
 	}
@@ -115,7 +115,7 @@ func TestAssembleSystemPrompt_CustomReplacesDefaults(t *testing.T) {
 }
 
 func TestAssembleSystemPrompt_ToolListSync(t *testing.T) {
-	// AC2: Tool list matches exactly the tools passed
+	// Tool list matches exactly the tools passed
 	cfg := StreamConfig{}
 
 	tools := []tool.Tool{
@@ -156,7 +156,7 @@ func TestAssembleSystemPrompt_ToolListEmpty(t *testing.T) {
 }
 
 func TestAssembleSystemPrompt_GitStatusInsideRepo(t *testing.T) {
-	// AC3: Git status injected when inside a git repo
+	// Git status injected when inside a git repo
 	// Use a temporary git repo
 	tmpDir := t.TempDir()
 	initTestGitRepo(t, tmpDir)
@@ -179,7 +179,7 @@ func TestAssembleSystemPrompt_GitStatusInsideRepo(t *testing.T) {
 }
 
 func TestAssembleSystemPrompt_GitStatusOutsideRepo(t *testing.T) {
-	// AC3: Git section not added outside a git repo
+	// Git section not added outside a git repo
 	cfg := StreamConfig{}
 	tools := []tool.Tool{}
 
@@ -196,7 +196,7 @@ func TestAssembleSystemPrompt_GitStatusOutsideRepo(t *testing.T) {
 }
 
 func TestAssembleSystemPrompt_PlatformContext(t *testing.T) {
-	// AC4: Platform and cwd context included
+	// Platform and cwd context included
 	cfg := StreamConfig{}
 	tools := []tool.Tool{}
 
@@ -221,7 +221,7 @@ func TestAssembleSystemPrompt_PlatformContext(t *testing.T) {
 }
 
 func TestAssembleSystemPrompt_AppendSupport(t *testing.T) {
-	// AC5: AppendSystemPrompt is appended after assembled sections
+	// AppendSystemPrompt is appended after assembled sections
 	cfg := StreamConfig{
 		AppendSystemPrompt: "This is appended content.",
 	}
@@ -235,14 +235,14 @@ func TestAssembleSystemPrompt_AppendSupport(t *testing.T) {
 		t.Error("append content should be present")
 	}
 
-	// Should be at the end (followed by a single trailing newline per AC1)
+	// Should be at the end (followed by a single trailing newline)
 	if !strings.HasSuffix(prompt, "This is appended content.\n") {
-		t.Error("append content should be at the end (with trailing newline per AC1)")
+		t.Error("append content should be at the end (with trailing newline)")
 	}
 }
 
 func TestAssembleSystemPrompt_OverrideSuppressesAppend(t *testing.T) {
-	// AC5: OverrideSystemPrompt suppresses append
+	// OverrideSystemPrompt suppresses append
 	cfg := StreamConfig{
 		AppendSystemPrompt:   "This should not appear.",
 		OverrideSystemPrompt: true,
@@ -277,7 +277,7 @@ func TestAssembleSystemPrompt_EmptyAppendIsNoOp(t *testing.T) {
 }
 
 func TestAssembleSystemPrompt_PrependSupport(t *testing.T) {
-	// AC5b: PrependSystemPrompt is prepended before assembled sections
+	// PrependSystemPrompt is prepended before assembled sections
 	cfg := StreamConfig{
 		PrependSystemPrompt: "This is prepended content.",
 	}
@@ -600,7 +600,7 @@ func TestDynamicSystemSuffix_AlwaysEmpty_InGitRepo(t *testing.T) {
 	}
 }
 
-// AC1: --print-system-prompt must end with a newline so the shell prompt does
+// --print-system-prompt must end with a newline so the shell prompt does
 // not run onto the last line. Verified by ensuring the last byte is '\n'.
 func TestAssembleSystemPrompt_TrailingNewline(t *testing.T) {
 	cfg := StreamConfig{}

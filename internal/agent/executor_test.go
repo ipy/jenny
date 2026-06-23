@@ -53,8 +53,8 @@ func (m *execMockTool) Execute(ctx context.Context, input map[string]any, cwd st
 	}
 }
 
-// TestExecutor_AC1_ParallelReadOnly verifies AC1: Read/Glob/Grep run in parallel when consecutive.
-func TestExecutor_AC1_ParallelReadOnly(t *testing.T) {
+// TestExecutor_ParallelReadOnly verifies: Read/Glob/Grep run in parallel when consecutive.
+func TestExecutor_ParallelReadOnly(t *testing.T) {
 	tools := []tool.Tool{
 		&execMockTool{name: "Read", delay: 100 * time.Millisecond, isSafe: true},
 		&execMockTool{name: "Glob", delay: 100 * time.Millisecond, isSafe: true},
@@ -95,8 +95,8 @@ func TestExecutor_AC1_ParallelReadOnly(t *testing.T) {
 	}
 }
 
-// TestExecutor_AC2_SerializedMutation verifies AC2: Write/Edit/Bash never run concurrently.
-func TestExecutor_AC2_SerializedMutation(t *testing.T) {
+// TestExecutor_SerializedMutation verifies: Write/Edit/Bash never run concurrently.
+func TestExecutor_SerializedMutation(t *testing.T) {
 	tools := []tool.Tool{
 		&execMockTool{name: "write", delay: 100 * time.Millisecond, isSafe: false},
 		&execMockTool{name: "edit", delay: 100 * time.Millisecond, isSafe: false},
@@ -145,7 +145,7 @@ func TestExecutor_AC2_SerializedMutation(t *testing.T) {
 	// Either way it should be < 200ms if reads were truly parallel, but since write is serial it should be ≥300ms
 	_ = mixedResults
 
-	// B3: Test: Bash + Bash should be serial (≥2s) - AC2 explicit case
+	// B3: Test: Bash + Bash should be serial (≥2s) - explicit case
 	bashTools := []tool.Tool{
 		&execMockTool{name: "Bash", delay: 1000 * time.Millisecond, isSafe: false},
 		&execMockTool{name: "Bash", delay: 1000 * time.Millisecond, isSafe: false},
@@ -175,9 +175,9 @@ func TestExecutor_AC2_SerializedMutation(t *testing.T) {
 	}
 }
 
-// TestExecutor_AC3_BashSiblingAbort verifies AC3: Bash failure aborts sibling bash in same batch.
+// TestExecutor_BashSiblingAbort verifies: Bash failure aborts sibling bash in same batch.
 // When one bash fails, subsequent sibling bash processes should be aborted (skipped).
-func TestExecutor_AC3_BashSiblingAbort(t *testing.T) {
+func TestExecutor_BashSiblingAbort(t *testing.T) {
 	// We want to test that if the SECOND bash tool fails, the THIRD one is skipped.
 	// The FIRST one should have already completed.
 	tools := []tool.Tool{
@@ -249,8 +249,8 @@ func TestExecutor_AC3_BashSiblingAbort(t *testing.T) {
 	}
 }
 
-// TestExecutor_AC4_UnknownTool verifies AC4: Unknown tool returns immediate error.
-func TestExecutor_AC4_UnknownTool(t *testing.T) {
+// TestExecutor_UnknownTool verifies: Unknown tool returns immediate error.
+func TestExecutor_UnknownTool(t *testing.T) {
 	tools := []tool.Tool{
 		&execMockTool{name: "Read", delay: 100 * time.Millisecond, isSafe: true},
 	}
@@ -288,8 +288,8 @@ func TestExecutor_AC4_UnknownTool(t *testing.T) {
 	}
 }
 
-// TestExecutor_AC5_ResultOrdering verifies AC5: Results emitted in request order.
-func TestExecutor_AC5_ResultOrdering(t *testing.T) {
+// TestExecutor_ResultOrdering verifies: Results emitted in request order.
+func TestExecutor_ResultOrdering(t *testing.T) {
 	tools := []tool.Tool{
 		&execMockTool{name: "Read", delay: 50 * time.Millisecond, isSafe: true},
 		&execMockTool{name: "write", delay: 100 * time.Millisecond, isSafe: false},
@@ -573,7 +573,7 @@ func TestExecutor_BashAbortOnlyAffectsBash(t *testing.T) {
 	}
 }
 
-// TestExecutor_SiblingAbort_SetsInterruptedField verifies AC2: every aborted sibling
+// TestExecutor_SiblingAbort_SetsInterruptedField verifies: Every aborted sibling
 // toolResult has Interrupted=true.
 func TestExecutor_SiblingAbort_SetsInterruptedField(t *testing.T) {
 	tools := []tool.Tool{
@@ -636,7 +636,7 @@ func TestExecutor_SiblingAbort_SetsInterruptedField(t *testing.T) {
 	}
 }
 
-// TestExecutor_CtxCancelled_SetsInterruptedField verifies AC3: when parent context
+// TestExecutor_CtxCancelled_SetsInterruptedField verifies: When parent context
 // is cancelled mid-execution, every pending (not-yet-run) tool's toolResult has
 // Interrupted=true and ToolUseID still populated from the block.
 func TestExecutor_CtxCancelled_SetsInterruptedField(t *testing.T) {
