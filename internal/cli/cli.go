@@ -25,10 +25,13 @@ type Flags struct {
 	Model                  string   `koanf:"model"`
 	SubagentModel          string   `koanf:"subagent-model"`
 	OutputFormat           string   `koanf:"output-format"`
+	InputFormat            string   `koanf:"input-format"`
 	Verbose                bool     `koanf:"verbose"`
 	IncludePartialMessages bool     `koanf:"include-partial-messages"`
 	SkipPermissions        bool     `koanf:"dangerously-skip-permissions"`
 	PermissionLevel        string   `koanf:"permission-level"`
+	PermissionMode         string   `koanf:"permission-mode"`
+	PermissionPromptTool   string   `koanf:"permission-prompt-tool"`
 	SessionResume          string   `koanf:"resume"`
 	NoSessionPersistence   bool     `koanf:"no-session-persistence"`
 	ForkSession            bool     `koanf:"fork-session"`
@@ -36,6 +39,9 @@ type Flags struct {
 	MCPConfig              []string `koanf:"mcp-config"`
 	StrictMCP              bool     `koanf:"strict-mcp-config"`
 	DeniedTools            []string `koanf:"deny-tool"`
+	AllowedTools           []string // --allowedTools: SDK tool allowlist
+	DisallowedTools        []string // --disallowedTools: SDK tool blocklist
+	ToolsPreset            string   // --tools: SDK tool preset
 	Bare                   bool     `koanf:"bare"`
 	SwarmsEnabled          bool     `koanf:"swarm"`                 // When true, enables named agent delegation (swarm mode)
 	Version                bool     `koanf:"version"`               // --version / -v: print version and exit
@@ -143,6 +149,10 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	var outputFormat string
 	flags.StringVarP(&outputFormat, "output-format", "", outputFormatDefault, "Output format (text, stream-json)")
 
+	inputFormatDefault := k.String("input-format")
+	var inputFormat string
+	flags.StringVarP(&inputFormat, "input-format", "", inputFormatDefault, "Input format (text, stream-json)")
+
 	var verbose bool
 	flags.BoolVarP(&verbose, "verbose", "", verboseDefault, "Enable verbose output")
 
@@ -152,8 +162,19 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	var skipPerms bool
 	flags.BoolVarP(&skipPerms, "dangerously-skip-permissions", "", skipPermsDefault, "Skip permissions")
 
+	var allowSkipPerms bool
+	flags.BoolVarP(&allowSkipPerms, "allow-dangerously-skip-permissions", "", false, "Alias for --dangerously-skip-permissions (SDK compatibility)")
+
 	var permLevel string
 	flags.StringVarP(&permLevel, "permission-level", "", permLevelDefault, "Permission level (read, analyze, edit, execute, unrestricted)")
+
+	permModeDefault := k.String("permission-mode")
+	var permMode string
+	flags.StringVarP(&permMode, "permission-mode", "", permModeDefault, "SDK permission mode (default, acceptEdits, bypassPermissions, plan, dontAsk)")
+
+	permPromptToolDefault := k.String("permission-prompt-tool")
+	var permPromptTool string
+	flags.StringVarP(&permPromptTool, "permission-prompt-tool", "", permPromptToolDefault, "Permission prompt tool (stdio for control protocol)")
 
 	var resume string
 	flags.StringVarP(&resume, "resume", "r", resumeDefault, "Session ID to resume")
@@ -175,6 +196,15 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 
 	var deniedTools []string
 	flags.StringSliceVarP(&deniedTools, "deny-tool", "", deniedToolsDefault, "Tool name to deny (can be specified multiple times)")
+
+	var allowedTools []string
+	flags.StringSliceVar(&allowedTools, "allowedTools", nil, "SDK tool allowlist (comma-separated)")
+
+	var disallowedTools []string
+	flags.StringSliceVar(&disallowedTools, "disallowedTools", nil, "SDK tool blocklist (comma-separated)")
+
+	var toolsPreset string
+	flags.StringVar(&toolsPreset, "tools", "", "SDK tool preset")
 
 	var bare bool
 	flags.BoolVarP(&bare, "bare", "", bareDefault, "Disable skill discovery for minimal environments")
@@ -212,6 +242,9 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	var thinkingBudget int
 	flags.IntVarP(&thinkingBudget, "thinking-budget", "", thinkingBudgetDefault, "Maximum thinking tokens for Anthropic")
 
+	var maxThinkingTokens int
+	flags.IntVar(&maxThinkingTokens, "max-thinking-tokens", 0, "Alias for --thinking-budget (SDK compatibility)")
+
 	var redactMode string
 	flags.StringVarP(&redactMode, "redact", "", redactModeDefault, "Secret redaction mode (disabled, redact, recover); JENNY_REDACT env var or .jenny/config.json is used when unset")
 
@@ -241,6 +274,19 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 
 	var offline bool
 	flags.BoolVarP(&offline, "offline", "", offlineDefault, "Skip all network fetch, use cached data as-is")
+
+	// SDK-compatibility flags: accepted but not acted on.
+	var sdkBetas, sdkJsonSchema, sdkFallbackModel, sdkResumeSessionAt, sdkSettingSources string
+	var sdkAddDir, sdkPluginDir []string
+	var sdkDebugToStderr bool
+	flags.StringVar(&sdkBetas, "betas", "", "Beta feature flags (SDK compatibility)")
+	flags.StringVar(&sdkJsonSchema, "json-schema", "", "JSON schema for structured output (SDK compatibility)")
+	flags.BoolVar(&sdkDebugToStderr, "debug-to-stderr", false, "Debug to stderr (SDK compatibility)")
+	flags.StringVar(&sdkFallbackModel, "fallback-model", "", "Fallback model (SDK compatibility)")
+	flags.StringSliceVar(&sdkAddDir, "add-dir", nil, "Additional directories (SDK compatibility)")
+	flags.StringSliceVar(&sdkPluginDir, "plugin-dir", nil, "Plugin directories (SDK compatibility)")
+	flags.StringVar(&sdkResumeSessionAt, "resume-session-at", "", "Resume at message UUID (SDK compatibility)")
+	flags.StringVar(&sdkSettingSources, "setting-sources", "", "Settings sources (SDK compatibility)")
 
 	// Parse the flags.
 	if err := flags.Parse(os.Args[1:]); err != nil {
@@ -274,6 +320,38 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	// - p: stored as []string in koanf, but struct expects string (join with newline).
 	parsed.Prompt = strings.Join(k.Strings("print"), "\n")
 
+	// --allow-dangerously-skip-permissions is an alias for --dangerously-skip-permissions
+	if allowSkipPerms {
+		parsed.SkipPermissions = true
+	}
+
+	// --max-thinking-tokens is an alias for --thinking-budget
+	if flags.Changed("max-thinking-tokens") && !flags.Changed("thinking-budget") {
+		parsed.ThinkingBudget = maxThinkingTokens
+	}
+
+	// --permission-mode: map SDK modes to permission levels
+	if flags.Changed("permission-mode") {
+		switch parsed.PermissionMode {
+		case "bypassPermissions", "dontAsk":
+			parsed.SkipPermissions = true
+		case "plan":
+			if !permLevelChanged {
+				parsed.PermissionLevel = "read"
+			}
+		}
+	}
+
+	// --disallowedTools merges into DeniedTools
+	if len(disallowedTools) > 0 {
+		parsed.DeniedTools = append(parsed.DeniedTools, disallowedTools...)
+	}
+
+	// --allowedTools and --tools: store for downstream filtering
+	parsed.AllowedTools = allowedTools
+	parsed.DisallowedTools = disallowedTools
+	parsed.ToolsPreset = toolsPreset
+
 	// --version / --print-system-prompt: caller will print and exit before any
 	// session or API initialisation, so a prompt is not required.
 	if parsed.Version || parsed.PrintSystemPrompt {
@@ -298,6 +376,12 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	// Fallback: if -p/--prompt-file is empty but there are positional args, use them as the prompt.
 	if parsed.Prompt == "" && len(args) > 0 {
 		parsed.Prompt = strings.Join(args, " ")
+	}
+
+	// When --input-format stream-json, prompt comes from stdin NDJSON, not CLI args.
+	// Skip the prompt requirement validation.
+	if parsed.InputFormat == "stream-json" {
+		return &parsed, k, nil
 	}
 
 	// Validate: require a prompt.

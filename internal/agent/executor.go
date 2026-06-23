@@ -293,13 +293,24 @@ func (e *ToolExecutor) executeParallel(parentCtx context.Context, batch []toolUs
 			// Check permission denial cache before execution
 			denialKey := BuildDenialKey(tw.block.Name, tw.block.Input)
 			if e.streamCfg != nil && e.streamCfg.HasPermissionDenial(denialKey) {
-				// Tool was previously denied - return cached denial
 				results[tw.index] = toolResult{
 					ToolUseID: tw.block.ID,
 					Content:   "Permission denied: tool execution blocked by permission gate",
 					IsError:   true,
 				}
 				return
+			}
+
+			// Run SDK PreToolUse hooks if configured
+			if e.streamCfg != nil {
+				if blocked, reason := RunPreToolUseHooks(toolCtx, e.streamCfg, tw.block.Name, tw.block.Input, tw.block.ID, e.streamCfg.SessionID, e.cwd); blocked {
+					results[tw.index] = toolResult{
+						ToolUseID: tw.block.ID,
+						Content:   reason,
+						IsError:   true,
+					}
+					return
+				}
 			}
 
 			execResult, err := tw.tool.Execute(toolCtx, tw.block.Input, e.cwd)
@@ -377,13 +388,24 @@ func (e *ToolExecutor) executeSerial(parentCtx context.Context, batch []toolUseW
 		// Check permission denial cache before execution
 		denialKey := BuildDenialKey(tw.block.Name, tw.block.Input)
 		if e.streamCfg != nil && e.streamCfg.HasPermissionDenial(denialKey) {
-			// Tool was previously denied - return cached denial
 			results[tw.index] = toolResult{
 				ToolUseID: tw.block.ID,
 				Content:   "Permission denied: tool execution blocked by permission gate",
 				IsError:   true,
 			}
 			continue
+		}
+
+		// Run SDK PreToolUse hooks if configured
+		if e.streamCfg != nil {
+			if blocked, reason := RunPreToolUseHooks(toolCtx, e.streamCfg, tw.block.Name, tw.block.Input, tw.block.ID, e.streamCfg.SessionID, e.cwd); blocked {
+				results[tw.index] = toolResult{
+					ToolUseID: tw.block.ID,
+					Content:   reason,
+					IsError:   true,
+				}
+				continue
+			}
 		}
 
 		execResult, err := tw.tool.Execute(toolCtx, tw.block.Input, e.cwd)

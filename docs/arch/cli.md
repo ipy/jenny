@@ -2,11 +2,12 @@
 title: CLI
 slug: cli
 priority: P0
-status: done
+status: partial
 spec: complete
-code: done
+code: partial
 package: internal/cli
-gaps: []
+gaps:
+  - SDK input protocol flags and stdin NDJSON
 defer_to: P3
 depends_on:
   []
@@ -67,6 +68,22 @@ jenny --prompt-file - < prompt.txt
 | `--thinking-budget <n>` | Maximum thinking tokens for Anthropic extended thinking. |
 | `--refresh-registry` | Synchronously fetch the latest model registry. |
 | `--offline` | Skip all network fetch, use cached data as-is. |
+| `--input-format <fmt>` | Input format: `text` (default) or `stream-json`. When `stream-json`, prompt is read from stdin as NDJSON instead of CLI args. See [sdk-input-protocol.md](./sdk-input-protocol.md). |
+| `--allow-dangerously-skip-permissions` | Alias for `--dangerously-skip-permissions` (SDK compatibility). |
+| `--max-thinking-tokens <n>` | Alias for `--thinking-budget` (SDK compatibility). |
+| `--permission-mode <mode>` | SDK permission mode. Maps: `default` → `edit`, `acceptEdits` → `edit`, `bypassPermissions` → `unrestricted`, `plan` → `read`, `dontAsk` → `unrestricted`. |
+| `--permission-prompt-tool <name>` | Permission prompt handler. `stdio` triggers control protocol on stdin/stdout. See [sdk-input-protocol.md](./sdk-input-protocol.md). |
+| `--allowedTools <list>` | Comma-separated allowlist of tool names. When set, only listed tools are available. |
+| `--disallowedTools <list>` | Comma-separated blocklist of tool names (equivalent to `--deny-tool`). |
+| `--tools <preset>` | Tool preset name or empty string to disable defaults. |
+| `--betas <list>` | Comma-separated beta feature flags (accepted, not acted on). |
+| `--json-schema <json>` | JSON schema for structured output. |
+| `--debug-to-stderr` | Route debug output to stderr (jenny always routes debug to stderr). |
+| `--fallback-model <model>` | Fallback model name (accepted, not acted on). |
+| `--add-dir <path>` | Additional working directory (accepted, not acted on). |
+| `--plugin-dir <path>` | Plugin directory path (accepted, not acted on). |
+| `--resume-session-at <uuid>` | Resume session at specific message UUID (accepted, not acted on). |
+| `--setting-sources <list>` | Comma-separated settings file sources (accepted, not acted on). |
 
 ## Flag Rules
 
@@ -78,7 +95,10 @@ jenny --prompt-file - < prompt.txt
 | `--prompt-file` with nonexistent file | Exit non-zero with error "prompt file not found: <path>" |
 | Positional + `-p` both given | When `-p` is set, positional args are **ignored**; only `-p` values are used |
 | Positional + `--prompt-file` both given | When `--prompt-file` is set, positional args are **ignored**; only `--prompt-file` values are used |
-| `--output-format stream-json` | Requires prompt (`-p` or positional) |
+| `--output-format stream-json` | Requires prompt (`-p`, positional, or `--input-format stream-json`) |
+| `--input-format stream-json` | Prompt comes from stdin NDJSON, not CLI args. No `-p` or positional required. |
+| `--allow-dangerously-skip-permissions` | Equivalent to `--dangerously-skip-permissions`; both set same flag |
+| `--max-thinking-tokens` | Equivalent to `--thinking-budget`; both set same field |
 | `--include-partial-messages` | Requires `--output-format stream-json` |
 | `--continue` with no prior sessions | Exit non-zero with error "no sessions to continue" |
 | Both `--dangerously-skip-permissions` and `--permission-level` | `--dangerously-skip-permissions` wins (unrestricted); warning logged |
@@ -95,10 +115,13 @@ jenny --prompt-file - < prompt.txt
 | Code | Condition |
 |------|-----------|
 | 0 | Success |
+| 0 | Expected termination in stream-json mode (`error_max_turns`, budget exceeded) — result already emitted on stdout |
 | Non-zero | Missing prompt, API error, agent error, session not found |
 | Non-zero | Unknown or invalid flag |
 
 On exit (normal, Ctrl+C, budget exceeded, or max turns), the process performs an ordered shutdown: flush transcript data to disk, drain memory extraction goroutines with bounded timeout, and disconnect MCP clients with bounded timeout.
+
+In `--output-format stream-json` mode, expected termination conditions (`error_max_turns`, budget exceeded) emit a `result` event on stdout and exit with code 0. This is required for SDK compatibility — the SDK treats non-zero exit codes as process failures.
 
 Help (`-h`) exits 0. Version (`--version`) uses `constants.Version` for unified reporting.
 

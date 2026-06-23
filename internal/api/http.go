@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -74,6 +75,10 @@ func (c *HTTPClient) Request(ctx context.Context, method, url string, headers ht
 }
 
 // StreamRequest performs an HTTP request and returns a channel of SSE events.
+// The returned body wraps the response with a cancelingBody: calling Close()
+// first cancels the request context (aborting the TCP connection immediately)
+// then closes the underlying body. This prevents body.Close() from blocking
+// while trying to drain a stalled connection.
 func (c *HTTPClient) StreamRequest(ctx context.Context, method, url string, headers http.Header, body any) (io.ReadCloser, error) {
 	var bodyReader io.Reader
 	if body != nil {
@@ -84,8 +89,10 @@ func (c *HTTPClient) StreamRequest(ctx context.Context, method, url string, head
 		bodyReader = bytes.NewReader(bodyBytes)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
+	reqCtx, reqCancel := context.WithCancel(ctx)
+	req, err := http.NewRequestWithContext(reqCtx, method, url, bodyReader)
 	if err != nil {
+		reqCancel()
 		return nil, err
 	}
 
@@ -101,12 +108,14 @@ func (c *HTTPClient) StreamRequest(ctx context.Context, method, url string, head
 
 	resp, err := c.client.Do(req)
 	if err != nil {
+		reqCancel()
 		return nil, err
 	}
 
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		reqCancel()
 		return nil, &HTTPError{
 			StatusCode:    resp.StatusCode,
 			Message:       string(respBody),
@@ -115,7 +124,20 @@ func (c *HTTPClient) StreamRequest(ctx context.Context, method, url string, head
 		}
 	}
 
-	return resp.Body, nil
+	return &cancelingBody{ReadCloser: resp.Body, cancel: reqCancel}, nil
+}
+
+// cancelingBody wraps an io.ReadCloser and cancels the associated request
+// context before closing the body. This ensures that Close() aborts the TCP
+// connection immediately rather than blocking while draining remaining data.
+type cancelingBody struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (b *cancelingBody) Close() error {
+	b.cancel()
+	return b.ReadCloser.Close()
 }
 
 // parseShouldRetry extracts the x-should-retry header value.
@@ -176,9 +198,11 @@ func (s *SSEScanner) Err() error {
 // so cancellation unblocks immediately instead of waiting for the underlying
 // io.Read to return.
 type ctxSSEScanner struct {
-	ch      chan scanResult
-	cancel  context.CancelFunc
-	lastErr error
+	ch        chan scanResult
+	cancel    context.CancelFunc
+	done      chan struct{}
+	closeOnce sync.Once
+	lastErr   error
 }
 
 type scanResult struct {
@@ -192,6 +216,7 @@ func newCtxSSEScanner(ctx context.Context, r io.Reader) *ctxSSEScanner {
 	s := &ctxSSEScanner{
 		ch:     make(chan scanResult, 1),
 		cancel: cancel,
+		done:   make(chan struct{}),
 	}
 	inner := NewSSEScanner(r)
 	go func() {
@@ -208,6 +233,8 @@ func newCtxSSEScanner(ctx context.Context, r io.Reader) *ctxSSEScanner {
 					return
 				}
 			case <-readCtx.Done():
+				return
+			case <-s.done:
 				return
 			}
 		}
@@ -226,7 +253,18 @@ func (s *ctxSSEScanner) Next(ctx context.Context) (string, bool) {
 	case <-ctx.Done():
 		s.cancel()
 		return "", false
+	case <-s.done:
+		return "", false
 	}
+}
+
+// Close signals the inner goroutine to exit and cancels the read context.
+// Safe to call multiple times.
+func (s *ctxSSEScanner) Close() {
+	s.closeOnce.Do(func() {
+		close(s.done)
+		s.cancel()
+	})
 }
 
 // Err returns the underlying scanner error, if any. It is only populated

@@ -543,31 +543,32 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 			}
 			return
 		}
+		streamCtx, streamCancel := context.WithCancel(ctx)
+		defer streamCancel()
 		defer body.Close()
 
 		acc := newStreamAccumulator()
 		hasMessageStart := false
 		hasMessageStop := false
-		scanner := newCtxSSEScanner(ctx, body)
+		scanner := newCtxSSEScanner(streamCtx, body)
+		defer scanner.Close()
 
 		idleTimer := time.NewTimer(idleTimeout)
 		defer idleTimer.Stop()
-
-		watchdogCtx, cancelWatchdog := context.WithCancel(ctx)
-		defer cancelWatchdog()
 
 		go func() {
 			select {
 			case <-idleTimer.C:
 				log.Warn("Anthropic: Idle timeout reached")
 				result.Error = "idle timeout"
-				body.Close()
-			case <-watchdogCtx.Done():
+				streamCancel()
+				go body.Close()
+			case <-streamCtx.Done():
 			}
 		}()
 
 		for {
-			data, ok := scanner.Next(ctx)
+			data, ok := scanner.Next(streamCtx)
 			if !ok {
 				break
 			}

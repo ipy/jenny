@@ -182,18 +182,18 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		// maxTurns enforcement - check before each API call
 		if e.maxTurns > 0 && e.turnCount >= e.maxTurns {
 			e.mu.Unlock()
-			// Emit error result if streaming enabled
 			if e.streamCfg.Enabled {
 				errStr := fmt.Sprintf("Maximum number of turns (%d) reached. stopping.", e.maxTurns)
 				msg := StreamMessage{
 					Type:            "result",
-					Subtype:         "error",
+					Subtype:         "error_max_turns",
 					Result:          errStr,
 					SessionID:       sessionID,
 					ParentToolUseID: nil,
 					Uuid:            GenerateUUID(),
 					Model:           e.model,
 					IsError:         true,
+					NumTurns:        e.turnCount,
 					StopReason:      "max_turns",
 					TTFTMs:          0,
 					TerminalReason:  "",
@@ -498,9 +498,12 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		// Reset timing fields for TTFT calculation per API call
 		e.firstTokenTime = time.Time{}
 		e.lastAPIStartTime = apiStartTime
+		// Defense-in-depth: wrap the API call with an overall timeout so the
+		// engine loop never blocks indefinitely on a single streaming request.
+		apiCtx, apiCancel := context.WithTimeout(ctx, api.DefaultFallbackTimeout+30*time.Second)
 		dynamicSuffix := DynamicSystemSuffix(e.streamCfg, cwd)
 		blocksChan, streamResult := e.client.SendMessageStream(
-			ctx,
+			apiCtx,
 			messages,
 			e.toolParams,
 			nil,
@@ -643,6 +646,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			}
 		}
 		e.totalAPIDurationMs += time.Since(apiStartTime).Milliseconds()
+		apiCancel()
 
 		// Emit final thinking_tokens events for all active thinking blocks
 		// before the consolidated assistant message. This ensures final totals are

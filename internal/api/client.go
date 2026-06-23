@@ -318,18 +318,27 @@ func (c *Client) SendMessageStream(
 		var pendingIndex int
 		var pendingBlocks []StreamContentBlock // Buffer content blocks until we know stream is complete
 
-		for block := range contentChan {
-			if block.Type == "stream_event" {
-				// Always pass through stream_event blocks for IncludePartial consumers
-				blocksChan <- block
-			} else if !shouldFallback {
-				// Stream directly when no fallback will be used
-				blocksChan <- StreamContentBlock{Index: pendingIndex, Block: block.Block}
-				pendingIndex++
-			} else {
-				// Buffer content blocks when fallback might be needed
-				pendingBlocks = append(pendingBlocks, StreamContentBlock{Index: pendingIndex, Block: block.Block})
-				pendingIndex++
+	drainLoop:
+		for {
+			select {
+			case block, ok := <-contentChan:
+				if !ok {
+					break drainLoop
+				}
+				if block.Type == "stream_event" {
+					// Always pass through stream_event blocks for IncludePartial consumers
+					blocksChan <- block
+				} else if !shouldFallback {
+					// Stream directly when no fallback will be used
+					blocksChan <- StreamContentBlock{Index: pendingIndex, Block: block.Block}
+					pendingIndex++
+				} else {
+					// Buffer content blocks when fallback might be needed
+					pendingBlocks = append(pendingBlocks, StreamContentBlock{Index: pendingIndex, Block: block.Block})
+					pendingIndex++
+				}
+			case <-ctx.Done():
+				break drainLoop
 			}
 		}
 

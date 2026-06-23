@@ -627,10 +627,88 @@ func run() error {
 	localRunner.SetClient(engine.Client())
 	asyncRunner.SetClient(engine.Client())
 
+	// When --input-format stream-json, read the prompt from stdin NDJSON and
+	// handle the SDK control protocol (initialize handshake).
+	prompt := flags.Prompt
+	var sdkReader *cli.SDKInputReader
+	if flags.InputFormat == "stream-json" {
+		sdkReader = cli.NewSDKInputReader()
+		sdkReader.Start(ctx)
+		defer sdkReader.Stop()
+
+		// Read user prompt and initialize request concurrently.
+		// Both arrive on stdin — user message first, then initialize.
+		var sdkPrompt string
+		var sdkErr error
+		promptDone := make(chan struct{})
+		go func() {
+			sdkPrompt, sdkErr = sdkReader.ReadPrompt(ctx)
+			close(promptDone)
+		}()
+
+		initCfg, initErr := sdkReader.WaitForInitialize(ctx)
+		if initErr != nil {
+			return fmt.Errorf("SDK initialize handshake failed: %w", initErr)
+		}
+
+		<-promptDone
+		if sdkErr != nil {
+			return fmt.Errorf("reading SDK prompt: %w", sdkErr)
+		}
+		prompt = sdkPrompt
+
+		// Apply initialize config to StreamConfig
+		if initCfg.SystemPrompt != "" {
+			streamCfg.CustomSystemPrompt = initCfg.SystemPrompt
+		}
+		if initCfg.AppendSystemPrompt != "" {
+			streamCfg.AppendSystemPrompt = initCfg.AppendSystemPrompt
+		}
+
+		// Wire SDK hook runner into StreamConfig
+		if sdkReader.HasHooks("PreToolUse") {
+			hookMatchers := sdkReader.GetHookMatchers("PreToolUse")
+			agentMatchers := make([]agent.SDKHookMatcher, len(hookMatchers))
+			for i, m := range hookMatchers {
+				agentMatchers[i] = agent.SDKHookMatcher{
+					Matcher:         m.Matcher,
+					HookCallbackIDs: m.HookCallbackIDs,
+					Timeout:         m.Timeout,
+				}
+			}
+			hookCfg := &agent.SDKHookConfig{
+				Matchers: map[string][]agent.SDKHookMatcher{
+					"PreToolUse": agentMatchers,
+				},
+				SendCallback: func(bctx context.Context, callbackID string, input map[string]any) (*agent.SDKHookCallbackResponse, error) {
+					resp, err := sdkReader.SendHookCallback(bctx, callbackID, input)
+					if err != nil {
+						return nil, err
+					}
+					return &agent.SDKHookCallbackResponse{
+						Continue:           resp.Continue,
+						Decision:           resp.Decision,
+						StopReason:         resp.StopReason,
+						SuppressOutput:     resp.SuppressOutput,
+						HookSpecificOutput: resp.HookSpecificOutput,
+					}, nil
+				},
+			}
+			streamCfg.SDKHookRunner = agent.NewSDKHookRunner(hookCfg)
+		}
+	}
+
 	// Run agent (will reuse the engine we just created since ParentEngine is set)
-	engine, result, _, err := agent.RunStream(ctx, flags.Prompt, tools, cwd, &streamCfg, flags.Model, agent.WithSkillActivator(skillActivator))
+	engine, result, _, err := agent.RunStream(ctx, prompt, tools, cwd, &streamCfg, flags.Model, agent.WithSkillActivator(skillActivator))
 	if err != nil {
-		return err
+		// In stream-json mode, expected terminations have already emitted
+		// a result event on stdout. Exit 0 so the SDK doesn't treat this
+		// as a process crash.
+		if flags.OutputFormat == "stream-json" && isExpectedTermination(err) {
+			result = ""
+		} else {
+			return err
+		}
 	}
 
 	// Drain memory extraction goroutines with bounded timeout first,
@@ -649,6 +727,20 @@ func run() error {
 		fmt.Println(result)
 	}
 	return nil
+}
+
+// isExpectedTermination returns true for errors that represent expected agent
+// termination conditions (max turns, budget exceeded). In stream-json mode
+// these have already emitted a result event on stdout and should not cause
+// a non-zero exit code.
+func isExpectedTermination(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "error_max_turns") ||
+		strings.Contains(msg, "budget") ||
+		strings.Contains(msg, "Budget")
 }
 
 // buildPrintTools returns the default set of tools for system prompt printing.

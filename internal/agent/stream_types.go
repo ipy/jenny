@@ -75,6 +75,7 @@ type StreamConfig struct {
 	ParentEngine         *QueryEngine         // Parent engine for subagent cost merge (set before RunStream)
 	PermissionLevel      tool.PermissionLevel // Parent's permission level for subagent inheritance
 	TaskStore            *tool.TaskStore      // Shared task store for persistence across sessions
+	SDKHookRunner        SDKHookRunner        // SDK hook runner for PreToolUse hooks (nil when not in SDK mode)
 }
 
 // SetActiveSkills sets the active skills list for the system prompt.

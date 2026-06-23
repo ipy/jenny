@@ -140,3 +140,83 @@ func TestCtxSSEScanner_ConcurrentCancellationSafety(t *testing.T) {
 		t.Error("expected at least one Next call to return false due to cancellation")
 	}
 }
+
+func TestCtxSSEScanner_CloseUnblocksBlockedReader(t *testing.T) {
+	// Simulate a reader that blocks forever (stalled TCP connection).
+	// Close() must cause the inner goroutine to exit promptly.
+	pr, pw := io.Pipe()
+	defer pw.Close()
+
+	ctx := context.Background()
+	scanner := newCtxSSEScanner(ctx, pr)
+
+	// Start a goroutine trying to read — it will block
+	done := make(chan struct{})
+	go func() {
+		scanner.Next(ctx)
+		close(done)
+	}()
+
+	// Give the goroutine time to enter the blocked read
+	time.Sleep(20 * time.Millisecond)
+
+	// Close the scanner — should unblock everything
+	scanner.Close()
+
+	select {
+	case <-done:
+		// Success: Next returned
+	case <-time.After(2 * time.Second):
+		t.Fatal("ctxSSEScanner.Close() did not unblock the blocked reader within 2s")
+	}
+}
+
+func TestCtxSSEScanner_CloseIdempotent(t *testing.T) {
+	r := strings.NewReader("data: hello\n\n")
+	ctx := context.Background()
+	scanner := newCtxSSEScanner(ctx, r)
+
+	// Drain the scanner
+	scanner.Next(ctx)
+	scanner.Next(ctx)
+
+	// Multiple Close calls should not panic
+	scanner.Close()
+	scanner.Close()
+	scanner.Close()
+}
+
+func TestCancelingBody_CancelsContextBeforeClose(t *testing.T) {
+	pr, pw := io.Pipe()
+	defer pw.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	body := &cancelingBody{
+		ReadCloser: pr,
+		cancel:     cancel,
+	}
+
+	// Write some data
+	go func() {
+		pw.Write([]byte("hello"))
+	}()
+
+	buf := make([]byte, 5)
+	n, err := body.Read(buf)
+	if err != nil {
+		t.Fatalf("unexpected read error: %v", err)
+	}
+	if n != 5 || string(buf) != "hello" {
+		t.Fatalf("expected 'hello', got %q", string(buf[:n]))
+	}
+
+	// Close the body — should cancel context first
+	body.Close()
+
+	// Verify context was cancelled
+	if ctx.Err() == nil {
+		t.Error("expected context to be cancelled after body.Close()")
+	}
+}

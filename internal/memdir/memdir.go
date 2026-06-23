@@ -228,7 +228,7 @@ func (m *Memdir) TopicPath(memType MemoryType, name string) string {
 // If truncated, the content will include a warning identifying which cap fired.
 func (m *Memdir) ReadIndex() (string, error) {
 	indexPath := m.IndexPath()
-		data, err := utils.ReadFileSafe(indexPath, constants.MaxMemoryFileReadBytes)
+	data, err := utils.ReadFileSafe(indexPath, constants.MaxMemoryFileReadBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", nil

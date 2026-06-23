@@ -487,25 +487,26 @@ func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Messa
 			}
 			return
 		}
+		streamCtx, streamCancel := context.WithCancel(ctx)
+		defer streamCancel()
 		defer body.Close()
 
 		acc := newOpenAIStreamAccumulator()
 		hasStopReason := false
-		scanner := newCtxSSEScanner(ctx, body)
+		scanner := newCtxSSEScanner(streamCtx, body)
+		defer scanner.Close()
 
 		idleTimer := time.NewTimer(idleTimeout)
 		defer idleTimer.Stop()
-
-		watchdogCtx, cancelWatchdog := context.WithCancel(ctx)
-		defer cancelWatchdog()
 
 		go func() {
 			select {
 			case <-idleTimer.C:
 				log.Warn("OpenAI: Idle timeout reached")
 				result.Error = "idle timeout"
-				body.Close()
-			case <-watchdogCtx.Done():
+				streamCancel()
+				go body.Close()
+			case <-streamCtx.Done():
 			}
 		}()
 
@@ -526,7 +527,7 @@ func (p *openAIProvider) SendMessageStream(ctx context.Context, messages []Messa
 		}
 
 		for {
-			data, ok := scanner.Next(ctx)
+			data, ok := scanner.Next(streamCtx)
 			if !ok {
 				break
 			}

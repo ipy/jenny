@@ -321,25 +321,26 @@ func (p *genaiProvider) SendMessageStream(ctx context.Context, messages []Messag
 			}
 			return
 		}
+		streamCtx, streamCancel := context.WithCancel(ctx)
+		defer streamCancel()
 		defer body.Close()
 
 		acc := newGenAIStreamAccumulator()
 		hasFinishReason := false
-		scanner := newCtxSSEScanner(ctx, body)
+		scanner := newCtxSSEScanner(streamCtx, body)
+		defer scanner.Close()
 
 		idleTimer := time.NewTimer(idleTimeout)
 		defer idleTimer.Stop()
-
-		watchdogCtx, cancelWatchdog := context.WithCancel(ctx)
-		defer cancelWatchdog()
 
 		go func() {
 			select {
 			case <-idleTimer.C:
 				log.Warn("GenAI: idle timeout reached")
 				result.Error = "idle timeout"
-				body.Close()
-			case <-watchdogCtx.Done():
+				streamCancel()
+				go body.Close()
+			case <-streamCtx.Done():
 			}
 		}()
 
@@ -360,7 +361,7 @@ func (p *genaiProvider) SendMessageStream(ctx context.Context, messages []Messag
 		}
 
 		for {
-			data, ok := scanner.Next(ctx)
+			data, ok := scanner.Next(streamCtx)
 			if !ok {
 				break
 			}

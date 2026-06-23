@@ -1082,3 +1082,168 @@ func TestParseBoolFlagAbsentUsesConfig(t *testing.T) {
 		t.Errorf("expected config.json disable-compact=true to flow through, got false")
 	}
 }
+
+func TestParseInputFormatStreamJSON(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"}
+
+	flags, _, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if flags.InputFormat != "stream-json" {
+		t.Errorf("expected input-format 'stream-json', got %q", flags.InputFormat)
+	}
+	if flags.Prompt != "" {
+		t.Errorf("expected empty prompt with --input-format stream-json, got %q", flags.Prompt)
+	}
+}
+
+func TestParseAllowDangerouslySkipPermissions(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "--allow-dangerously-skip-permissions", "--print", "hello"}
+
+	flags, _, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !flags.SkipPermissions {
+		t.Error("expected skip-permissions to be true via --allow-dangerously-skip-permissions")
+	}
+}
+
+func TestParseMaxThinkingTokens(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "--max-thinking-tokens", "8192", "--print", "hello"}
+
+	flags, _, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if flags.ThinkingBudget != 8192 {
+		t.Errorf("expected ThinkingBudget=8192, got %d", flags.ThinkingBudget)
+	}
+}
+
+func TestParseAllowedTools(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "--allowedTools", "Read,Write,Bash", "--print", "hello"}
+
+	flags, _, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if len(flags.AllowedTools) != 3 {
+		t.Errorf("expected 3 allowed tools, got %d: %v", len(flags.AllowedTools), flags.AllowedTools)
+	}
+}
+
+func TestParseDisallowedTools(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "--disallowedTools", "Bash,Write", "--print", "hello"}
+
+	flags, _, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if len(flags.DisallowedTools) != 2 {
+		t.Errorf("expected 2 disallowed tools, got %d", len(flags.DisallowedTools))
+	}
+}
+
+func TestParsePermissionMode(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "--permission-mode", "bypassPermissions", "--print", "hello"}
+
+	flags, _, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !flags.SkipPermissions {
+		t.Error("expected skip-permissions to be true via --permission-mode bypassPermissions")
+	}
+}
+
+func TestParsePermissionPromptTool(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "--permission-prompt-tool", "stdio", "--print", "hello"}
+
+	flags, _, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if flags.PermissionPromptTool != "stdio" {
+		t.Errorf("expected permission-prompt-tool 'stdio', got %q", flags.PermissionPromptTool)
+	}
+}
+
+func TestParseSDKCompatibilityFlags(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{
+		"jenny",
+		"--betas", "context-1m",
+		"--debug-to-stderr",
+		"--fallback-model", "claude-3-haiku",
+		"--add-dir", "/tmp/extra",
+		"--plugin-dir", "/tmp/plugins",
+		"--resume-session-at", "uuid-123",
+		"--setting-sources", "local,global",
+		"--print", "hello",
+	}
+
+	_, _, err := Parse()
+	if err != nil {
+		t.Errorf("SDK compatibility flags should be accepted without error: %v", err)
+	}
+}
+
+func TestParseSDKFullSpawn(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{
+		"jenny",
+		"--output-format", "stream-json",
+		"--verbose",
+		"--input-format", "stream-json",
+		"--max-turns", "100",
+		"--model", "opus",
+		"--allowedTools", "Task,Bash,Glob,Grep,Read,Write,Edit",
+	}
+
+	flags, _, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error for SDK-style spawn: %v", err)
+	}
+	if flags.InputFormat != "stream-json" {
+		t.Errorf("expected input-format 'stream-json', got %q", flags.InputFormat)
+	}
+	if flags.OutputFormat != "stream-json" {
+		t.Errorf("expected output-format 'stream-json', got %q", flags.OutputFormat)
+	}
+	if flags.MaxTurns != 100 {
+		t.Errorf("expected max-turns 100, got %d", flags.MaxTurns)
+	}
+	if flags.Model != "opus" {
+		t.Errorf("expected model 'opus', got %q", flags.Model)
+	}
+	if len(flags.AllowedTools) != 7 {
+		t.Errorf("expected 7 allowed tools, got %d", len(flags.AllowedTools))
+	}
+}

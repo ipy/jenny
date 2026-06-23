@@ -539,27 +539,28 @@ func (p *openAIResponsesProvider) SendMessageStream(ctx context.Context, message
 			}
 			return
 		}
+		streamCtx, streamCancel := context.WithCancel(ctx)
+		defer streamCancel()
 		defer body.Close()
 
 		idleTimer := time.NewTimer(idleTimeout)
 		defer idleTimer.Stop()
-
-		watchdogCtx, cancelWatchdog := context.WithCancel(ctx)
-		defer cancelWatchdog()
 
 		go func() {
 			select {
 			case <-idleTimer.C:
 				log.Warn("OpenAI Responses: Idle timeout reached")
 				result.Error = "idle timeout"
-				body.Close()
-			case <-watchdogCtx.Done():
+				streamCancel()
+				go body.Close()
+			case <-streamCtx.Done():
 			}
 		}()
 
 		acc := newResponsesStreamAccumulator()
 		hasCompleted := false
-		scanner := newCtxSSEScanner(ctx, body)
+		scanner := newCtxSSEScanner(streamCtx, body)
+		defer scanner.Close()
 
 		// Emit message_start
 		messageID := fmt.Sprintf("msg_openai_resp_%s", GenerateShortID())
@@ -578,7 +579,7 @@ func (p *openAIResponsesProvider) SendMessageStream(ctx context.Context, message
 		}
 
 		for {
-			data, ok := scanner.Next(ctx)
+			data, ok := scanner.Next(streamCtx)
 			if !ok {
 				break
 			}
