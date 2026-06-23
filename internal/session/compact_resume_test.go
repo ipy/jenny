@@ -18,7 +18,7 @@ func withJennyHomeCompact(t *testing.T, dir string) {
 	t.Cleanup(func() { constants.JennyHomeDirFunc = orig })
 }
 
-// TestMaybeExtractArchive_ExtractsAndRestoresTranscript (AC8)
+// TestMaybeExtractArchive_ExtractsAndRestoresTranscript
 // When the session directory is absent but the archive is present,
 // MaybeExtractArchive extracts the archive and the Manager can then load
 // the original transcript entries.
@@ -83,7 +83,7 @@ func TestMaybeExtractArchive_ExtractsAndRestoresTranscript(t *testing.T) {
 	}
 }
 
-// TestMaybeExtractArchive_NoOpWhenDirectoryExists (AC8 inverse):
+// TestMaybeExtractArchive_NoOpWhenDirectoryExists:
 // If the session directory already exists, MaybeExtractArchive is a no-op even
 // if an archive with the same id is sitting next to it.
 func TestMaybeExtractArchive_NoOpWhenDirectoryExists(t *testing.T) {
@@ -116,7 +116,7 @@ func TestMaybeExtractArchive_NoOpWhenDirectoryExists(t *testing.T) {
 // because the underlying compact.ExtractArchive invoked os.Remove while the
 // archive handle was still open; this test exercises the keepArchive=true
 // branch at the session layer to keep that wiring covered alongside the
-// AC5/AC8 keepArchive test in the compact package.
+// keepArchive test in the compact package.
 //
 // The keepArchive flag is now sourced from JENNY_COMPACT_KEEP_ARCHIVE /
 // --compact-keep-archive via the unified koanf config layer; this test calls

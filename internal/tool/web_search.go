@@ -10,8 +10,8 @@ import (
 
 // WebSearch limits.
 const (
-	webSearchMinQueryLen      = 2 // AC2: minimum query length
-	webSearchMaxResults       = 8 // AC3: maximum results per call
+	webSearchMinQueryLen      = 2 // Minimum query length
+	webSearchMaxResults       = 8 // Maximum results per call
 	webSearchMaxCallsPerAgent = 8 // maximum searches per agent session
 )
 
@@ -88,7 +88,7 @@ func (t *WebSearchTool) Execute(ctx context.Context, input map[string]any, cwd s
 		}, nil
 	}
 
-	// AC2: Validate query length
+	// Validate query length
 	query, ok := input["query"].(string)
 	if !ok || len(query) < webSearchMinQueryLen {
 		return &ToolResult{
@@ -97,7 +97,7 @@ func (t *WebSearchTool) Execute(ctx context.Context, input map[string]any, cwd s
 		}, nil
 	}
 
-	// AC3: Check for mutual exclusion of domain filters
+	// Check for mutual exclusion of domain filters
 	hasAllowed := false
 	hasBlocked := false
 

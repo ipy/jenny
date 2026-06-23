@@ -11,10 +11,10 @@ import (
 	"github.com/ipy/jenny/internal/log"
 )
 
-// TestMalformedJSONLogging_AC6 is the AC6 regression test.
+// TestMalformedJSONLogging is the regression test.
 // It verifies that LoadTranscript logs a warning for malformed JSON lines
 // and continues parsing remaining lines.
-func TestMalformedJSONLogging_AC6(t *testing.T) {
+func TestMalformedJSONLogging_FileIO(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -54,30 +54,30 @@ func TestMalformedJSONLogging_AC6(t *testing.T) {
 	captureBuf := &bytes.Buffer{}
 	log.SetOutput(captureBuf)
 
-	// AC6: LoadTranscript should skip the malformed line and return only valid entries.
+	// LoadTranscript should skip the malformed line and return only valid entries.
 	loaded, err := m.LoadTranscript(sessionID)
 	if err != nil {
 		t.Fatalf("LoadTranscript() error = %v", err)
 	}
 	if len(loaded) != 2 {
-		t.Errorf("AC6 FAIL: LoadTranscript() returned %d entries, want 2 (malformed line skipped)", len(loaded))
+		t.Errorf("FAIL: LoadTranscript() returned %d entries, want 2 (malformed line skipped)", len(loaded))
 	}
 
-	// AC6: Verify log capture contains a Warn for the malformed line.
+	// Verify log capture contains a Warn for the malformed line.
 	captured := captureBuf.String()
 	if !strings.Contains(captured, "WARN") {
-		t.Errorf("AC6 FAIL: expected log capture to contain WARN level, got: %q", captured)
+		t.Errorf("FAIL: expected log capture to contain WARN level, got: %q", captured)
 	}
 	if !strings.Contains(captured, "Malformed JSON line in transcript") {
-		t.Errorf("AC6 FAIL: expected 'Malformed JSON line in transcript' in log, got: %q", captured)
+		t.Errorf("FAIL: expected 'Malformed JSON line in transcript' in log, got: %q", captured)
 	}
 }
 
-// TestConcurrency_AC2 is the AC2 regression test.
+// TestConcurrency is the regression test.
 // It exercises concurrent AppendEntry and LoadTranscript on the same session ID.
 // The RWMutex implementation must report zero data races under -race and
 // ensure LoadTranscript never returns a truncated JSONL line.
-func TestConcurrency_AC2(t *testing.T) {
+func TestConcurrency_FileIO(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping concurrency test in short mode")
 	}
@@ -132,10 +132,10 @@ func TestConcurrency_AC2(t *testing.T) {
 					}
 					continue
 				}
-				// AC2: Every entry must have non-empty Content (not a truncated line).
+				// Every entry must have non-empty Content (not a truncated line).
 				for _, e := range loaded {
 					if e.Content == "" {
-						t.Errorf("AC2 FAIL: LoadTranscript returned entry with empty Content (truncated line?)")
+						t.Errorf("FAIL: LoadTranscript returned entry with empty Content (truncated line?)")
 					}
 				}
 			}
@@ -153,7 +153,7 @@ func TestConcurrency_AC2(t *testing.T) {
 	}
 	expected := numWriters * writesPerWriter
 	if len(loaded) != expected {
-		t.Errorf("AC2 FAIL: LoadTranscript() returned %d entries, want %d", len(loaded), expected)
+		t.Errorf("FAIL: LoadTranscript() returned %d entries, want %d", len(loaded), expected)
 	}
 
 	// Verify all writes are accounted for by content prefix.
@@ -165,13 +165,13 @@ func TestConcurrency_AC2(t *testing.T) {
 		for i := 0; i < writesPerWriter; i++ {
 			key := fmt.Sprintf("writer-%d-entry-%d", w, i)
 			if !seen[key] {
-				t.Errorf("AC2 FAIL: missing entry %q in final transcript", key)
+				t.Errorf("FAIL: missing entry %q in final transcript", key)
 			}
 		}
 	}
 }
 
-// TestUTF8SafeTruncate_TruncateForLog verifies AC7: truncateForLog uses rune-aware
+// TestUTF8SafeTruncate_TruncateForLog verifies truncateForLog uses rune-aware
 // slicing so multi-byte code points are never split mid-character.
 func TestUTF8SafeTruncate_TruncateForLog(t *testing.T) {
 	t.Parallel()
@@ -205,9 +205,9 @@ func TestUTF8SafeTruncate_TruncateForLog(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := truncateForLog(tt.input, tt.max)
-			// AC7: result must be valid UTF-8.
+			// Result must be valid UTF-8.
 			if !utf8Valid(got) {
-				t.Errorf("AC7 FAIL: truncateForLog(%q, %d) = %q is not valid UTF-8", tt.input, tt.max, got)
+				t.Errorf("FAIL: truncateForLog(%q, %d) = %q is not valid UTF-8", tt.input, tt.max, got)
 			}
 		})
 	}
@@ -223,7 +223,7 @@ func utf8Valid(s string) bool {
 	return true
 }
 
-// TestAtomicWrite_NoPartialFiles verifies AC4: after AppendEntry calls,
+// TestAtomicWrite_NoPartialFiles verifies after AppendEntry calls,
 // the transcript file ends with a newline (no partial JSONL line).
 func TestAtomicWrite_NoPartialFiles(t *testing.T) {
 	t.Parallel()
@@ -255,11 +255,11 @@ func TestAtomicWrite_NoPartialFiles(t *testing.T) {
 	content := string(data)
 	lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
 	if len(lines) != 10 {
-		t.Errorf("AC4: got %d lines, want 10", len(lines))
+		t.Errorf("got %d lines, want 10", len(lines))
 	}
 	for _, line := range lines {
 		if line == "" {
-			t.Errorf("AC4: found empty line (partial/corrupt JSONL)")
+			t.Errorf("found empty line (partial/corrupt JSONL)")
 		}
 	}
 }

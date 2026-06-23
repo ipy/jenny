@@ -145,7 +145,7 @@ func (t *NotebookEditTool) Execute(ctx context.Context, input map[string]any, cw
 		t.activator.ActivateForPath(notebookPath)
 	}
 
-	// AC1: Check extension is .ipynb
+	// Check extension is .ipynb
 	if !strings.HasSuffix(notebookPath, ".ipynb") {
 		return &ToolResult{
 			Content: "Editing non-.ipynb files requires the Edit tool. Use Edit for regular files.",
@@ -153,7 +153,7 @@ func (t *NotebookEditTool) Execute(ctx context.Context, input map[string]any, cw
 		}, nil
 	}
 
-	// AC3: Check readFileState cache for the path
+	// Check readFileState cache for the path
 	entry, exists := t.readCache.GetRead(notebookPath)
 	if !exists {
 		return &ToolResult{
@@ -162,7 +162,7 @@ func (t *NotebookEditTool) Execute(ctx context.Context, input map[string]any, cw
 		}, nil
 	}
 
-	// AC3: Check staleness
+	// Check staleness
 	info, err := os.Stat(notebookPath)
 	if err == nil {
 		if info.ModTime().After(entry.Mtime) {
@@ -173,7 +173,7 @@ func (t *NotebookEditTool) Execute(ctx context.Context, input map[string]any, cw
 		}
 	}
 
-	// AC3: Check if entry was a partial read
+	// Check if entry was a partial read
 	if !entry.IsFullRead {
 		return &ToolResult{
 			Content: "Cannot edit after partial read. Use Read tool without offset/limit to get the full file first.",
@@ -181,7 +181,7 @@ func (t *NotebookEditTool) Execute(ctx context.Context, input map[string]any, cw
 		}, nil
 	}
 
-	// AC2: Validate parameters based on edit mode
+	// Validate parameters based on edit mode
 	switch editMode {
 	case "replace":
 		// cell_id required for replace
@@ -199,7 +199,7 @@ func (t *NotebookEditTool) Execute(ctx context.Context, input map[string]any, cw
 			}, nil
 		}
 	case "insert":
-		// AC2: cell_type required for insert
+		// cell_type required for insert
 		if cellType == "" {
 			return &ToolResult{
 				Content: "cell_type is required for insert mode (use 'code' or 'markdown')",
@@ -341,7 +341,7 @@ func (t *NotebookEditTool) Execute(ctx context.Context, input map[string]any, cw
 		newMtime = newInfo.ModTime()
 	}
 
-	// AC5: Update readFileCache with new content, offset undefined to break Read dedup
+	// Update readFileCache with new content, offset undefined to break Read dedup
 	t.readCache.RecordRead(notebookPath, string(newJSON), newMtime, true, 0, 0)
 
 	return &ToolResult{

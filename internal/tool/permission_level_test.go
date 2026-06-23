@@ -26,7 +26,7 @@ func TestPermissionLevel_String(t *testing.T) {
 }
 
 // TestParsePermissionLevel verifies parsing from string values.
-// Covers AC8: valid levels from CLI/env/config, and error on invalid values.
+// Valid levels from CLI/env/config, and error on invalid values.
 func TestParsePermissionLevel(t *testing.T) {
 	tests := []struct {
 		input   string
@@ -68,11 +68,11 @@ func TestParsePermissionLevel(t *testing.T) {
 
 // TestPermissionLevel_CapabilityQueries tests the capability query methods
 // that drive CommandGate and tool-level behavior.
-// AC1: read blocks Bash and file writes
-// AC2: analyze allows read-only Bash, blocks writes
-// AC3: edit allows read-only Bash + file writes (current default)
-// AC4: execute allows Bash mutation, pattern blocks enforced
-// AC5: unrestricted skips all gates
+// Read blocks Bash and file writes
+// Analyze allows read-only Bash, blocks writes
+// Edit allows read-only Bash + file writes (current default)
+// Execute allows Bash mutation, pattern blocks enforced
+// Unrestricted skips all gates
 func TestPermissionLevel_CapabilityQueries(t *testing.T) {
 	tests := []struct {
 		name                 string
@@ -140,7 +140,7 @@ func TestPermissionLevel_CapabilityQueries(t *testing.T) {
 }
 
 // TestPermissionLevel_DefaultIsEdit verifies that the default permission level
-// matches current behavior (AC3: edit is the default).
+// Matches current behavior (edit is the default).
 func TestPermissionLevel_DefaultIsEdit(t *testing.T) {
 	if DefaultPermissionLevel != PermissionEdit {
 		t.Errorf("DefaultPermissionLevel = %v, want PermissionEdit", DefaultPermissionLevel)
@@ -149,8 +149,8 @@ func TestPermissionLevel_DefaultIsEdit(t *testing.T) {
 
 // TestResolvePermissionLevel tests the resolution logic when both
 // --dangerously-skip-permissions and --permission-level are specified.
-// AC5: --dangerously-skip-permissions maps to unrestricted
-// AC6: both specified → unrestricted + warning
+// --dangerously-skip-permissions maps to unrestricted
+// Both specified → unrestricted + warning
 func TestResolvePermissionLevel(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -165,7 +165,7 @@ func TestResolvePermissionLevel(t *testing.T) {
 			wantLevel: PermissionEdit, wantWarnContains: "",
 		},
 		{
-			name:      "only skip-perms → unrestricted (AC5)",
+			name:      "only skip-perms → unrestricted",
 			skipPerms: true, permLevelStr: "",
 			wantLevel: PermissionUnrestricted, wantWarnContains: "",
 		},
@@ -175,7 +175,7 @@ func TestResolvePermissionLevel(t *testing.T) {
 			wantLevel: PermissionExecute, wantWarnContains: "",
 		},
 		{
-			name:      "both specified → unrestricted + warning (AC6)",
+			name:      "both specified → unrestricted + warning",
 			skipPerms: true, permLevelStr: "edit",
 			wantLevel: PermissionUnrestricted, wantWarnContains: "dangerously-skip-permissions",
 		},

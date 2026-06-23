@@ -658,13 +658,13 @@ func TestManager_ListSessions_FiltersNonJsonl(t *testing.T) {
 		t.Fatalf("AppendEntry() error = %v", err)
 	}
 
-	// Create a subdirectory inside sessions/ that has no transcript.jsonl (AC11)
+	// Create a subdirectory inside sessions/ that has no transcript.jsonl
 	emptyDir := filepath.Join(tmpDir, "sessions", "sess_no_transcript")
 	if err := os.MkdirAll(emptyDir, 0755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
 
-	// Create a non-directory file inside sessions/ (AC12)
+	// Create a non-directory file inside sessions/
 	nonDirFile := filepath.Join(tmpDir, "sessions", "not_a_dir.txt")
 	if err := os.WriteFile(nonDirFile, []byte("not a session"), 0644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
@@ -683,23 +683,9 @@ func TestManager_ListSessions_FiltersNonJsonl(t *testing.T) {
 	}
 }
 
-// TestAC8_ListSessions_Ordering tests AC8: sessions sorted by most recent transcript.jsonl mtime first.
-func TestAC8_ListSessions_Ordering(t *testing.T) {
-	TestManager_ListSessions_Ordering(t)
-}
-
-// TestAC9_ListSessions_EmptyDir tests AC9: empty sessions/ directory returns nil.
-func TestAC9_ListSessions_EmptyDir(t *testing.T) {
-	TestManager_ListSessions_EmptyDir(t)
-}
-
-// TestAC10_ListSessions_NonExistentDir tests AC10: non-existent sessions/ directory returns nil.
-func TestAC10_ListSessions_NonExistentDir(t *testing.T) {
-	TestManager_ListSessions_NonExistentDir(t)
-}
-
-// TestAC11_ListSessions_ExcludesDirsWithoutTranscript tests AC11: directories without transcript.jsonl excluded.
-func TestAC11_ListSessions_ExcludesDirsWithoutTranscript(t *testing.T) {
+// TestListSessions_ExcludesDirsWithoutTranscript tests that directories
+// without transcript.jsonl are excluded from session listings.
+func TestListSessions_ExcludesDirsWithoutTranscript(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
 		t.Fatalf("MkdirTemp() error = %v", err)
@@ -737,8 +723,9 @@ func TestAC11_ListSessions_ExcludesDirsWithoutTranscript(t *testing.T) {
 	}
 }
 
-// TestAC12_ListSessions_IgnoresNonDirEntries tests AC12: non-directory entries in sessions/ are ignored.
-func TestAC12_ListSessions_IgnoresNonDirEntries(t *testing.T) {
+// TestListSessions_IgnoresNonDirEntries tests that non-directory entries in
+// sessions/ are ignored.
+func TestListSessions_IgnoresNonDirEntries(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
 		t.Fatalf("MkdirTemp() error = %v", err)
@@ -931,7 +918,7 @@ func TestManager_AppendSystemPrompt_NilChecks(t *testing.T) {
 
 // TestMalformedJSONLogging verifies that when LoadTranscript encounters a
 // non-JSON line, it emits a structured log.Warn message (visible via log
-// capture) and continues parsing remaining lines (AC7).
+// capture) and continues parsing remaining lines.
 func TestMalformedJSONLogging(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
@@ -1000,7 +987,7 @@ func TestMalformedJSONLogging(t *testing.T) {
 // same session ID. The locking implementation must (a) report zero data races
 // under -race and (b) ensure that LoadTranscript never returns a truncated
 // JSONL line (an entry that started but did not finish) from an in-progress
-// AppendEntry (AC2).
+// AppendEntry.
 func TestConcurrency(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-concurrency-*")
 	if err != nil {
@@ -1102,9 +1089,9 @@ func TestConcurrency(t *testing.T) {
 	}
 }
 
-// TestAC2_LoadPostBoundaryMessages tests that LoadPostBoundaryMessages correctly
+// TestLoadPostBoundaryMessages tests that LoadPostBoundaryMessages correctly
 // filters entries after a compaction boundary.
-func TestAC2_LoadPostBoundaryMessages(t *testing.T) {
+func TestLoadPostBoundaryMessages(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
 		t.Fatalf("MkdirTemp() error = %v", err)
@@ -1195,9 +1182,9 @@ func TestAC2_LoadPostBoundaryMessages(t *testing.T) {
 	}
 }
 
-// TestAC2_LoadPostBoundaryMessages_NoBoundary tests that when there's no boundary,
+// TestLoadPostBoundaryMessages_NoBoundary tests that when there's no boundary,
 // LoadPostBoundaryMessages returns all entries (current behavior).
-func TestAC2_LoadPostBoundaryMessages_NoBoundary(t *testing.T) {
+func TestLoadPostBoundaryMessages_NoBoundary(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
 		t.Fatalf("MkdirTemp() error = %v", err)
@@ -1233,8 +1220,8 @@ func TestAC2_LoadPostBoundaryMessages_NoBoundary(t *testing.T) {
 	}
 }
 
-// TestAC5_MultipleCompactionBoundaries tests that only the most recent boundary applies.
-func TestAC5_MultipleCompactionBoundaries(t *testing.T) {
+// TestMultipleCompactionBoundaries tests that only the most recent boundary applies.
+func TestMultipleCompactionBoundaries(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
 		t.Fatalf("MkdirTemp() error = %v", err)
@@ -1301,8 +1288,8 @@ func TestAC5_MultipleCompactionBoundaries(t *testing.T) {
 	}
 }
 
-// TestAC4_CompactionBoundaryMetadata tests that boundary metadata is persisted correctly.
-func TestAC4_CompactionBoundaryMetadata(t *testing.T) {
+// TestCompactionBoundaryMetadata tests that boundary metadata is persisted correctly.
+func TestCompactionBoundaryMetadata(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
 		t.Fatalf("MkdirTemp() error = %v", err)

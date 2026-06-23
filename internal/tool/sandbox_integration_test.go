@@ -17,10 +17,10 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// AC1 — Bash wrapped unless excluded
+// Bash wrapped unless excluded
 // ---------------------------------------------------------------------------
 
-func TestBashTool_AC1_NoSandboxConfigured(t *testing.T) {
+func TestBashTool_NoSandboxConfigured(t *testing.T) {
 	// When sandbox is nil, command executes normally without wrapping
 	bash := NewBashTool(PermissionUnrestricted)
 	result, err := bash.Execute(context.Background(), map[string]any{
@@ -37,7 +37,7 @@ func TestBashTool_AC1_NoSandboxConfigured(t *testing.T) {
 	}
 }
 
-func TestBashTool_AC1_ActiveSandboxWrapsCommand(t *testing.T) {
+func TestBashTool_ActiveSandboxWrapsCommand(t *testing.T) {
 	sb := sandbox.NewMockSandboxManager()
 	if err := sb.Initialize(context.Background(), sandbox.Config{
 		Backend: sandbox.BackendLinux,
@@ -66,7 +66,7 @@ func TestBashTool_AC1_ActiveSandboxWrapsCommand(t *testing.T) {
 	}
 }
 
-func TestBashTool_AC1_ExcludedCommandBypassesSandbox(t *testing.T) {
+func TestBashTool_ExcludedCommandBypassesSandbox(t *testing.T) {
 	sb := sandbox.NewMockSandboxManager()
 	if err := sb.Initialize(context.Background(), sandbox.Config{
 		Backend:          sandbox.BackendLinux,
@@ -92,7 +92,7 @@ func TestBashTool_AC1_ExcludedCommandBypassesSandbox(t *testing.T) {
 	// Verifying the call was made confirms BashTool delegated correctly.
 }
 
-func TestBashTool_AC1_DangerouslyDisableSandboxBypasses(t *testing.T) {
+func TestBashTool_DangerouslyDisableSandboxBypasses(t *testing.T) {
 	sb := sandbox.NewMockSandboxManager()
 	if err := sb.Initialize(context.Background(), sandbox.Config{
 		Backend: sandbox.BackendLinux,
@@ -122,7 +122,7 @@ func TestBashTool_AC1_DangerouslyDisableSandboxBypasses(t *testing.T) {
 	}
 }
 
-func TestBashTool_AC1_InactiveSandboxDoesNotWrap(t *testing.T) {
+func TestBashTool_InactiveSandboxDoesNotWrap(t *testing.T) {
 	sb := sandbox.NewMockSandboxManager()
 	if err := sb.Initialize(context.Background(), sandbox.Config{
 		Backend: sandbox.BackendNone, // inactive
@@ -148,10 +148,10 @@ func TestBashTool_AC1_InactiveSandboxDoesNotWrap(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC2 — Managed-domains-only restricts network (via mock config)
+// Managed-domains-only restricts network (via mock config)
 // ---------------------------------------------------------------------------
 
-func TestSandbox_AC2_ManagedDomainsOnlyConfig(t *testing.T) {
+func TestSandbox_ManagedDomainsOnlyConfig(t *testing.T) {
 	// Verify the network policy constant values
 	if sandbox.NetworkPolicyManagedDomainsOnly != "managed-domains-only" {
 		t.Errorf("expected NetworkPolicyManagedDomainsOnly to be 'managed-domains-only', got %q", sandbox.NetworkPolicyManagedDomainsOnly)
@@ -184,7 +184,7 @@ func TestSandbox_AC2_ManagedDomainsOnlyConfig(t *testing.T) {
 	}
 }
 
-func TestSandbox_AC2_DeniedDomainsAlwaysBlocked(t *testing.T) {
+func TestSandbox_DeniedDomainsAlwaysBlocked(t *testing.T) {
 	// DeniedDomains should block regardless of policy mode
 	sb := sandbox.NewMockSandboxManager()
 	if err := sb.Initialize(context.Background(), sandbox.Config{
@@ -198,9 +198,9 @@ func TestSandbox_AC2_DeniedDomainsAlwaysBlocked(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC3 — Grep uses sandboxed ripgrep when sandbox on
+// Grep uses sandboxed ripgrep when sandbox on
 // ---------------------------------------------------------------------------
-func TestGrepTool_AC3_SandboxedRipgrepPathUsed(t *testing.T) {
+func TestGrepTool_SandboxedRipgrepPathUsed(t *testing.T) {
 	if _, err := exec.LookPath("rg"); err != nil {
 		t.Skip("ripgrep (rg) not on PATH; skipping sandboxed rg test")
 	}
@@ -241,7 +241,7 @@ func TestGrepTool_AC3_SandboxedRipgrepPathUsed(t *testing.T) {
 	}
 }
 
-func TestGrepTool_AC3_NoSandboxFallsBackToHostRg(t *testing.T) {
+func TestGrepTool_NoSandboxFallsBackToHostRg(t *testing.T) {
 	// When no sandbox configured, Grep uses host rg
 	grep := NewGrepTool()
 
@@ -265,7 +265,7 @@ func TestGrepTool_AC3_NoSandboxFallsBackToHostRg(t *testing.T) {
 	}
 }
 
-func TestGrepTool_AC3_InactiveSandboxFallsBackToHostRg(t *testing.T) {
+func TestGrepTool_InactiveSandboxFallsBackToHostRg(t *testing.T) {
 	// When sandbox is inactive, Grep uses host rg even if sandbox is configured
 	sb := sandbox.NewMockSandboxManager()
 	if err := sb.Initialize(context.Background(), sandbox.Config{
@@ -300,10 +300,10 @@ func TestGrepTool_AC3_InactiveSandboxFallsBackToHostRg(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC4 — Missing deps yield clear unavailable reason
+// Missing deps yield clear unavailable reason
 // ---------------------------------------------------------------------------
 
-func TestSandbox_AC4_ErrMissingDependencyFormat(t *testing.T) {
+func TestSandbox_ErrMissingDependencyFormat(t *testing.T) {
 	err := &sandbox.ErrMissingDependency{
 		Backend:     sandbox.BackendLinux,
 		Dependency:  "bwrap",
@@ -316,7 +316,7 @@ func TestSandbox_AC4_ErrMissingDependencyFormat(t *testing.T) {
 	}
 }
 
-func TestSandbox_AC4_MockMissingDepsReturnsErr(t *testing.T) {
+func TestSandbox_MockMissingDepsReturnsErr(t *testing.T) {
 	sb := sandbox.NewMockSandboxManager()
 	sb.SetMissingDeps(true, "bwrap", "sudo apt install bubblewrap")
 
@@ -347,7 +347,7 @@ func TestSandbox_AC4_MockMissingDepsReturnsErr(t *testing.T) {
 	}
 }
 
-func TestSandbox_AC4_MockMissingDepsWarningMode(t *testing.T) {
+func TestSandbox_MockMissingDepsWarningMode(t *testing.T) {
 	sb := sandbox.NewMockSandboxManager()
 	sb.SetMissingDeps(true, "bwrap", "sudo apt install bubblewrap")
 
@@ -367,7 +367,7 @@ func TestSandbox_AC4_MockMissingDepsWarningMode(t *testing.T) {
 
 // Test that the macOS backend properly checks for sandbox-exec
 // (black-box: initializing on macOS should succeed since sandbox-exec is present)
-func TestSandbox_AC4_MacOSBackendDependencyCheck(t *testing.T) {
+func TestSandbox_MacOSBackendDependencyCheck(t *testing.T) {
 	sb := sandbox.NewMacOSSandboxManager()
 	cfg := sandbox.Config{
 		Backend:           sandbox.BackendMacOS,
@@ -412,10 +412,10 @@ func TestSandbox_AC4_MacOSBackendDependencyCheck(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC5 — Config refresh without restart
+// Config refresh without restart
 // ---------------------------------------------------------------------------
 
-func TestSandbox_AC5_MockRefreshConfig(t *testing.T) {
+func TestSandbox_MockRefreshConfig(t *testing.T) {
 	sb := sandbox.NewMockSandboxManager()
 	if err := sb.Initialize(context.Background(), sandbox.Config{
 		Backend: sandbox.BackendLinux,
@@ -429,7 +429,7 @@ func TestSandbox_AC5_MockRefreshConfig(t *testing.T) {
 	}
 }
 
-func TestSandbox_AC5_MacOSRefreshConfig(t *testing.T) {
+func TestSandbox_MacOSRefreshConfig(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("macOS sandbox tests require darwin")
 	}
@@ -448,7 +448,7 @@ func TestSandbox_AC5_MacOSRefreshConfig(t *testing.T) {
 	}
 }
 
-func TestSandbox_AC5_RefreshAfterConfigChange(t *testing.T) {
+func TestSandbox_RefreshAfterConfigChange(t *testing.T) {
 	// Verify RefreshConfig re-reads sandbox settings
 	sb := sandbox.NewMockSandboxManager()
 	if err := sb.Initialize(context.Background(), sandbox.Config{
@@ -544,7 +544,7 @@ func TestRegistry_WithSandboxWiring(t *testing.T) {
 // Platform backend: macOS sandbox-exec wraps commands
 // ---------------------------------------------------------------------------
 
-func TestMacOSSandbox_AC1_WrapsCommand(t *testing.T) {
+func TestMacOSSandbox_WrapsCommand(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("macOS sandbox tests require darwin")
 	}
@@ -570,7 +570,7 @@ func TestMacOSSandbox_AC1_WrapsCommand(t *testing.T) {
 	}
 }
 
-func TestMacOSSandbox_AC1_ExcludedCommands(t *testing.T) {
+func TestMacOSSandbox_ExcludedCommands(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("macOS sandbox tests require darwin")
 	}
@@ -592,7 +592,7 @@ func TestMacOSSandbox_AC1_ExcludedCommands(t *testing.T) {
 	}
 }
 
-func TestMacOSSandbox_AC2_NetworkPolicy(t *testing.T) {
+func TestMacOSSandbox_NetworkPolicy(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("macOS sandbox tests require darwin")
 	}
@@ -620,7 +620,7 @@ func TestMacOSSandbox_AC2_NetworkPolicy(t *testing.T) {
 // Unhappy paths
 // ---------------------------------------------------------------------------
 
-func TestBashTool_AC1_Unhappy_SandboxWrapError(t *testing.T) {
+func TestBashTool_Unhappy_SandboxWrapError(t *testing.T) {
 	// When WrapWithSandbox returns an error, BashTool should return a clear
 	// sandbox error message. Use a command that passes CommandGate.
 	sb := sandbox.NewMockSandboxManager()
@@ -650,7 +650,7 @@ func TestBashTool_AC1_Unhappy_SandboxWrapError(t *testing.T) {
 	}
 }
 
-func TestBashTool_AC1_Unhappy_NilSandboxInactive(t *testing.T) {
+func TestBashTool_Unhappy_NilSandboxInactive(t *testing.T) {
 	// Proves nil sandbox doesn't cause issues — command runs normally
 	bash := NewBashTool(PermissionUnrestricted)
 	result, err := bash.Execute(context.Background(), map[string]any{
@@ -667,7 +667,7 @@ func TestBashTool_AC1_Unhappy_NilSandboxInactive(t *testing.T) {
 	}
 }
 
-func TestMacOSSandbox_AC4_Unhappy_MissingBinary(t *testing.T) {
+func TestMacOSSandbox_Unhappy_MissingBinary(t *testing.T) {
 	sb := sandbox.NewMacOSSandboxManager()
 	cfg := sandbox.Config{
 		Backend:           sandbox.BackendMacOS,

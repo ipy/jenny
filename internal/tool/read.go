@@ -22,7 +22,7 @@ const (
 	defaultMaxTokens    = 25000
 	// maxSizeHardLimit is the absolute ceiling the Read tool will never
 	// exceed, regardless of the caller-supplied max_size parameter.
-	// AC3: 1 GiB OOM guard — os.Stat must be consulted before any read.
+	// 1 GiB OOM guard — os.Stat must be consulted before any read.
 	maxSizeHardLimit = 1 << 30 // 1,073,741,824 bytes
 )
 
@@ -164,7 +164,7 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 	// Clean the absolute path to resolve any traversal sequences
 	absFilePathClean := filepath.Clean(absFilePath)
 
-	// Universal Windows Security (AC4)
+	// Universal Windows Security
 	if runtime.GOOS == "windows" {
 		winGate := NewWindowsCommandGate(t.effectiveLevel())
 		if err := winGate.CheckPath(absFilePathClean); err != nil {
@@ -259,7 +259,7 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 
 	isFullRead := !offsetExplicit && !limitExplicit
 
-	// AC1: TOCTOU eliminated — atomically stat+compare inside the cache mutex.
+	// TOCTOU eliminated — atomically stat+compare inside the cache mutex.
 	if t.readCache != nil && isFullRead {
 		hit, statErr := t.readCache.CheckAndRecord(absFilePath, "", isFullRead, offset, limit)
 		if statErr == nil && hit {
@@ -271,7 +271,7 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}
 	}
 
-	// AC3: 1 GiB OOM guard — reject files ≥1 GiB before any read.
+	// 1 GiB OOM guard — reject files ≥1 GiB before any read.
 	if isFullRead && info.Size() > maxSizeHardLimit {
 		return &ToolResult{
 			Content: fmt.Sprintf("file is too large (%d bytes): exceeds maxSizeBytes limit (1 GiB)", info.Size()),
@@ -305,7 +305,7 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}, nil
 	}
 
-	// AC5: UTF-16 Detection and Decoding
+	// UTF-16 Detection and Decoding
 	var content string
 	if decoded, ok := detectAndDecodeUTF16(fileBytes); ok {
 		content = decoded
@@ -349,7 +349,7 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 		} else {
 			fullContent = content
 		}
-		// AC1: post-read stat-and-record is atomic in the cache mutex.
+		// post-read stat-and-record is atomic in the cache mutex.
 		_, _ = t.readCache.StatAndRecord(absFilePath, fullContent, isFullRead, offset, limit)
 	}
 

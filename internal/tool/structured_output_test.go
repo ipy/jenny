@@ -10,10 +10,10 @@ import (
 )
 
 // ============================================================================
-// AC2: Schema validation
+// Schema validation
 // ============================================================================
 
-func TestAC2_ValidSchema_ParsesSuccessfully(t *testing.T) {
+func TestValidSchema_ParsesSuccessfully(t *testing.T) {
 	validSchema := `{"type": "object", "properties": {"name": {"type": "string"}}}`
 	schema, err := tool.ValidateStructuredSchema(validSchema)
 	if err != nil {
@@ -27,7 +27,7 @@ func TestAC2_ValidSchema_ParsesSuccessfully(t *testing.T) {
 	}
 }
 
-func TestAC2_InvalidJSON_FailsParsing(t *testing.T) {
+func TestInvalidJSON_FailsParsing(t *testing.T) {
 	invalidJSON := `not json at all`
 	_, err := tool.ValidateStructuredSchema(invalidJSON)
 	if err == nil {
@@ -38,7 +38,7 @@ func TestAC2_InvalidJSON_FailsParsing(t *testing.T) {
 	}
 }
 
-func TestAC2_TypeNotString_Fails(t *testing.T) {
+func TestTypeNotString_Fails(t *testing.T) {
 	invalidSchema := `{"type": 123}`
 	_, err := tool.ValidateStructuredSchema(invalidSchema)
 	if err == nil {
@@ -49,7 +49,7 @@ func TestAC2_TypeNotString_Fails(t *testing.T) {
 	}
 }
 
-func TestAC2_TypeNotObject_Fails(t *testing.T) {
+func TestTypeNotObject_Fails(t *testing.T) {
 	invalidSchema := `{"type": "string"}`
 	_, err := tool.ValidateStructuredSchema(invalidSchema)
 	if err == nil {
@@ -60,7 +60,7 @@ func TestAC2_TypeNotObject_Fails(t *testing.T) {
 	}
 }
 
-func TestAC2_PropertiesNotObject_Fails(t *testing.T) {
+func TestPropertiesNotObject_Fails(t *testing.T) {
 	invalidSchema := `{"type": "object", "properties": "not an object"}`
 	_, err := tool.ValidateStructuredSchema(invalidSchema)
 	if err == nil {
@@ -71,7 +71,7 @@ func TestAC2_PropertiesNotObject_Fails(t *testing.T) {
 	}
 }
 
-func TestAC2_MissingType_Accepted(t *testing.T) {
+func TestMissingType_Accepted(t *testing.T) {
 	// Schema without type is technically valid (any JSON value allowed)
 	schema := `{"properties": {"name": {"type": "string"}}}`
 	parsed, err := tool.ValidateStructuredSchema(schema)
@@ -84,10 +84,10 @@ func TestAC2_MissingType_Accepted(t *testing.T) {
 }
 
 // ============================================================================
-// AC1: StructuredOutputTool creation and interface
+// StructuredOutputTool creation and interface
 // ============================================================================
 
-func TestAC1_StructuredOutputTool_Name(t *testing.T) {
+func TestStructuredOutputTool_Name(t *testing.T) {
 	schema := map[string]any{"type": "object"}
 	outputTool := tool.NewStructuredOutputTool(schema)
 	if outputTool.Name() != "StructuredOutput" {
@@ -95,7 +95,7 @@ func TestAC1_StructuredOutputTool_Name(t *testing.T) {
 	}
 }
 
-func TestAC1_StructuredOutputTool_Description(t *testing.T) {
+func TestStructuredOutputTool_Description(t *testing.T) {
 	schema := map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string"}}}
 	outputTool := tool.NewStructuredOutputTool(schema)
 	desc := outputTool.Description()
@@ -107,7 +107,7 @@ func TestAC1_StructuredOutputTool_Description(t *testing.T) {
 	}
 }
 
-func TestAC1_StructuredOutputTool_InputSchema(t *testing.T) {
+func TestStructuredOutputTool_InputSchema(t *testing.T) {
 	schema := map[string]any{"type": "object"}
 	outputTool := tool.NewStructuredOutputTool(schema)
 	inputSchema := outputTool.InputSchema()
@@ -126,8 +126,8 @@ func TestAC1_StructuredOutputTool_InputSchema(t *testing.T) {
 	}
 }
 
-func TestAC1_InputSchema_DynamicUserSchema(t *testing.T) {
-	// AC1: InputSchema should dynamically incorporate user schema properties
+func TestInputSchema_DynamicUserSchema(t *testing.T) {
+	// InputSchema should dynamically incorporate user schema properties
 	userSchema := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -149,7 +149,7 @@ func TestAC1_InputSchema_DynamicUserSchema(t *testing.T) {
 		t.Fatal("expected 'value' property to be a map")
 	}
 
-	// AC1: The value property should have the user schema's properties
+	// The value property should have the user schema's properties
 	// Check that 'properties' from user schema is in the value property
 	valueProps, ok := valueProp["properties"].(map[string]any)
 	if !ok {
@@ -157,37 +157,37 @@ func TestAC1_InputSchema_DynamicUserSchema(t *testing.T) {
 	}
 
 	if _, ok := valueProps["name"]; !ok {
-		t.Error("AC1 FAIL: 'value.properties' should include 'name' from user schema")
+		t.Error("FAIL: 'value.properties' should include 'name' from user schema")
 	} else {
-		t.Log("AC1 PASS: 'value.properties' includes 'name' from user schema")
+		t.Log("PASS: 'value.properties' includes 'name' from user schema")
 	}
 
 	if _, ok := valueProps["age"]; !ok {
-		t.Error("AC1 FAIL: 'value.properties' should include 'age' from user schema")
+		t.Error("FAIL: 'value.properties' should include 'age' from user schema")
 	} else {
-		t.Log("AC1 PASS: 'value.properties' includes 'age' from user schema")
+		t.Log("PASS: 'value.properties' includes 'age' from user schema")
 	}
 
-	// AC1: The value property should have type "object" (inherited from user schema)
+	// The value property should have type "object" (inherited from user schema)
 	if valueProp["type"] != "object" {
-		t.Errorf("AC1 FAIL: 'value' property should have type 'object', got %v", valueProp["type"])
+		t.Errorf("FAIL: 'value' property should have type 'object', got %v", valueProp["type"])
 	} else {
-		t.Log("AC1 PASS: 'value' property has type 'object'")
+		t.Log("PASS: 'value' property has type 'object'")
 	}
 
-	// AC1: The value property should have required: ["value"]
+	// The value property should have required: ["value"]
 	if req, ok := valueProp["required"].([]any); ok {
 		if len(req) != 1 || req[0] != "value" {
-			t.Errorf("AC1 FAIL: 'value.required' should be [\"value\"], got %v", req)
+			t.Errorf("FAIL: 'value.required' should be [\"value\"], got %v", req)
 		} else {
-			t.Log("AC1 PASS: 'value.required' is [\"value\"]")
+			t.Log("PASS: 'value.required' is [\"value\"]")
 		}
 	} else {
-		t.Error("AC1 FAIL: 'value.required' should exist and be [\"value\"]")
+		t.Error("FAIL: 'value.required' should exist and be [\"value\"]")
 	}
 }
 
-func TestAC1_StructuredOutputTool_Reset(t *testing.T) {
+func TestStructuredOutputTool_Reset(t *testing.T) {
 	schema := map[string]any{"type": "object"}
 	outputTool := tool.NewStructuredOutputTool(schema)
 
@@ -212,10 +212,10 @@ func TestAC1_StructuredOutputTool_Reset(t *testing.T) {
 }
 
 // ============================================================================
-// AC3: Execute enforces single emission per turn
+// Execute enforces single emission per turn
 // ============================================================================
 
-func TestAC3_SecondExecute_ReturnsError(t *testing.T) {
+func TestSecondExecute_ReturnsError(t *testing.T) {
 	schema := map[string]any{"type": "object"}
 	outputTool := tool.NewStructuredOutputTool(schema)
 
@@ -248,7 +248,7 @@ func TestAC3_SecondExecute_ReturnsError(t *testing.T) {
 	}
 }
 
-func TestAC3_ExecuteWithMissingValue_ReturnsError(t *testing.T) {
+func TestExecuteWithMissingValue_ReturnsError(t *testing.T) {
 	schema := map[string]any{"type": "object"}
 	outputTool := tool.NewStructuredOutputTool(schema)
 
@@ -267,7 +267,7 @@ func TestAC3_ExecuteWithMissingValue_ReturnsError(t *testing.T) {
 	}
 }
 
-func TestAC3_ExecuteWithValidValue_ReturnsValidatedJSON(t *testing.T) {
+func TestExecuteWithValidValue_ReturnsValidatedJSON(t *testing.T) {
 	schema := map[string]any{"type": "object"}
 	outputTool := tool.NewStructuredOutputTool(schema)
 
@@ -294,7 +294,7 @@ func TestAC3_ExecuteWithValidValue_ReturnsValidatedJSON(t *testing.T) {
 	}
 }
 
-func TestAC3_ExecuteWithRequiredFields_ValidatesPresence(t *testing.T) {
+func TestExecuteWithRequiredFields_ValidatesPresence(t *testing.T) {
 	schema := map[string]any{
 		"type":     "object",
 		"required": []any{"name"},

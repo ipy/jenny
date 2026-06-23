@@ -117,8 +117,8 @@ func (l PermissionLevel) ReadBeforeWrite() bool {
 // ResolvePermissionLevel resolves the effective permission level from the
 // --dangerously-skip-permissions flag and the --permission-level string value.
 //
-// AC5: --dangerously-skip-permissions maps to unrestricted.
-// AC6: both specified → unrestricted + warning logged.
+// --dangerously-skip-permissions maps to unrestricted.
+// Both specified → unrestricted + warning logged.
 // If permLevelStr is empty, DefaultPermissionLevel (edit) is used as fallback.
 // Returns the resolved level and an optional warning message.
 func ResolvePermissionLevel(skipPerms bool, permLevelStr string) (PermissionLevel, string) {
@@ -134,10 +134,10 @@ func ResolvePermissionLevel(skipPerms bool, permLevelStr string) (PermissionLeve
 		permLevel = DefaultPermissionLevel
 	}
 
-	// AC5: --dangerously-skip-permissions maps to unrestricted
+	// --dangerously-skip-permissions maps to unrestricted
 	if skipPerms {
 		resolved := PermissionUnrestricted
-		// AC6: warn if both specified and they conflict
+		// Warn if both specified and they conflict
 		if permLevelStr != "" && permLevel != PermissionUnrestricted {
 			warning := fmt.Sprintf(
 				"warning: --dangerously-skip-permissions overrides --permission-level %s; using unrestricted",

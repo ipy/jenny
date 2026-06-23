@@ -250,10 +250,10 @@ func TestToolBash(t *testing.T) {
 		{
 			ID:          "tool.bash.sleep-blocked-foreground",
 			Category:    "tools",
-			Description: "Bash tool blocks sleep >= 2 in foreground",
+			Description: "Bash tool blocks sleep > 5 in foreground",
 			Target: harness.TargetInvocation{
 				Kind:             "prompt",
-				Prompt:           "sleep 5",
+				Prompt:           "sleep 10",
 				Format:           "stream-json",
 				CassetteSequence: []string{"bash-sleep-blocked", "tool-use-turn2"},
 				Cassette:         "bash-sleep-blocked",

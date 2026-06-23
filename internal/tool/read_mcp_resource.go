@@ -155,10 +155,10 @@ func (t *ReadMcpResourceTool) Execute(ctx context.Context, input map[string]any,
 		if c.Type == "text" {
 			item["text"] = c.Text
 		} else if c.Type == "blob" {
-			// AC3: Binary content persisted to disk
+			// Binary content persisted to disk
 			savedPath, err := t.persistBlob(c.Blob)
 			if err != nil {
-				// AC4: Persist failure does not inline base64
+				// Persist failure does not inline base64
 				return &ToolResult{
 					Content: fmt.Sprintf("Error saving binary content to disk: %v", err),
 					IsError: true,

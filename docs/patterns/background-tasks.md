@@ -63,5 +63,5 @@ Only `running` tasks; accepts deprecated `shell_id` alias.
 - **AC1:** Background bash writes to output file.
 - **AC2:** Progress after 2s.
 - **AC3:** Completion notifies parent via structured XML.
-- **AC4:** `sleep >=2` disallowed in foreground; requires `run_in_background: true`.
+- **AC4:** `sleep >5` disallowed in foreground; requires `run_in_background: true`.
 - **AC5:** TaskStop only for running tasks.

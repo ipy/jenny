@@ -92,7 +92,7 @@ func (c *ReadFileCache) Add(path, content string, mtime time.Time, isFullRead bo
 // only on a miss. This eliminates the TOCTOU race between an external os.Stat
 // and the cache dedup compare.
 //
-// AC1: read.go TOCTOU eliminated — stat+compare is performed inside the cache
+// Read.go TOCTOU eliminated — stat+compare is performed inside the cache
 // mutex so concurrent writers cannot introduce a stale mtime into the cache.
 func (c *ReadFileCache) CheckAndRecord(path, content string, isFullRead bool, offset, limit int) (bool, error) {
 	c.mu.Lock()
@@ -125,7 +125,7 @@ func (c *ReadFileCache) CheckAndRecord(path, content string, isFullRead bool, of
 // cache mutex. Used by the post-read path where the file has just been read and
 // we need a fresh mtime for the cache entry. Returns the recorded mtime.
 //
-// AC1: post-read path — the re-stat and RecordRead happen as a single
+// Post-read path — the re-stat and RecordRead happen as a single
 // critical section so a concurrent writer cannot sneak a mtime change between
 // them.
 func (c *ReadFileCache) StatAndRecord(path, content string, isFullRead bool, offset, limit int) (time.Time, error) {

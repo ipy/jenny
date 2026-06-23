@@ -567,7 +567,7 @@ func TestStreamJSON_ReferenceAlignment(t *testing.T) {
 
 // TestStreamJSONGap_ResultExtendedFields tests that jenny includes extended result timing fields.
 // This test verifies: ttft_ms, ttft_stream_ms, time_to_request_ms, terminal_reason, api_error_status on result.
-// AC3: All 5 fields must be present in result event.
+// All 5 fields must be present in result event.
 // Uses mock API delay to ensure timing values are non-zero.
 func TestStreamJSONGap_ResultExtendedFields(t *testing.T) {
 	runE2ESuiteWithDelay(t, []*harness.TestCase{
@@ -586,7 +586,7 @@ func TestStreamJSONGap_ResultExtendedFields(t *testing.T) {
 				StreamJSON: &harness.StreamJSONExpectation{
 					LastEvent: &harness.EventExpectation{
 						Type: "result",
-						// AC3: All 5 fields must be present (spec requirement)
+						// All 5 fields must be present (spec requirement)
 						HasFields: []string{"ttft_ms", "ttft_stream_ms", "time_to_request_ms", "terminal_reason", "api_error_status"},
 					},
 				},
@@ -643,7 +643,7 @@ func TestStreamJSONUserToolResultFormat(t *testing.T) {
 }
 
 // TestStreamJSONGap_InitExtendedFields tests that jenny includes all init extended fields.
-// AC4: Checks for all 8 fields: analytics_disabled, product_feedback_disabled, agents, plugins,
+// Checks for all 8 fields: analytics_disabled, product_feedback_disabled, agents, plugins,
 // skills, slash_commands, memory_paths, apiKeySource.
 // Uses WorkDirFiles to provision a skill and a plugin so that non-empty output is verified.
 func TestStreamJSONGap_InitExtendedFields(t *testing.T) {

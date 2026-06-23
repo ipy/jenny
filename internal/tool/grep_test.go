@@ -176,8 +176,8 @@ func TestGrepTool_Execute(t *testing.T) {
 	}
 }
 
-// AC1: Default head_limit is 250; head_limit=0 means unlimited
-func TestGrepTool_AC1_HeadLimit(t *testing.T) {
+// Default head_limit is 250; head_limit=0 means unlimited
+func TestGrepTool_HeadLimit(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create 300 files with matching content in top-level directories
@@ -233,8 +233,8 @@ func TestGrepTool_AC1_HeadLimit(t *testing.T) {
 	}
 }
 
-// AC2: Pattern starting with `-` uses `-e` flag
-func TestGrepTool_AC2_DashPattern(t *testing.T) {
+// Pattern starting with `-` uses `-e` flag
+func TestGrepTool_DashPattern(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a file containing the literal string "-foo"
@@ -270,8 +270,8 @@ func TestGrepTool_AC2_DashPattern(t *testing.T) {
 	}
 }
 
-// AC3: Timeout returns error
-func TestGrepTool_AC3_Timeout(t *testing.T) {
+// Timeout returns error
+func TestGrepTool_Timeout(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a file with content
@@ -300,8 +300,8 @@ func TestGrepTool_AC3_Timeout(t *testing.T) {
 	t.Logf("timeout test: search completed (timeout may be clamped to minimum)")
 }
 
-// AC4: Output capped at ~20K characters
-func TestGrepTool_AC4_OutputCap(t *testing.T) {
+// Output capped at ~20K characters
+func TestGrepTool_OutputCap(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a file with large content that will exceed 20K when searched
@@ -341,8 +341,8 @@ func TestGrepTool_AC4_OutputCap(t *testing.T) {
 	}
 }
 
-// AC5: VCS directories excluded by default
-func TestGrepTool_AC5_VCSExcluded(t *testing.T) {
+// VCS directories excluded by default
+func TestGrepTool_VCSExcluded(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a .git/objects tree with a file containing matching content

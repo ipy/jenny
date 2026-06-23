@@ -431,28 +431,36 @@ func TestCompletionNotification_Format(t *testing.T) {
 }
 
 // ============================================================================
-// AC4: Sleep ≥2 blocked in foreground; auto-background hint
+// Sleep >5 blocked in foreground; auto-background hint
 // ============================================================================
 
-func TestAC4_SleepBlockedInForeground(t *testing.T) {
-	// sleep >=2 in foreground should return an error with specific message.
-	// This already exists in codebase — TestBashTool_AC3_SleepBlocked covers it.
-
+func TestSleepBlockedInForeground(t *testing.T) {
 	bt := NewBashTool(PermissionEdit)
 	cwd := t.TempDir()
 
-	// sleep 3 should be blocked
+	// sleep 6 should be blocked
 	result, err := bt.Execute(context.Background(), map[string]any{
-		"command": "sleep 3",
+		"command": "sleep 6",
 	}, cwd)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !result.IsError {
-		t.Fatal("expected error for sleep >=2 in foreground")
+		t.Fatal("expected error for sleep >5 in foreground")
 	}
 	if !strings.Contains(result.Content, "run_in_background") {
 		t.Errorf("expected 'run_in_background' in error, got: %s", result.Content)
+	}
+
+	// sleep 5 should be allowed (boundary)
+	result, err = bt.Execute(context.Background(), map[string]any{
+		"command": "sleep 5",
+	}, cwd)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatal("expected sleep 5 to be allowed in foreground")
 	}
 
 	// sleep 1 should be allowed
@@ -467,7 +475,7 @@ func TestAC4_SleepBlockedInForeground(t *testing.T) {
 	}
 }
 
-func TestAC4_AutoBackgroundHint(t *testing.T) {
+func TestAutoBackgroundHint(t *testing.T) {
 	// When a foreground command takes >120s, the output should include
 	// a hint about using run_in_background.
 
@@ -499,10 +507,10 @@ func TestAC4_AutoBackgroundHint(t *testing.T) {
 }
 
 // ============================================================================
-// AC5: TaskStop tool cancels running tasks
+// TaskStop tool cancels running tasks
 // ============================================================================
 
-func TestAC5_TaskStop_StopsRunningTask(t *testing.T) {
+func TestTaskStop_StopsRunningTask(t *testing.T) {
 	// Launch a background command, call TaskStop with its task_id,
 	// verify the task is stopped.
 
@@ -560,7 +568,7 @@ func TestAC5_TaskStop_StopsRunningTask(t *testing.T) {
 	}
 }
 
-func TestAC5_TaskStop_TaskNotFound(t *testing.T) {
+func TestTaskStop_TaskNotFound(t *testing.T) {
 	// Calling TaskStop on a completed or nonexistent task should return an error.
 
 	tmpDir := t.TempDir()
@@ -583,7 +591,7 @@ func TestAC5_TaskStop_TaskNotFound(t *testing.T) {
 	}
 }
 
-func TestAC5_TaskStop_TaskAlreadyCompleted(t *testing.T) {
+func TestTaskStop_TaskAlreadyCompleted(t *testing.T) {
 	// Stopping an already completed task should return an error.
 
 	tmpDir := t.TempDir()
@@ -611,7 +619,7 @@ func TestAC5_TaskStop_TaskAlreadyCompleted(t *testing.T) {
 	}
 }
 
-func TestAC5_TaskStop_AcceptsShellID(t *testing.T) {
+func TestTaskStop_AcceptsShellID(t *testing.T) {
 	// TaskStop should accept deprecated shell_id alias
 
 	tmpDir := t.TempDir()
@@ -637,7 +645,7 @@ func TestAC5_TaskStop_AcceptsShellID(t *testing.T) {
 	}
 }
 
-func TestAC5_TaskStop_FailsWithoutTaskID(t *testing.T) {
+func TestTaskStop_FailsWithoutTaskID(t *testing.T) {
 	// TaskStop without task_id should return an error
 
 	tmpDir := t.TempDir()
@@ -657,8 +665,8 @@ func TestAC5_TaskStop_FailsWithoutTaskID(t *testing.T) {
 	}
 }
 
-func TestAC5_TaskStop_OnlyOperatesOnRunning(t *testing.T) {
-	// AC5 spec: "It only operates on running tasks — completed tasks are ignored."
+func TestTaskStop_OnlyOperatesOnRunning(t *testing.T) {
+	// It only operates on running tasks — completed tasks are ignored.
 
 	tmpDir := t.TempDir()
 	tm := NewTaskManager().WithProjectRoot(tmpDir)
@@ -713,7 +721,7 @@ func TestAC5_TaskStop_OnlyOperatesOnRunning(t *testing.T) {
 	}
 }
 
-func TestAC5_TaskStop_NilTaskManager(t *testing.T) {
+func TestTaskStop_NilTaskManager(t *testing.T) {
 	// TaskStop with nil task manager should return an error
 
 	stopTool := NewTaskStopTool(nil)
@@ -729,7 +737,7 @@ func TestAC5_TaskStop_NilTaskManager(t *testing.T) {
 	}
 }
 
-func TestAC5_TaskStop_RegisteredInRegistry(t *testing.T) {
+func TestTaskStop_RegisteredInRegistry(t *testing.T) {
 	// Verify that WithTaskStopEnabled creates and wires the TaskStop tool
 
 	reg := NewRegistry().
@@ -749,7 +757,7 @@ func TestAC5_TaskStop_RegisteredInRegistry(t *testing.T) {
 	}
 }
 
-func TestAC5_TaskStop_NotRegisteredByDefault(t *testing.T) {
+func TestTaskStop_NotRegisteredByDefault(t *testing.T) {
 	// Verify TaskStop is not registered when not explicitly enabled
 
 	reg := NewRegistry().
@@ -763,7 +771,7 @@ func TestAC5_TaskStop_NotRegisteredByDefault(t *testing.T) {
 	}
 }
 
-func TestAC5_TaskStop_InputSchema(t *testing.T) {
+func TestTaskStop_InputSchema(t *testing.T) {
 	// Verify the TaskStop tool's input schema has both task_id and shell_id
 
 	stopTool := NewTaskStopTool(nil)
@@ -800,7 +808,7 @@ func TestAC5_TaskStop_InputSchema(t *testing.T) {
 // Integration: main.go does NOT enable TaskStop tool
 // ============================================================================
 
-func TestAC5_MainRegistry_MissingTaskStop(t *testing.T) {
+func TestMainRegistry_MissingTaskStop(t *testing.T) {
 	// CRITICAL: main.go builds the registry WITHOUT WithTaskStopEnabled.
 	// This means TaskStop tool is never available at runtime.
 	// See cmd/jenny/main.go:135-144 — the registry chain does NOT include
@@ -819,16 +827,16 @@ func TestAC5_MainRegistry_MissingTaskStop(t *testing.T) {
 	t.Log("the TaskStop tool is never registered at runtime.")
 	t.Log("Additionally, the BashTool's TaskManager is never initialized")
 	t.Log("when created through the registry without WithTaskStopEnabled.")
-	t.Log("This means background tasks run but without AC5 support and")
+	t.Log("This means background tasks run but without TaskStop support and")
 	t.Log("without persistent output files (no TaskManager wired).")
 }
 
 // ============================================================================
-// Integration: AC3 completion notifications are injected in engine
+// Integration: completion notifications are injected in engine
 // ============================================================================
 
-func TestAC3_EngineWired_Integration(t *testing.T) {
-	// AC3 is wired: engine.go runLoop() calls drainTaskCompletions() at line 350
+func TestEngineWired_Integration(t *testing.T) {
+	// Completion notifications are wired: engine.go runLoop() calls drainTaskCompletions() at line 350
 	// and injects pending completions as synthetic tool_results into the message
 	// chain. This test verifies the integration is in place.
 	//

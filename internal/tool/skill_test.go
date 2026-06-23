@@ -573,10 +573,10 @@ A local skill.
 	}
 }
 
-// TestSkillTool_AC1_ExplicitActivation tests that calling activate_skill with a valid
+// TestSkillTool_ExplicitActivation tests that calling activate_skill with a valid
 // skill name calls RegisterActivation on the SkillActivator, recording the skill name
-// and root path. This verifies AC1: Explicit activation via ActivateSkill tool.
-func TestSkillTool_AC1_ExplicitActivation(t *testing.T) {
+// and root path.
+func TestSkillTool_ExplicitActivation(t *testing.T) {
 	// Create test skills
 	testSkills := []skills.Skill{
 		{
@@ -594,7 +594,7 @@ func TestSkillTool_AC1_ExplicitActivation(t *testing.T) {
 	}
 
 	// Create a mock activator that tracks activations
-	mockActivator := &mockActivatorForAC1{activations: make([]activationRecord, 0)}
+	mockActivator := &mockActivatorForTestExplicitActivation{activations: make([]activationRecord, 0)}
 
 	tool := NewSkillTool(testSkills)
 	tool.WithActivator(mockActivator)
@@ -649,12 +649,12 @@ func TestSkillTool_AC1_ExplicitActivation(t *testing.T) {
 		t.Errorf("expected 2 activations, got %d", len(mockActivator.activations))
 	}
 
-	t.Log("AC1 PASS: SkillTool.Execute calls RegisterActivation with correct name and rootPath")
+	t.Log("PASS: SkillTool.Execute calls RegisterActivation with correct name and rootPath")
 }
 
-// TestSkillTool_AC1_NoOpWhenNilActivator tests that nil activator produces no panic
-// and leaves the state clean. This verifies AC1: Nil activator produces no panic.
-func TestSkillTool_AC1_NoOpWhenNilActivator(t *testing.T) {
+// TestSkillTool_NoOpWhenNilActivator tests that nil activator produces no panic
+// and leaves the state clean.
+func TestSkillTool_NoOpWhenNilActivator(t *testing.T) {
 	testSkill := skills.Skill{
 		Name:     "test-skill",
 		RootPath: "/path/to/test",
@@ -681,11 +681,11 @@ func TestSkillTool_AC1_NoOpWhenNilActivator(t *testing.T) {
 		t.Errorf("expected activated_skill in output, got: %s", result.Content)
 	}
 
-	t.Log("AC1 PASS: nil activator is no-op, no panic")
+	t.Log("PASS: nil activator is no-op, no panic")
 }
 
-// mockActivatorForAC1 tracks RegisterActivation calls for AC1 testing
-type mockActivatorForAC1 struct {
+// mockActivatorForTestExplicitActivation tracks RegisterActivation calls for testing
+type mockActivatorForTestExplicitActivation struct {
 	activations []activationRecord
 }
 
@@ -694,11 +694,11 @@ type activationRecord struct {
 	rootPath string
 }
 
-func (a *mockActivatorForAC1) ActivateForPath(path string) []string {
+func (a *mockActivatorForTestExplicitActivation) ActivateForPath(path string) []string {
 	return nil
 }
 
-func (a *mockActivatorForAC1) RegisterActivation(name string, rootPath string, allowedTools []string) {
+func (a *mockActivatorForTestExplicitActivation) RegisterActivation(name string, rootPath string, allowedTools []string) {
 	// Deduplication check
 	for _, act := range a.activations {
 		if act.name == name {
@@ -708,11 +708,11 @@ func (a *mockActivatorForAC1) RegisterActivation(name string, rootPath string, a
 	a.activations = append(a.activations, activationRecord{name: name, rootPath: rootPath})
 }
 
-func (a *mockActivatorForAC1) GetActivatedTools() []string {
+func (a *mockActivatorForTestExplicitActivation) GetActivatedTools() []string {
 	return nil
 }
 
-func (a *mockActivatorForAC1) GetActivatedSkills() []skills.ActivatedSkill {
+func (a *mockActivatorForTestExplicitActivation) GetActivatedSkills() []skills.ActivatedSkill {
 	result := make([]skills.ActivatedSkill, len(a.activations))
 	for i, act := range a.activations {
 		result[i] = skills.ActivatedSkill{Name: act.name, RootPath: act.rootPath}

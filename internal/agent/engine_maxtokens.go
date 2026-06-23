@@ -66,6 +66,7 @@ type MaxTokensController struct {
 	forkFired        bool
 	modelMax         int
 	progressLevel    ProgressLevel
+	justEscalated    bool // true for exactly one ComputeBudget call after a level escalation
 
 	// Per-turn state for adaptive adjustments
 	lastStopReason string // "max_tokens", "end_turn", "tool_use", etc.
@@ -81,9 +82,14 @@ func NewMaxTokensController(model string) *MaxTokensController {
 }
 
 // SetProgressLevel updates the progress monitor level.
+// When the level escalates (e.g. L0→L1, L1→L2), the next ComputeBudget call
+// gets a one-shot thinking boost for reflection before tightening kicks in.
 func (c *MaxTokensController) SetProgressLevel(level ProgressLevel) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if level > c.progressLevel {
+		c.justEscalated = true
+	}
 	c.progressLevel = level
 }
 
@@ -123,12 +129,14 @@ func (c *MaxTokensController) ShouldFork() bool {
 
 // ComputeBudget returns the token budget for the given turn.
 func (c *MaxTokensController) ComputeBudget(turn int) TokenBudget {
-	c.mu.RLock()
+	c.mu.Lock()
 	cr := c.complexityResult
 	level := c.progressLevel
 	lastStop := c.lastStopReason
 	lastWrite := c.lastHadWrite
-	c.mu.RUnlock()
+	reflectionTurn := c.justEscalated
+	c.justEscalated = false // consume: boost applies to exactly one turn
+	c.mu.Unlock()
 
 	if turn <= 3 {
 		return c.earlyTurnBudget()
@@ -136,7 +144,7 @@ func (c *MaxTokensController) ComputeBudget(turn int) TokenBudget {
 
 	var thinking, completion int
 	if cr != nil {
-		thinking = c.thinkingBudget(cr, turn, level)
+		thinking = c.thinkingBudget(cr, turn, level, reflectionTurn)
 		completion = c.completionBudget(cr, turn, level, lastStop, lastWrite)
 	} else {
 		tb := turnBasedMaxTokens(turn, c.modelMax)
@@ -164,6 +172,7 @@ func (c *MaxTokensController) ComputeBudget(turn int) TokenBudget {
 		"completion", completion,
 		"total", total,
 		"level", level,
+		"reflection", reflectionTurn,
 		"hasComplexity", cr != nil,
 	)
 	return TokenBudget{ThinkingBudget: thinking, CompletionBudget: completion, TotalBudget: total}
@@ -188,17 +197,26 @@ func (c *MaxTokensController) earlyTurnBudget() TokenBudget {
 }
 
 // thinkingBudget calculates the thinking token allocation based on complexity and turn state.
-func (c *MaxTokensController) thinkingBudget(cr *ComplexityResult, turn int, level ProgressLevel) int {
+// reflectionTurn is true for exactly one turn after a progress level escalation,
+// granting a one-shot thinking boost so the agent can reflect on why it's stuck.
+// All subsequent turns at the same level get tightened budgets to force action.
+func (c *MaxTokensController) thinkingBudget(cr *ComplexityResult, turn int, level ProgressLevel, reflectionTurn bool) int {
 	intensity := cr.ThinkingIntensity() // 1-5
 	// Base: per intensity level, with model-proportional scaling
 	base := intensity * c.modelMax / 100
 
-	// Reduce thinking budget at high progress levels (stuck = think less, act more)
-	switch level {
-	case ProgressLevelL2, ProgressLevelL3:
-		base = base * 40 / 100
-	case ProgressLevelL1:
-		base = base * 70 / 100
+	if reflectionTurn && (level == ProgressLevelL1 || level == ProgressLevelL2) {
+		// One-shot reflection boost: the agent just got flagged as stuck,
+		// give it extra thinking capacity to reconsider its approach.
+		base = base * 160 / 100
+	} else {
+		// Steady-state: tighten thinking to push toward action, not rumination.
+		switch level {
+		case ProgressLevelL1:
+			base = base * 70 / 100
+		case ProgressLevelL2, ProgressLevelL3:
+			base = base * 40 / 100
+		}
 	}
 
 	// Cap thinking at 60% of model max to leave room for output

@@ -14,7 +14,7 @@ import (
 	"github.com/ipy/jenny/internal/utils"
 )
 
-// TestUTF8SafeTruncate verifies AC7: rune-aware truncation never splits
+// TestUTF8SafeTruncate verifies rune-aware truncation never splits
 // multi-byte code points.
 func TestUTF8SafeTruncate(t *testing.T) {
 	t.Parallel()
@@ -87,7 +87,7 @@ func TestUTF8SafeTruncate(t *testing.T) {
 	}
 }
 
-// TestUTF8SafeTruncate_NoSplitEmoji specifically verifies the AC7 guarantee:
+// TestUTF8SafeTruncate_NoSplitEmoji specifically verifies the guarantee:
 // an emoji at the truncation boundary is never split mid-code-point.
 func TestUTF8SafeTruncate_NoSplitEmoji(t *testing.T) {
 	// "🔥" is a 4-byte UTF-8 sequence: \xF0\x9F\x94\xA5.
@@ -95,17 +95,17 @@ func TestUTF8SafeTruncate_NoSplitEmoji(t *testing.T) {
 	input := strings.Repeat("🔥", 100) // 400 bytes of emoji
 	maxBytes := 399                   // Force truncation mid-rune
 	result := utils.SafeTruncate(input, maxBytes)
-	// AC7: The result must be valid UTF-8 (no split code points).
+	// The result must be valid UTF-8 (no split code points).
 	if !utf8.ValidString(result) {
-		t.Errorf("AC7 FAIL: result contains invalid UTF-8: %q", result)
+		t.Errorf("FAIL: result contains invalid UTF-8: %q", result)
 	}
 	// The result should be 396 bytes (99 complete emojis).
 	if len(result) != 396 {
-		t.Errorf("AC7 FAIL: expected 396 bytes (99 emojis), got %d", len(result))
+		t.Errorf("FAIL: expected 396 bytes (99 emojis), got %d", len(result))
 	}
 }
 
-// TestAtomicWrite verifies AC4: WriteTool uses temp-file → Sync → rename.
+// TestAtomicWrite verifies WriteTool uses temp-file → Sync → rename.
 func TestAtomicWrite(t *testing.T) {
 	t.Parallel()
 
@@ -152,19 +152,19 @@ func TestAtomicWrite(t *testing.T) {
 		t.Fatalf("Verify read failed: %s", result.Content)
 	}
 	if !strings.Contains(result.Content, "new atomic content") {
-		t.Errorf("AC4 FAIL: file content does not contain 'new atomic content', got: %s", result.Content)
+		t.Errorf("FAIL: file content does not contain 'new atomic content', got: %s", result.Content)
 	}
 
 	// Verify no temp files were left behind.
 	entries, _ := os.ReadDir(tmpDir)
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), ".write-") {
-			t.Errorf("AC4 FAIL: temp file %q was not cleaned up", e.Name())
+			t.Errorf("FAIL: temp file %q was not cleaned up", e.Name())
 		}
 	}
 }
 
-// TestAtomicWrite_CreatesNewFile verifies AC4: WriteTool atomically creates new files.
+// TestAtomicWrite_CreatesNewFile verifies WriteTool atomically creates new files.
 func TestAtomicWrite_CreatesNewFile(t *testing.T) {
 	t.Parallel()
 
@@ -205,7 +205,7 @@ func TestAtomicWrite_CreatesNewFile(t *testing.T) {
 	}
 }
 
-// TestTaskOutputAppendMode verifies AC5: task output files use os.O_APPEND.
+// TestTaskOutputAppendMode verifies task output files use os.O_APPEND.
 func TestTaskOutputAppendMode(t *testing.T) {
 	t.Parallel()
 
@@ -237,19 +237,19 @@ func TestTaskOutputAppendMode(t *testing.T) {
 	}
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
 	if len(lines) < 2 {
-		t.Errorf("AC5 FAIL: expected ≥2 JSONL lines, got %d", len(lines))
+		t.Errorf("FAIL: expected ≥2 JSONL lines, got %d", len(lines))
 	}
 	for _, line := range lines {
 		if line == "" {
 			continue
 		}
 		if !strings.Contains(line, "output") {
-			t.Errorf("AC5 FAIL: malformed JSONL line: %s", line)
+			t.Errorf("FAIL: malformed JSONL line: %s", line)
 		}
 	}
 }
 
-// TestConcurrentTaskWrites verifies AC5: concurrent writers produce intact lines.
+// TestConcurrentTaskWrites verifies concurrent writers produce intact lines.
 func TestConcurrentTaskWrites(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping concurrent test in short mode")
@@ -284,19 +284,19 @@ func TestConcurrentTaskWrites(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
 	expected := goroutines * linesPerGoroutine
 	if len(lines) != expected {
-		t.Errorf("AC5 FAIL: expected %d lines, got %d", expected, len(lines))
+		t.Errorf("FAIL: expected %d lines, got %d", expected, len(lines))
 	}
 	for _, line := range lines {
 		if line == "" {
 			continue
 		}
 		if !strings.Contains(line, "goroutine-") || !strings.Contains(line, "-line-") {
-			t.Errorf("AC5 FAIL: line does not contain expected content: %s", line)
+			t.Errorf("FAIL: line does not contain expected content: %s", line)
 		}
 	}
 }
 
-// TestGlobTool_MaxDepthLimit verifies AC8: glob respects maxDepth (default 64).
+// TestGlobTool_MaxDepthLimit verifies glob respects maxDepth (default 64).
 // We create a tree 100 levels deep (exceeding maxDepth=64), place a file at depth 75
 // (beyond the limit) and a file at depth 3 (within the limit), then assert only the
 // shallow file is found.
@@ -339,15 +339,15 @@ func TestGlobTool_MaxDepthLimit(t *testing.T) {
 
 	// The shallow file should be found.
 	if !strings.Contains(result.Content, "within_limit.txt") {
-		t.Errorf("AC8 FAIL: shallow file should be found, got: %s", result.Content)
+		t.Errorf("FAIL: shallow file should be found, got: %s", result.Content)
 	}
 	// The deep file should NOT be found (exceeds maxDepth=64).
 	if strings.Contains(result.Content, "beyond_limit.txt") {
-		t.Errorf("AC8 FAIL: deep file should NOT be found (exceeds maxDepth=64), got: %s", result.Content)
+		t.Errorf("FAIL: deep file should NOT be found (exceeds maxDepth=64), got: %s", result.Content)
 	}
 }
 
-// TestGlobTool_MaxResults verifies AC8: glob caps at 100 results with Truncated flag.
+// TestGlobTool_MaxResults verifies glob caps at 100 results with Truncated flag.
 func TestGlobTool_MaxResults(t *testing.T) {
 	t.Parallel()
 
@@ -375,14 +375,14 @@ func TestGlobTool_MaxResults(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(result.Content), "\n")
 	count := len(lines)
 	if count > 100 {
-		t.Errorf("AC8 FAIL: expected ≤100 results, got %d", count)
+		t.Errorf("FAIL: expected ≤100 results, got %d", count)
 	}
 	if !result.Truncated {
-		t.Errorf("AC8 FAIL: expected Truncated=true when results exceed cap")
+		t.Errorf("FAIL: expected Truncated=true when results exceed cap")
 	}
 }
 
-// TestReadTool_1GiBRejection verifies AC3: ReadTool rejects files >1 GiB with a behavioral test.
+// TestReadTool_1GiBRejection verifies ReadTool rejects files >1 GiB with a behavioral test.
 // We use a sparse file (Seek + Truncate) to avoid writing 1 GiB of data, but os.Stat reports >1 GiB.
 // This mirrors the pattern from TestEditOOM.
 func TestReadTool_1GiBRejection(t *testing.T) {
@@ -427,10 +427,10 @@ func TestReadTool_1GiBRejection(t *testing.T) {
 		t.Fatalf("Execute returned Go error: %v", err)
 	}
 	if !result.IsError {
-		t.Fatal("AC3 FAIL: expected IsError=true for >1GiB file")
+		t.Fatal("FAIL: expected IsError=true for >1GiB file")
 	}
 	if !strings.Contains(result.Content, "too large") {
-		t.Errorf("AC3 FAIL: error message %q does not contain 'too large'", result.Content)
+		t.Errorf("FAIL: error message %q does not contain 'too large'", result.Content)
 	}
 
 	// Also verify a small file succeeds.
@@ -443,6 +443,6 @@ func TestReadTool_1GiBRejection(t *testing.T) {
 		t.Fatalf("Execute small file returned Go error: %v", err)
 	}
 	if result2.IsError {
-		t.Errorf("AC3 FAIL: small file should succeed, got error: %s", result2.Content)
+		t.Errorf("FAIL: small file should succeed, got error: %s", result2.Content)
 	}
 }

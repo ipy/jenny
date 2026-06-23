@@ -278,7 +278,7 @@ func (m *Manager) LoadTranscript(sessionID string) ([]TranscriptEntry, error) {
 		}
 		var entry TranscriptEntry
 		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			// AC7: Log malformed lines as warnings to aid debugging,
+			// Log malformed lines as warnings to aid debugging,
 			// but continue parsing remaining lines.
 			log.Warn("Malformed JSON line in transcript",
 				"session", sessionID,

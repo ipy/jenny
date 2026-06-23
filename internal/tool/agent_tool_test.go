@@ -119,7 +119,7 @@ func TestNamedAgent_CannotSpawnNamedAgent(t *testing.T) {
 func TestNamedAgent_CanSpawnUnnamedAgent(t *testing.T) {
 	// Create an AgentTool with swarms enabled
 	// We need a mock runner since we're testing the context check, not actual execution
-	mockRunner := &mockSubagentRunnerForAC1{}
+	mockRunner := &mockSubagentRunnerForNestedCheck{}
 	agentTool := tool.NewAgentToolWithSwarms(mockRunner, nil, true)
 
 	// Simulate being in a named agent context
@@ -183,7 +183,7 @@ func TestSwarmModeDisabled_NameParameterReturnsError(t *testing.T) {
 
 func TestSwarmModeEnabled_NameParameterAccepted(t *testing.T) {
 	// Create an AgentTool with swarms ENABLED
-	mockRunner := &mockSubagentRunnerForAC3{}
+	mockRunner := &mockSubagentRunnerWithCapturedParams{}
 	agentTool := tool.NewAgentToolWithSwarms(mockRunner, nil, true)
 
 	// Input with name should be accepted (will fail on execution since mock has no real tools)
@@ -203,13 +203,13 @@ func TestSwarmModeEnabled_NameParameterAccepted(t *testing.T) {
 	}
 	// Verify Name was captured in mock runner params
 	if mockRunner.capturedParams.Name != "worker1" {
-		t.Errorf("AC2 FAIL: expected Name='worker1', got Name='%s'", mockRunner.capturedParams.Name)
+		t.Errorf("FAIL: expected Name='worker1', got Name='%s'", mockRunner.capturedParams.Name)
 	} else {
-		t.Log("AC2 PASS: Name='worker1' was captured in mock runner params")
+		t.Log("PASS: Name='worker1' was captured in mock runner params")
 	}
 }
 
-func TestAC2_NameParameterNotInSchemaWhenDisabled(t *testing.T) {
+func TestNameParameterNotInSchemaWhenDisabled(t *testing.T) {
 	// Create an AgentTool with swarms DISABLED
 	agentTool := tool.NewAgentTool(nil, nil)
 
@@ -224,7 +224,7 @@ func TestAC2_NameParameterNotInSchemaWhenDisabled(t *testing.T) {
 	}
 }
 
-func TestAC2_NameParameterInSchemaWhenEnabled(t *testing.T) {
+func TestNameParameterInSchemaWhenEnabled(t *testing.T) {
 	// Create an AgentTool with swarms ENABLED
 	agentTool := tool.NewAgentToolWithSwarms(nil, nil, true)
 
@@ -240,10 +240,10 @@ func TestAC2_NameParameterInSchemaWhenEnabled(t *testing.T) {
 }
 
 // ============================================================================
-// AC3: Flat delegation only in headless mode
+// Flat delegation only in headless mode
 // ============================================================================
 
-func TestAC3_NamedAgentHasAccessToParentTools(t *testing.T) {
+func TestNamedAgentHasAccessToParentTools(t *testing.T) {
 	// This test verifies the structural constraint:
 	// When name is set, IsNamedAgent is marked in the child's StreamConfig
 	// The tool.NamedAgentKey context value should propagate
@@ -281,38 +281,38 @@ func TestAC3_NamedAgentHasAccessToParentTools(t *testing.T) {
 		t.Fatalf("named agent should be able to execute (flat delegation)")
 	}
 
-	// AC2-(5): Verify captured StreamConfig shows IsNamedAgent=true and inherited fields
+	// Verify captured StreamConfig shows IsNamedAgent=true and inherited fields
 	cfgInfo := runner.GetCapturedStreamConfigInfo()
 	if cfgInfo == nil {
-		t.Fatal("AC2-(5) FAIL: expected captured StreamConfig, got nil")
+		t.Fatal("FAIL: expected captured StreamConfig, got nil")
 	}
 
 	if !cfgInfo["IsNamedAgent"].(bool) {
-		t.Error("AC2-(5) FAIL: IsNamedAgent should be true")
+		t.Error("FAIL: IsNamedAgent should be true")
 	} else {
-		t.Log("AC2-(5) PASS: IsNamedAgent is true")
+		t.Log("PASS: IsNamedAgent is true")
 	}
 
 	// Verify inherited fields match parent config values
 	if cfgInfo["MaxBudgetUSD"] != parentCfg.MaxBudgetUSD {
-		t.Errorf("AC2-(5) FAIL: MaxBudgetUSD should be inherited, got %v", cfgInfo["MaxBudgetUSD"])
+		t.Errorf("FAIL: MaxBudgetUSD should be inherited, got %v", cfgInfo["MaxBudgetUSD"])
 	} else {
-		t.Logf("AC2-(5) PASS: MaxBudgetUSD is inherited: %v", cfgInfo["MaxBudgetUSD"])
+		t.Logf("PASS: MaxBudgetUSD is inherited: %v", cfgInfo["MaxBudgetUSD"])
 	}
 
 	if cfgInfo["MaxTurns"] != parentCfg.MaxTurns {
-		t.Errorf("AC2-(5) FAIL: MaxTurns should be inherited, got %v", cfgInfo["MaxTurns"])
+		t.Errorf("FAIL: MaxTurns should be inherited, got %v", cfgInfo["MaxTurns"])
 	} else {
-		t.Logf("AC2-(5) PASS: MaxTurns is inherited: %v", cfgInfo["MaxTurns"])
+		t.Logf("PASS: MaxTurns is inherited: %v", cfgInfo["MaxTurns"])
 	}
 }
 
-// mockSubagentRunnerForAC3 captures the params to verify IsNamedAgent was set
-type mockSubagentRunnerForAC3 struct {
+// mockSubagentRunnerWithCapturedParams captures the params to verify IsNamedAgent was set
+type mockSubagentRunnerWithCapturedParams struct {
 	capturedParams tool.SubagentParams
 }
 
-func (m *mockSubagentRunnerForAC3) RunSubagent(ctx context.Context, params tool.SubagentParams) (*tool.SubagentResult, error) {
+func (m *mockSubagentRunnerWithCapturedParams) RunSubagent(ctx context.Context, params tool.SubagentParams) (*tool.SubagentResult, error) {
 	m.capturedParams = params
 	// Verify that Name was propagated
 	if params.Name != "worker1" {
@@ -321,7 +321,7 @@ func (m *mockSubagentRunnerForAC3) RunSubagent(ctx context.Context, params tool.
 	return &tool.SubagentResult{Output: "success"}, nil
 }
 
-func (m *mockSubagentRunnerForAC3) GetCapturedStreamConfigInfo() map[string]any {
+func (m *mockSubagentRunnerWithCapturedParams) GetCapturedStreamConfigInfo() map[string]any {
 	return nil
 }
 
@@ -331,7 +331,7 @@ func (m *mockSubagentRunnerForAC3) GetCapturedStreamConfigInfo() map[string]any 
 
 func TestEdgeCase_EmptyNameParameterIsIgnored(t *testing.T) {
 	// Create an AgentTool with swarms DISABLED and a mock runner
-	mockRunner := &mockSubagentRunnerForAC1{}
+	mockRunner := &mockSubagentRunnerForNestedCheck{}
 	agentTool := tool.NewAgentToolWithSwarms(mockRunner, nil, false) // swarmsEnabled = false
 
 	// Empty string for name should be treated as no name (unnamed subagent)

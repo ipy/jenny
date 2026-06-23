@@ -9,7 +9,7 @@ import (
 	"github.com/ipy/jenny/internal/api"
 )
 
-// TestThinkingPersistenceRoundTrip_OpenAIChat tests AC4: OpenAI Chat round-trip with reasoning_content
+// TestThinkingPersistenceRoundTrip_OpenAIChat tests OpenAI Chat round-trip with reasoning_content
 func TestThinkingPersistenceRoundTrip_OpenAIChat(t *testing.T) {
 	// Create temp directory
 	tmpDir, err := os.MkdirTemp("", "jenny-thinking-*")
@@ -60,7 +60,7 @@ func TestThinkingPersistenceRoundTrip_OpenAIChat(t *testing.T) {
 	}
 }
 
-// TestThinkingPersistenceRoundTrip_Anthropic tests AC4: Anthropic thinking block with signature
+// TestThinkingPersistenceRoundTrip_Anthropic tests Anthropic thinking block with signature
 func TestThinkingPersistenceRoundTrip_Anthropic(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-thinking-*")
 	if err != nil {
@@ -106,7 +106,7 @@ func TestThinkingPersistenceRoundTrip_Anthropic(t *testing.T) {
 	}
 }
 
-// TestThinkingPersistenceRoundTrip_ResponsesAPI tests AC4: Responses API thinking block
+// TestThinkingPersistenceRoundTrip_ResponsesAPI tests Responses API thinking block
 func TestThinkingPersistenceRoundTrip_ResponsesAPI(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-thinking-*")
 	if err != nil {
@@ -225,7 +225,7 @@ func TestThinkingPersistenceRoundTrip_MultiTurn(t *testing.T) {
 	}
 }
 
-// TestThinkingPersistenceRoundTrip_BackwardCompat tests AC5: loading old transcripts without thinking fields
+// TestThinkingPersistenceRoundTrip_BackwardCompat tests loading old transcripts without thinking fields
 func TestThinkingPersistenceRoundTrip_BackwardCompat(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-backcompat-*")
 	if err != nil {

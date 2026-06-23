@@ -186,7 +186,7 @@ func TestBashTool_Timeout(t *testing.T) {
 
 	// Use sleep 1 with timeout 0.5 seconds to ensure context deadline fires
 	// before sleep completes (~500ms deadline vs 1000ms sleep).
-	// sleep 1 is allowed in foreground (AC3 exempts sleep < 2).
+	// sleep 1 is allowed in foreground (exempts sleep < 2).
 	result, err := tool.Execute(context.Background(), map[string]any{
 		"command": "sleep 1",
 		"timeout": float64(0.5),
@@ -259,8 +259,8 @@ func TestIsReadOnlyCommand(t *testing.T) {
 	}
 }
 
-// AC1: Read-only pipelines validated per segment
-func TestBashTool_AC1_ReadOnlyPipeline(t *testing.T) {
+// Read-only pipelines validated per segment
+func TestBashTool_ReadOnlyPipeline(t *testing.T) {
 	tool := NewBashTool(PermissionEdit)
 	cwd := t.TempDir()
 
@@ -301,8 +301,8 @@ func TestBashTool_AC1_ReadOnlyPipeline(t *testing.T) {
 	}
 }
 
-// AC2: Output >30K chars spilled to disk
-func TestBashTool_AC2_OutputSpill(t *testing.T) {
+// Output >30K chars spilled to disk
+func TestBashTool_OutputSpill(t *testing.T) {
 	tool := NewBashTool(PermissionUnrestricted) // unrestricted level since this test is about output spill, not security
 	cwd := t.TempDir()
 
@@ -342,31 +342,31 @@ func TestBashTool_AC2_OutputSpill(t *testing.T) {
 	}
 }
 
-// AC3: sleep >=2 blocked in foreground; run_in_background spawns tracked task
-func TestBashTool_AC3_SleepBlocked(t *testing.T) {
+// Sleep >5 blocked in foreground; run_in_background spawns tracked task
+func TestBashTool_SleepBlocked(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("sleep command is Unix-specific")
 	}
 	tool := NewBashTool(PermissionEdit)
 	cwd := t.TempDir()
 
-	// Test: sleep >=2 in foreground should be blocked
+	// Test: sleep >5 in foreground should be blocked
 	result, err := tool.Execute(context.Background(), map[string]any{
-		"command": "sleep 3",
+		"command": "sleep 6",
 	}, cwd)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !result.IsError {
-		t.Errorf("expected error for sleep >=2 in foreground")
+		t.Errorf("expected error for sleep >5 in foreground")
 	}
 	if !strings.Contains(result.Content, "run_in_background") {
 		t.Errorf("expected error message mentioning run_in_background, got: %s", result.Content)
 	}
 
-	// Test: sleep >=2 with run_in_background should succeed with task ID
+	// Test: sleep >5 with run_in_background should succeed with task ID
 	result, err = tool.Execute(context.Background(), map[string]any{
-		"command":           "sleep 3",
+		"command":           "sleep 6",
 		"run_in_background": true,
 	}, cwd)
 	if err != nil {
@@ -391,8 +391,8 @@ func TestBashTool_AC3_SleepBlocked(t *testing.T) {
 	}
 }
 
-// AC4: Cwd reset when outside project
-func TestBashTool_AC4_CwdReset(t *testing.T) {
+// Cwd reset when outside project
+func TestBashTool_CwdReset(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping /tmp path test on Windows")
 	}
@@ -443,8 +443,8 @@ func TestBashTool_AC4_CwdReset(t *testing.T) {
 	}
 }
 
-// AC5: Sed simulation invisible in schema
-func TestBashTool_AC5_SchemaHygiene(t *testing.T) {
+// Sed simulation invisible in schema
+func TestBashTool_SchemaHygiene(t *testing.T) {
 	tool := NewBashTool(PermissionEdit)
 
 	schema := tool.InputSchema()
@@ -584,7 +584,7 @@ func TestBashTool_BackgroundGateSecurity(t *testing.T) {
 	}
 }
 
-// TestBashTool_SkipPermissions tests AC2: cwd bypass with unrestricted level flag
+// TestBashTool_SkipPermissions tests cwd bypass with unrestricted level flag
 func TestBashTool_SkipPermissions(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping Unix path test on Windows")
@@ -616,7 +616,7 @@ func TestBashTool_SkipPermissions(t *testing.T) {
 	}
 }
 
-// TestBashTool_ScratchpadAccess tests AC6: scratchpad is always accessible
+// TestBashTool_ScratchpadAccess tests scratchpad is always accessible
 func TestBashTool_ScratchpadAccess(t *testing.T) {
 	tmpDir := t.TempDir()
 	tool := NewBashTool(PermissionEdit)

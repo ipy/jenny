@@ -180,7 +180,7 @@ func (t *BashTool) InputSchema() map[string]any {
 			},
 			"run_in_background": map[string]any{
 				"type":        "boolean",
-				"description": "Spawn command as background task (required for sleep >=2)",
+				"description": "Spawn command as background task (required for sleep >5)",
 			},
 		},
 		"required": []string{"command"},
@@ -266,11 +266,11 @@ func (t *BashTool) Execute(ctx context.Context, input map[string]any, cwd string
 		return t.executeSed(command, t.commandCwd)
 	}
 
-	// Check for sleep >= 2 in foreground
+	// Check for sleep > 5 in foreground
 	if !isBackgroundExecution(input) {
-		if sleepSeconds := getSleepSeconds(command); sleepSeconds >= 2 {
+		if sleepSeconds := getSleepSeconds(command); sleepSeconds > 5 {
 			return &ToolResult{
-				Content: "sleep >=2 seconds is not allowed in foreground; use run_in_background: true",
+				Content: "sleep >5 seconds is not allowed in foreground; use run_in_background: true",
 				IsError: true,
 			}, nil
 		}

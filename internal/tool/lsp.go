@@ -71,7 +71,7 @@ func (t *LSPTool) InputSchema() map[string]any {
 
 // Execute runs the LSP tool with the given input.
 func (t *LSPTool) Execute(ctx context.Context, input map[string]any, cwd string) (*ToolResult, error) {
-	// AC2: Check if LSP client is connected
+	// Check if LSP client is connected
 	if !t.client.Connected() {
 		return &ToolResult{
 			Content: "LSP server not connected.",
@@ -113,7 +113,7 @@ func (t *LSPTool) Execute(ctx context.Context, input map[string]any, cwd string)
 		filePath = uriToFilePath(uri)
 	}
 
-	// AC3: Check file size before any LSP operation
+	// Check file size before any LSP operation
 	if filePath != "" {
 		info, err := os.Stat(filePath)
 		if err != nil {
@@ -216,7 +216,7 @@ func (t *LSPTool) executeFindReferences(ctx context.Context, input map[string]an
 		}, nil
 	}
 
-	// AC5: Filter gitignored paths
+	// Filter gitignored paths
 	repoRoot, err := git.GetRoot(cwd)
 	if err == nil {
 		var filtered []lsp.Reference
@@ -316,7 +316,7 @@ func (t *LSPTool) executeWorkspaceSymbol(ctx context.Context, input map[string]a
 		}, nil
 	}
 
-	// AC5: Filter gitignored paths
+	// Filter gitignored paths
 	repoRoot, err := git.GetRoot(cwd)
 	if err == nil {
 		var filtered []lsp.WorkspaceSymbol

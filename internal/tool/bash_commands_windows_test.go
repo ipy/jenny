@@ -29,5 +29,5 @@ func TestIsPathWithinCwdCaseInsensitive(t *testing.T) {
 		}
 	}
 
-	t.Log("AC4 PASS: isPathWithinCwd handles case-insensitive comparison for Windows paths")
+	t.Log("PASS: isPathWithinCwd handles case-insensitive comparison for Windows paths")
 }
