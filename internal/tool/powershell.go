@@ -13,6 +13,12 @@ import (
 	"time"
 )
 
+const (
+	// psShellUnavailableReason is the reason when powershell.exe is not found
+	// and the command could not be parsed as simple argv for direct execution.
+	psShellUnavailableReason = "powershell.exe not found and command uses shell syntax that cannot run without a shell"
+)
+
 // resolvePowerShellHook, when set by tests, overrides PowerShell resolution.
 var resolvePowerShellHook func() (string, error)
 
@@ -232,14 +238,13 @@ func (t *PowerShellTool) runForegroundPowerShell(ctx context.Context, shellPath,
 func (t *PowerShellTool) executeShellFallback(ctx context.Context, command string, timeout int) (*ToolResult, error) {
 	parsed := parseSimpleCommand(command, ShellFlavorPowerShell)
 	if !parsed.OK {
-		hint := fallbackHint
 		return &ToolResult{
 			Content: formatToolError(
 				"shell_unavailable",
-				"powershell.exe not found; input not runnable as simple argv",
+				psShellUnavailableReason,
 				command,
 				strings.Join(parsed.Issues, ", "),
-				hint,
+				fallbackHint,
 			),
 			IsError: true,
 		}, nil
@@ -264,7 +269,7 @@ func (t *PowerShellTool) runForegroundExec(ctx context.Context, path string, arg
 				fmt.Sprintf("failed to start executable: %v", err),
 				strings.Join(append([]string{path}, args...), " "),
 				"",
-				"",
+				execStartFailedHint,
 			),
 			IsError: true,
 		}, nil
@@ -280,7 +285,7 @@ func (t *PowerShellTool) runForegroundExec(ctx context.Context, path string, arg
 				fmt.Sprintf("command timed out after %d seconds", timeout),
 				strings.Join(append([]string{path}, args...), " "),
 				"",
-				"set run_in_background: true",
+				timeoutHint,
 			),
 			IsError: true,
 		}, nil
@@ -293,7 +298,7 @@ func (t *PowerShellTool) runForegroundExec(ctx context.Context, path string, arg
 				waitErr.Error(),
 				strings.Join(append([]string{path}, args...), " "),
 				"",
-				"",
+				execWaitFailedHint,
 			),
 			IsError: true,
 		}, nil
@@ -516,13 +521,12 @@ func (t *PowerShellTool) resolveExecArgv(command string) (string, []string, erro
 
 	parsed := parseSimpleCommand(command, ShellFlavorPowerShell)
 	if !parsed.OK {
-		hint := fallbackHint
 		return "", nil, fmt.Errorf("%s", formatToolError(
 			"shell_unavailable",
-			"powershell.exe not found; input not runnable as simple argv",
+			psShellUnavailableReason,
 			command,
 			strings.Join(parsed.Issues, ", "),
-			hint,
+			fallbackHint,
 		))
 	}
 

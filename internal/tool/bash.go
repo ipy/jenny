@@ -35,7 +35,21 @@ const (
 	maxHeredocLines = 30
 	// fallbackHint is shown when a shell is missing and the command can't be
 	// parsed into a simple argv list for direct exec.
-	fallbackHint = "use a simple argv command (program arg1 arg2 ...) so the exec fallback can run it"
+	fallbackHint = "rewrite the command as a plain program with arguments (no pipes, redirects, or shell syntax) so the exec fallback can run it directly"
+	// shellUnavailableReason is the reason message when no shell is found and the
+	// command cannot be parsed into a simple argv list for direct execution.
+	shellUnavailableReason = "shell not found and command uses shell syntax that cannot run without a shell"
+	// sandboxFallbackReason is the reason when a sandbox is active and the
+	// simple-exec fallback cannot honor sandbox isolation.
+	sandboxFallbackReason = "sandbox active; simple-exec fallback cannot honor sandbox"
+	// execStartFailedHint is shown when a direct exec fails to start (e.g.
+	// binary not found, permission denied, invalid ELF).
+	execStartFailedHint = "the program could not be started; verify the program name is correct and try a different command"
+	// execWaitFailedHint is shown when a direct exec process crashes or is
+	// killed by a signal.
+	execWaitFailedHint = "the process exited abnormally; see the reason above for details"
+	// timeoutHint is shown when a foreground command times out.
+	timeoutHint = "set run_in_background: true"
 )
 
 // resolveShellHook, when set by tests, overrides shell resolution.
@@ -411,7 +425,7 @@ func (t *BashTool) executeShellFallback(ctx context.Context, command string, tim
 		return &ToolResult{
 			Content: formatToolError(
 				"sandbox_violation",
-				"sandbox active; simple-exec fallback cannot honor sandbox",
+				sandboxFallbackReason,
 				command,
 				"",
 				fallbackHint,
@@ -422,14 +436,13 @@ func (t *BashTool) executeShellFallback(ctx context.Context, command string, tim
 
 	parsed := parseSimpleCommand(command, ShellFlavorBash)
 	if !parsed.OK {
-		hint := fallbackHint
 		return &ToolResult{
 			Content: formatToolError(
 				"shell_unavailable",
-				"shell not found; input not runnable as simple argv",
+				shellUnavailableReason,
 				command,
 				strings.Join(parsed.Issues, ", "),
-				hint,
+				fallbackHint,
 			),
 			IsError: true,
 		}, nil
@@ -454,7 +467,7 @@ func (t *BashTool) runForegroundExec(ctx context.Context, path string, args []st
 				fmt.Sprintf("failed to start executable: %v", err),
 				strings.Join(append([]string{path}, args...), " "),
 				"",
-				"",
+				execStartFailedHint,
 			),
 			IsError: true,
 		}, nil
@@ -470,7 +483,7 @@ func (t *BashTool) runForegroundExec(ctx context.Context, path string, args []st
 				fmt.Sprintf("command timed out after %d seconds", timeout),
 				strings.Join(append([]string{path}, args...), " "),
 				"",
-				"set run_in_background: true",
+				timeoutHint,
 			),
 			IsError: true,
 		}, nil
@@ -483,7 +496,7 @@ func (t *BashTool) runForegroundExec(ctx context.Context, path string, args []st
 				waitErr.Error(),
 				strings.Join(append([]string{path}, args...), " "),
 				"",
-				"",
+				execWaitFailedHint,
 			),
 			IsError: true,
 		}, nil
@@ -839,13 +852,12 @@ func (t *BashTool) resolveExecArgv(command string) (string, []string, error) {
 
 	parsed := parseSimpleCommand(command, ShellFlavorBash)
 	if !parsed.OK {
-		hint := fallbackHint
 		return "", nil, fmt.Errorf("%s", formatToolError(
 			"shell_unavailable",
-			"shell not found; input not runnable as simple argv",
+			shellUnavailableReason,
 			command,
 			strings.Join(parsed.Issues, ", "),
-			hint,
+			fallbackHint,
 		))
 	}
 
