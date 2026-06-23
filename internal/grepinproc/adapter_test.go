@@ -238,17 +238,38 @@ func TestRun_InvalidPatternErrors(t *testing.T) {
 
 func TestRun_ContextCancellation(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, root, "a.txt", "hello\n")
+	writeFile(t, root, "a.txt", "hello world\n")
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // already cancelled
+	cancel() // cancel immediately
+
 	_, err := Run(ctx, Options{
 		Pattern: "hello",
 		Path:    root,
 		Cwd:     root,
 	})
 	if err == nil {
-		t.Error("expected context error")
+		t.Fatal("expected error from cancelled context")
+	}
+}
+
+func TestRun_DefaultIgnoreDirs(t *testing.T) {
+	if len(defaultIgnoreDirs) < 5 {
+		t.Errorf("expected at least 5 default ignore dirs, got %d", len(defaultIgnoreDirs))
+	}
+	// Verify pseudo-FS dirs are included
+	hasSys := false
+	hasProc := false
+	for _, d := range defaultIgnoreDirs {
+		if d == "sys" {
+			hasSys = true
+		}
+		if d == "proc" {
+			hasProc = true
+		}
+	}
+	if !hasSys || !hasProc {
+		t.Error("defaultIgnoreDirs should include 'sys' and 'proc'")
 	}
 }
 

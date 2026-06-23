@@ -45,6 +45,7 @@ func (d *directHandler) SetBackground(bool)                   {}
 func (d *directHandler) SetThinkingConfig(api.ThinkingConfig) {}
 func (d *directHandler) SetProviderName(string)               {}
 func (d *directHandler) SetMaxTokensOverride(int)             {}
+func (d *directHandler) SetDynamicThinkingBudget(int)         {}
 
 // stickyClientWithHandler builds a StickyClient that talks to a real
 // httptest server, bypassing api.Client entirely.

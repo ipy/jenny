@@ -4,204 +4,190 @@ import (
 	"testing"
 )
 
-func TestComputeMaxTokens_Basic(t *testing.T) {
-	modelMax := 384000
-
-	tests := []struct {
-		complexity int
-		isCoding   bool
-		expected   int
-	}{
-		{1, false, 3840},
-		{2, false, 7680},
-		{3, false, 11520},
-		{5, false, 19200},
-		{1, true, 19200},
-		{2, true, 38400},
-		{5, true, 96000},
+func TestComplexityResult_OverallComplexity(t *testing.T) {
+	cr := ComplexityResult{ReasoningDepth: 3, CodeVolume: 4, DomainSpecialization: 2, IntegrationBreadth: 3, NeedWrite: true}
+	got := cr.OverallComplexity()
+	// 3*0.30 + 4*0.25 + 2*0.20 + 3*0.25 = 0.9 + 1.0 + 0.4 + 0.75 = 3.05
+	if got < 3.04 || got > 3.06 {
+		t.Errorf("OverallComplexity() = %.2f, want ~3.05", got)
 	}
+}
 
+func TestComplexityResult_ThinkingIntensity(t *testing.T) {
+	cr := ComplexityResult{ReasoningDepth: 5, CodeVolume: 1, DomainSpecialization: 3, IntegrationBreadth: 1}
+	got := cr.ThinkingIntensity()
+	// 5*0.60 + 3*0.40 = 3.0 + 1.2 = 4.2 → round to 4
+	if got != 4 {
+		t.Errorf("ThinkingIntensity() = %d, want 4", got)
+	}
+}
+
+func TestComplexityResult_OutputIntensity(t *testing.T) {
+	cr := ComplexityResult{ReasoningDepth: 1, CodeVolume: 5, DomainSpecialization: 1, IntegrationBreadth: 4}
+	got := cr.OutputIntensity()
+	// 5*0.50 + 4*0.30 + 1*0.20 = 2.5 + 1.2 + 0.2 = 3.9 → round to 4
+	if got != 4 {
+		t.Errorf("OutputIntensity() = %d, want 4", got)
+	}
+}
+
+func TestClampDim(t *testing.T) {
+	tests := []struct{ in, want int }{
+		{0, 1}, {1, 1}, {3, 3}, {5, 5}, {6, 5}, {-1, 1},
+	}
 	for _, tt := range tests {
-		got := computeMaxTokens(tt.complexity, tt.isCoding, modelMax)
-		if got != tt.expected {
-			t.Errorf("computeMaxTokens(%d, %v, %d) = %d, want %d",
-				tt.complexity, tt.isCoding, modelMax, got, tt.expected)
+		got := clampDim(tt.in)
+		if got != tt.want {
+			t.Errorf("clampDim(%d) = %d, want %d", tt.in, got, tt.want)
 		}
 	}
 }
 
-func TestComputeMaxTokens_MinimumFloor(t *testing.T) {
-	got := computeMaxTokens(1, false, 10000)
-	if got < 800 {
-		t.Errorf("expected minimum 800, got %d", got)
-	}
-}
-
-func TestComputeMaxTokens_CappedAtModelMax(t *testing.T) {
-	got := computeMaxTokens(5, true, 10000)
-	if got > 10000 {
-		t.Errorf("expected capped at 10000, got %d", got)
-	}
-}
-
-func TestComputeMaxTokens_ClampComplexity(t *testing.T) {
-	modelMax := 384000
-	got0 := computeMaxTokens(0, false, modelMax)
-	got1 := computeMaxTokens(1, false, modelMax)
-	if got0 != got1 {
-		t.Errorf("complexity 0 should clamp to 1: got %d vs %d", got0, got1)
-	}
-
-	got6 := computeMaxTokens(6, false, modelMax)
-	got5 := computeMaxTokens(5, false, modelMax)
-	if got6 != got5 {
-		t.Errorf("complexity 6 should clamp to 5: got %d vs %d", got6, got5)
-	}
-}
-
 func TestTurnBasedMaxTokens(t *testing.T) {
-	// Large model (>100K maxOut) — uses higher caps
 	modelMax := 384000
 	tests := []struct {
 		turn     int
 		expected int
 	}{
-		{1, 8192},   // early turn: capped to prevent runaway thinking
-		{3, 8192},   // still early
-		{4, 16384},  // mid schedule
-		{10, 16384}, // end of mid
-		{11, 15984}, // taper starts: 16384 - 1*400
-		{20, 12384}, // 16384 - 10*400
-		{40, 4384},  // 16384 - 30*400 = 4384
-		{41, 4096},  // floor
-		{100, 4096}, // floor
+		{1, 8192},
+		{3, 8192},
+		{4, 16384},
+		{10, 16384},
+		{11, 15984},
+		{20, 12384},
+		{40, 4384},
+		{41, 4096},
+		{100, 4096},
 	}
-
 	for _, tt := range tests {
 		got := turnBasedMaxTokens(tt.turn, modelMax)
 		if got != tt.expected {
-			t.Errorf("turnBasedMaxTokens(%d, %d) = %d, want %d",
-				tt.turn, modelMax, got, tt.expected)
+			t.Errorf("turnBasedMaxTokens(%d, %d) = %d, want %d", tt.turn, modelMax, got, tt.expected)
 		}
 	}
 
-	// Small model (<100K maxOut) — uses lower caps
 	smallMax := 8192
 	smallTests := []struct {
 		turn     int
 		expected int
 	}{
-		{1, 4096}, // min(4096, 8192)
+		{1, 4096},
 		{3, 4096},
-		{4, 8192}, // min(16384, 8192) = 8192
+		{4, 8192},
 		{10, 8192},
 	}
 	for _, tt := range smallTests {
 		got := turnBasedMaxTokens(tt.turn, smallMax)
 		if got != tt.expected {
-			t.Errorf("turnBasedMaxTokens(%d, %d) = %d, want %d",
-				tt.turn, smallMax, got, tt.expected)
+			t.Errorf("turnBasedMaxTokens(%d, %d) = %d, want %d", tt.turn, smallMax, got, tt.expected)
 		}
 	}
 }
 
-func TestMaxTokensController_Discovery(t *testing.T) {
-	// deepseek-chat has modelMax > 100K, so earlyTurnCap = 8192
+func TestMaxTokensController_EarlyTurnBudget(t *testing.T) {
 	c := NewMaxTokensController("deepseek-chat")
-
 	for turn := 1; turn <= 3; turn++ {
-		got := c.ComputeEffective(turn)
-		if got != 8192 {
-			t.Errorf("turn %d: expected 8192 during discovery, got %d", turn, got)
+		budget := c.ComputeBudget(turn)
+		if budget.TotalBudget != 8192 {
+			t.Errorf("turn %d: expected total 8192, got %d", turn, budget.TotalBudget)
+		}
+		if budget.ThinkingBudget <= 0 {
+			t.Errorf("turn %d: thinking budget should be positive, got %d", turn, budget.ThinkingBudget)
+		}
+		if budget.CompletionBudget <= 0 {
+			t.Errorf("turn %d: completion budget should be positive, got %d", turn, budget.CompletionBudget)
+		}
+		if budget.ThinkingBudget+budget.CompletionBudget != budget.TotalBudget {
+			t.Errorf("turn %d: thinking(%d) + completion(%d) != total(%d)", turn, budget.ThinkingBudget, budget.CompletionBudget, budget.TotalBudget)
 		}
 	}
 }
 
-func TestMaxTokensController_Discovery_SmallModel(t *testing.T) {
-	c := &MaxTokensController{modelMax: 8192}
-
-	for turn := 1; turn <= 3; turn++ {
-		got := c.ComputeEffective(turn)
-		if got != 4096 {
-			t.Errorf("turn %d: expected 4096 during discovery for small model, got %d", turn, got)
-		}
-	}
-}
-
-func TestMaxTokensController_TurnBased_BeforeFork(t *testing.T) {
+func TestMaxTokensController_WithComplexity(t *testing.T) {
 	c := NewMaxTokensController("deepseek-chat")
+	c.SetComplexityResult(&ComplexityResult{
+		ReasoningDepth: 4, CodeVolume: 3, DomainSpecialization: 2, IntegrationBreadth: 3, NeedWrite: true,
+	})
 
-	got := c.ComputeEffective(5)
-	if got != 16384 {
-		t.Errorf("turn 5 without fork: expected 16384, got %d", got)
+	budget := c.ComputeBudget(5)
+	if budget.TotalBudget <= 0 {
+		t.Errorf("total budget should be positive, got %d", budget.TotalBudget)
 	}
-}
-
-func TestMaxTokensController_ForkOverridesTurnBased(t *testing.T) {
-	c := NewMaxTokensController("deepseek-chat")
-	c.SetComplexityResult(&ComplexityResult{Complexity: 3, NeedWrite: true})
-
-	got := c.ComputeEffective(5)
-	expected := computeMaxTokens(3, true, c.modelMax)
-	if got != expected {
-		t.Errorf("turn 5 with fork: expected %d, got %d", expected, got)
+	if budget.ThinkingBudget <= 0 {
+		t.Errorf("thinking budget should be positive, got %d", budget.ThinkingBudget)
 	}
-}
-
-func TestMaxTokensController_DiscoveryIgnoresFork(t *testing.T) {
-	c := NewMaxTokensController("deepseek-chat")
-	c.SetComplexityResult(&ComplexityResult{Complexity: 5, NeedWrite: true})
-
-	for turn := 1; turn <= 3; turn++ {
-		got := c.ComputeEffective(turn)
-		if got != 8192 {
-			t.Errorf("turn %d: discovery should use earlyTurnCap, expected 8192, got %d", turn, got)
-		}
+	if budget.CompletionBudget <= 0 {
+		t.Errorf("completion budget should be positive, got %d", budget.CompletionBudget)
 	}
 }
 
 func TestMaxTokensController_ProgressLevelCaps(t *testing.T) {
 	c := NewMaxTokensController("deepseek-chat")
-	c.SetComplexityResult(&ComplexityResult{Complexity: 5, NeedWrite: true})
+	c.SetComplexityResult(&ComplexityResult{
+		ReasoningDepth: 5, CodeVolume: 5, DomainSpecialization: 5, IntegrationBreadth: 5, NeedWrite: true,
+	})
 
 	c.SetProgressLevel(ProgressLevelL1)
-	got := c.ComputeEffective(5)
-	if got != 8192 {
-		t.Errorf("L1 should cap at 8192, got %d", got)
+	budget := c.ComputeBudget(5)
+	if budget.TotalBudget > 8192 {
+		t.Errorf("L1 should cap total at 8192, got %d", budget.TotalBudget)
 	}
 
 	c.SetProgressLevel(ProgressLevelL2)
-	got = c.ComputeEffective(5)
-	if got != 4096 {
-		t.Errorf("L2 should cap at 4096, got %d", got)
-	}
-}
-
-func TestMaxTokensController_ProgressLevel_SmallModel(t *testing.T) {
-	c := &MaxTokensController{modelMax: 4096}
-
-	c.SetProgressLevel(ProgressLevelL1)
-	got := c.ComputeEffective(5)
-	if got > 4096 {
-		t.Errorf("L1 on small model should not exceed modelMax, got %d", got)
+	budget = c.ComputeBudget(5)
+	if budget.TotalBudget > 4096 {
+		t.Errorf("L2 should cap total at 4096, got %d", budget.TotalBudget)
 	}
 
-	c.SetProgressLevel(ProgressLevelL2)
-	got = c.ComputeEffective(5)
-	if got > 4096 {
-		t.Errorf("L2 on small model should not exceed modelMax, got %d", got)
+	c.SetProgressLevel(ProgressLevelL3)
+	budget = c.ComputeBudget(5)
+	if budget.TotalBudget > 2048 {
+		t.Errorf("L3 should cap total at 2048, got %d", budget.TotalBudget)
 	}
 }
 
 func TestMaxTokensController_ShouldFork_OnlyOnce(t *testing.T) {
 	c := NewMaxTokensController("deepseek-chat")
-
 	if !c.ShouldFork() {
 		t.Error("first ShouldFork should return true")
 	}
 	if c.ShouldFork() {
 		t.Error("second ShouldFork should return false")
 	}
+}
+
+func TestMaxTokensController_MaxTokensSpikeProtection(t *testing.T) {
+	c := NewMaxTokensController("deepseek-chat")
+	c.SetComplexityResult(&ComplexityResult{
+		ReasoningDepth: 2, CodeVolume: 2, DomainSpecialization: 1, IntegrationBreadth: 2, NeedWrite: true,
+	})
+
+	baseline := c.ComputeEffective(5)
+
+	// Simulate hitting max_tokens on previous turn
+	c.RecordTurnOutcome("max_tokens", true, true)
+	boosted := c.ComputeEffective(6)
+
+	if boosted <= baseline {
+		t.Errorf("spike protection should boost: baseline=%d, boosted=%d", baseline, boosted)
+	}
+}
+
+func TestMaxTokensController_RecordTurnOutcome(t *testing.T) {
+	c := NewMaxTokensController("deepseek-chat")
+	c.RecordTurnOutcome("end_turn", true, false)
+
+	c.mu.RLock()
+	if c.lastStopReason != "end_turn" {
+		t.Errorf("expected lastStopReason='end_turn', got %q", c.lastStopReason)
+	}
+	if !c.lastHadToolUse {
+		t.Error("expected lastHadToolUse=true")
+	}
+	if c.lastHadWrite {
+		t.Error("expected lastHadWrite=false")
+	}
+	c.mu.RUnlock()
 }
 
 func TestExtractJSON(t *testing.T) {

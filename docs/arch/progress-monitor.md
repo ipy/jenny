@@ -42,7 +42,9 @@ Each turn is scored by analyzing tool names, exit codes, command prefixes, and f
 | First read of a new file path | +1 |
 | Scratchpad write | +1 |
 
-Prefix matching uses word-boundary enforcement: after the prefix, the next character must be end-of-string, space, tab, slash, or equals. This prevents false positives such as `makefile` matching `make` or `go testify` matching `go test`.
+Prefix matching uses word-boundary enforcement: after the prefix, the next character must be end-of-string, space, tab, slash, equals, or hyphen. This allows versioned commands like `gcc-12` to match the `gcc` prefix. This prevents false positives such as `makefile` matching `make` or `go testify` matching `go test`.
+
+For compound commands (joined by `&&`, `||`, or `;`), each segment is tested independently. This allows commands like `cd /app && gcc -o main main.c` to match the `gcc` build prefix.
 
 Package install is detected two ways:
 
@@ -126,6 +128,8 @@ Allows at most 5 additional **API turns** (tracked by `l2TurnCount`, incremented
 ### L3 — Hard Terminate
 
 Engine terminates the session and emits a `result` event with `subtype: "progress_terminated"`, including the monitor state (consecutive count, total count, level).
+
+Before terminating, L3 dispatches one final fork-judge evaluation. If the judge finds meaningful progress (overall ≥ 3.0), all counters reset and the session continues. If negative, termination proceeds. The threshold is a fixed constant (3.0), the same as the L1-second fork-judge — no progressive penalty across evaluations.
 
 ## L1-Second Fork-Judge Evaluation
 

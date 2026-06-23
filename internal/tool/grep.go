@@ -176,6 +176,15 @@ func (t *GrepTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}
 	}
 
+	// Reject root-level paths
+	absPath, _ := filepath.Abs(path)
+	if absPath == "/" || absPath == `C:\` {
+		return &ToolResult{
+			Content: "Error: refusing to search the filesystem root. Specify a subdirectory.",
+			IsError: true,
+		}, nil
+	}
+
 	// Universal Windows Security (AC4)
 	if runtime.GOOS == "windows" {
 		winGate := NewWindowsCommandGate(PermissionEdit)
@@ -364,6 +373,14 @@ func (t *GrepTool) executeInProcess(ctx context.Context, input map[string]any, p
 	}
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(cwd, path)
+	}
+
+	absPath, _ := filepath.Abs(path)
+	if absPath == "/" || absPath == `C:\` {
+		return &ToolResult{
+			Content: "Error: refusing to search the filesystem root. Specify a subdirectory.",
+			IsError: true,
+		}, nil
 	}
 
 	opts := grepinproc.Options{

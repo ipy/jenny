@@ -33,6 +33,7 @@ type Requester interface {
 	SetThinkingConfig(cfg ThinkingConfig)
 	SetProviderName(name string)
 	SetMaxTokensOverride(n int)
+	SetDynamicThinkingBudget(n int)
 }
 
 // Client wraps an API provider.
@@ -258,6 +259,17 @@ func effortToBudgetTokens(effort string) int {
 func (c *Client) SetMaxTokensOverride(n int) {
 	if setter, ok := c.provider.(interface{ SetMaxTokensOverride(int) }); ok {
 		setter.SetMaxTokensOverride(n)
+	}
+}
+
+// SetDynamicThinkingBudget updates the thinking budget tokens per-turn without
+// changing the reasoning effort level (which would invalidate prompt caches).
+// Only affects providers that support separate thinking budgets (Anthropic).
+// For unified-budget providers (DeepSeek, OpenAI), this is a no-op since their
+// thinking allocation is controlled implicitly via the total max_tokens.
+func (c *Client) SetDynamicThinkingBudget(n int) {
+	if setter, ok := c.provider.(interface{ SetDynamicThinkingBudget(int) }); ok {
+		setter.SetDynamicThinkingBudget(n)
 	}
 }
 

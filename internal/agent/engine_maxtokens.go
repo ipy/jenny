@@ -11,18 +11,66 @@ import (
 )
 
 // ComplexityResult holds the parsed result from a fork-based complexity evaluation.
+// Four orthogonal dimensions are evaluated independently and combined internally.
 type ComplexityResult struct {
-	Complexity int  `json:"complexity"`
-	NeedWrite  bool `json:"need_write"`
+	ReasoningDepth       int  `json:"reasoning_depth"`
+	CodeVolume           int  `json:"code_volume"`
+	DomainSpecialization int  `json:"domain_specialization"`
+	IntegrationBreadth   int  `json:"integration_breadth"`
+	NeedWrite            bool `json:"need_write"`
 }
 
-// MaxTokensController manages dynamic max_tokens computation.
+// OverallComplexity computes a weighted aggregate from the four dimensions.
+// The weights are internal and not exposed to the evaluation prompt.
+func (cr *ComplexityResult) OverallComplexity() float64 {
+	return float64(cr.ReasoningDepth)*0.30 +
+		float64(cr.CodeVolume)*0.25 +
+		float64(cr.DomainSpecialization)*0.20 +
+		float64(cr.IntegrationBreadth)*0.25
+}
+
+// ThinkingIntensity returns a 1-5 score biased toward reasoning needs.
+func (cr *ComplexityResult) ThinkingIntensity() int {
+	v := float64(cr.ReasoningDepth)*0.60 + float64(cr.DomainSpecialization)*0.40
+	return clampDim(int(v + 0.5))
+}
+
+// OutputIntensity returns a 1-5 score biased toward output volume needs.
+func (cr *ComplexityResult) OutputIntensity() int {
+	v := float64(cr.CodeVolume)*0.50 + float64(cr.IntegrationBreadth)*0.30 + float64(cr.ReasoningDepth)*0.20
+	return clampDim(int(v + 0.5))
+}
+
+func clampDim(v int) int {
+	if v < 1 {
+		return 1
+	}
+	if v > 5 {
+		return 5
+	}
+	return v
+}
+
+// TokenBudget holds the separate thinking and completion budgets.
+type TokenBudget struct {
+	ThinkingBudget   int // tokens allocated for reasoning (for providers that support it)
+	CompletionBudget int // tokens allocated for visible output + tool calls
+	TotalBudget      int // ThinkingBudget + CompletionBudget (what gets sent to unified-budget APIs)
+}
+
+// MaxTokensController manages dynamic max_tokens computation with separate
+// thinking and completion budgets.
 type MaxTokensController struct {
 	mu               sync.RWMutex
 	complexityResult *ComplexityResult
 	forkFired        bool
 	modelMax         int
 	progressLevel    ProgressLevel
+
+	// Per-turn state for adaptive adjustments
+	lastStopReason string // "max_tokens", "end_turn", "tool_use", etc.
+	lastHadToolUse bool   // whether last turn contained tool calls
+	lastHadWrite   bool   // whether last turn contained write/edit tool calls
 }
 
 // NewMaxTokensController creates a new controller for the given model.
@@ -32,7 +80,7 @@ func NewMaxTokensController(model string) *MaxTokensController {
 	}
 }
 
-// SetProgressLevel updates the progress monitor level for max_tokens capping.
+// SetProgressLevel updates the progress monitor level.
 func (c *MaxTokensController) SetProgressLevel(level ProgressLevel) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -46,11 +94,20 @@ func (c *MaxTokensController) SetComplexityResult(cr *ComplexityResult) {
 	c.complexityResult = cr
 }
 
-// ComplexityResult returns the current complexity result (nil if not yet available).
+// GetComplexityResult returns the current complexity result (nil if not yet available).
 func (c *MaxTokensController) GetComplexityResult() *ComplexityResult {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.complexityResult
+}
+
+// RecordTurnOutcome records signals from the completed turn for next-turn adaptation.
+func (c *MaxTokensController) RecordTurnOutcome(stopReason string, hadToolUse, hadWrite bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lastStopReason = stopReason
+	c.lastHadToolUse = hadToolUse
+	c.lastHadWrite = hadWrite
 }
 
 // ShouldFork returns true if the fork hasn't been fired yet and sets forkFired=true atomically.
@@ -64,86 +121,152 @@ func (c *MaxTokensController) ShouldFork() bool {
 	return true
 }
 
-// ComputeEffective returns the effective max_tokens for the given turn.
-func (c *MaxTokensController) ComputeEffective(turn int) int {
+// ComputeBudget returns the token budget for the given turn.
+func (c *MaxTokensController) ComputeBudget(turn int) TokenBudget {
 	c.mu.RLock()
 	cr := c.complexityResult
 	level := c.progressLevel
+	lastStop := c.lastStopReason
+	lastWrite := c.lastHadWrite
 	c.mu.RUnlock()
 
-	var base int
 	if turn <= 3 {
-		base = c.earlyTurnCap()
-	} else if cr != nil {
-		base = computeMaxTokens(cr.Complexity, cr.NeedWrite, c.modelMax)
-	} else {
-		base = turnBasedMaxTokens(turn, c.modelMax)
+		return c.earlyTurnBudget()
 	}
 
+	var thinking, completion int
+	if cr != nil {
+		thinking = c.thinkingBudget(cr, turn, level)
+		completion = c.completionBudget(cr, turn, level, lastStop, lastWrite)
+	} else {
+		tb := turnBasedMaxTokens(turn, c.modelMax)
+		thinking = tb * 40 / 100
+		completion = tb - thinking
+	}
+
+	total := thinking + completion
+	total = c.applyProgressCap(total, level)
+
+	if total > c.modelMax {
+		total = c.modelMax
+	}
+
+	// Re-proportion thinking/completion after capping
+	if thinking+completion > 0 && total < thinking+completion {
+		ratio := float64(thinking) / float64(thinking+completion)
+		thinking = int(float64(total) * ratio)
+		completion = total - thinking
+	}
+
+	log.Debug("TokenBudget computed",
+		"turn", turn,
+		"thinking", thinking,
+		"completion", completion,
+		"total", total,
+		"level", level,
+		"hasComplexity", cr != nil,
+	)
+	return TokenBudget{ThinkingBudget: thinking, CompletionBudget: completion, TotalBudget: total}
+}
+
+// ComputeEffective returns the total max_tokens for APIs that use a unified budget.
+// This is the primary entry point used by the engine loop.
+func (c *MaxTokensController) ComputeEffective(turn int) int {
+	return c.ComputeBudget(turn).TotalBudget
+}
+
+func (c *MaxTokensController) earlyTurnBudget() TokenBudget {
+	cap := 8192
+	if c.modelMax < 100_000 {
+		cap = min(4096, c.modelMax)
+	} else {
+		cap = min(8192, c.modelMax)
+	}
+	thinking := cap * 30 / 100
+	completion := cap - thinking
+	return TokenBudget{ThinkingBudget: thinking, CompletionBudget: completion, TotalBudget: cap}
+}
+
+// thinkingBudget calculates the thinking token allocation based on complexity and turn state.
+func (c *MaxTokensController) thinkingBudget(cr *ComplexityResult, turn int, level ProgressLevel) int {
+	intensity := cr.ThinkingIntensity() // 1-5
+	// Base: 1K per intensity level, with model-proportional scaling
+	base := intensity * c.modelMax / 100
+	if base < 1024 {
+		base = 1024
+	}
+
+	// Reduce thinking budget at high progress levels (stuck = think less, act more)
+	switch level {
+	case ProgressLevelL2, ProgressLevelL3:
+		base = base * 40 / 100
+	case ProgressLevelL1:
+		base = base * 70 / 100
+	}
+
+	// Cap thinking at 60% of model max to leave room for output
+	maxThinking := c.modelMax * 60 / 100
+	if base > maxThinking {
+		base = maxThinking
+	}
+	return base
+}
+
+// completionBudget calculates the completion token allocation.
+func (c *MaxTokensController) completionBudget(cr *ComplexityResult, turn int, level ProgressLevel, lastStop string, lastWrite bool) int {
+	intensity := cr.OutputIntensity() // 1-5
+	base := intensity * c.modelMax / 100
+	if base < 2048 {
+		base = 2048
+	}
+
+	// Boost for code-writing tasks
+	if cr.NeedWrite {
+		base = base * 3
+	}
+
+	// Spike protection: if previous turn hit max_tokens, boost completion
+	if lastStop == "max_tokens" {
+		base = base * 150 / 100
+	}
+
+	// Sustained write phase: if last turn had writes, maintain high completion
+	if lastWrite {
+		minWrite := 8192
+		if base < minWrite {
+			base = minWrite
+		}
+	}
+
+	if base > c.modelMax {
+		base = c.modelMax
+	}
+	return base
+}
+
+// applyProgressCap applies progress-level-based caps to the total budget.
+func (c *MaxTokensController) applyProgressCap(total int, level ProgressLevel) int {
+	var cap int
 	switch level {
 	case ProgressLevelL3:
-		cap := c.progressCap(2048)
-		if base > cap {
-			base = cap
-		}
+		cap = 2048
 	case ProgressLevelL2:
-		cap := c.progressCap(4096)
-		if base > cap {
-			base = cap
-		}
+		cap = 4096
 	case ProgressLevelL1:
-		cap := c.progressCap(8192)
-		if base > cap {
-			base = cap
-		}
+		cap = 8192
+	default:
+		return total
 	}
-
-	log.Debug("MaxTokens computed", "turn", turn, "base", base, "level", level, "hasComplexity", cr != nil)
-	return base
-}
-
-// earlyTurnCap returns the max_tokens cap for the first 3 discovery turns.
-// Set to 8192 for thinking models: high enough for planning + first tool calls,
-// low enough to prevent runaway thinking burns (e.g. Task 66: 14K thinking tokens
-// on turn 1 with zero tool use at 16384 cap).
-func (c *MaxTokensController) earlyTurnCap() int {
-	if c.modelMax >= 100_000 {
-		return min(8192, c.modelMax)
+	if c.modelMax < cap {
+		cap = c.modelMax
 	}
-	return min(4096, c.modelMax)
-}
-
-// progressCap returns the max_tokens cap for a given progress level,
-// scaled to the model's capacity. Never returns below 2048.
-func (c *MaxTokensController) progressCap(desired int) int {
-	if desired > c.modelMax {
-		return c.modelMax
+	if cap < 2048 {
+		cap = 2048
 	}
-	if desired < 2048 {
-		return 2048
+	if total > cap {
+		return cap
 	}
-	return desired
-}
-
-// computeMaxTokens calculates max_tokens from complexity and coding flag.
-func computeMaxTokens(complexity int, isCoding bool, modelMax int) int {
-	if complexity < 1 {
-		complexity = 1
-	}
-	if complexity > 5 {
-		complexity = 5
-	}
-	base := modelMax * complexity / 100
-	if base < 800 {
-		base = 800
-	}
-	if isCoding {
-		base *= 5
-	}
-	if base > modelMax {
-		base = modelMax
-	}
-	return base
+	return total
 }
 
 // turnBasedMaxTokens returns the schedule-based default for a given turn.
@@ -170,17 +293,40 @@ func turnBasedMaxTokens(turn int, modelMax int) int {
 const complexityEvalPrompt = `<system-reminder>
 This is a separate meta-evaluation request. Do not continue any prior conversation or call any tools.
 </system-reminder>
-Evaluate the task being worked on. Respond ONLY with a JSON object, no other text, comments or fences:
-{"complexity": <1-5>, "need_write": <true/false>}
+Evaluate the task being worked on across these dimensions. Respond ONLY with a JSON object, no other text, comments or fences:
+{"reasoning_depth": <1-5>, "code_volume": <1-5>, "domain_specialization": <1-5>, "integration_breadth": <1-5>, "need_write": <true/false>}
 
-Complexity rubric (pick the LOWEST level that fits):
-1 = Trivial: one obvious action. e.g., "rename variable x to count", "add a doc comment to calculateTotal".
-2 = Simple: one component, a few steps. e.g., "add a /health endpoint returning 200", "install Postgres and run the migration scripts".
-3 = Moderate: several components or moderate domain knowledge. e.g., "swap session auth for JWT, update callers, add token refresh", "build a CI pipeline that lints, tests on 3 Python versions, and builds a Docker image".
-4 = Complex: many interacting parts or non-trivial algorithms. e.g., "implement a distributed lock with leader election and fencing tokens across 5 nodes", "diagnose a thread-pool race condition that only reproduces under load".
-5 = Very complex: research-level work, novel algorithms, or deep obscure-domain expertise. e.g., "implement a cost-based query optimizer with histograms and join enumeration", "write a JIT backend for a subset of WASM targeting a custom RISC-V accelerator".
+Dimension rubrics (pick the LOWEST level that fits for each):
 
-need_write=true if the task involves writing/modifying code, article, or other complex artifacts. This is a strong signal that more out tokens may be needed.`
+REASONING DEPTH — how much deliberation is needed before acting:
+  1 = Obvious next step. e.g., rename a variable, fix a typo.
+  2 = Straightforward logic. e.g., add a simple endpoint, write a unit test.
+  3 = Moderate analysis. e.g., trace a bug across 2-3 call sites, choose between two design options.
+  4 = Deep reasoning. e.g., design a concurrency strategy, analyze a subtle race condition.
+  5 = Research-level. e.g., prove correctness of a distributed protocol, devise a novel algorithm.
+
+CODE VOLUME — how much code/text needs to be produced:
+  1 = A few lines. e.g., one-line fix, add a config entry.
+  2 = A function or small block. e.g., add a helper, write a short test.
+  3 = Multiple functions or a module. e.g., implement a REST handler with validation.
+  4 = Several files or a subsystem. e.g., add JWT auth across middleware, routes, and tests.
+  5 = Large-scale generation. e.g., scaffold an entire service, generate a full test suite.
+
+DOMAIN SPECIALIZATION — how niche the required knowledge is:
+  1 = General programming. e.g., string manipulation, basic I/O.
+  2 = Common framework usage. e.g., Express.js routing, React components.
+  3 = Specialized library or protocol. e.g., gRPC interceptors, OpenGL shaders.
+  4 = Deep domain expertise. e.g., cryptographic implementations, kernel module development.
+  5 = Research-level niche. e.g., LLVM IR optimization passes, custom FPGA synthesis.
+
+INTEGRATION BREADTH — how many components or files are touched:
+  1 = Single file. e.g., edit one function in one file.
+  2 = 2-3 files. e.g., update a function and its test.
+  3 = A module or package. e.g., refactor a package's public API.
+  4 = Cross-module. e.g., change a shared interface used by 5+ consumers.
+  5 = System-wide. e.g., migrate a database schema affecting all layers.
+
+need_write=true if the task involves writing/modifying code, articles, or other complex artifacts.`
 
 // forkComplexityEval sends a side request to evaluate task complexity.
 // It reuses the cached system prompt prefix for cache hits.
@@ -212,11 +358,18 @@ func forkComplexityEval(ctx context.Context, client api.Requester, messages []ap
 		return nil, "", api.Usage{}, err
 	}
 
-	if cr.Complexity < 1 || cr.Complexity > 5 {
-		cr.Complexity = 3
-	}
+	cr.ReasoningDepth = clampDim(cr.ReasoningDepth)
+	cr.CodeVolume = clampDim(cr.CodeVolume)
+	cr.DomainSpecialization = clampDim(cr.DomainSpecialization)
+	cr.IntegrationBreadth = clampDim(cr.IntegrationBreadth)
 
-	log.Debug("Complexity eval result", "complexity", cr.Complexity, "need_write", cr.NeedWrite)
+	log.Debug("Complexity eval result",
+		"reasoning_depth", cr.ReasoningDepth,
+		"code_volume", cr.CodeVolume,
+		"domain_specialization", cr.DomainSpecialization,
+		"integration_breadth", cr.IntegrationBreadth,
+		"need_write", cr.NeedWrite,
+	)
 	return &cr, resp.Model, resp.Usage, nil
 }
 

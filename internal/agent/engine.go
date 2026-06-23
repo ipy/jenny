@@ -84,6 +84,9 @@ type QueryEngine struct {
 	// Progress monitor (circuit breaker)
 	progressMonitor *ProgressMonitor
 
+	// Thinking monitor (per-turn thinking token usage)
+	thinkingMonitor *ThinkingMonitor
+
 	// Token estimator with per-model EWMA calibration
 	tokenEstimator *TokenEstimator
 
@@ -104,6 +107,18 @@ type QueryEngine struct {
 	// check for user cancellation (Ctrl+C) independently of the
 	// detached loop context.
 	originalCtx context.Context
+}
+
+// sumThinkingTokens returns the total estimated thinking tokens for the current turn.
+func (e *QueryEngine) sumThinkingTokens() int {
+	if e.thinkingBlockState == nil {
+		return 0
+	}
+	total := 0
+	for _, state := range e.thinkingBlockState {
+		total += state.EstimatedTokens
+	}
+	return total
 }
 
 // thinkingBlockState tracks the accumulated thinking tokens for a single thinking block.
@@ -311,6 +326,7 @@ func NewQueryEngine(cfg *StreamConfig, tools []tool.Tool, model string, opts ...
 	// Initialize dynamic max_tokens and progress monitor
 	e.maxTokensCtrl = NewMaxTokensController(e.model)
 	e.progressMonitor = NewProgressMonitor()
+	e.thinkingMonitor = NewThinkingMonitor()
 
 	// Wire context into tools
 	e.WireTools()

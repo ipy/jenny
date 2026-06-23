@@ -205,6 +205,15 @@ func (t *GlobTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}
 	}
 
+	// Reject root-level paths that would traverse the entire filesystem.
+	absSearch, _ := filepath.Abs(searchRoot)
+	if absSearch == "/" || absSearch == `C:\` {
+		return &ToolResult{
+			Content: "Error: refusing to search the filesystem root. Specify a subdirectory.",
+			IsError: true,
+		}, nil
+	}
+
 	// Universal Windows Security (AC4)
 	if runtime.GOOS == "windows" {
 		winGate := NewWindowsCommandGate(PermissionEdit)
@@ -227,7 +236,7 @@ func (t *GlobTool) Execute(ctx context.Context, input map[string]any, cwd string
 	}
 
 	// Fallback: manual filepath.Walk (always respects .gitignore/.jennyignore)
-	matches, err := t.globWithWalk(searchRoot, pattern)
+	matches, err := t.globWithWalk(ctx, searchRoot, pattern)
 	if err != nil {
 		return nil, fmt.Errorf("glob error: %v", err)
 	}
@@ -291,51 +300,76 @@ func (t *GlobTool) globWithRipgrep(searchRoot, pattern string) ([]fileMatch, err
 	return matches, nil
 }
 
+// pseudoFSDirs are Linux virtual filesystem directories that can hang WalkDir.
+var pseudoFSDirs = map[string]bool{
+	"proc": true, "sys": true, "dev": true, "run": true, "snap": true,
+}
+
 // globWithWalk is the fallback when ripgrep is not available.
 // It walks the directory tree and matches files manually.
-func (t *GlobTool) globWithWalk(searchRoot, pattern string) ([]fileMatch, error) {
+func (t *GlobTool) globWithWalk(ctx context.Context, searchRoot, pattern string) ([]fileMatch, error) {
 	ignorePatterns := ignore.LoadPatterns(searchRoot)
-	var matches []fileMatch
 
-	err := filepath.Walk(searchRoot, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if info == nil {
-			return nil
-		}
+	type walkResult struct {
+		matches []fileMatch
+		err     error
+	}
+	ch := make(chan walkResult, 1)
+	go func() {
+		var matches []fileMatch
+		err := filepath.Walk(searchRoot, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return nil
+			}
+			if info == nil {
+				return nil
+			}
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 
-		relPath, relErr := filepath.Rel(searchRoot, path)
-		if relErr != nil {
-			return nil
-		}
+			relPath, relErr := filepath.Rel(searchRoot, path)
+			if relErr != nil {
+				return nil
+			}
 
-		depth := 1 + strings.Count(relPath, string(filepath.Separator))
-		if depth > maxDepth {
-			if info.IsDir() {
+			if info.IsDir() && pseudoFSDirs[info.Name()] {
 				return filepath.SkipDir
 			}
-			return nil
-		}
 
-		if relPath != "." && ignore.Match(relPath, ignorePatterns) {
-			if info.IsDir() {
-				return filepath.SkipDir
+			depth := 1 + strings.Count(relPath, string(filepath.Separator))
+			if depth > maxDepth {
+				if info.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
 			}
-			return nil
-		}
 
-		if matchGlob(pattern, relPath) {
-			if !info.IsDir() {
-				mtime := info.ModTime().UnixNano()
-				matches = append(matches, fileMatch{path: relPath, mtime: mtime})
+			if relPath != "." && ignore.Match(relPath, ignorePatterns) {
+				if info.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
 			}
-		}
 
-		return nil
-	})
+			if matchGlob(pattern, relPath) {
+				if !info.IsDir() {
+					mtime := info.ModTime().UnixNano()
+					matches = append(matches, fileMatch{path: relPath, mtime: mtime})
+				}
+			}
 
-	return matches, err
+			return nil
+		})
+		ch <- walkResult{matches, err}
+	}()
+
+	select {
+	case wr := <-ch:
+		return wr.matches, wr.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // buildResult sorts, truncates, and formats the matches for output.

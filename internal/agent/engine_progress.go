@@ -65,11 +65,9 @@ type ProgressMonitor struct {
 	// L2 fork-judge state
 	forkDispatched bool
 	forkResultCh   chan *ProgressEvalResult
-	forkEvalCount  int // number of fork-judge evaluations completed (for dynamic threshold)
 
 	// L3 fork-judge state: before hard termination, dispatch one final fork-judge.
 	// If the judge says meaningful progress, reset counters.
-	// This fork counts against the same forkEvalCount (rising threshold).
 	l3ForkDispatched bool
 }
 
@@ -350,10 +348,49 @@ func (pm *ProgressMonitor) scoreTurn(toolUseBlocks []api.ToolUseBlock, toolResul
 }
 
 // matchesPrefix checks if cmd starts with any of the given prefixes,
-// requiring a word boundary after the prefix (space, end of string, or
-// path/flag separator). This prevents false positives like "makefile"
-// matching "make" or "go testify" matching "go test".
+// requiring a word boundary after the prefix. For compound commands
+// (joined by &&, ||, or ;), each segment is tested independently.
 func matchesPrefix(cmdLower string, prefixes []string) bool {
+	segments := splitCompoundCommand(cmdLower)
+	for _, seg := range segments {
+		if matchesSinglePrefix(seg, prefixes) {
+			return true
+		}
+	}
+	return false
+}
+
+// splitCompoundCommand splits a shell command by &&, ||, and ;
+// returning the trimmed segments.
+func splitCompoundCommand(cmd string) []string {
+	// Replace || and && with a unique delimiter first, then split by ;
+	// We split manually to handle && vs || correctly.
+	var segments []string
+	remaining := cmd
+	for remaining != "" {
+		idx := -1
+		sep := ""
+		for _, s := range []string{"&&", "||", ";"} {
+			if i := strings.Index(remaining, s); i >= 0 && (idx < 0 || i < idx) {
+				idx = i
+				sep = s
+			}
+		}
+		if idx < 0 {
+			segments = append(segments, strings.TrimSpace(remaining))
+			break
+		}
+		seg := strings.TrimSpace(remaining[:idx])
+		if seg != "" {
+			segments = append(segments, seg)
+		}
+		remaining = remaining[idx+len(sep):]
+	}
+	return segments
+}
+
+// matchesSinglePrefix checks a single (non-compound) command against prefixes.
+func matchesSinglePrefix(cmdLower string, prefixes []string) bool {
 	for _, p := range prefixes {
 		if !strings.HasPrefix(cmdLower, p) {
 			continue
@@ -362,7 +399,7 @@ func matchesPrefix(cmdLower string, prefixes []string) bool {
 			return true
 		}
 		next := cmdLower[len(p)]
-		if next == ' ' || next == '\t' || next == '/' || next == '=' {
+		if next == ' ' || next == '\t' || next == '/' || next == '=' || next == '-' {
 			return true
 		}
 	}
@@ -533,8 +570,6 @@ func (pm *ProgressMonitor) MarkForkDispatched() {
 // ShouldForkL3ProgressEval returns true when the L3 fork-judge should be dispatched.
 // It fires exactly once when L3 is reached (hard termination imminent) to give the
 // agent one last chance: if the judge finds meaningful progress, the session is "rescued".
-// This fork shares the forkEvalCount with L1-second forks, so the threshold rises
-// across all evaluations (3.0 → 3.5 → 4.0).
 func (pm *ProgressMonitor) ShouldForkL3ProgressEval() bool {
 	return pm.level >= ProgressLevelL3 && !pm.l3ForkDispatched && !pm.forkDispatched
 }
@@ -545,33 +580,22 @@ func (pm *ProgressMonitor) MarkL3ForkDispatched() {
 	pm.forkDispatched = true
 }
 
-// forkJudgeThreshold returns the dynamic threshold for the nth fork-judge
-// evaluation. Each successive evaluation demands a higher bar, making it
-// progressively harder for the judge to rescue a stuck session.
-func forkJudgeThreshold(evalCount int) float64 {
-	switch {
-	case evalCount <= 1:
-		return 3.0
-	case evalCount == 2:
-		return 3.5
-	default:
-		return 4.0
-	}
-}
+// forkJudgeThreshold is the fixed threshold for fork-judge evaluations.
+// Using a constant avoids penalizing later evaluations: L3 is the agent's
+// last chance and should not face a higher bar than earlier checks.
+const forkJudgeThreshold = 3.0
 
 // ApplyProgressEvalResult applies the judge result. If meaningful progress is found
-// (above the dynamic threshold), all counters and escalation state reset to 0.
+// (above the fork-judge threshold), all counters and escalation state reset to 0.
 // Otherwise the L1-second flow continues.
 // Always clears forkDispatched — the fork has completed and delivered its result.
 func (pm *ProgressMonitor) ApplyProgressEvalResult(result *ProgressEvalResult) {
 	pm.forkDispatched = false
-	pm.forkEvalCount++
 
-	threshold := forkJudgeThreshold(pm.forkEvalCount)
+	threshold := forkJudgeThreshold
 	result.MeaningfulProgress = result.Overall >= threshold
 
 	log.Debug("Fork-judge threshold applied",
-		"eval_count", pm.forkEvalCount,
 		"threshold", threshold,
 		"overall", result.Overall,
 		"meaningful", result.MeaningfulProgress,

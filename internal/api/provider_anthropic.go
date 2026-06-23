@@ -77,6 +77,12 @@ func (p *anthropicProvider) SetThinkingConfig(cfg ThinkingConfig) {
 	p.thinkingConfig = cfg
 }
 
+// SetDynamicThinkingBudget updates the thinking budget tokens per-turn.
+// Only changes BudgetTokens, preserving Effort to avoid cache invalidation.
+func (p *anthropicProvider) SetDynamicThinkingBudget(n int) {
+	p.thinkingConfig.BudgetTokens = n
+}
+
 // SetRequestTransformer sets the request transformer.
 func (p *anthropicProvider) SetRequestTransformer(t RequestTransformer) {
 	p.transform = t

@@ -185,6 +185,61 @@ func TestProgressMonitor_ScoreTurn_BuildSuccess_GCC(t *testing.T) {
 	}
 }
 
+func TestProgressMonitor_ScoreTurn_BuildSuccess_CompoundGCC(t *testing.T) {
+	pm := NewProgressMonitor()
+	ts := pm.scoreTurn(
+		[]api.ToolUseBlock{{Name: "Bash", Input: map[string]any{"command": "cd /app && gcc -o main main.c"}}},
+		[]api.ToolResult{{Content: ""}},
+	)
+	if ts.Score != 2 {
+		t.Errorf("expected score 2 for compound gcc command, got %d (signals: %v)", ts.Score, ts.Signals)
+	}
+}
+
+func TestProgressMonitor_ScoreTurn_BuildSuccess_GCCVersioned(t *testing.T) {
+	pm := NewProgressMonitor()
+	ts := pm.scoreTurn(
+		[]api.ToolUseBlock{{Name: "Bash", Input: map[string]any{"command": "gcc-12 -O3 -fPIC -shared -o lib.so lib.c"}}},
+		[]api.ToolResult{{Content: ""}},
+	)
+	if ts.Score != 2 {
+		t.Errorf("expected score 2 for gcc-12 versioned command, got %d (signals: %v)", ts.Score, ts.Signals)
+	}
+}
+
+func TestProgressMonitor_ScoreTurn_BuildSuccess_CompoundGCCVersioned(t *testing.T) {
+	pm := NewProgressMonitor()
+	ts := pm.scoreTurn(
+		[]api.ToolUseBlock{{Name: "Bash", Input: map[string]any{"command": "cd /app && gcc-12 -O3 -fPIC -shared -o ext.so ext.c"}}},
+		[]api.ToolResult{{Content: ""}},
+	)
+	if ts.Score != 2 {
+		t.Errorf("expected score 2 for cd+gcc-12, got %d (signals: %v)", ts.Score, ts.Signals)
+	}
+}
+
+func TestProgressMonitor_ScoreTurn_TestPass_CompoundGoTest(t *testing.T) {
+	pm := NewProgressMonitor()
+	ts := pm.scoreTurn(
+		[]api.ToolUseBlock{{Name: "Bash", Input: map[string]any{"command": "cd /workspace && go test ./..."}}},
+		[]api.ToolResult{{Content: "ok  \tgithub.com/foo/bar\t0.003s"}},
+	)
+	if ts.Score != 3 {
+		t.Errorf("expected score 3 for compound go test, got %d (signals: %v)", ts.Score, ts.Signals)
+	}
+}
+
+func TestProgressMonitor_ScoreTurn_CompoundSemicolon(t *testing.T) {
+	pm := NewProgressMonitor()
+	ts := pm.scoreTurn(
+		[]api.ToolUseBlock{{Name: "Bash", Input: map[string]any{"command": "export CC=gcc; make -j4"}}},
+		[]api.ToolResult{{Content: ""}},
+	)
+	if ts.Score != 2 {
+		t.Errorf("expected score 2 for semicolon compound with make, got %d (signals: %v)", ts.Score, ts.Signals)
+	}
+}
+
 func TestProgressMonitor_ScoreTurn_BuildSuccess_Configure(t *testing.T) {
 	pm := NewProgressMonitor()
 	ts := pm.scoreTurn(

@@ -813,6 +813,9 @@ func (m *mockCompactClient) SetProviderName(name string) {}
 // SetMaxTokensOverride implements api.Requester.
 func (m *mockCompactClient) SetMaxTokensOverride(n int) {}
 
+// SetDynamicThinkingBudget implements api.Requester.
+func (m *mockCompactClient) SetDynamicThinkingBudget(n int) {}
+
 // TestAC1_InSessionCompact_Behavior_WithLargeMessages verifies that when
 // estimated tokens exceed effectiveContextWindow - MIN_SAFETY_OVERHEAD - SUMMARY_MAX_TOKENS,
 // compactMessages succeeds via forkSummaryAgent fallback (proving inSessionCompact was skipped).

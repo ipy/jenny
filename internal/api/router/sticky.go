@@ -212,6 +212,15 @@ func (s *StickyClient) SetMaxTokensOverride(n int) {
 	}
 }
 
+// SetDynamicThinkingBudget implements api.Requester.
+func (s *StickyClient) SetDynamicThinkingBudget(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.client != nil {
+		s.client.SetDynamicThinkingBudget(n)
+	}
+}
+
 func (s *StickyClient) selectEndpoint() error {
 	if s.endpoint != nil {
 		return nil

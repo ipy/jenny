@@ -487,8 +487,10 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			return e.client.SendMessage(fallbackCtx, messages, e.toolParams, nil, systemPrompt, "")
 		}
 
-		// Dynamic max_tokens: set override before each API call
-		e.client.SetMaxTokensOverride(e.maxTokensCtrl.ComputeEffective(e.turnCount))
+		// Dynamic token budget: compute and set thinking + completion budgets
+		turnBudget := e.maxTokensCtrl.ComputeBudget(e.turnCount)
+		e.client.SetMaxTokensOverride(turnBudget.TotalBudget)
+		e.client.SetDynamicThinkingBudget(turnBudget.ThinkingBudget)
 
 		// Use streaming API (AC1)
 		// Track API call duration (AC3: duration_api_ms)
@@ -1020,6 +1022,32 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		// Progress monitor: record turn and update max_tokens level
 		e.progressMonitor.RecordTurn(toolUseBlocks, execToolResults)
 		e.maxTokensCtrl.SetProgressLevel(e.progressMonitor.Level())
+		// Record turn outcome for next-turn adaptive max_tokens
+		hadToolUse := len(toolUseBlocks) > 0
+		hadWrite := false
+		for _, tb := range toolUseBlocks {
+			if tb.Name == "write" || tb.Name == "edit" || tb.Name == "notebook_edit" {
+				hadWrite = true
+				break
+			}
+		}
+		e.maxTokensCtrl.RecordTurnOutcome(e.currentStopReason, hadToolUse, hadWrite)
+
+		// Thinking monitor: record this turn's thinking usage and check for reminder
+		turnThinkingTokens := e.sumThinkingTokens()
+		thinkingComplexity := 3.0
+		if cr := e.maxTokensCtrl.GetComplexityResult(); cr != nil {
+			thinkingComplexity = cr.OverallComplexity()
+		}
+		e.thinkingMonitor.RecordTurn(e.turnCount, turnThinkingTokens, len(toolUseBlocks) > 0, thinkingComplexity)
+		if reminder := e.thinkingMonitor.ShouldRemind(); reminder != "" {
+			messages = append(messages, api.Message{
+				Role:      api.RoleUser,
+				Content:   reminder,
+				IsVirtual: true,
+			})
+			log.Info("Thinking monitor injected reminder", "turn", e.turnCount, "thinking_tokens", turnThinkingTokens)
+		}
 
 		// Sync active skills and inject a reminder message if they changed.
 		// (The executeAndProcessTools function also calls syncActiveSkills, but this
@@ -1117,12 +1145,19 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					modelUsage := e.buildModelUsage()
 					e.mu.Unlock()
 					e.maxTokensCtrl.SetComplexityResult(cr)
-					log.Info("Complexity eval result", "complexity", cr.Complexity, "is_coding", cr.NeedWrite)
+					log.Info("Complexity eval result",
+						"reasoning_depth", cr.ReasoningDepth,
+						"code_volume", cr.CodeVolume,
+						"domain_specialization", cr.DomainSpecialization,
+						"integration_breadth", cr.IntegrationBreadth,
+						"need_write", cr.NeedWrite,
+					)
 					if e.streamCfg.Enabled {
+						crJSON, _ := json.Marshal(cr)
 						msg := StreamMessage{
 							Type:         "system",
 							Subtype:      "complexity_eval",
-							Result:       fmt.Sprintf(`{"complexity":%d,"is_coding":%v}`, cr.Complexity, cr.NeedWrite),
+							Result:       string(crJSON),
 							Uuid:         GenerateUUID(),
 							TotalCostUSD: totalCost,
 							ModelUsage:   modelUsage,

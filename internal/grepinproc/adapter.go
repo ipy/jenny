@@ -93,6 +93,14 @@ type Result struct {
 	Matches []Match
 }
 
+// defaultIgnoreDirs skips VCS directories and Linux pseudo-filesystems that
+// can cause WalkDir to hang on blocking kernel reads.
+var defaultIgnoreDirs = []string{
+	".git", ".svn", ".hg",
+	"proc", "sys", "dev", "run", "snap",
+	"node_modules", "__pycache__",
+}
+
 // Run performs a single search and returns the collected matches.
 // The context controls cancellation only — there is no built-in
 // timeout here. Callers that need a timeout should derive one from
@@ -127,7 +135,7 @@ func Run(ctx context.Context, opts Options) ([]Result, error) {
 	// Default ignore list.
 	ignoreDirs := opts.IgnoreDirs
 	if len(ignoreDirs) == 0 {
-		ignoreDirs = []string{".git", ".svn"}
+		ignoreDirs = defaultIgnoreDirs
 	}
 
 	// File-type filter set (lower-case, with leading dot).
@@ -164,46 +172,64 @@ func Run(ctx context.Context, opts Options) ([]Result, error) {
 	if !stat.IsDir() {
 		files = []string{searchPath}
 	} else {
-		walkErr := filepath.WalkDir(searchPath, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				// Skip unreadable entries; do not abort the walk.
-				return nil
-			}
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			if d.IsDir() {
-				base := d.Name()
-				if slices.Contains(ignoreDirs, base) {
-					return filepath.SkipDir
-				}
-				if !opts.Hidden && strings.HasPrefix(base, ".") && path != searchPath {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			// Regular file (or symlink; we follow the dir walk's policy).
-			name := d.Name()
-			if !opts.Hidden && strings.HasPrefix(name, ".") {
-				return nil
-			}
-			if globMatch != nil && !globMatch(name) {
-				return nil
-			}
-			if typeExt != nil {
-				ext := strings.ToLower(filepath.Ext(name))
-				if _, ok := typeExt[ext]; !ok {
+		// WalkDir runs in a goroutine so context cancellation takes effect even
+		// when os.ReadDir blocks on pseudo-filesystems. The goroutine may leak
+		// if the walk is stuck on a blocking syscall when ctx is cancelled —
+		// this is acceptable since the agent session will terminate shortly after.
+		type walkResult struct {
+			files []string
+			err   error
+		}
+		ch := make(chan walkResult, 1)
+		go func() {
+			var walkFiles []string
+			walkErr := filepath.WalkDir(searchPath, func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
 					return nil
 				}
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				if d.IsDir() {
+					base := d.Name()
+					if slices.Contains(ignoreDirs, base) {
+						return filepath.SkipDir
+					}
+					if !opts.Hidden && strings.HasPrefix(base, ".") && path != searchPath {
+						return filepath.SkipDir
+					}
+					return nil
+				}
+				name := d.Name()
+				if !opts.Hidden && strings.HasPrefix(name, ".") {
+					return nil
+				}
+				if globMatch != nil && !globMatch(name) {
+					return nil
+				}
+				if typeExt != nil {
+					ext := strings.ToLower(filepath.Ext(name))
+					if _, ok := typeExt[ext]; !ok {
+						return nil
+					}
+				}
+				walkFiles = append(walkFiles, path)
+				return nil
+			})
+			ch <- walkResult{walkFiles, walkErr}
+		}()
+
+		select {
+		case wr := <-ch:
+			if wr.err != nil {
+				if wr.err == context.Canceled || wr.err == context.DeadlineExceeded {
+					return nil, wr.err
+				}
+				return nil, fmt.Errorf("grepinproc: walk %s: %w", searchPath, wr.err)
 			}
-			files = append(files, path)
-			return nil
-		})
-		if walkErr != nil {
-			if walkErr == context.Canceled || walkErr == context.DeadlineExceeded {
-				return nil, walkErr
-			}
-			return nil, fmt.Errorf("grepinproc: walk %s: %w", searchPath, walkErr)
+			files = wr.files
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		}
 	}
 
