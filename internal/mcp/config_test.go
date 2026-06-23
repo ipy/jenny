@@ -463,7 +463,7 @@ func TestAC2_MCPConfigEnvExpansion(t *testing.T) {
 	t.Log("AC2 PASS: env expansion works correctly in MCP config")
 }
 
-// TestLoadConfigOAuthFields tests AC1: MCPServerDef includes OAuth config fields.
+// TestLoadConfigOAuthFields tests the MCPServerDef includes OAuth config fields.
 func TestLoadConfigOAuthFields(t *testing.T) {
 	content := `{
 		"mcpServers": {

@@ -938,7 +938,7 @@ func TestAC1_MemdirCreatedAtPromptBuild(t *testing.T) {
 
 // TestAC1_DenyRuleStructuredOutput tests that when StructuredOutput is denied
 // via StructuredDenyRules but a schema is configured, NewQueryEngine panics.
-// This verifies the startup error for AC1 deny-rule checking.
+// This verifies the startup error for deny-rule checking.
 func TestAC1_DenyRuleStructuredOutput(t *testing.T) {
 	cfg := StreamConfig{
 		Enabled:             true,
@@ -1321,8 +1321,8 @@ func TestInterruptSyntheticToolResults_AC5(t *testing.T) {
 	t.Setenv("ANTHROPIC_BASE_URL", server.URL)
 	t.Setenv("ANTHROPIC_API_KEY", "test-key")
 
-	// One fast tool (completes immediately, exercises AC2) and one blocking
-	// tool that only returns when the context is cancelled (exercises AC1).
+	// One fast tool (completes immediately) and one blocking
+	// tool that only returns when the context is cancelled.
 	fast := &fastTool{name: "Read", content: "fast-tool-real-content"}
 	slow := &blockingTool{name: "Grep", blockDuration: 5 * time.Second}
 	tools := []tool.Tool{fast, slow}
@@ -1797,7 +1797,7 @@ func stopReasonTestServer(t *testing.T, calls *atomic.Int32, stopReason string, 
 	return ms.Server
 }
 
-// TestRunLoop_EmptyStopReason_TerminatesAsEndTurn verifies AC3: when the API
+// TestRunLoop_EmptyStopReason_TerminatesAsEndTurn verifies that when the API
 // returns stop_reason="", the loop terminates as end_turn with a single API call.
 func TestRunLoop_EmptyStopReason_TerminatesAsEndTurn(t *testing.T) {
 	var calls atomic.Int32
@@ -1829,15 +1829,15 @@ func TestRunLoop_EmptyStopReason_TerminatesAsEndTurn(t *testing.T) {
 	if result != "hello" {
 		t.Errorf("expected result 'hello', got %q", result)
 	}
-	// AC3: exactly 1 API call
+	// Exactly 1 API call
 	if calls.Load() != 1 {
 		t.Errorf("expected 1 API call, got %d", calls.Load())
 	} else {
-		t.Log("AC3 PASS: exactly 1 API call with empty stop_reason")
+		t.Log("PASS: exactly 1 API call with empty stop_reason")
 	}
 }
 
-// TestRunLoop_NullStopReason_TerminatesAsEndTurn verifies AC4: when the API
+// TestRunLoop_NullStopReason_TerminatesAsEndTurn verifies that when the API
 // returns a response with the stop_reason field omitted (null), the loop
 // terminates as end_turn with a single API call.
 func TestRunLoop_NullStopReason_TerminatesAsEndTurn(t *testing.T) {
@@ -1894,11 +1894,11 @@ func TestRunLoop_NullStopReason_TerminatesAsEndTurn(t *testing.T) {
 	if calls.Load() != 1 {
 		t.Errorf("expected 1 API call, got %d", calls.Load())
 	} else {
-		t.Log("AC4 PASS: null stop_reason terminated with 1 API call")
+		t.Log("PASS: null stop_reason terminated with 1 API call")
 	}
 }
 
-// TestRunLoop_UnknownStopReason_TerminatesAsEndTurn verifies AC5: when the API
+// TestRunLoop_UnknownStopReason_TerminatesAsEndTurn verifies that when the API
 // returns an unrecognized stop_reason string, the loop terminates as end_turn
 // with a single API call.
 func TestRunLoop_UnknownStopReason_TerminatesAsEndTurn(t *testing.T) {
@@ -1924,11 +1924,11 @@ func TestRunLoop_UnknownStopReason_TerminatesAsEndTurn(t *testing.T) {
 	if calls.Load() != 1 {
 		t.Errorf("expected 1 API call, got %d", calls.Load())
 	} else {
-		t.Log("AC5 PASS: unknown stop_reason terminated with 1 API call")
+		t.Log("PASS: unknown stop_reason terminated with 1 API call")
 	}
 }
 
-// TestRunLoop_EmptyStopReason_WithToolUse_TreatsAsToolUse verifies AC9:
+// TestRunLoop_EmptyStopReason_WithToolUse_TreatsAsToolUse verifies that
 // when stop_reason is empty BUT a tool_use block is present, the loop
 // treats this as tool_use (continues) and makes a second API call after
 // executing the tool. The second turn returns end_turn with text "done".
@@ -1959,19 +1959,19 @@ func TestRunLoop_EmptyStopReason_WithToolUse_TreatsAsToolUse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SubmitMessage returned error: %v", err)
 	}
-	// AC9: The engine must have made 2 API calls (first with empty stop_reason+tool_use,
+	// The engine must have made 2 API calls (first with empty stop_reason+tool_use,
 	// second with end_turn). The text from turn 1 ("hello") is discarded when
 	// stop_reason is empty and tool_use is present (the loop continues without
 	// finalizing), so the final result is "done" from turn 2.
 	if calls.Load() != 2 {
-		t.Errorf("AC9 FAIL: expected 2 API calls, got %d", calls.Load())
+		t.Errorf("FAIL: expected 2 API calls, got %d", calls.Load())
 	} else {
-		t.Logf("AC9 PASS: exactly 2 API calls (loop continued past empty stop_reason with tool_use)")
+		t.Logf("PASS: exactly 2 API calls (loop continued past empty stop_reason with tool_use)")
 	}
 	if result != "done" {
 		t.Errorf("expected result 'done', got %q", result)
 	} else {
-		t.Log("AC9 PASS: result is 'done' from second turn")
+		t.Log("PASS: result is 'done' from second turn")
 	}
 }
 
@@ -1985,7 +1985,7 @@ func (s *stubMemExtractorForAC10) SendMessage(ctx context.Context, messages []ap
 	return &api.Response{}, nil
 }
 
-// TestRunLoop_EmptyStopReason_MemExtractorCalledWithEmpty verifies AC10: when
+// TestRunLoop_EmptyStopReason_MemExtractorCalledWithEmpty verifies that when
 // the loop terminates on empty stop_reason, memExtractor.CheckAndExtract is
 // invoked with StopReason: "" (passed through verbatim for observability).
 //
@@ -2066,11 +2066,11 @@ func TestRunLoop_EmptyStopReason_MemExtractorCalledWithEmpty(t *testing.T) {
 	})
 	memPath := expectedMem.MemoryPath()
 
-	// AC10: memExtractor.CheckAndExtract was called (proved by memdir creation)
+	// memExtractor.CheckAndExtract was called (proved by memdir creation)
 	if _, statErr := os.Stat(memPath); statErr != nil {
-		t.Errorf("AC10 FAIL: memdir not created at %q (CheckAndExtract not called): %v", memPath, statErr)
+		t.Errorf("FAIL: memdir not created at %q (CheckAndExtract not called): %v", memPath, statErr)
 	} else {
-		t.Log("AC10 PASS: memdir created, proving CheckAndExtract was called with empty stop_reason")
+		t.Log("PASS: memdir created, proving CheckAndExtract was called with empty stop_reason")
 	}
 }
 
@@ -2096,7 +2096,7 @@ func (m *mockExtraTool) Execute(ctx context.Context, input map[string]any, cwd s
 }
 
 func TestQueryEngine_ToolParamExtraction(t *testing.T) {
-	// AC1, AC3: Verify QueryEngine extracts extra fields from tool schema
+	// Verify QueryEngine extracts extra fields from tool schema
 	tools := []tool.Tool{&mockExtraTool{}}
 	cfg := StreamConfig{Enabled: false}
 	engine := mustNewQueryEngine(&cfg, tools, "", WithClient(fastClient(t)))
@@ -2489,7 +2489,7 @@ func TestEngine_ContextExhausted_MiniMax_EmitsStructuredError(t *testing.T) {
 
 // TestAC2_PersistCompactBoundary_LogsError verifies that persistCompactBoundary
 // returns an error when AppendEntry fails (instead of swallowing it) and logs
-// the error via log.Error. This tests AC1 and AC2: the function now returns the
+// the error via log.Error. This tests both the function behavior and the
 // error and logs it internally.
 func TestAC2_PersistCompactBoundary_LogsError(t *testing.T) {
 	// Create a session manager with a valid tmpDir
@@ -2532,16 +2532,16 @@ func TestAC2_PersistCompactBoundary_LogsError(t *testing.T) {
 	// persistCompactBoundary should return an error (not panic or silently swallow it)
 	err = engine.persistCompactBoundary(5000, 3, "auto", "test summary")
 	if err == nil {
-		t.Error("AC2 FAIL: expected error from persistCompactBoundary when AppendEntry fails, got nil")
+		t.Error("FAIL: expected error from persistCompactBoundary when AppendEntry fails, got nil")
 	} else {
-		t.Logf("AC2 PASS: persistCompactBoundary returned error: %v", err)
+		t.Logf("PASS: persistCompactBoundary returned error: %v", err)
 	}
 
-	// AC1: Verify log.Error was called with the expected message
+	// Verify log.Error was called with the expected message
 	if !strings.Contains(logBuf.String(), "Failed to persist compaction boundary") {
-		t.Errorf("AC1 FAIL: expected log output to contain 'Failed to persist compaction boundary', got: %s", logBuf.String())
+		t.Errorf("FAIL: expected log output to contain 'Failed to persist compaction boundary', got: %s", logBuf.String())
 	} else {
-		t.Logf("AC1 PASS: log output contains expected message")
+		t.Logf("PASS: log output contains expected message")
 	}
 }
 
@@ -2617,7 +2617,7 @@ func TestAC1_SkillActivatorWiring(t *testing.T) {
 	if engine.streamCfg.ActiveSkills[1].Name != "code-review" {
 		t.Errorf("expected skill name 'code-review', got %s", engine.streamCfg.ActiveSkills[1].Name)
 	}
-	t.Log("AC1 PASS: skill activator wiring and type conversion work correctly")
+	t.Log("PASS: skill activator wiring and type conversion work correctly")
 }
 
 // TestAC1_SkillActivatorDeduplication tests that duplicate activations are not added.

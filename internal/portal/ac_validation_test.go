@@ -101,7 +101,7 @@ func TestHeadlessStart(t *testing.T) {
 func TestBuildOutput(t *testing.T) {
 	// The embedded go:embed directive is in server.go: //go:embed webui/dist
 	// Since vite.config.ts has outDir: '../internal/portal/webui/dist',
-	// running `npm run build` in webui/ outputs to internal/portal/webui/dist
+	// Running `npm run build` in webui/ outputs to internal/portal/webui/dist
 
 	// Check that internal/portal/webui/dist exists with index.html (test runs from internal/portal/)
 	embedPath := filepath.Join("webui", "dist")
