@@ -12,11 +12,11 @@ import (
 )
 
 // ============================================================
-// AC1 — Auto-compact at effectiveWindow − 13K
+// Auto-compact at effectiveWindow - 13K
 // ============================================================
 
-// TestAC1_CheckCompactThreshold verifies the threshold check works correctly.
-func TestAC1_CheckCompactThreshold(t *testing.T) {
+// TestCheckCompactThreshold verifies the threshold check works correctly.
+func TestCheckCompactThreshold(t *testing.T) {
 	tests := []struct {
 		name                 string
 		modelContextWindow   int
@@ -68,15 +68,15 @@ func TestAC1_CheckCompactThreshold(t *testing.T) {
 			}
 			got := cfg.checkCompactThreshold(tt.estimatedTokens, "user")
 			if got != tt.want {
-				t.Errorf("AC1 FAIL: checkCompactThreshold(%d) = %v, want %v", tt.estimatedTokens, got, tt.want)
+				t.Errorf("FAIL: checkCompactThreshold(%d) = %v, want %v", tt.estimatedTokens, got, tt.want)
 			}
 		})
 	}
-	t.Log("AC1 PASS: auto-compact threshold check works correctly")
+	t.Log("auto-compact threshold check works correctly")
 }
 
-// TestAC1_WarningThreshold verifies warning threshold is emitted when appropriate.
-func TestAC1_WarningThreshold(t *testing.T) {
+// TestWarningThreshold verifies warning threshold is emitted when appropriate.
+func TestWarningThreshold(t *testing.T) {
 	cfg := CompactConfig{
 		ModelContextWindow:   200_000,
 		ModelMaxOutputTokens: 20_000,
@@ -89,57 +89,57 @@ func TestAC1_WarningThreshold(t *testing.T) {
 
 	// Below warning threshold - no warning
 	if cfg.checkWarningThreshold(130_000) {
-		t.Error("AC1 FAIL: warning should not trigger below threshold")
+		t.Error("FAIL: warning should not trigger below threshold")
 	}
 
 	// At warning threshold - warning
 	if !cfg.checkWarningThreshold(135_000) {
-		t.Error("AC1 FAIL: warning should trigger at threshold")
+		t.Error("FAIL: warning should trigger at threshold")
 	}
 
 	// Above warning threshold - warning
 	if !cfg.checkWarningThreshold(150_000) {
-		t.Error("AC1 FAIL: warning should trigger above threshold")
+		t.Error("FAIL: warning should trigger above threshold")
 	}
 
-	t.Log("AC1 PASS: warning threshold check works correctly")
+	t.Log("warning threshold check works correctly")
 }
 
 // ============================================================
-// AC2 — Circuit breaker after 3 failures
+// Circuit breaker after 3 failures
 // ============================================================
 
-// TestAC2_CircuitBreakerReset verifies circuit breaker resets on success.
-func TestAC2_CircuitBreakerReset(t *testing.T) {
+// TestCircuitBreakerReset verifies circuit breaker resets on success.
+func TestCircuitBreakerReset(t *testing.T) {
 	// Simulate failure counter behavior
 	failCount := 0
 
 	// Increment on failure
 	failCount++
 	if failCount != 1 {
-		t.Errorf("AC2 FAIL: expected failCount 1, got %d", failCount)
+		t.Errorf("FAIL: expected failCount 1, got %d", failCount)
 	}
 
 	failCount++
 	failCount++
 	if failCount != 3 {
-		t.Errorf("AC2 FAIL: expected failCount 3, got %d", failCount)
+		t.Errorf("FAIL: expected failCount 3, got %d", failCount)
 	}
 
 	// Reset on success
 	failCount = 0
 	if failCount != 0 {
-		t.Errorf("AC2 FAIL: expected failCount 0 after reset, got %d", failCount)
+		t.Errorf("FAIL: expected failCount 0 after reset, got %d", failCount)
 	}
 
-	t.Log("AC2 PASS: circuit breaker reset works correctly")
+	t.Log("circuit breaker reset works correctly")
 }
 
-// TestAC2_CircuitBreakerTrip verifies circuit breaker trips after 3 failures.
-func TestAC2_CircuitBreakerTrip(t *testing.T) {
+// TestCircuitBreakerTrip verifies circuit breaker trips after 3 failures.
+func TestCircuitBreakerTrip(t *testing.T) {
 	maxFailures := MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES
 	if maxFailures != 3 {
-		t.Errorf("AC2 FAIL: MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES should be 3, got %d", maxFailures)
+		t.Errorf("FAIL: MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES should be 3, got %d", maxFailures)
 	}
 
 	// Simulate circuit breaker behavior
@@ -155,18 +155,18 @@ func TestAC2_CircuitBreakerTrip(t *testing.T) {
 	}
 
 	if !circuitBreakerTripped {
-		t.Error("AC2 FAIL: circuit breaker should have tripped after 3 failures")
+		t.Error("FAIL: circuit breaker should have tripped after 3 failures")
 	}
 
-	t.Log("AC2 PASS: circuit breaker trips after 3 consecutive failures")
+	t.Log("circuit breaker trips after 3 consecutive failures")
 }
 
 // ============================================================
-// AC3 — Hard block at effectiveWindow − 3K when auto off
+// Hard block at effectiveWindow - 3K when auto off
 // ============================================================
 
-// TestAC3_BlockIfOverLimit verifies blocking limit when auto-compact is disabled.
-func TestAC3_BlockIfOverLimit(t *testing.T) {
+// TestBlockIfOverLimit verifies blocking limit when auto-compact is disabled.
+func TestBlockIfOverLimit(t *testing.T) {
 	tests := []struct {
 		name                 string
 		modelContextWindow   int
@@ -224,19 +224,19 @@ func TestAC3_BlockIfOverLimit(t *testing.T) {
 			err := cfg.blockIfOverLimit(tt.estimatedTokens, tt.querySource)
 			gotBlock := err != nil
 			if gotBlock != tt.wantBlock {
-				t.Errorf("AC3 FAIL: blockIfOverLimit(%d) returned error = %v, want block = %v", tt.estimatedTokens, gotBlock, tt.wantBlock)
+				t.Errorf("FAIL: blockIfOverLimit(%d) returned error = %v, want block = %v", tt.estimatedTokens, gotBlock, tt.wantBlock)
 			}
 		})
 	}
-	t.Log("AC3 PASS: blocking limit check works correctly")
+	t.Log("blocking limit check works correctly")
 }
 
 // ============================================================
-// AC4 — Post-compact payload passes tool/thinking pairing rules
+// Post-compact payload passes tool/thinking pairing rules
 // ============================================================
 
-// TestAC4_PostCompactNormalization verifies post-compact normalization.
-func TestAC4_PostCompactNormalization(t *testing.T) {
+// TestPostCompactNormalization verifies post-compact normalization.
+func TestPostCompactNormalization(t *testing.T) {
 	// Create messages with thinking that needs normalization
 	messages := []api.Message{
 		{
@@ -268,7 +268,7 @@ func TestAC4_PostCompactNormalization(t *testing.T) {
 		if result[i].Role == "assistant" {
 			content := result[i].Content
 			if strings.Contains(content, "<thinking>") {
-				t.Errorf("AC4 FAIL: assistant message still contains thinking block: %q", content)
+				t.Errorf("FAIL: assistant message still contains thinking block: %q", content)
 			}
 			break
 		}
@@ -277,19 +277,19 @@ func TestAC4_PostCompactNormalization(t *testing.T) {
 	// Verify empty assistants get placeholder
 	for _, msg := range result {
 		if msg.Role == "assistant" && strings.TrimSpace(msg.Content) == "" && len(msg.ToolUse) == 0 {
-			t.Errorf("AC4 FAIL: empty assistant should have placeholder content")
+			t.Errorf("FAIL: empty assistant should have placeholder content")
 		}
 	}
 
-	t.Log("AC4 PASS: post-compact normalization works correctly")
+	t.Log("post-compact normalization works correctly")
 }
 
 // ============================================================
-// AC5 — compact/session_memory sources never hard-blocked pre-API
+// compact/session_memory sources never hard-blocked pre-API
 // ============================================================
 
-// TestAC5_CompactSourceNeverBlocked verifies compact querySource skips hard block.
-func TestAC5_CompactSourceNeverBlocked(t *testing.T) {
+// TestCompactSourceNeverBlocked verifies compact querySource skips hard block.
+func TestCompactSourceNeverBlocked(t *testing.T) {
 	cfg := CompactConfig{
 		ModelContextWindow:   200_000,
 		ModelMaxOutputTokens: 20_000,
@@ -299,21 +299,21 @@ func TestAC5_CompactSourceNeverBlocked(t *testing.T) {
 	// Even with very high tokens and auto-compact disabled, compact source should not block
 	err := cfg.blockIfOverLimit(200_000, "compact")
 	if err != nil {
-		t.Errorf("AC5 FAIL: compact source should never be blocked, got error: %v", err)
+		t.Errorf("FAIL: compact source should never be blocked, got error: %v", err)
 	}
 
 	err = cfg.blockIfOverLimit(200_000, "session_memory")
 	if err != nil {
-		t.Errorf("AC5 FAIL: session_memory source should never be blocked, got error: %v", err)
+		t.Errorf("FAIL: session_memory source should never be blocked, got error: %v", err)
 	}
 
 	// But user source should still block
 	err = cfg.blockIfOverLimit(200_000, "user")
 	if err == nil {
-		t.Error("AC5 FAIL: user source should be blocked when auto-compact is disabled")
+		t.Error("FAIL: user source should be blocked when auto-compact is disabled")
 	}
 
-	t.Log("AC5 PASS: compact/session_memory sources never hard-blocked")
+	t.Log("compact/session_memory sources never hard-blocked")
 }
 
 // ============================================================
@@ -422,34 +422,34 @@ func TestBuildCompactedChain(t *testing.T) {
 
 	// First message should be the boundary marker
 	if len(result) == 0 {
-		t.Fatal("AC1 FAIL: result should not be empty")
+		t.Fatal("FAIL: result should not be empty")
 	}
 
 	if result[0].Role != "user" {
-		t.Errorf("AC1 FAIL: first message should be system role, got %s", result[0].Role)
+		t.Errorf("FAIL: first message should be system role, got %s", result[0].Role)
 	}
 
 	if !strings.Contains(result[0].Content, "[Context boundary") {
-		t.Error("AC1 FAIL: first message should contain boundary marker")
+		t.Error("FAIL: first message should contain boundary marker")
 	}
 
 	if !strings.Contains(result[0].Content, summary) {
-		t.Error("AC1 FAIL: first message should contain summary text")
+		t.Error("FAIL: first message should contain summary text")
 	}
 
 	// Should have kept last 10 messages
 	if len(result) != 11 { // 1 boundary + 10 kept messages
-		t.Errorf("AC1 FAIL: expected11 messages, got %d", len(result))
+		t.Errorf("FAIL: expected11 messages, got %d", len(result))
 	}
 
 	t.Log("buildCompactedChain produces correct structure")
 }
 
 // ============================================================
-// AC6 — Thresholds from actual model params
+// Thresholds from actual model params
 // ============================================================
 
-func TestAC6_ModelAwareCompactConfig(t *testing.T) {
+func TestModelAwareCompactConfig(t *testing.T) {
 	// DeepSeek V4 models have 1048576 context window and 393216 max output
 	cfg := newCompactConfigForModel("deepseek-v4-flash", nil)
 	if cfg.ModelContextWindow != 1_048_576 {
@@ -495,7 +495,7 @@ func TestNewCompactConfigFromStreamConfig(t *testing.T) {
 	}
 }
 
-func TestAC6_DeepSeekThresholdMath(t *testing.T) {
+func TestDeepSeekThresholdMath(t *testing.T) {
 	cfg := newCompactConfigForModel("deepseek-v4-flash", nil)
 
 	// effectiveContextWindow = 1048576 - 393216 = 655360
@@ -521,9 +521,9 @@ func TestAC6_DeepSeekThresholdMath(t *testing.T) {
 	t.Logf("DeepSeek threshold math: effective=%d threshold=%d", effectiveWindow, threshold)
 }
 
-// TestAC6_MidRangeThreshold verifies that models with context window > 256K
-// and ≤ 512K use 50% of context window as the threshold.
-func TestAC6_MidRangeThreshold(t *testing.T) {
+// TestMidRangeThreshold verifies that models with context window > 256K
+// and <= 512K use 50% of context window as the threshold.
+func TestMidRangeThreshold(t *testing.T) {
 	cfg := CompactConfig{
 		ModelContextWindow:   300_000,
 		ModelMaxOutputTokens: 20_000,
@@ -543,9 +543,9 @@ func TestAC6_MidRangeThreshold(t *testing.T) {
 	}
 }
 
-// TestAC6_256KBoundaryThreshold verifies the boundary between tier 1 and tier 2.
+// Test256KBoundaryThreshold verifies the boundary between tier 1 and tier 2.
 // At exactly 256K, the original formula should be used.
-func TestAC6_256KBoundaryThreshold(t *testing.T) {
+func Test256KBoundaryThreshold(t *testing.T) {
 	cfg := CompactConfig{
 		ModelContextWindow:   256_000,
 		ModelMaxOutputTokens: 20_000,
@@ -567,10 +567,10 @@ func TestAC6_256KBoundaryThreshold(t *testing.T) {
 	}
 }
 
-// TestAC6_AutoCompactWindowOverride verifies that when AUTO_COMPACT_WINDOW
+// TestAutoCompactWindowOverride verifies that when AUTO_COMPACT_WINDOW
 // is explicitly set, the original formula is used regardless of context window
 // size, bypassing the tiered logic.
-func TestAC6_AutoCompactWindowOverride(t *testing.T) {
+func TestAutoCompactWindowOverride(t *testing.T) {
 	// Simulate user setting AUTO_COMPACT_WINDOW=200000 on deepseek-v4-flash
 	// (which has a 1M context window, normally triggering the 512K cap)
 	cfg := CompactConfig{
@@ -605,11 +605,10 @@ func TestAC6_AutoCompactWindowOverride(t *testing.T) {
 	}
 }
 
-// TestAC6_HighOutputModelThresholdFloor verifies that models with large output
+// TestHighOutputModelThresholdFloor verifies that models with large output
 // relative to context window (e.g. gpt-5.5: 200k context, 128k max output)
-// don't produce negative thresholds. The buffer is capped at 50% of effective
-// context, so the threshold floors at effective/2.
-func TestAC6_HighOutputModelThresholdFloor(t *testing.T) {
+// don't produce negative thresholds.
+func TestHighOutputModelThresholdFloor(t *testing.T) {
 	cfg := CompactConfig{
 		ModelContextWindow:   200_000,
 		ModelMaxOutputTokens: 128_000,

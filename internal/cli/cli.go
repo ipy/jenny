@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/utils"
 	"github.com/knadh/koanf/parsers/json"
 	"github.com/knadh/koanf/providers/env"
@@ -367,13 +368,13 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 // A path of "-" reads from stdin.
 func readPromptFile(path string) (string, error) {
 	if path == "-" {
-		data, err := io.ReadAll(os.Stdin)
+		data, err := io.ReadAll(io.LimitReader(os.Stdin, constants.MaxCLIPromptReadBytes))
 		if err != nil {
 			return "", fmt.Errorf("failed to read prompt from stdin: %w", err)
 		}
 		return string(data), nil
 	}
-	data, err := os.ReadFile(path)
+	data, err := utils.ReadFileSafe(path, constants.MaxCLIPromptReadBytes)
 	if err != nil {
 		return "", fmt.Errorf("prompt file not found: %s", path)
 	}

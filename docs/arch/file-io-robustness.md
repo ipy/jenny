@@ -65,6 +65,19 @@ The Glob tool enforces both a maximum recursion depth (configurable, default 64)
 
 *Verification:* `TestGlobTool_MaxDepthLimit` verifies that a directory tree 100 levels deep returns results only from the configured depth limit. `TestGlobTool_MaxResults` verifies the 100 result cap with `Truncated: true`.
 
+### AC9: Bounded Directory Reads
+
+All os.ReadDir calls use utils.ReadDirSafe, which reads in batches via file.ReadDir
+to prevent OOM. Pass max=0 to get all entries (batched internally); pass a specific
+max to cap results.
+
+### AC10: Bounded File and Stream Reads
+
+All os.ReadFile calls on unbounded files use utils.ReadFileSafe with appropriate
+max size constants. All io.ReadAll calls on unbounded streams use io.LimitReader.
+Hard size guards with errors are used only where truncation would corrupt data
+(e.g., bash_sed).
+
 ## 🔴 Critical Standards (P0)
 
 ### 1. TOCTOU & Cache Consistency

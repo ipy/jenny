@@ -262,7 +262,7 @@ func (m *Manager) LoadTranscript(sessionID string) ([]TranscriptEntry, error) {
 	defer m.mu.RUnlock()
 
 	path := m.transcriptPath(sessionID)
-	data, err := os.ReadFile(path)
+	data, err := utils.ReadFileSafe(path, constants.MaxTranscriptReadBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("session not found: %s", sessionID)
@@ -324,7 +324,7 @@ func (m *Manager) LoadCompactFailCount(sessionID string) (int, error) {
 	defer m.mu.RUnlock()
 
 	path := m.transcriptPath(sessionID)
-	data, err := os.ReadFile(path)
+	data, err := utils.ReadFileSafe(path, constants.MaxTranscriptReadBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return 0, nil // No transcript yet
@@ -512,7 +512,7 @@ func (m *Manager) LoadPostBoundaryMessages(sessionID string) ([]TranscriptEntry,
 	defer m.mu.RUnlock()
 
 	path := m.transcriptPath(sessionID)
-	data, err := os.ReadFile(path)
+	data, err := utils.ReadFileSafe(path, constants.MaxTranscriptReadBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("session not found: %s", sessionID)
@@ -578,7 +578,7 @@ func (m *Manager) ListSessions() ([]string, error) {
 
 	// Scan new sessions directory
 	sessionsBaseDir := filepath.Join(m.jennyDir, "sessions")
-	entries, err := os.ReadDir(sessionsBaseDir)
+	entries, err := utils.ReadDirSafe(sessionsBaseDir, 0)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil

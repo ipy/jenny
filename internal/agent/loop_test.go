@@ -501,7 +501,7 @@ func TestResumeWithToolCalls(t *testing.T) {
 	// Create a temporary transcript directory
 	tmpDir := t.TempDir()
 
-	// AC4-isolation: Override JennyHomeDirFunc to use tmpDir for session-specific directory structure
+	// Override JennyHomeDirFunc to use tmpDir for session-specific directory structure
 	origFunc := constants.JennyHomeDirFunc
 	constants.JennyHomeDirFunc = func() string { return tmpDir }
 	defer func() { constants.JennyHomeDirFunc = origFunc }()
@@ -611,7 +611,7 @@ func TestResumeWithToolCalls(t *testing.T) {
 }
 
 func TestHasChainMessages_QueueOnlyTranscript(t *testing.T) {
-	// AC1/AC2: Queue-only transcript (only progress types) has no chain messages
+	// Queue-only transcript (only progress types) has no chain messages
 	entries := []session.TranscriptEntry{
 		{Type: "progress", Content: "Thinking..."},
 		{Type: "bash_progress", Content: "Running command"},
@@ -624,7 +624,7 @@ func TestHasChainMessages_QueueOnlyTranscript(t *testing.T) {
 }
 
 func TestHasChainMessages_EmptyTranscript(t *testing.T) {
-	// AC2: Empty transcript has no chain messages
+	// Empty transcript has no chain messages
 	entries := []session.TranscriptEntry{}
 	if HasChainMessages(entries) {
 		t.Error("HasChainMessages() = true, want false for empty transcript")
@@ -632,7 +632,7 @@ func TestHasChainMessages_EmptyTranscript(t *testing.T) {
 }
 
 func TestHasChainMessages_NormalTranscript(t *testing.T) {
-	// AC3: Normal transcript with user entry has chain messages
+	// Normal transcript with user entry has chain messages
 	entries := []session.TranscriptEntry{
 		{Type: "user", Content: "Hello"},
 	}
@@ -684,7 +684,7 @@ func TestHasChainMessages_MixedWithProgress(t *testing.T) {
 	}
 }
 
-// TestHasChainMessages_TableDriven tests AC6: comprehensive table-driven coverage
+// TestHasChainMessages_TableDriven tests comprehensive table-driven coverage
 func TestHasChainMessages_TableDriven(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -792,11 +792,11 @@ func TestHasChainMessages_TableDriven(t *testing.T) {
 }
 
 // ============================================================================
-// AC1: Recursive fork blocked
+// Recursive fork blocked
 // ============================================================================
 
-func TestAC1_RecursiveForkBlocked_ViaContext(t *testing.T) {
-	// AC1: When a fork marker is in the context (IsForkChild = true),
+func TestRecursiveForkBlocked_ViaContext(t *testing.T) {
+	// When a fork marker is in the context (IsForkChild = true),
 	// AgentTool.Execute() must return error "recursive fork not allowed".
 	// This applies to all subagent types.
 
@@ -849,8 +849,8 @@ func (m *mockSubagentRunner) GetCapturedStreamConfigInfo() map[string]any {
 	return nil
 }
 
-func TestAC1_RecursiveForkBlocked_NoFalsePositive(t *testing.T) {
-	// AC1: Without fork marker in context, recursive fork is NOT blocked.
+func TestRecursiveForkBlocked_NoFalsePositive(t *testing.T) {
+	// Without fork marker in context, recursive fork is NOT blocked.
 	// The agent tool should proceed to call the runner (and get the runner's error,
 	// not the fork error). We use a mock runner to avoid real API calls.
 
@@ -888,8 +888,8 @@ func TestAC1_RecursiveForkBlocked_NoFalsePositive(t *testing.T) {
 	}
 }
 
-func TestAC1_RecursiveForkBlocked_AllSubagentTypes(t *testing.T) {
-	// AC1: Verify fork blocking applies to ALL subagent types (not just some)
+func TestRecursiveForkBlocked_AllSubagentTypes(t *testing.T) {
+	// Verify fork blocking applies to ALL subagent types (not just some)
 
 	client, cleanup := newMockClient(t)
 	defer cleanup()

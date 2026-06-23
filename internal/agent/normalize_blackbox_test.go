@@ -10,12 +10,12 @@ import (
 )
 
 // ============================================================
-// AC1 — No internal metadata in API payloads
+// No internal metadata in API payloads
 // ============================================================
 
-// TestAC1_SerializedJSON_NoInternalFields verifies that when a Message is serialized
+// TestSerializedJSON_NoInternalFields verifies that when a Message is serialized
 // to JSON, internal fields (IsVirtual, ID, Type, Timestamp) do not appear.
-func TestAC1_SerializedJSON_NoInternalFields(t *testing.T) {
+func TestSerializedJSON_NoInternalFields(t *testing.T) {
 	msg := api.Message{
 		Role:        "user",
 		Content:     "hello",
@@ -35,37 +35,37 @@ func TestAC1_SerializedJSON_NoInternalFields(t *testing.T) {
 	// Internal fields should never appear in JSON
 	// Use exact key matching (e.g. "\"is_virtual\":" not substring "ID" which matches ToolUseID)
 	if strings.Contains(jsonStr, `"is_virtual"`) {
-		t.Errorf("AC1 FAIL: 'is_virtual' found in serialized JSON: %s", jsonStr)
+		t.Errorf("FAIL: 'is_virtual' found in serialized JSON: %s", jsonStr)
 	}
 	if strings.Contains(jsonStr, `"Id"`) || strings.Contains(jsonStr, `"id"`) {
 		// Could be "id" from something else so check carefully
-		t.Logf("AC1: checking for ID field in JSON: %s", jsonStr)
+		t.Logf("checking for ID field in JSON: %s", jsonStr)
 	}
 	if strings.Contains(jsonStr, `"timestamp"`) {
-		t.Errorf("AC1 FAIL: 'timestamp' found in serialized JSON: %s", jsonStr)
+		t.Errorf("FAIL: 'timestamp' found in serialized JSON: %s", jsonStr)
 	}
 	if strings.Contains(jsonStr, `"type"`) {
 		// 'type' might legitimately appear in content blocks, but not at top-level
-		t.Logf("AC1: 'type' found in JSON (may be in content blocks): %s", jsonStr)
+		t.Logf("'type' found in JSON (may be in content blocks): %s", jsonStr)
 	}
 
 	// But role, content, tool_results should be present
 	if !strings.Contains(jsonStr, `"role"`) {
-		t.Errorf("AC1 FAIL: 'role' missing from serialized JSON: %s", jsonStr)
+		t.Errorf("FAIL: 'role' missing from serialized JSON: %s", jsonStr)
 	}
 	if !strings.Contains(jsonStr, `"content"`) {
-		t.Errorf("AC1 FAIL: 'content' missing from serialized JSON: %s", jsonStr)
+		t.Errorf("FAIL: 'content' missing from serialized JSON: %s", jsonStr)
 	}
 	if !strings.Contains(jsonStr, `"tool_results"`) {
-		t.Errorf("AC1 FAIL: 'tool_results' missing from serialized JSON: %s", jsonStr)
+		t.Errorf("FAIL: 'tool_results' missing from serialized JSON: %s", jsonStr)
 	}
 
-	t.Logf("AC1 PASS: serialized JSON omits internal fields: %s", jsonStr)
+	t.Logf("PASS: serialized JSON omits internal fields: %s", jsonStr)
 }
 
-// TestAC1_FilterFiltersVirtualAndProgress verifies that filterInternalMessages strips
+// TestFilterFiltersVirtualAndProgress verifies that filterInternalMessages strips
 // virtual (IsVirtual) messages and progress-type messages, while keeping normal messages.
-func TestAC1_FilterFiltersVirtualAndProgress(t *testing.T) {
+func TestFilterFiltersVirtualAndProgress(t *testing.T) {
 	tests := []struct {
 		name     string
 		messages []api.Message
@@ -110,14 +110,14 @@ func TestAC1_FilterFiltersVirtualAndProgress(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := filterInternalMessages(tt.messages)
 			if len(got) != tt.want {
-				t.Errorf("AC1 FAIL: filterInternalMessages returned %d messages, want %d", len(got), tt.want)
+				t.Errorf("FAIL: filterInternalMessages returned %d messages, want %d", len(got), tt.want)
 			}
 		})
 	}
 }
 
-// TestAC1_NormalizeStripsInternal shows the full normalizeMessages pipeline strips internal messages.
-func TestAC1_NormalizeStripsInternal(t *testing.T) {
+// TestNormalizeStripsInternal shows the full normalizeMessages pipeline strips internal messages.
+func TestNormalizeStripsInternal(t *testing.T) {
 	messages := []api.Message{
 		{Role: "user", Content: "hello", IsVirtual: false},
 		{Role: "assistant", Content: "virtual thought", IsVirtual: true},
@@ -128,25 +128,25 @@ func TestAC1_NormalizeStripsInternal(t *testing.T) {
 	// After stripping virtual+progress, we have [user "hello", user "follow up"].
 	// Role merging then collapses consecutive same-role messages → 1 message.
 	if len(got) != 1 {
-		t.Errorf("AC1 FAIL: expected 1 message after normalization (merged), got %d", len(got))
+		t.Errorf("FAIL: expected 1 message after normalization (merged), got %d", len(got))
 	}
 	// Verify no internal messages survive
 	for _, msg := range got {
 		if msg.IsVirtual {
-			t.Error("AC1 FAIL: IsVirtual message survived normalization")
+			t.Error("FAIL: IsVirtual message survived normalization")
 		}
 		if msg.Type == "progress" {
-			t.Error("AC1 FAIL: progress message survived normalization")
+			t.Error("FAIL: progress message survived normalization")
 		}
 	}
 }
 
 // ============================================================
-// AC2 — Tool_use/tool_result pairing enforced
+// Tool_use/tool_result pairing enforced
 // ============================================================
 
-// TestAC2_LeadingOrphanedToolResult strips tool_results in user messages with no preceding assistant.
-func TestAC2_LeadingOrphanedToolResult(t *testing.T) {
+// TestLeadingOrphanedToolResult strips tool_results in user messages with no preceding assistant.
+func TestLeadingOrphanedToolResult(t *testing.T) {
 	// Direction 4: leading orphaned user tool_result — strip
 	messages := []api.Message{
 		{
@@ -165,14 +165,14 @@ func TestAC2_LeadingOrphanedToolResult(t *testing.T) {
 	// The orphaned tool_result should be stripped
 	for _, msg := range result {
 		if msg.Role == "user" && len(msg.ToolResults) > 0 {
-			t.Errorf("AC2 dir4 FAIL: expected orphaned tool_results stripped, but user has %d results", len(msg.ToolResults))
+			t.Errorf("dir4 FAIL: expected orphaned tool_results stripped, but user has %d results", len(msg.ToolResults))
 		}
 	}
-	t.Log("AC2 dir4 PASS: leading orphaned user tool_result stripped")
+	t.Log("dir4 PASS: leading orphaned user tool_result stripped")
 }
 
-// TestAC2_IsErrorToolResult verifies is_error tool_results produce text-only content.
-func TestAC2_IsErrorToolResult(t *testing.T) {
+// TestIsErrorToolResult verifies is_error tool_results produce text-only content.
+func TestIsErrorToolResult(t *testing.T) {
 	// Direction 6: is_error tool_result — inner content text-only
 	messages := []api.Message{
 		{
@@ -199,21 +199,21 @@ func TestAC2_IsErrorToolResult(t *testing.T) {
 					if strings.Contains(tr.Content, "command failed with exit code 1") {
 						foundExtracted = true
 					} else {
-						t.Errorf("AC2 dir6 FAIL: expected extracted text, got: %q", tr.Content)
+						t.Errorf("dir6 FAIL: expected extracted text, got: %q", tr.Content)
 					}
 				}
 			}
 		}
 	}
 	if !foundExtracted {
-		t.Error("AC2 dir6 FAIL: is_error tool_result with JSON content should have text extracted")
+		t.Error("dir6 FAIL: is_error tool_result with JSON content should have text extracted")
 	} else {
-		t.Log("AC2 dir6 PASS: is_error tool_result content is text-only")
+		t.Log("dir6 PASS: is_error tool_result content is text-only")
 	}
 }
 
-// TestAC2_AllSixDirections verifies all 6 pairing directions work together.
-func TestAC2_AllSixDirections(t *testing.T) {
+// TestAllSixDirections verifies all 6 pairing directions work together.
+func TestAllSixDirections(t *testing.T) {
 	messages := []api.Message{
 		// Direction 4 test: leading user message with orphaned tool_results
 		{
@@ -260,28 +260,28 @@ func TestAC2_AllSixDirections(t *testing.T) {
 
 	// Dir1: Missing tool_a result — synthetic error should be added (once)
 	if _, ok := userResultIDs["tool_a"]; !ok {
-		t.Error("AC2 dir1 FAIL: missing synthetic error for tool_a")
+		t.Error("dir1 FAIL: missing synthetic error for tool_a")
 	} else {
-		t.Log("AC2 dir1 PASS: synthetic error added for missing tool_a result")
+		t.Log("dir1 PASS: synthetic error added for missing tool_a result")
 	}
 
 	// Dir2: orphan_x should be stripped
 	if _, ok := userResultIDs["orphan_x"]; ok {
-		t.Error("AC2 dir2 FAIL: orphan_x should have been stripped")
+		t.Error("dir2 FAIL: orphan_x should have been stripped")
 	} else {
-		t.Log("AC2 dir2 PASS: orphaned tool_result stripped")
+		t.Log("dir2 PASS: orphaned tool_result stripped")
 	}
 
 	// Dir3: tool_b should be deduped (count = 1):
 	if userResultIDs["tool_b"] != 1 {
-		t.Errorf("AC2 dir3 FAIL: expected tool_b count 1, got %d", userResultIDs["tool_b"])
+		t.Errorf("dir3 FAIL: expected tool_b count 1, got %d", userResultIDs["tool_b"])
 	} else {
-		t.Log("AC2 dir3 PASS: tool_b deduped (count=1)")
+		t.Log("dir3 PASS: tool_b deduped (count=1)")
 	}
 
 	// Dir4: leading user tool_results with no matching tool_use should be stripped
 	// The leading user message should not add tool_results
-	t.Log("AC2 dir4 PASS: leading orphaned user tool_result stripped")
+	t.Log("dir4 PASS: leading orphaned user tool_result stripped")
 
 	// Verify message structure: there should be exactly 1 user message after the ghost one is handled
 	msgRoles := make([]string, 0)
@@ -291,21 +291,21 @@ func TestAC2_AllSixDirections(t *testing.T) {
 	// Expected roles: user (ghost, may be stripped if empty), assistant, user
 	// If ghost is stripped: [assistant user]
 	// If ghost is kept (if it had content): [user assistant user]
-	t.Logf("AC2: result message roles: %v", msgRoles)
+	t.Logf("result message roles: %v", msgRoles)
 }
 
 // ============================================================
-// AC3 — Read output uses fixed-width line numbers
+// Read output uses fixed-width line numbers
 // ============================================================
 
-// AC3 read tool tests are in internal/tool/read_blackbox_test.go
+// Read tool tests are in internal/tool/read_blackbox_test.go
 
 // ============================================================
-// AC4 — Media errors mapped to specific strings
+// Media errors mapped to specific strings
 // ============================================================
 
-// TestAC4_MediaErrorMessages verifies all five media error message mappings.
-func TestAC4_MediaErrorMessages(t *testing.T) {
+// TestMediaErrorMessages verifies all five media error message mappings.
+func TestMediaErrorMessages(t *testing.T) {
 	tests := []struct {
 		name     string
 		errorMsg string
@@ -363,30 +363,30 @@ func TestAC4_MediaErrorMessages(t *testing.T) {
 			got, isMedia := mapMediaErrorToUserMessage(tt.errorMsg)
 			want := tt.wantFunc()
 			if got != want {
-				t.Errorf("AC4 FAIL: mapMediaErrorToUserMessage(%q) = %q, want %q", tt.errorMsg, got, want)
+				t.Errorf("FAIL: mapMediaErrorToUserMessage(%q) = %q, want %q", tt.errorMsg, got, want)
 			}
 			if !isMedia {
-				t.Errorf("AC4 FAIL: mapMediaErrorToUserMessage(%q) isMedia = false, want true", tt.errorMsg)
+				t.Errorf("FAIL: mapMediaErrorToUserMessage(%q) isMedia = false, want true", tt.errorMsg)
 			}
 		})
 	}
-	t.Log("AC4 PASS: all 5 media error types map to distinct user-facing messages")
+	t.Log("PASS: all 5 media error types map to distinct user-facing messages")
 }
 
-// TestAC4_NonMediaError verifies non-media errors pass through unchanged.
-func TestAC4_NonMediaError(t *testing.T) {
+// TestNonMediaError verifies non-media errors pass through unchanged.
+func TestNonMediaError(t *testing.T) {
 	got, isMedia := mapMediaErrorToUserMessage("rate limit exceeded")
 	if isMedia {
-		t.Error("AC4 FAIL: 'rate limit exceeded' should not be a media error")
+		t.Error("FAIL: 'rate limit exceeded' should not be a media error")
 	}
 	if got != "rate limit exceeded" {
-		t.Errorf("AC4 FAIL: expected original message, got %q", got)
+		t.Errorf("FAIL: expected original message, got %q", got)
 	}
-	t.Log("AC4 PASS: non-media errors pass through unchanged")
+	t.Log("PASS: non-media errors pass through unchanged")
 }
 
-// TestAC4_StripMediaErrorFromMessage verifies offending tool_result is stripped.
-func TestAC4_StripMediaErrorFromMessage(t *testing.T) {
+// TestStripMediaErrorFromMessage verifies offending tool_result is stripped.
+func TestStripMediaErrorFromMessage(t *testing.T) {
 	msg := &api.Message{
 		Role: "user",
 		ToolResults: []api.ToolResultBlock{
@@ -400,21 +400,21 @@ func TestAC4_StripMediaErrorFromMessage(t *testing.T) {
 
 	for _, tr := range msg.ToolResults {
 		if tr.ToolUseID == "tool_remove" {
-			t.Error("AC4 FAIL: tool_remove should have been stripped")
+			t.Error("FAIL: tool_remove should have been stripped")
 		}
 	}
 	if len(msg.ToolResults) != 2 {
-		t.Errorf("AC4 FAIL: expected 2 tool_results after strip, got %d", len(msg.ToolResults))
+		t.Errorf("FAIL: expected 2 tool_results after strip, got %d", len(msg.ToolResults))
 	}
-	t.Log("AC4 PASS: offending media tool_result stripped from user message")
+	t.Log("PASS: offending media tool_result stripped from user message")
 }
 
 // ============================================================
-// AC5 — Last assistant never ends with thinking block
+// Last assistant never ends with thinking block
 // ============================================================
 
-// TestAC5_FiveStepThinkingNormalizationOrder verifies the 5-step order.
-func TestAC5_FiveStepThinkingNormalizationOrder(t *testing.T) {
+// TestFiveStepThinkingNormalizationOrder verifies the 5-step order.
+func TestFiveStepThinkingNormalizationOrder(t *testing.T) {
 	messages := []api.Message{
 		// Step 1 input: orphaned thinking with no user following
 		{
@@ -450,17 +450,17 @@ func TestAC5_FiveStepThinkingNormalizationOrder(t *testing.T) {
 		if result[i].Role == "assistant" {
 			content := result[i].Content
 			if strings.Contains(content, "<thinking>") {
-				t.Errorf("AC5 FAIL: assistant message still contains thinking block: %q", content)
+				t.Errorf("FAIL: assistant message still contains thinking block: %q", content)
 			}
 			break
 		}
 	}
 
-	t.Log("AC5 PASS: final assistant message has no dangling thinking blocks")
+	t.Log("PASS: final assistant message has no dangling thinking blocks")
 }
 
-// TestAC5_OrphanedThinkingFiltered removes thinking-only assistant msgs with no user after.
-func TestAC5_OrphanedThinkingFiltered(t *testing.T) {
+// TestOrphanedThinkingFiltered removes thinking-only assistant msgs with no user after.
+func TestOrphanedThinkingFiltered(t *testing.T) {
 	messages := []api.Message{
 		{
 			Role:    "assistant",
@@ -476,14 +476,14 @@ func TestAC5_OrphanedThinkingFiltered(t *testing.T) {
 	// The last assistant's thinking-only content should be cleared
 	for _, msg := range result {
 		if msg.Role == "assistant" && strings.HasPrefix(strings.TrimSpace(msg.Content), "<thinking>") {
-			t.Errorf("AC5 FAIL: orphaned thinking message content not cleared: %q", msg.Content)
+			t.Errorf("FAIL: orphaned thinking message content not cleared: %q", msg.Content)
 		}
 	}
-	t.Log("AC5 PASS: orphaned thinking-only assistant message content cleared")
+	t.Log("PASS: orphaned thinking-only assistant message content cleared")
 }
 
-// TestAC5_NonEmptyAssistantGuard inserts placeholder for empty assistant.
-func TestAC5_NonEmptyAssistantGuard(t *testing.T) {
+// TestNonEmptyAssistantGuard inserts placeholder for empty assistant.
+func TestNonEmptyAssistantGuard(t *testing.T) {
 	messages := []api.Message{
 		{
 			Role:    "assistant",
@@ -492,13 +492,13 @@ func TestAC5_NonEmptyAssistantGuard(t *testing.T) {
 	}
 	result := ensureNonEmptyAssistant(messages)
 	if result[0].Content != "[Tool use interrupted]" {
-		t.Errorf("AC5 FAIL: expected '[Tool use interrupted]' placeholder, got %q", result[0].Content)
+		t.Errorf("FAIL: expected '[Tool use interrupted]' placeholder, got %q", result[0].Content)
 	}
-	t.Log("AC5 PASS: empty assistant gets '[Tool use interrupted]' placeholder")
+	t.Log("PASS: empty assistant gets '[Tool use interrupted]' placeholder")
 }
 
-// TestAC5_WhitespaceOnlyFiltered removes whitespace-only messages.
-func TestAC5_WhitespaceOnlyFiltered(t *testing.T) {
+// TestWhitespaceOnlyFiltered removes whitespace-only messages.
+func TestWhitespaceOnlyFiltered(t *testing.T) {
 	messages := []api.Message{
 		{Role: "user", Content: "   "},
 		{Role: "user", Content: "real"},
@@ -507,13 +507,13 @@ func TestAC5_WhitespaceOnlyFiltered(t *testing.T) {
 	}
 	result := filterWhitespaceOnly(messages)
 	if len(result) != 2 {
-		t.Errorf("AC5 FAIL: expected 2 messages after filtering whitespace, got %d", len(result))
+		t.Errorf("FAIL: expected 2 messages after filtering whitespace, got %d", len(result))
 	}
-	t.Log("AC5 PASS: whitespace-only messages filtered")
+	t.Log("PASS: whitespace-only messages filtered")
 }
 
-// TestAC5_TrailingThinkingStrippedFromAssistant verifies trailing thinking removal.
-func TestAC5_TrailingThinkingStrippedFromAssistant(t *testing.T) {
+// TestTrailingThinkingStrippedFromAssistant verifies trailing thinking removal.
+func TestTrailingThinkingStrippedFromAssistant(t *testing.T) {
 	messages := []api.Message{
 		{
 			Role:    "assistant",
@@ -522,10 +522,10 @@ func TestAC5_TrailingThinkingStrippedFromAssistant(t *testing.T) {
 	}
 	result := stripTrailingThinking(messages)
 	if strings.Contains(result[0].Content, "<thinking>") {
-		t.Errorf("AC5 FAIL: trailing thinking not stripped: %q", result[0].Content)
+		t.Errorf("FAIL: trailing thinking not stripped: %q", result[0].Content)
 	}
 	if result[0].Content != "Here's my answer" {
-		t.Errorf("AC5 FAIL: expected 'Here's my answer', got %q", result[0].Content)
+		t.Errorf("FAIL: expected 'Here's my answer', got %q", result[0].Content)
 	}
-	t.Log("AC5 PASS: trailing thinking stripped from assistant message")
+	t.Log("PASS: trailing thinking stripped from assistant message")
 }

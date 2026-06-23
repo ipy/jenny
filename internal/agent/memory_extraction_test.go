@@ -27,9 +27,9 @@ func (m *mockExtractionAPIClient) SendMessage(ctx context.Context, messages []ap
 	return &api.Response{}, nil
 }
 
-// TestAC1_EndOfTurnOnly verifies that extraction only runs on end_turn or
+// TestEndOfTurnOnly verifies that extraction only runs on end_turn or
 // stop_sequence, not on tool_use.
-func TestAC1_EndOfTurnOnly(t *testing.T) {
+func TestEndOfTurnOnly(t *testing.T) {
 	cfg := ExtractorConfig{
 		IsSubAgent:         false,
 		ExtractEveryNTurns: 1,
@@ -57,9 +57,9 @@ func TestAC1_EndOfTurnOnly(t *testing.T) {
 		me.CheckAndExtract(context.Background(), turnCtx)
 		time.Sleep(200 * time.Millisecond)
 		if invokeCount.Load() == 0 {
-			t.Error("AC1 FAIL: extraction should run on end_turn")
+			t.Error("FAIL: extraction should run on end_turn")
 		} else {
-			t.Log("AC1 PASS: extraction runs on end_turn")
+			t.Log("PASS: extraction runs on end_turn")
 		}
 	})
 
@@ -83,9 +83,9 @@ func TestAC1_EndOfTurnOnly(t *testing.T) {
 		me.CheckAndExtract(context.Background(), turnCtx)
 		time.Sleep(200 * time.Millisecond)
 		if invokeCount.Load() == 0 {
-			t.Error("AC1 FAIL: extraction should run on stop_sequence")
+			t.Error("FAIL: extraction should run on stop_sequence")
 		} else {
-			t.Log("AC1 PASS: extraction runs on stop_sequence")
+			t.Log("PASS: extraction runs on stop_sequence")
 		}
 	})
 
@@ -109,9 +109,9 @@ func TestAC1_EndOfTurnOnly(t *testing.T) {
 		me.CheckAndExtract(context.Background(), turnCtx)
 		time.Sleep(200 * time.Millisecond)
 		if invokeCount.Load() > 0 {
-			t.Error("AC1 FAIL: extraction should NOT run on tool_use")
+			t.Error("FAIL: extraction should NOT run on tool_use")
 		} else {
-			t.Log("AC1 PASS: extraction does not run on tool_use")
+			t.Log("PASS: extraction does not run on tool_use")
 		}
 	})
 
@@ -135,16 +135,16 @@ func TestAC1_EndOfTurnOnly(t *testing.T) {
 		me.CheckAndExtract(context.Background(), turnCtx)
 		time.Sleep(200 * time.Millisecond)
 		if invokeCount.Load() > 0 {
-			t.Error("AC1 FAIL: extraction should NOT run on max_tokens")
+			t.Error("FAIL: extraction should NOT run on max_tokens")
 		} else {
-			t.Log("AC1 PASS: extraction does not run on max_tokens")
+			t.Log("PASS: extraction does not run on max_tokens")
 		}
 	})
 }
 
-// TestAC2_SkipWhenMainAgentWroteMemory verifies that extraction is skipped
+// TestSkipWhenMainAgentWroteMemory verifies that extraction is skipped
 // when the main agent already wrote to auto-mem paths in the current turn.
-func TestAC2_SkipWhenMainAgentWroteMemory(t *testing.T) {
+func TestSkipWhenMainAgentWroteMemory(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	cfg := ExtractorConfig{
@@ -190,22 +190,22 @@ func TestAC2_SkipWhenMainAgentWroteMemory(t *testing.T) {
 
 	// Extraction should be skipped because main agent wrote to auto-mem
 	if invokeCount.Load() > 0 {
-		t.Error("AC2 FAIL: extraction should be skipped when main agent wrote to auto-mem")
+		t.Error("FAIL: extraction should be skipped when main agent wrote to auto-mem")
 	} else {
-		t.Log("AC2 PASS: extraction skipped when main agent wrote to auto-mem")
+		t.Log("PASS: extraction skipped when main agent wrote to auto-mem")
 	}
 
 	// Verify cursor still advanced (even though extraction was skipped)
 	if uuid, _ := me.getCursor(); uuid != "msg_1" {
-		t.Errorf("AC2 FAIL: cursor should advance to msg_1, got %s", uuid)
+		t.Errorf("FAIL: cursor should advance to msg_1, got %s", uuid)
 	} else {
-		t.Log("AC2 PASS: cursor advances even when extraction is skipped")
+		t.Log("PASS: cursor advances even when extraction is skipped")
 	}
 }
 
-// TestAC2_PostSkipFollowUpTurn verifies that after a skip, the next eligible
+// TestPostSkipFollowUpTurn verifies that after a skip, the next eligible
 // turn still triggers extraction correctly.
-func TestAC2_PostSkipFollowUpTurn(t *testing.T) {
+func TestPostSkipFollowUpTurn(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	cfg := ExtractorConfig{
@@ -251,7 +251,7 @@ func TestAC2_PostSkipFollowUpTurn(t *testing.T) {
 
 	// Extraction should be skipped in first turn
 	if invokeCount.Load() != 0 {
-		t.Error("AC2 follow-up FAIL: first turn should skip extraction")
+		t.Error("follow-up FAIL: first turn should skip extraction")
 	}
 
 	// Second turn: no main agent write to auto-mem - extraction should run
@@ -269,22 +269,22 @@ func TestAC2_PostSkipFollowUpTurn(t *testing.T) {
 
 	// Second turn should trigger extraction
 	if invokeCount.Load() != 1 {
-		t.Errorf("AC2 follow-up FAIL: second turn should trigger extraction, got %d", invokeCount.Load())
+		t.Errorf("follow-up FAIL: second turn should trigger extraction, got %d", invokeCount.Load())
 	} else {
-		t.Log("AC2 follow-up PASS: second turn triggers extraction after skip")
+		t.Log("follow-up PASS: second turn triggers extraction after skip")
 	}
 
 	// Cursor should advance to msg_2
 	if uuid, _ := me.getCursor(); uuid != "msg_2" {
-		t.Errorf("AC2 follow-up FAIL: cursor should advance to msg_2, got %s", uuid)
+		t.Errorf("follow-up FAIL: cursor should advance to msg_2, got %s", uuid)
 	} else {
-		t.Log("AC2 follow-up PASS: cursor advances to msg_2 after second turn")
+		t.Log("follow-up PASS: cursor advances to msg_2 after second turn")
 	}
 }
 
-// TestAC3_CompactionCursorFallback verifies that when UUID is missing after
+// TestCompactionCursorFallback verifies that when UUID is missing after
 // compaction, the cursor falls back to counting messages.
-func TestAC3_CompactionCursorFallback(t *testing.T) {
+func TestCompactionCursorFallback(t *testing.T) {
 	cfg := ExtractorConfig{
 		IsSubAgent:         false,
 		ExtractEveryNTurns: 1,
@@ -310,15 +310,15 @@ func TestAC3_CompactionCursorFallback(t *testing.T) {
 
 	// After advancing with empty UUID, should fall back to count
 	if me.lastMemoryMessageUuid != "" {
-		t.Errorf("AC3 FAIL: lastMemoryMessageUuid should be empty, got %s", me.lastMemoryMessageUuid)
+		t.Errorf("FAIL: lastMemoryMessageUuid should be empty, got %s", me.lastMemoryMessageUuid)
 	}
 	if me.lastMemoryMessageCount != 50 {
-		t.Errorf("AC3 FAIL: lastMemoryMessageCount should be 50, got %d", me.lastMemoryMessageCount)
+		t.Errorf("FAIL: lastMemoryMessageCount should be 50, got %d", me.lastMemoryMessageCount)
 	} else {
-		t.Log("AC3 PASS: cursor falls back to message count when UUID is missing")
+		t.Log("PASS: cursor falls back to message count when UUID is missing")
 	}
 
-	// AC5 (1): Verify buildExtractionPrompt uses the message-count slice
+	// Verify buildExtractionPrompt uses the message-count slice
 	turnCtx.RecentMessages = []api.Message{
 		{Role: "user", Content: "msg1"},
 		{Role: "user", Content: "msg 2"},
@@ -330,24 +330,24 @@ func TestAC3_CompactionCursorFallback(t *testing.T) {
 	// With lastMemoryMessageCount=50 and only 5 recent messages,
 	// the slice should be empty (count >= len(messages))
 	if strings.Contains(prompt, "msg 1") || strings.Contains(prompt, "msg 5") {
-		t.Error("AC5(1) FAIL: prompt should not contain messages when count >= len(messages)")
+		t.Error("FAIL: prompt should not contain messages when count >= len(messages)")
 	} else {
-		t.Log("AC5(1) PASS: buildExtractionPrompt correctly handles count-based slicing")
+		t.Log("PASS: buildExtractionPrompt correctly handles count-based slicing")
 	}
 
 	// Test with count< len(messages) to verify slicing works
 	me.lastMemoryMessageCount = 2
 	prompt = me.buildExtractionPrompt(turnCtx, "")
 	if !strings.Contains(prompt, "msg 3") {
-		t.Error("AC5(1) FAIL: prompt should contain msg 3 (first message after count=2)")
+		t.Error("FAIL: prompt should contain msg 3 (first message after count=2)")
 	} else {
-		t.Log("AC5(1) PASS: buildExtractionPrompt correctly slices messages after count")
+		t.Log("PASS: buildExtractionPrompt correctly slices messages after count")
 	}
 }
 
-// TestAC4_EditScopedToAutoMem verifies that the forked extraction agent
+// TestEditScopedToAutoMem verifies that the forked extraction agent
 // has Edit and Write tools scoped to the auto-mem directory.
-func TestAC4_EditScopedToAutoMem(t *testing.T) {
+func TestEditScopedToAutoMem(t *testing.T) {
 	cfg := ExtractorConfig{
 		IsSubAgent:         false,
 		ExtractEveryNTurns: 1,
@@ -369,33 +369,33 @@ func TestAC4_EditScopedToAutoMem(t *testing.T) {
 
 	// Verify required tools are present
 	if !toolMap["Read"] {
-		t.Error("AC4 FAIL: Read tool should be present")
+		t.Error("FAIL: Read tool should be present")
 	} else {
-		t.Log("AC4 PASS: Read tool present")
+		t.Log("PASS: Read tool present")
 	}
 
 	if !toolMap["Grep"] {
-		t.Error("AC4 FAIL: Grep tool should be present")
+		t.Error("FAIL: Grep tool should be present")
 	} else {
-		t.Log("AC4 PASS: Grep tool present")
+		t.Log("PASS: Grep tool present")
 	}
 
 	if !toolMap["Glob"] {
-		t.Error("AC4 FAIL: Glob tool should be present")
+		t.Error("FAIL: Glob tool should be present")
 	} else {
-		t.Log("AC4 PASS: Glob tool present")
+		t.Log("PASS: Glob tool present")
 	}
 
 	if !toolMap["edit"] {
-		t.Error("AC4 FAIL: Edit tool should be present")
+		t.Error("FAIL: Edit tool should be present")
 	} else {
-		t.Log("AC4 PASS: Edit tool present")
+		t.Log("PASS: Edit tool present")
 	}
 
 	if !toolMap["write"] {
-		t.Error("AC4 FAIL: Write tool should be present")
+		t.Error("FAIL: Write tool should be present")
 	} else {
-		t.Log("AC4 PASS: Write tool present")
+		t.Log("PASS: Write tool present")
 	}
 
 	// Verify Edit tool is scoped to auto-mem dir
@@ -403,21 +403,21 @@ func TestAC4_EditScopedToAutoMem(t *testing.T) {
 		if tl.Name() == "edit" {
 			_, ok := tl.(*tool.EditTool)
 			if !ok {
-				t.Error("AC4 FAIL: Edit tool is not *EditTool")
+				t.Error("FAIL: Edit tool is not *EditTool")
 				continue
 			}
 			// The EditTool should have allowedPaths set
 			// We can't directly check allowedPaths, but we can verify the tool exists and is properly configured
-			t.Log("AC4 PASS: Edit tool is properly configured")
+			t.Log("PASS: Edit tool is properly configured")
 		}
 		if tl.Name() == "write" {
 			_, ok := tl.(*tool.WriteTool)
 			if !ok {
-				t.Error("AC4 FAIL: Write tool is not *WriteTool")
+				t.Error("FAIL: Write tool is not *WriteTool")
 				continue
 			}
 			// The WriteTool should have allowedPaths set
-			t.Log("AC4 PASS: Write tool is properly configured")
+			t.Log("PASS: Write tool is properly configured")
 		}
 	}
 
@@ -430,20 +430,20 @@ func TestAC4_EditScopedToAutoMem(t *testing.T) {
 	// NotebookEdit should NOT be present
 	for _, name := range toolNames {
 		if name == "notebook_edit" {
-			t.Error("AC4 FAIL: notebook_edit should NOT be present in extraction tools")
+			t.Error("FAIL: notebook_edit should NOT be present in extraction tools")
 		}
 	}
 
-	// Bash should NOT be present (AC4 says read-only bash, but we should verify no bash at all for safety)
+	// Bash should NOT be present (read-only bash, but we should verify no bash at all for safety)
 	for _, name := range toolNames {
 		if name == "Bash" {
-			t.Error("AC4 FAIL: bash should NOT be present in extraction tools")
+			t.Error("FAIL: bash should NOT be present in extraction tools")
 		}
 	}
 
-	t.Log("AC4 PASS: Extraction tools are properly scoped to auto-mem directory")
+	t.Log("PASS: Extraction tools are properly scoped to auto-mem directory")
 
-	// AC4 runtime enforcement sub-test: verify Edit/Write outside memdir is rejected
+	// Runtime enforcement sub-test: verify Edit/Write outside memdir is rejected
 	t.Run("EditRejectsPathOutsideMemdir", func(t *testing.T) {
 		autoMemDir := filepath.Join(tmpDir, "memory")
 		os.MkdirAll(autoMemDir, 0755)
@@ -461,9 +461,9 @@ func TestAC4_EditScopedToAutoMem(t *testing.T) {
 					t.Fatalf("Edit Execute returned error: %v", err)
 				}
 				if result == nil || !result.IsError {
-					t.Error("AC4 runtime FAIL: Edit should reject path outside memdir")
+					t.Error("runtime FAIL: Edit should reject path outside memdir")
 				} else {
-					t.Log("AC4 runtime PASS: Edit correctly rejects path outside memdir")
+					t.Log("runtime PASS: Edit correctly rejects path outside memdir")
 				}
 			}
 			if tl.Name() == "write" {
@@ -476,15 +476,15 @@ func TestAC4_EditScopedToAutoMem(t *testing.T) {
 					t.Fatalf("Write Execute returned error: %v", err)
 				}
 				if result == nil || !result.IsError {
-					t.Error("AC4 runtime FAIL: Write should reject path outside memdir")
+					t.Error("runtime FAIL: Write should reject path outside memdir")
 				} else {
-					t.Log("AC4 runtime PASS: Write correctly rejects path outside memdir")
+					t.Log("runtime PASS: Write correctly rejects path outside memdir")
 				}
 			}
 		}
 	})
 
-	// AC5 (2): End-to-end sub-test exercising processExtractionResponse's isUnderAutoMem guard
+	// End-to-end sub-test exercising processExtractionResponse's isUnderAutoMem guard
 	t.Run("ProcessExtractionRejectsPathOutsideMemdir", func(t *testing.T) {
 		autoMemDir := filepath.Join(tmpDir, "memory")
 		os.MkdirAll(autoMemDir, 0755)
@@ -522,16 +522,16 @@ func TestAC4_EditScopedToAutoMem(t *testing.T) {
 		// Verify the file was NOT modified (edit was rejected by isUnderAutoMem guard)
 		content, _ := os.ReadFile(outsideFile)
 		if string(content) != "test" {
-			t.Error("AC5(2) FAIL: file should not be modified - edit should be rejected by processExtractionResponse")
+			t.Error("FAIL: file should not be modified - edit should be rejected by processExtractionResponse")
 		} else {
-			t.Log("AC5(2) PASS: processExtractionResponse correctly rejects edit outside auto-mem")
+			t.Log("PASS: processExtractionResponse correctly rejects edit outside auto-mem")
 		}
 	})
 }
 
-// TestAC5_CoalescingConcurrentRequests verifies that concurrent extraction
+// TestCoalescingConcurrentRequests verifies that concurrent extraction
 // requests are coalesced - only one extraction runs at a time.
-func TestAC5_CoalescingConcurrentRequests(t *testing.T) {
+func TestCoalescingConcurrentRequests(t *testing.T) {
 	cfg := ExtractorConfig{
 		IsSubAgent:         false,
 		ExtractEveryNTurns: 1,
@@ -584,27 +584,27 @@ func TestAC5_CoalescingConcurrentRequests(t *testing.T) {
 	case <-extractionDone:
 		// One extraction completed — good
 	case <-time.After(3 * time.Second):
-		t.Fatal("AC5 FAIL: extraction timed out")
+		t.Fatal("FAIL: extraction timed out")
 	}
 
 	// Check no more completions arrive within extraction time
 	// (second was coalesced - trailing extraction hasn't started yet)
 	select {
 	case <-extractionDone:
-		t.Error("AC5 FAIL: second extraction ran despite coalescing")
+		t.Error("FAIL: second extraction ran despite coalescing")
 	case <-time.After(50 * time.Millisecond):
 		// No second extraction within extraction time — coalescing worked
 	}
 
 	if maxConcurrent.Load() > 1 {
-		t.Errorf("AC5 FAIL: max concurrent extractions was %d, expected 1", maxConcurrent.Load())
+		t.Errorf("FAIL: max concurrent extractions was %d, expected 1", maxConcurrent.Load())
 	} else {
-		t.Log("AC5 PASS: concurrent extraction requests are coalesced")
+		t.Log("PASS: concurrent extraction requests are coalesced")
 	}
 }
 
-// TestAC1_SubAgentSkipped verifies that extraction is skipped for sub-agents.
-func TestAC1_SubAgentSkipped(t *testing.T) {
+// TestSubAgentSkipped verifies that extraction is skipped for sub-agents.
+func TestSubAgentSkipped(t *testing.T) {
 	cfg := ExtractorConfig{
 		IsSubAgent:         true, // This is a sub-agent
 		ExtractEveryNTurns: 1,
@@ -634,15 +634,15 @@ func TestAC1_SubAgentSkipped(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	if invokeCount.Load() > 0 {
-		t.Error("AC1 FAIL: extraction should not run for sub-agent")
+		t.Error("FAIL: extraction should not run for sub-agent")
 	} else {
-		t.Log("AC1 PASS: extraction skipped for sub-agent")
+		t.Log("PASS: extraction skipped for sub-agent")
 	}
 }
 
-// TestAC1_AutoMemoryDisabled verifies that extraction is skipped when
+// TestAutoMemoryDisabled verifies that extraction is skipped when
 // auto-memory is disabled.
-func TestAC1_AutoMemoryDisabled(t *testing.T) {
+func TestAutoMemoryDisabled(t *testing.T) {
 	cfg := ExtractorConfig{
 		IsSubAgent:         false,
 		ExtractEveryNTurns: 1,
@@ -672,9 +672,9 @@ func TestAC1_AutoMemoryDisabled(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	if invokeCount.Load() > 0 {
-		t.Error("AC1 FAIL: extraction should not run when auto-memory is disabled")
+		t.Error("FAIL: extraction should not run when auto-memory is disabled")
 	} else {
-		t.Log("AC1 PASS: extraction skipped when auto-memory is disabled")
+		t.Log("PASS: extraction skipped when auto-memory is disabled")
 	}
 }
 
@@ -810,7 +810,7 @@ func TestIsUnderAutoMem(t *testing.T) {
 	t.Log("isUnderAutoMem PASS: correctly identifies paths under auto-mem directory")
 }
 
-// TestGoroutineLeak is the AC3 regression test. It exercises the slow-API
+// TestGoroutineLeak is the regression test for goroutine leaks. It exercises the slow-API
 // client + Drain path, then asserts that runtime.NumGoroutine() is at
 // baseline after a 500ms settle. With the waitgroup-aware Drain, every
 // in-flight extraction goroutine (including the trailing run spawned by
@@ -862,9 +862,9 @@ func TestGoroutineLeak(t *testing.T) {
 
 	after := runtime.NumGoroutine()
 	if after > baseline {
-		t.Errorf("AC3 FAIL: goroutine count elevated after Drain: baseline=%d, after=%d (delta=%d)",
+		t.Errorf("FAIL: goroutine count elevated after Drain: baseline=%d, after=%d (delta=%d)",
 			baseline, after, after-baseline)
 	} else {
-		t.Logf("AC3 PASS: goroutine count at baseline after Drain: baseline=%d, after=%d", baseline, after)
+		t.Logf("PASS: goroutine count at baseline after Drain: baseline=%d, after=%d", baseline, after)
 	}
 }

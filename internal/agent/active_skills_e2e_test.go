@@ -386,7 +386,7 @@ func TestDiscoveredSkillNames_SurviveCompaction_E2E(t *testing.T) {
 	// Verify ALL unique entries are present
 	expectedCount := 2 + concurrentCount
 	if len(cfg.DiscoveredSkillNames) != expectedCount {
-		t.Errorf("AC3 FAIL: Expected %d unique skill names, got %d", expectedCount, len(cfg.DiscoveredSkillNames))
+		t.Errorf("FAIL: Expected %d unique skill names, got %d", expectedCount, len(cfg.DiscoveredSkillNames))
 	}
 
 	// Verify the specific unique entries are present
@@ -401,14 +401,14 @@ func TestDiscoveredSkillNames_SurviveCompaction_E2E(t *testing.T) {
 		}
 	}
 	if foundCount != concurrentCount {
-		t.Errorf("AC3 FAIL: Only %d/%d unique concurrent skill names found", foundCount, concurrentCount)
+		t.Errorf("FAIL: Only %d/%d unique concurrent skill names found", foundCount, concurrentCount)
 	}
 
 	// Verify deduplication works
 	initialCount := len(cfg.DiscoveredSkillNames)
 	cfg.AddDiscoveredSkillName("readme-writer") // duplicate
 	if len(cfg.DiscoveredSkillNames) != initialCount {
-		t.Error("AC3 FAIL: Duplicate skill name should not increase count")
+		t.Error("FAIL: Duplicate skill name should not increase count")
 	}
 
 	// Now test with real compaction
@@ -464,7 +464,7 @@ func TestDiscoveredSkillNames_SurviveCompaction_E2E(t *testing.T) {
 	// CRITICAL: Verify count is UNCHANGED after real compaction
 	countAfter := len(engine.streamCfg.DiscoveredSkillNames)
 	if countBefore != countAfter {
-		t.Errorf("AC3 FAIL: DiscoveredSkillNames count changed after compaction: before=%d, after=%d", countBefore, countAfter)
+		t.Errorf("FAIL: DiscoveredSkillNames count changed after compaction: before=%d, after=%d", countBefore, countAfter)
 	}
 
 	// Verify all entries still present after compaction
@@ -477,7 +477,7 @@ func TestDiscoveredSkillNames_SurviveCompaction_E2E(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Errorf("AC3 FAIL: Skill name %q lost after compaction", name)
+			t.Errorf("FAIL: Skill name %q lost after compaction", name)
 		}
 	}
 
@@ -485,13 +485,13 @@ func TestDiscoveredSkillNames_SurviveCompaction_E2E(t *testing.T) {
 	currentCount := len(engine.streamCfg.DiscoveredSkillNames)
 	engine.streamCfg.AddDiscoveredSkillName("readme-writer")
 	if len(engine.streamCfg.DiscoveredSkillNames) != currentCount {
-		t.Error("AC3 FAIL: Deduplication should still work after compaction")
+		t.Error("FAIL: Deduplication should still work after compaction")
 	}
 
-	t.Log("AC3 PASS: DiscoveredSkillNames survive real compaction with proper thread safety")
+	t.Log("PASS: DiscoveredSkillNames survive real compaction with proper thread safety")
 }
 
-// TestActiveSkills_AccumulateAcrossTurns tests AC4: Multi-turn sequential activation
+// TestActiveSkills_AccumulateAcrossTurns tests multi-turn sequential activation
 // accumulation. Uses real QueryEngine with multi-turn mock server.
 func TestActiveSkills_AccumulateAcrossTurns(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -569,16 +569,16 @@ func TestActiveSkills_AccumulateAcrossTurns(t *testing.T) {
 	// Verify skill-A is in the activated list
 	activatedSkills1 := activator.GetActivatedSkills()
 	if len(activatedSkills1) != 1 {
-		t.Errorf("AC4 FAIL: Expected 1 skill after turn 1, got %d", len(activatedSkills1))
+		t.Errorf("FAIL: Expected 1 skill after turn 1, got %d", len(activatedSkills1))
 	}
 	if len(activatedSkills1) > 0 && activatedSkills1[0].Name != "go-developer" {
-		t.Errorf("AC4 FAIL: Expected 'go-developer', got %s", activatedSkills1[0].Name)
+		t.Errorf("FAIL: Expected 'go-developer', got %s", activatedSkills1[0].Name)
 	}
 
 	// Verify activeSkillsSection reflects skill-A
 	reminder1 := activeSkillsSection(engine.streamCfg.ActiveSkills)
 	if !containsSubstring(reminder1, "go-developer") {
-		t.Error("AC4 FAIL: activeSkillsSection should contain 'go-developer' after turn 1")
+		t.Error("FAIL: activeSkillsSection should contain 'go-developer' after turn 1")
 	}
 
 	// Turn 2: explicit activation for skill-B (python-developer)
@@ -587,37 +587,37 @@ func TestActiveSkills_AccumulateAcrossTurns(t *testing.T) {
 	// Verify both skills are in the list
 	activatedSkills2 := activator.GetActivatedSkills()
 	if len(activatedSkills2) != 2 {
-		t.Errorf("AC4 FAIL: Expected 2 skills after turn 2, got %d", len(activatedSkills2))
+		t.Errorf("FAIL: Expected 2 skills after turn 2, got %d", len(activatedSkills2))
 	}
 
 	// Verify no duplication
 	skillNames := make(map[string]bool)
 	for _, s := range activatedSkills2 {
 		if skillNames[s.Name] {
-			t.Errorf("AC4 FAIL: Duplicate skill %s found", s.Name)
+			t.Errorf("FAIL: Duplicate skill %s found", s.Name)
 		}
 		skillNames[s.Name] = true
 	}
 
 	// Verify both skills are present
 	if !skillNames["go-developer"] {
-		t.Error("AC4 FAIL: 'go-developer' should be active after both turns")
+		t.Error("FAIL: 'go-developer' should be active after both turns")
 	}
 	if !skillNames["python-developer"] {
-		t.Error("AC4 FAIL: 'python-developer' should be active after explicit activation")
+		t.Error("FAIL: 'python-developer' should be active after explicit activation")
 	}
 
 	// Verify dedup: re-activating same skill doesn't add duplicates
 	activator.RegisterActivation("go-developer", tmpDir+"/go-developer", nil)
 	activatedSkills3 := activator.GetActivatedSkills()
 	if len(activatedSkills3) != 2 {
-		t.Errorf("AC4 FAIL: Re-activating skill should not create duplicate, got %d skills", len(activatedSkills3))
+		t.Errorf("FAIL: Re-activating skill should not create duplicate, got %d skills", len(activatedSkills3))
 	}
 
-	t.Log("AC4 PASS: Multi-turn sequential activation accumulation verified")
+	t.Log("PASS: Multi-turn sequential activation accumulation verified")
 }
 
-// TestCompaction_PreservesNonCompactedFields tests AC5: Compaction does not modify
+// TestCompaction_PreservesNonCompactedFields tests compaction does not modify
 // StreamConfig non-compacted fields. Uses real compact() invocation.
 func TestCompaction_PreservesNonCompactedFields(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -699,56 +699,56 @@ func TestCompaction_PreservesNonCompactedFields(t *testing.T) {
 
 	// Verify compaction modified messages
 	if len(compacted) >= len(messages) {
-		t.Errorf("AC5 FAIL: Compaction should reduce message count, before=%d, after=%d", len(messages), len(compacted))
+		t.Errorf("FAIL: Compaction should reduce message count, before=%d, after=%d", len(messages), len(compacted))
 	}
 
 	// CRITICAL: Verify all three fields are UNCHANGED after real compaction
 	// Check ActiveSkills
 	if len(engine.streamCfg.ActiveSkills) != len(originalActiveSkills) {
-		t.Errorf("AC5 FAIL: ActiveSkills count changed after compaction: was %d, now %d", len(originalActiveSkills), len(engine.streamCfg.ActiveSkills))
+		t.Errorf("FAIL: ActiveSkills count changed after compaction: was %d, now %d", len(originalActiveSkills), len(engine.streamCfg.ActiveSkills))
 	}
 	for i, s := range originalActiveSkills {
 		if i >= len(engine.streamCfg.ActiveSkills) || engine.streamCfg.ActiveSkills[i].Name != s.Name || engine.streamCfg.ActiveSkills[i].RootPath != s.RootPath {
-			t.Errorf("AC5 FAIL: ActiveSkills[%d] changed after compaction", i)
+			t.Errorf("FAIL: ActiveSkills[%d] changed after compaction", i)
 		}
 	}
 
 	// Check PermissionDenials
 	if len(engine.streamCfg.PermissionDenials) != len(originalDenials) {
-		t.Errorf("AC5 FAIL: PermissionDenials count changed after compaction: was %d, now %d", len(originalDenials), len(engine.streamCfg.PermissionDenials))
+		t.Errorf("FAIL: PermissionDenials count changed after compaction: was %d, now %d", len(originalDenials), len(engine.streamCfg.PermissionDenials))
 	}
 	for i, d := range originalDenials {
 		if i >= len(engine.streamCfg.PermissionDenials) || engine.streamCfg.PermissionDenials[i] != d {
-			t.Errorf("AC5 FAIL: PermissionDenials[%d] changed after compaction", i)
+			t.Errorf("FAIL: PermissionDenials[%d] changed after compaction", i)
 		}
 	}
 
 	// Check DiscoveredSkillNames
 	if len(engine.streamCfg.DiscoveredSkillNames) != len(originalDiscovered) {
-		t.Errorf("AC5 FAIL: DiscoveredSkillNames count changed after compaction: was %d, now %d", len(originalDiscovered), len(engine.streamCfg.DiscoveredSkillNames))
+		t.Errorf("FAIL: DiscoveredSkillNames count changed after compaction: was %d, now %d", len(originalDiscovered), len(engine.streamCfg.DiscoveredSkillNames))
 	}
 	for i, n := range originalDiscovered {
 		if i >= len(engine.streamCfg.DiscoveredSkillNames) || engine.streamCfg.DiscoveredSkillNames[i] != n {
-			t.Errorf("AC5 FAIL: DiscoveredSkillNames[%d] changed after compaction", i)
+			t.Errorf("FAIL: DiscoveredSkillNames[%d] changed after compaction", i)
 		}
 	}
 
-	t.Log("AC5 PASS: Compaction preserves non-compacted fields")
+	t.Log("PASS: Compaction preserves non-compacted fields")
 }
 
-// TestActiveSkills_GracefulDegradation tests AC6: Graceful degradation when
+// TestActiveSkills_GracefulDegradation tests graceful degradation when
 // activator returns empty skills. Verifies nil-slice/empty-slice edge case.
 func TestActiveSkills_GracefulDegradation(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Test case 1: nil ActiveSkills → empty reminder
 	if r := activeSkillsSection(nil); r != "" {
-		t.Error("AC6 FAIL: activeSkillsSection should return empty for nil skills")
+		t.Error("FAIL: activeSkillsSection should return empty for nil skills")
 	}
 
 	// Test case 2: empty ActiveSkills slice → empty reminder
 	if r := activeSkillsSection([]ActivatedSkill{}); r != "" {
-		t.Error("AC6 FAIL: activeSkillsSection should return empty for empty skills")
+		t.Error("FAIL: activeSkillsSection should return empty for empty skills")
 	}
 
 	// Test case 3: Activator with no matching skills
@@ -765,18 +765,18 @@ func TestActiveSkills_GracefulDegradation(t *testing.T) {
 	nonMatchingPath := "/some/path/file.py"
 	activated := activator.ActivateForPath(nonMatchingPath)
 	if len(activated) != 0 {
-		t.Error("AC6 FAIL: Non-matching path should not activate any skill")
+		t.Error("FAIL: Non-matching path should not activate any skill")
 	}
 
 	// DynamicSystemSuffix is always empty regardless of skills
 	if DynamicSystemSuffix(&StreamConfig{}, tmpDir) != "" {
-		t.Error("AC6 FAIL: DynamicSystemSuffix should always be empty")
+		t.Error("FAIL: DynamicSystemSuffix should always be empty")
 	}
 
-	t.Log("AC6 PASS: Graceful degradation for empty/nil skills")
+	t.Log("PASS: Graceful degradation for empty/nil skills")
 }
 
-// TestActiveSkills_NoRegression verifies AC7: No regression on existing unit tests.
+// TestActiveSkills_NoRegression verifies no regression on existing unit tests.
 func TestActiveSkills_NoRegression(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -789,23 +789,23 @@ func TestActiveSkills_NoRegression(t *testing.T) {
 	// activeSkillsSection (not suffix) should produce skill text
 	result := activeSkillsSection(cfg.ActiveSkills)
 	if !containsActiveSkillsSection(result) {
-		t.Error("AC7 FAIL: containsActiveSkillsSection should detect Active Skills section")
+		t.Error("FAIL: containsActiveSkillsSection should detect Active Skills section")
 	}
 	if !containsSubstring(result, "test-skill") {
-		t.Error("AC7 FAIL: containsSubstring should find skill name")
+		t.Error("FAIL: containsSubstring should find skill name")
 	}
 
 	// Test BuildDenialKey
 	key1 := BuildDenialKey("Bash", map[string]any{"command": "ls"})
 	key2 := BuildDenialKey("Bash", map[string]any{"command": "ls"})
 	if key1 != key2 {
-		t.Error("AC7 FAIL: BuildDenialKey should produce deterministic keys")
+		t.Error("FAIL: BuildDenialKey should produce deterministic keys")
 	}
 
 	// DynamicSystemSuffix is always empty (skills go through messages)
 	if DynamicSystemSuffix(&cfg, tmpDir) != "" {
-		t.Error("AC7 FAIL: DynamicSystemSuffix should be empty")
+		t.Error("FAIL: DynamicSystemSuffix should be empty")
 	}
 
-	t.Log("AC7 PASS: No regression on existing unit test helpers")
+	t.Log("PASS: No regression on existing unit test helpers")
 }

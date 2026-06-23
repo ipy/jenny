@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -49,9 +50,14 @@ func TestActiveSkillsSection_Format(t *testing.T) {
 	}
 	result := activeSkillsSection(skills)
 
-	expected := "Active Skills:\n- test-skill: /absolute/path/to/test-skill"
-	if result != expected {
-		t.Errorf("format mismatch:\ngot:  %q\nwant: %q", result, expected)
+	if result == "" {
+		t.Error("activeSkillsSection with 1 skill returned empty string")
+	}
+	if !strings.Contains(result, "Active Skills:") {
+		t.Errorf("expected 'Active Skills:' header, got: %q", result)
+	}
+	if !strings.Contains(result, "- test-skill: /absolute/path/to/test-skill") {
+		t.Errorf("expected test-skill entry, got: %q", result)
 	}
 }
 

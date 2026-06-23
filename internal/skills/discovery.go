@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // Skill represents a discovered skill with its metadata and content.
@@ -142,7 +144,7 @@ func Discover(dirs ...string) ([]Skill, error) {
 			continue
 		}
 
-		entries, err := os.ReadDir(absDir)
+		entries, err := utils.ReadDirSafe(absDir, 0)
 		if err != nil {
 			// Skip directories that don't exist
 			if os.IsNotExist(err) {

@@ -156,7 +156,7 @@ func (p *Portal) getSessionMeta(sessionID string) (*SessionMeta, error) {
 	}
 
 	// Read transcript to get metadata
-	data, err := os.ReadFile(transcriptPath)
+	data, err := utils.ReadFileSafe(transcriptPath, constants.MaxTranscriptReadBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -497,7 +497,7 @@ func (p *Portal) getSessionPID(sessionID string) (int, error) {
 	}
 
 	// Try to find from transcript state entry
-	data, err := os.ReadFile(transcriptPath)
+	data, err := utils.ReadFileSafe(transcriptPath, constants.MaxTranscriptReadBytes)
 	if err != nil {
 		return 0, err
 	}
@@ -561,7 +561,7 @@ func (p *Portal) handleStats(w http.ResponseWriter, r *http.Request) {
 	tokens := make([]int, 0)
 	for _, id := range sessionIDs {
 		transcriptPath := filepath.Join(constants.SessionDir(id), "transcript.jsonl")
-		if data, err := os.ReadFile(transcriptPath); err == nil {
+		if data, err := utils.ReadFileSafe(transcriptPath, constants.MaxTranscriptReadBytes); err == nil {
 			lines := utils.SplitLines(string(data))
 			for _, line := range lines {
 				if line == "" {
@@ -851,7 +851,7 @@ func (p *Portal) handleListSkills(w http.ResponseWriter, r *http.Request) {
 	seen := make(map[string]bool) // dedup by skill name
 
 	for _, skillsDir := range skillsDirs {
-		entries, err := os.ReadDir(skillsDir)
+		entries, err := utils.ReadDirSafe(skillsDir, 0)
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue
@@ -920,7 +920,7 @@ func (p *Portal) handleListPlugins(w http.ResponseWriter, r *http.Request) {
 	// Check each marker directory
 	for _, dirName := range []string{constants.PluginDirName, ".claude-plugin", ".codex-plugin"} {
 		markerDir := filepath.Join(gitRoot, dirName)
-		entries, err := os.ReadDir(markerDir)
+		entries, err := utils.ReadDirSafe(markerDir, 0)
 		if err != nil {
 			continue // Dir may not exist
 		}

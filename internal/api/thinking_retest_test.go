@@ -16,13 +16,13 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// AC2: Reasoning effort flag — Responses API
+// Reasoning effort flag — Responses API
 // --effort low|medium|high -> reasoning_config.effort
 // ---------------------------------------------------------------------------
 
-// TestAC2_ResponsesAPI_EffortTranslation verifies that --effort maps to
+// TestResponsesAPI_EffortTranslation verifies that --effort maps to
 // reasoning_config.effort when OPENAI_WIRE_API=responses.
-func TestAC2_ResponsesAPI_EffortTranslation(t *testing.T) {
+func TestResponsesAPI_EffortTranslation(t *testing.T) {
 	ms := mockapi.NewMockServer()
 	ms.SetPathHandler("POST /v1/responses", func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -35,10 +35,10 @@ func TestAC2_ResponsesAPI_EffortTranslation(t *testing.T) {
 		// Verify reasoning_config.effort is set to "high"
 		rc, ok := req["reasoning_config"].(map[string]any)
 		if !ok {
-			t.Fatal("AC2 FAIL: reasoning_config missing from Responses API request")
+			t.Fatal("FAIL: reasoning_config missing from Responses API request")
 		}
 		if rc["effort"] != "high" {
-			t.Errorf("AC2 FAIL: reasoning_config.effort = %v, want 'high'", rc["effort"])
+			t.Errorf("FAIL: reasoning_config.effort = %v, want 'high'", rc["effort"])
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -80,7 +80,7 @@ func TestAC2_ResponsesAPI_EffortTranslation(t *testing.T) {
 	if resp.Model != "o3-mini" {
 		t.Errorf("Model = %q, want 'o3-mini'", resp.Model)
 	}
-	t.Log("AC2 PASS: reasoning_config.effort correctly set for Responses API")
+	t.Log("PASS: reasoning_config.effort correctly set for Responses API")
 }
 
 // TestAC2_NoEffort_NoReasoningConfig verifies that when --effort is not set,
@@ -97,7 +97,7 @@ func TestAC2_NoEffort_NoReasoningConfig(t *testing.T) {
 
 		// Verify no reasoning_config when effort is not set
 		if _, ok := req["reasoning_config"]; ok {
-			t.Error("AC2 FAIL: reasoning_config present but effort was not set")
+			t.Error("FAIL: reasoning_config present but effort was not set")
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -135,7 +135,7 @@ func TestAC2_NoEffort_NoReasoningConfig(t *testing.T) {
 		t.Fatalf("SendMessage error = %v", err)
 	}
 	_ = resp
-	t.Log("AC2 PASS: no reasoning_config when effort not set")
+	t.Log("PASS: no reasoning_config when effort not set")
 }
 
 // TestAC2_EffortNotThreaded_EmptyEffortFromCLI verifies that when
@@ -153,10 +153,10 @@ func TestAC2_EffortNotThreaded_EmptyEffortFromCLI(t *testing.T) {
 
 		// When effort is empty, reasoning_effort should not appear
 		if _, ok := req["reasoning_effort"]; ok {
-			t.Error("AC2 FAIL: reasoning_effort present but effort was empty in StreamConfig")
+			t.Error("FAIL: reasoning_effort present but effort was empty in StreamConfig")
 		}
 		if _, ok := req["extra_body"]; ok {
-			t.Error("AC2 FAIL: extra_body present but effort was empty")
+			t.Error("FAIL: extra_body present but effort was empty")
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -190,11 +190,11 @@ func TestAC2_EffortNotThreaded_EmptyEffortFromCLI(t *testing.T) {
 		t.Fatalf("SendMessage error = %v", err)
 	}
 	_ = resp
-	t.Log("AC2 PASS: empty effort not threaded to provider")
+	t.Log("PASS: empty effort not threaded to provider")
 }
 
 // ---------------------------------------------------------------------------
-// AC2: DeepSeek extra_body thinking
+// DeepSeek extra_body thinking
 // ---------------------------------------------------------------------------
 
 // TestAC2_DeepSeekExtraBody_Enabled verifies DeepSeek models get
@@ -212,14 +212,14 @@ func TestAC2_DeepSeekExtraBody_Enabled(t *testing.T) {
 		// Verify extra_body.thinking.type is "enabled"
 		extraBody, ok := req["extra_body"].(map[string]any)
 		if !ok {
-			t.Fatal("AC2 FAIL: extra_body missing from DeepSeek request")
+			t.Fatal("FAIL: extra_body missing from DeepSeek request")
 		}
 		thinking, ok := extraBody["thinking"].(map[string]any)
 		if !ok {
-			t.Fatal("AC2 FAIL: extra_body.thinking missing from DeepSeek request")
+			t.Fatal("FAIL: extra_body.thinking missing from DeepSeek request")
 		}
 		if thinking["type"] != "enabled" {
-			t.Errorf("AC2 FAIL: thinking.type = %v, want 'enabled'", thinking["type"])
+			t.Errorf("FAIL: thinking.type = %v, want 'enabled'", thinking["type"])
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -267,9 +267,9 @@ func TestAC2_DeepSeekExtraBody_Enabled(t *testing.T) {
 		}
 	}
 	if !foundThinking {
-		t.Error("AC2 FAIL: reasoning_content not parsed into thinking block for DeepSeek")
+		t.Error("FAIL: reasoning_content not parsed into thinking block for DeepSeek")
 	}
-	t.Log("AC2 PASS: DeepSeek extra_body and reasoning persistence working")
+	t.Log("PASS: DeepSeek extra_body and reasoning persistence working")
 }
 
 // TestAC2_DeepSeekExtraBody_NoEffort_NoExtraBody verifies that without
@@ -286,7 +286,7 @@ func TestAC2_DeepSeekExtraBody_NoEffort_NoExtraBody(t *testing.T) {
 
 		// Without effort, no extra_body should be present
 		if _, ok := req["extra_body"]; ok {
-			t.Error("AC2 FAIL: extra_body present but effort was not set for DeepSeek")
+			t.Error("FAIL: extra_body present but effort was not set for DeepSeek")
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -324,11 +324,11 @@ func TestAC2_DeepSeekExtraBody_NoEffort_NoExtraBody(t *testing.T) {
 		t.Fatalf("SendMessage error = %v", err)
 	}
 	_ = resp
-	t.Log("AC2 PASS: no extra_body when effort not set for DeepSeek")
+	t.Log("PASS: no extra_body when effort not set for DeepSeek")
 }
 
 // ---------------------------------------------------------------------------
-// AC2: Effort threaded from CLI through agent to provider
+// Effort threaded from CLI through agent to provider
 // ---------------------------------------------------------------------------
 
 // TestAC2_EffortThreaded_FromCLIThroughEngine verifies the full threading
@@ -346,10 +346,10 @@ func TestAC2_EffortThreaded_FromCLIThroughEngine(t *testing.T) {
 		// Verify reasoning_config.effort is present and matches "low"
 		rc, ok := req["reasoning_config"].(map[string]any)
 		if !ok {
-			t.Fatal("AC2 FAIL: reasoning_config missing in threaded effort test")
+			t.Fatal("FAIL: reasoning_config missing in threaded effort test")
 		}
 		if rc["effort"] != "low" {
-			t.Errorf("AC2 FAIL: effort = %v, want 'low'", rc["effort"])
+			t.Errorf("FAIL: effort = %v, want 'low'", rc["effort"])
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -389,11 +389,11 @@ func TestAC2_EffortThreaded_FromCLIThroughEngine(t *testing.T) {
 		t.Fatalf("SendMessage error = %v", err)
 	}
 	_ = resp
-	t.Log("AC2 PASS: effort threaded from engine to provider correctly")
+	t.Log("PASS: effort threaded from engine to provider correctly")
 }
 
 // ---------------------------------------------------------------------------
-// AC3: Thinking persistence in .jsonl transcript
+// Thinking persistence in .jsonl transcript
 // ---------------------------------------------------------------------------
 
 // TestAC3_ThinkingPersisted_JSONLTranscript verifies that assistant entries
@@ -421,13 +421,13 @@ func TestAC3_ThinkingPersisted_JSONLTranscript(t *testing.T) {
 
 	// Verify JSON contains thinking and signature fields
 	if !strings.Contains(string(data), `"thinking":"Step-by-step reasoning..."`) {
-		t.Error("AC3 FAIL: thinking field missing from JSON output")
+		t.Error("FAIL: thinking field missing from JSON output")
 	}
 	if !strings.Contains(string(data), `"signature":"sig_abc123"`) {
-		t.Error("AC3 FAIL: signature field missing from JSON output")
+		t.Error("FAIL: signature field missing from JSON output")
 	}
 
-	t.Log("AC3 PASS: thinking and signature fields round-trip through JSON")
+	t.Log("PASS: thinking and signature fields round-trip through JSON")
 }
 
 // TestAC3_ThinkingPersisted_OpenAIChat_Provider tests that reasoning_content from
@@ -490,7 +490,7 @@ func TestAC3_ThinkingPersisted_OpenAIChat_Provider(t *testing.T) {
 		}
 	}
 	if !foundThinking {
-		t.Fatal("AC3 FAIL: reasoning_content not captured as thinking block in response")
+		t.Fatal("FAIL: reasoning_content not captured as thinking block in response")
 	}
 
 	// Extract for transcript persistence
@@ -501,9 +501,9 @@ func TestAC3_ThinkingPersisted_OpenAIChat_Provider(t *testing.T) {
 		}
 	}
 	if extractedThinking != "Deep thinking..." {
-		t.Errorf("AC3 FAIL: extracted thinking = %q, want 'Deep thinking...'", extractedThinking)
+		t.Errorf("FAIL: extracted thinking = %q, want 'Deep thinking...'", extractedThinking)
 	}
-	t.Log("AC3 PASS: thinking content extracted from OpenAI Chat response for transcript persistence")
+	t.Log("PASS: thinking content extracted from OpenAI Chat response for transcript persistence")
 }
 
 // TestAC3_ThinkingPersisted_DeepSeek_Provider tests that reasoning_content from
@@ -565,13 +565,13 @@ func TestAC3_ThinkingPersisted_DeepSeek_Provider(t *testing.T) {
 		}
 	}
 	if !foundThinking {
-		t.Fatal("AC3 FAIL: DeepSeek reasoning_content not captured")
+		t.Fatal("FAIL: DeepSeek reasoning_content not captured")
 	}
-	t.Log("AC3 PASS: DeepSeek reasoning persisted as thinking block")
+	t.Log("PASS: DeepSeek reasoning persisted as thinking block")
 }
 
 // ---------------------------------------------------------------------------
-// AC4: Thinking round-trip for tool calls
+// Thinking round-trip for tool calls
 // ---------------------------------------------------------------------------
 
 // TestAC4_ResponsesAPI_ThinkingRoundTrip verifies that assistant messages
@@ -621,7 +621,7 @@ func TestAC4_ResponsesAPI_ThinkingRoundTrip(t *testing.T) {
 			}
 		}
 		if !foundReasoning {
-			t.Error("AC4 FAIL: no reasoning (thinking) item in input array for multi-turn")
+			t.Error("FAIL: no reasoning (thinking) item in input array for multi-turn")
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -694,9 +694,9 @@ func TestAC4_ResponsesAPI_ThinkingRoundTrip(t *testing.T) {
 		}
 	}
 	if !foundNewThinking {
-		t.Error("AC4 FAIL: new thinking not captured from Responses API response")
+		t.Error("FAIL: new thinking not captured from Responses API response")
 	}
-	t.Log("AC4 PASS: Responses API thinking round-trip working")
+	t.Log("PASS: Responses API thinking round-trip working")
 }
 
 // TestAC4_ChatAPI_ThinkingWithToolCalls verifies that for OpenAI Chat API,
@@ -805,12 +805,12 @@ func TestAC4_ChatAPI_ThinkingWithToolCalls(t *testing.T) {
 		}
 	}
 	if !foundNewThinking {
-		t.Error("AC4 FAIL: thinking block not in response with tool_calls")
+		t.Error("FAIL: thinking block not in response with tool_calls")
 	}
 	if !foundNewToolCall {
-		t.Error("AC4 FAIL: tool_use block not in response")
+		t.Error("FAIL: tool_use block not in response")
 	}
-	t.Log("AC4 PASS: Chat API reasoning_content round-trip with tool_calls working")
+	t.Log("PASS: Chat API reasoning_content round-trip with tool_calls working")
 }
 
 // TestAC4_AnthropicThinkingBeforeToolUse verifies that for Anthropic API,
@@ -839,7 +839,7 @@ func TestAC4_AnthropicThinkingBeforeToolUse(t *testing.T) {
 		t.Errorf("thinking signature = %q, want 'sig_an_123'", content[0].Signature)
 	}
 
-	t.Log("AC4 PASS: Anthropic thinking before tool_use ordering verified")
+	t.Log("PASS: Anthropic thinking before tool_use ordering verified")
 }
 
 // TestAC4_RoundTrip_No400Error verifies that loading a transcript with
@@ -931,13 +931,13 @@ func TestAC4_RoundTrip_No400Error(t *testing.T) {
 
 	resp, err := client.SendMessage(context.Background(), messages, nil, nil, []string{}, "")
 	if err != nil {
-		t.Fatalf("AC4 FAIL: reconstructed history produced error (expected no 400): %v", err)
+		t.Fatalf("FAIL: reconstructed history produced error (expected no 400): %v", err)
 	}
 
 	if resp.StopReason != StopReasonEndTurn {
 		t.Errorf("StopReason = %q, want 'end_turn'", resp.StopReason)
 	}
-	t.Log("AC4 PASS: multi-turn thinking round-trip succeeds without 400 errors")
+	t.Log("PASS: multi-turn thinking round-trip succeeds without 400 errors")
 }
 
 // TestAC4_ChatAPIRoundTrip_ThinkingToolCalls_No400 verifies that OpenAI Chat
@@ -973,7 +973,7 @@ func TestAC4_ChatAPIRoundTrip_ThinkingToolCalls_No400(t *testing.T) {
 			}
 		}
 		if !foundAssistantWithBoth {
-			t.Error("AC4 FAIL: no assistant message with both reasoning_content and tool_calls")
+			t.Error("FAIL: no assistant message with both reasoning_content and tool_calls")
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -1034,17 +1034,17 @@ func TestAC4_ChatAPIRoundTrip_ThinkingToolCalls_No400(t *testing.T) {
 
 	resp, err := client.SendMessage(context.Background(), messages, nil, nil, []string{}, "")
 	if err != nil {
-		t.Fatalf("AC4 FAIL: Chat API thinking round-trip error: %v", err)
+		t.Fatalf("FAIL: Chat API thinking round-trip error: %v", err)
 	}
 
 	if resp.StopReason != StopReasonToolUse {
 		t.Errorf("StopReason = %q, want 'tool_use'", resp.StopReason)
 	}
-	t.Log("AC4 PASS: Chat API thinking+tool_calls round-trip works without 400")
+	t.Log("PASS: Chat API thinking+tool_calls round-trip works without 400")
 }
 
 // ---------------------------------------------------------------------------
-// AC4: Responses API round-trip thinking — retest
+// Responses API round-trip thinking — retest
 // ---------------------------------------------------------------------------
 
 // TestAC4_ResponsesAPI_ThinkingRoundTrip_Retest verifies the full round-trip:
@@ -1110,17 +1110,17 @@ func TestAC4_ResponsesAPI_ThinkingRoundTrip_Retest(t *testing.T) {
 	}
 
 	if len(loadedThinking) != 2 {
-		t.Errorf("AC4 FAIL: expected 2 thinking entries, got %d: %v", len(loadedThinking), loadedThinking)
+		t.Errorf("FAIL: expected 2 thinking entries, got %d: %v", len(loadedThinking), loadedThinking)
 	}
 
 	if loadedThinking[0] != "Need to find climate datasets." {
-		t.Errorf("AC4 FAIL: first thinking = %q, want 'Need to find climate datasets.'", loadedThinking[0])
+		t.Errorf("FAIL: first thinking = %q, want 'Need to find climate datasets.'", loadedThinking[0])
 	}
 	if loadedThinking[1] != "Summarizing results." {
-		t.Errorf("AC4 FAIL: second thinking = %q, want 'Summarizing results.'", loadedThinking[1])
+		t.Errorf("FAIL: second thinking = %q, want 'Summarizing results.'", loadedThinking[1])
 	}
 
-	t.Log("AC4 PASS: Responses API thinking round-trip through transcript verified")
+	t.Log("PASS: Responses API thinking round-trip through transcript verified")
 }
 
 // TestAC4_RoundTrip_StillBroken_NoMessageThinking verifies that when
@@ -1153,7 +1153,7 @@ func TestAC4_RoundTrip_StillBroken_NoMessageThinking(t *testing.T) {
 			}
 		}
 		if !foundThinkingItem {
-			t.Error("AC4 FAIL: no reasoning items in input for thinking-only assistant")
+			t.Error("FAIL: no reasoning items in input for thinking-only assistant")
 		}
 
 		w.Header().Set("Content-Type", "application/json")

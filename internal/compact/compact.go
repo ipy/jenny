@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/ipy/jenny/internal/constants"
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // CompactUsage is the human-readable help text printed by `jenny compact --help`.
@@ -65,7 +66,7 @@ func RunCompact(id string, dryRun, force bool, stdout, stderr io.Writer) int {
 
 	// Batch mode: iterate every direct child. Continue past per-entry errors
 	// unless the entry was the single-id invocation.
-	entries, err := os.ReadDir(sessDir)
+	entries, err := utils.ReadDirSafe(sessDir, 0)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return 0

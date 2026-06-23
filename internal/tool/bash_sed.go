@@ -84,6 +84,15 @@ func (t *BashTool) executeSed(command string, cwd string) (*ToolResult, error) {
 		}, nil
 	}
 
+	// Check file size before reading
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return &ToolResult{Content: fmt.Sprintf("sed: cannot stat file: %v", err), IsError: true}, nil
+	}
+	if info.Size() > 1<<30 {
+		return &ToolResult{Content: "sed: file is too large (exceeds 1 GiB limit)", IsError: true}, nil
+	}
+
 	// Read file
 	data, err := os.ReadFile(filePath)
 	if err != nil {

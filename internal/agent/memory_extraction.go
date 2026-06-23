@@ -13,6 +13,7 @@ import (
 	"github.com/ipy/jenny/internal/log"
 	"github.com/ipy/jenny/internal/memdir"
 	"github.com/ipy/jenny/internal/tool"
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // ExtractorConfig holds configuration for the memory extractor.
@@ -389,7 +390,7 @@ func (me *MemoryExtractor) buildMemoryManifest() string {
 		memdir.MemoryTypeRef,
 	} {
 		subdir := filepath.Join(me.memdir, string(memType))
-		entries, err := os.ReadDir(subdir)
+		entries, err := utils.ReadDirSafe(subdir, 0)
 		if err != nil {
 			continue
 		}

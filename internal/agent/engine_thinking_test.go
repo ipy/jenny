@@ -107,10 +107,10 @@ func thinkingTextToolUseEvents(thinking, signature, text, toolID, toolName strin
 	return events
 }
 
-// TestAC1_ThinkingBlockEmittedSeparately verifies AC1: a thinking block
+// TestThinkingBlockEmittedSeparately verifies that a thinking block
 // appears as its own `type: "thinking"` block in the assistant content array
 // and is NOT merged into the text block.
-func TestAC1_ThinkingBlockEmittedSeparately(t *testing.T) {
+func TestThinkingBlockEmittedSeparately(t *testing.T) {
 	thinking := "Let me think about this..."
 	text := "Here is my answer."
 
@@ -143,32 +143,32 @@ func TestAC1_ThinkingBlockEmittedSeparately(t *testing.T) {
 
 	content := findAssistantContentBlock(t, stdout)
 	if content == nil {
-		t.Fatal("AC1 FAIL: no assistant envelope found in stdout")
+		t.Fatal("FAIL: no assistant envelope found in stdout")
 	}
 	if len(content) != 2 {
-		t.Fatalf("AC1 FAIL: expected 2 content blocks (thinking + text), got %d: %v", len(content), content)
+		t.Fatalf("FAIL: expected 2 content blocks (thinking + text), got %d: %v", len(content), content)
 	}
 
 	// First block must be the thinking block.
 	if content[0]["type"] != "thinking" {
-		t.Errorf("AC1 FAIL: first block type = %v, want \"thinking\"", content[0]["type"])
+		t.Errorf("FAIL: first block type = %v, want \"thinking\"", content[0]["type"])
 	}
 	if content[0]["thinking"] != thinking {
-		t.Errorf("AC1 FAIL: thinking field = %v, want %q", content[0]["thinking"], thinking)
+		t.Errorf("FAIL: thinking field = %v, want %q", content[0]["thinking"], thinking)
 	}
 	if _, hasText := content[0]["text"]; hasText {
-		t.Errorf("AC1 FAIL: thinking block must not have text field, got %v", content[0]["text"])
+		t.Errorf("FAIL: thinking block must not have text field, got %v", content[0]["text"])
 	}
 
 	// Second block must be the text block, with no thinking content merged in.
 	if content[1]["type"] != "text" {
-		t.Errorf("AC1 FAIL: second block type = %v, want \"text\"", content[1]["type"])
+		t.Errorf("FAIL: second block type = %v, want \"text\"", content[1]["type"])
 	}
 	if content[1]["text"] != text {
-		t.Errorf("AC1 FAIL: text field = %v, want %q", content[1]["text"], text)
+		t.Errorf("FAIL: text field = %v, want %q", content[1]["text"], text)
 	}
 	if strings.Contains(content[1]["text"].(string), thinking) {
-		t.Errorf("AC1 FAIL: text block contains thinking text %q (should be separated)", thinking)
+		t.Errorf("FAIL: text block contains thinking text %q (should be separated)", thinking)
 	}
 }
 

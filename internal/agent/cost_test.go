@@ -17,7 +17,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// AC1: All four token types
+// All four token types
 // ---------------------------------------------------------------------------
 
 func TestAC1_AccumulateUsageCapturesAllFourTokenTypes(t *testing.T) {
@@ -112,7 +112,7 @@ func TestAC1_SendMessageNonStreamingUsageStruct(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC2: Cost persistence
+// Cost persistence
 // ---------------------------------------------------------------------------
 
 func TestAC2_SaveCostStatePersistsToDotJennyConfig(t *testing.T) {
@@ -298,7 +298,7 @@ func TestAC2_PersistsEndTurnPath(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC3: Resume cost restore
+// Resume cost restore
 // ---------------------------------------------------------------------------
 
 func TestAC3_RestoreCostStateWithMatchingSessionID(t *testing.T) {
@@ -428,11 +428,11 @@ func TestAC3_AccumulateOnRestoredState(t *testing.T) {
 	if restored.TotalCostUSD <= 0.001 {
 		t.Errorf("AC3 FAIL: accumulated TotalCostUSD = %f, want > 0.001 (was 0.001 before accumulation)", restored.TotalCostUSD)
 	}
-	t.Log("AC3 PASS: accumulated usage on restored state correctly adds to restored values")
+	t.Log("PASS: accumulated usage on restored state correctly adds to restored values")
 }
 
 // ---------------------------------------------------------------------------
-// AC4: Stream-json result.usage
+// Stream-json result.usage
 // ---------------------------------------------------------------------------
 
 func TestAC4_UsageStructHasCorrectJSONTags(t *testing.T) {
@@ -475,7 +475,7 @@ func TestAC4_UsageStructHasCorrectJSONTags(t *testing.T) {
 		t.Errorf("AC4 FAIL: cache_read_input_tokens = %v, want 5", parsed["cache_read_input_tokens"])
 	}
 
-	t.Log("AC4 PASS: all JSON tags are snake_case and present")
+	t.Log("PASS: all JSON tags are snake_case and present")
 }
 
 func TestAC4_ResultLineContainsCacheAndCostFields(t *testing.T) {
@@ -551,11 +551,11 @@ func TestAC4_ResultLineContainsCacheAndCostFields(t *testing.T) {
 		t.Error("AC4 FAIL: result missing total_cost_usd")
 	}
 
-	t.Logf("AC4 PASS: result.usage = %+v, total_cost_usd = %v", usage, result["total_cost_usd"])
+	t.Logf("PASS: result.usage = %+v, total_cost_usd = %v", usage, result["total_cost_usd"])
 }
 
 // ---------------------------------------------------------------------------
-// AC5: Budget enforcement
+// Budget enforcement
 // ---------------------------------------------------------------------------
 
 func TestAC5_CheckBudgetExceededWithLimit(t *testing.T) {
@@ -695,7 +695,7 @@ func TestAC5_BudgetStopInRunStream(t *testing.T) {
 		t.Logf("AC5: result line = %s", resultLine)
 	}
 
-	t.Logf("AC5 PASS: RunStream returned budget error: %v", err)
+	t.Logf("PASS: RunStream returned budget error: %v", err)
 }
 
 func TestAC5_BudgetNoLimitWhenMaxBudgetUSDIsZero(t *testing.T) {
@@ -725,7 +725,7 @@ func TestAC5_BudgetNoLimitWhenMaxBudgetUSDIsZero(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AC5 FAIL: RunStream should not fail with no budget limit: %v", err)
 	}
-	t.Log("AC5 PASS: RunStream completes normally with no budget limit")
+	t.Log("PASS: RunStream completes normally with no budget limit")
 }
 
 // ---------------------------------------------------------------------------
@@ -761,7 +761,7 @@ func TestPricing_AC1_ClaudeUSDRates(t *testing.T) {
 		t.Errorf("AC1 FAIL: claude-sonnet-4 USD output 1M = %f, want 15.0", mu3.CostUSD)
 	}
 
-	t.Log("AC1 PASS: Claude USD rates correct")
+	t.Log("PASS: Claude USD rates correct")
 }
 
 // TestPricing_AC2_NewModelFamilies verifies AC2: new model families are present.
@@ -783,7 +783,7 @@ func TestPricing_AC2_NewModelFamilies(t *testing.T) {
 		}
 	}
 
-	t.Log("AC2 PASS: new model families present")
+	t.Log("PASS: new model families present")
 }
 
 // TestPricing_AC3_DeepSeekUSDRates verifies AC3: native USD models have correct rates.
@@ -817,7 +817,7 @@ func TestPricing_AC3_DeepSeekUSDRates(t *testing.T) {
 		t.Errorf("AC3 FAIL: deepseek-v4-pro USD input 1M = %f, want 0.435", mu3.CostUSD)
 	}
 
-	t.Log("AC3 PASS: native USD model rates correct")
+	t.Log("PASS: native USD model rates correct")
 }
 
 // TestPricing_AC4_UnknownModelFallback verifies AC4: unknown model returns conservative defaults.
@@ -830,7 +830,7 @@ func TestPricing_AC4_UnknownModelFallback(t *testing.T) {
 		t.Error("AC4 FAIL: unknown model has zero rates")
 	}
 
-	t.Log("AC4 PASS: unknown model fallback correct")
+	t.Log("PASS: unknown model fallback correct")
 }
 
 // TestPricing_Gemini35Flash verifies Gemini 3.5 Flash pricing (AC2).
@@ -1015,5 +1015,5 @@ func TestPricing_AC7_CustomPricingOverride(t *testing.T) {
 	if p3.InputUSD != 0.000003 {
 		t.Errorf("AC7 FAIL: after bad JSON, InputUSD = %f, want 0.000003", p3.InputUSD)
 	}
-	t.Log("AC7 PASS: pricing override works correctly")
+	t.Log("PASS: pricing override works correctly")
 }

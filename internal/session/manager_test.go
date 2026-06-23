@@ -1458,3 +1458,64 @@ func TestManager_AppendAndLoadWithThinking(t *testing.T) {
 		t.Errorf("entries[0].Signature = %v, want %v", entries[0].Signature, "sig_def456")
 	}
 }
+
+func TestLoadTranscriptTruncated(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp() error = %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	m, err := NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	sessionID := "sess_truncated_test"
+
+	// Build valid JSONL lines manually and write them to the transcript file.
+	entries := []TranscriptEntry{
+		{Type: "user", Content: "Hello"},
+		{Type: "assistant", Content: "Hi there"},
+		{Type: "user", Content: "How are you?"},
+	}
+
+	var buf bytes.Buffer
+	for _, e := range entries {
+		data, err := json.Marshal(e)
+		if err != nil {
+			t.Fatalf("json.Marshal() error = %v", err)
+		}
+		buf.Write(data)
+		buf.WriteByte('\n')
+	}
+
+	// Write directly to the transcript path (bypass AppendEntry to avoid
+	// auto-populated fields like UUID/timestamp, making assertions simpler).
+	path := m.transcriptPath(sessionID)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(path, buf.Bytes(), 0644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	loaded, err := m.LoadTranscript(sessionID)
+	if err != nil {
+		t.Fatalf("LoadTranscript() error = %v", err)
+	}
+
+	if len(loaded) != 3 {
+		t.Fatalf("LoadTranscript() returned %d entries, want 3", len(loaded))
+	}
+
+	if loaded[0].Type != "user" || loaded[0].Content != "Hello" {
+		t.Errorf("entry 0: type=%s content=%s, want user/Hello", loaded[0].Type, loaded[0].Content)
+	}
+	if loaded[1].Type != "assistant" || loaded[1].Content != "Hi there" {
+		t.Errorf("entry 1: type=%s content=%s, want assistant/Hi there", loaded[1].Type, loaded[1].Content)
+	}
+	if loaded[2].Type != "user" || loaded[2].Content != "How are you?" {
+		t.Errorf("entry 2: type=%s content=%s, want user/How are you?", loaded[2].Type, loaded[2].Content)
+	}
+}

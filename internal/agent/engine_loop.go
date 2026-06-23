@@ -46,7 +46,7 @@ func (e *QueryEngine) SubmitMessage(ctx context.Context, prompt string) (string,
 	e.cwd = cwd
 	e.mu.Unlock()
 
-	// AC1: Persist user message to transcript BEFORE any API call
+	// Persist user message to transcript BEFORE any API call
 	if sessionManager != nil {
 		// For resume sessions, check for duplicate user message
 		skipUserPersist := false
@@ -68,7 +68,7 @@ func (e *QueryEngine) SubmitMessage(ctx context.Context, prompt string) (string,
 		}
 	}
 
-	// AC1: Create memdir and inject memory content into system prompt
+	// Create memdir and inject memory content into system prompt
 	if e.streamCfg.AutoMemoryEnabled {
 		if gitRoot, err := git.GetRoot(cwd); err == nil {
 			memdirCfg := memdir.Config{
@@ -128,7 +128,7 @@ func (e *QueryEngine) SubmitMessage(ctx context.Context, prompt string) (string,
 	// Run the agent loop
 	result, err := e.runLoop(ctx, messages, cwd, sessionID, "user")
 
-	// AC3: Flush cost state on completion (success, error, or limit exceeded)
+	// Flush cost state on completion (success, error, or limit exceeded)
 	e.mu.Lock()
 	e.costState.LastSessionID = sessionID
 	e.mu.Unlock()
@@ -159,7 +159,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 	// but currently providers handle the slice.
 	systemPrompt := e.streamCfg.CachedSystemPrompt
 
-	// AC3: When stream-json mode is active, redirect debug logs to stderr
+	// When stream-json mode is active, redirect debug logs to stderr
 	// to prevent interleaving with NDJSON output on stdout
 	if e.streamCfg.Enabled {
 		log.SetOutput(os.Stderr)
@@ -179,7 +179,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			return "", ctx.Err()
 		}
 		e.mu.Lock()
-		// AC2: maxTurns enforcement - check before each API call
+		// maxTurns enforcement - check before each API call
 		if e.maxTurns > 0 && e.turnCount >= e.maxTurns {
 			e.mu.Unlock()
 			// Emit error result if streaming enabled
@@ -213,12 +213,12 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		budgetUSD := e.streamCfg.MaxBudgetUSD
 		e.mu.Unlock()
 
-		// AC3: Reset structured output tool at start of each turn
+		// Reset structured output tool at start of each turn
 		if e.structuredOutputTool != nil {
 			e.structuredOutputTool.Reset()
 		}
 
-		// AC2: Budget enforcement - check before each API call
+		// Budget enforcement - check before each API call
 		if budgetUSD > 0 {
 			if exceeded, _ := CheckBudgetExceeded(e.costState, budgetUSD); exceeded {
 				if e.streamCfg.Enabled {
@@ -248,7 +248,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			}
 		}
 
-		// AC3: Inject pending task completions as a virtual user message
+		// Inject pending task completions as a virtual user message
 		// with Content (not ToolResults) to avoid violating API protocol:
 		// tool_result blocks require their tool_use_id to reference an
 		// actual tool_use in a preceding assistant message.
@@ -411,7 +411,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			e.persistSystemReminder(sessionID, msg.Content)
 		}
 
-		// AC1: Check compaction threshold before API request
+		// Check compaction threshold before API request
 		// Estimate tokens and check if auto-compact should trigger
 		var estimatedTokens int
 		var preAPICharCount int // cached for EWMA Observe after API response
@@ -426,13 +426,13 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			EmitCompactWarning(estimatedTokens, e.compactConfig.warningThreshold())
 		}
 
-		// Check blocking limit when auto-compact is disabled (AC3)
-		// compact/session_memory sources skip this check (AC5)
+		// Check blocking limit when auto-compact is disabled
+		// compact/session_memory sources skip this check
 		if err := e.compactConfig.blockIfOverLimit(estimatedTokens, querySource); err != nil {
 			return "", err
 		}
 
-		// AC1: Auto-compact if threshold exceeded and circuit breaker not tripped
+		// Auto-compact if threshold exceeded and circuit breaker not tripped
 		if e.compactConfig.checkCompactThreshold(estimatedTokens, querySource) {
 			e.mu.Lock()
 			circuitBreakerTripped := e.compactFailCount >= MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES
@@ -482,7 +482,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			messages[i] = normalizeNewMessage(messages[i])
 		}
 
-		// Create fallback function for streaming failures (AC3)
+		// Create fallback function for streaming failures
 		fallbackFn := func(fallbackCtx context.Context) (*api.Response, error) {
 			return e.client.SendMessage(fallbackCtx, messages, e.toolParams, nil, systemPrompt, "")
 		}
@@ -492,8 +492,8 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		e.client.SetMaxTokensOverride(turnBudget.TotalBudget)
 		e.client.SetDynamicThinkingBudget(turnBudget.ThinkingBudget)
 
-		// Use streaming API (AC1)
-		// Track API call duration (AC3: duration_api_ms)
+		// Use streaming API
+		// Track API call duration
 		apiStartTime := time.Now()
 		// Reset timing fields for TTFT calculation per API call
 		e.firstTokenTime = time.Time{}
@@ -517,12 +517,12 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		var toolUseBlocks []api.ToolUseBlock
 		var thinkingBlocks []thinkingBlock
 
-		// Reset thinking block state at the start of each streaming turn (AC3: thinking_tokens)
+		// Reset thinking block state at the start of each streaming turn
 		e.resetThinkingBlockState()
 
 		// Process blocks as they arrive
 		for block := range blocksChan {
-			// AC1: Capture message ID, usage, and stop reason from raw events for assistant events
+			// Capture message ID, usage, and stop reason from raw events for assistant events
 			if block.Type == "stream_event" {
 				if ev, ok := block.RawEvent.(api.AnthropicStreamEvent); ok {
 					switch ev.Type {
@@ -549,12 +549,12 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 
 			// Handle raw stream_event passthrough
 			if block.Type == "stream_event" && e.streamCfg.Enabled && e.streamCfg.IncludePartial {
-				// Transform SDK event to minimal representation (AC1: no bloated zero-value fields)
+				// Transform SDK event to minimal representation
 				transformedEvent, err := TransformStreamEvent(block.RawEvent)
 				if err != nil {
 					continue
 				}
-				// Emit spec-compliant stream_event wire shape (AC5)
+				// Emit spec-compliant stream_event wire shape
 				msg := StreamMessage{
 					Type:            "stream_event",
 					SessionID:       sessionID,
@@ -575,7 +575,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				if e.firstTokenTime.IsZero() {
 					e.firstTokenTime = time.Now()
 				}
-				// AC1: Redact secrets from text output before writing
+				// Redact secrets from text output before writing
 				var text string
 				if e.secretRedactor != nil && e.secretRedactor.Enabled() {
 					text = e.secretRedactor.Redact(block.Block.Text)
@@ -583,7 +583,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					text = block.Block.Text
 				}
 				textOutput.WriteString(text)
-				// AC1: Emit assistant event for text block stop
+				// Emit assistant event for text block stop
 				if e.streamCfg.Enabled && text != "" {
 					e.emitAssistantEvent(sessionID, api.ContentBlock{
 						Type: api.BlockTypeText,
@@ -595,18 +595,18 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				if e.firstTokenTime.IsZero() {
 					e.firstTokenTime = time.Now()
 				}
-				// AC2: Track first stream event time (for ttft_stream_ms calculation)
+				// Track first stream event time (for ttft_stream_ms calculation)
 				if e.firstStreamTime.IsZero() {
 					e.firstStreamTime = time.Now()
 				}
-				// AC3: Emit thinking_tokens event when thinking block arrives (streaming delta)
+				// Emit thinking_tokens event when thinking block arrives (streaming delta)
 				e.emitThinkingTokens(sessionID, block.Index, block.Block.Thinking)
 				// When IncludePartial is true, thinking blocks are already emitted via thinking_tokens events,
 				// so don't accumulate them for emitConsolidatedAssistant to avoid duplication.
 				if !e.streamCfg.IncludePartial {
 					thinkingBlocks = append(thinkingBlocks, thinkingBlock{Text: block.Block.Thinking, Signature: block.Block.Signature})
 				}
-				// AC1: Emit assistant event for thinking block stop
+				// Emit assistant event for thinking block stop
 				if e.streamCfg.Enabled {
 					e.emitAssistantEvent(sessionID, block.Block, e.currentMessageID, e.model)
 				}
@@ -615,7 +615,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				if e.firstTokenTime.IsZero() {
 					e.firstTokenTime = time.Now()
 				}
-				// AC2: Track first stream event time (for ttft_stream_ms calculation)
+				// Track first stream event time (for ttft_stream_ms calculation)
 				if e.firstStreamTime.IsZero() {
 					e.firstStreamTime = time.Now()
 				}
@@ -626,12 +626,12 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					Input:     block.Block.ToolInput,
 					Signature: block.Block.Signature,
 				})
-				// AC1: Emit assistant event for tool_use block stop
+				// Emit assistant event for tool_use block stop
 				if e.streamCfg.Enabled {
 					e.emitAssistantEvent(sessionID, block.Block, e.currentMessageID, e.model)
 				}
 			case api.BlockTypeWebSearchResult:
-				// AC5: Process web search results and surface error codes
+				// Process web search results and surface error codes
 				if block.Block.WebSearchResult != nil && block.Block.WebSearchResult.IsError {
 					// Surface server error code as a tool result
 					toolResults = append(toolResults, api.ToolResult{
@@ -644,12 +644,12 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		}
 		e.totalAPIDurationMs += time.Since(apiStartTime).Milliseconds()
 
-		// AC4: Emit final thinking_tokens events for all active thinking blocks
+		// Emit final thinking_tokens events for all active thinking blocks
 		// before the consolidated assistant message. This ensures final totals are
 		// emitted even if the periodic timer hasn't fired since last delta.
 		e.emitAllFinalThinkingTokens(sessionID)
 
-		// AC1: Emit final assistant event with usage and stop_reason in stream-json mode
+		// Emit final assistant event with usage and stop_reason in stream-json mode
 		if e.streamCfg.Enabled {
 			e.emitAssistantFinalEvent(sessionID, e.currentMessageID, e.currentStopReason, e.currentStopSequence, toLoopUsage(e.currentUsage), e.model)
 		}
@@ -663,7 +663,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				category = streamResult.ErrorInfo.Category
 			}
 
-			// AC1: ModelNotFound re-entry via non-streaming fallback
+			// ModelNotFound re-entry via non-streaming fallback
 			if category == api.CategoryModelNotFound {
 				e.mu.Lock()
 				initialModel := e.model
@@ -697,7 +697,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				return "", err
 			}
 
-			// AC2: Quota/Payment fast-fail
+			// Quota/Payment fast-fail
 			if category == api.CategoryQuotaExhausted || category == api.CategoryPaymentRequired {
 				errMsg := "Quota exceeded. Check your billing settings."
 				if e.streamCfg.Enabled {
@@ -727,7 +727,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				return "", fmt.Errorf("%s", errMsg)
 			}
 
-			// AC3: Content filter fast-fail
+			// Content filter fast-fail
 			if category == api.CategoryContentFilter {
 				errMsg := "Content blocked by provider policy."
 				if e.streamCfg.Enabled {
@@ -831,13 +831,13 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				fmt.Fprintln(os.Stdout, string(data))
 			}
 
-			// AC4: Check if this is a media error - if so, strip the offending tool_result and retry
+			// Check if this is a media error - if so, strip the offending tool_result and retry
 			var wasMediaError bool
 			messages, wasMediaError = HandleMediaErrorOnRetry(messages, streamResult.Error)
 			if wasMediaError {
 				continue // Retry with modified messages
 			}
-			// AC2: Non-user-abort error - increment compaction failure counter
+			// Non-user-abort error - increment compaction failure counter
 			// Skip increment for user-initiated aborts (context cancellation, Esc, SIGINT, etc.)
 			if !utils.IsUserAbortError(streamResult.Error) {
 				e.incrementCompactFailCount()
@@ -864,7 +864,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			for _, block := range resp.Content {
 				switch block.Type {
 				case api.BlockTypeText:
-					// AC1: Redact secrets from text output in fallback path
+					// Redact secrets from text output in fallback path
 					if e.secretRedactor != nil && e.secretRedactor.Enabled() {
 						textOutput.WriteString(e.secretRedactor.Redact(block.Text))
 					} else {
@@ -881,7 +881,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 						Signature: block.Signature,
 					})
 				case api.BlockTypeWebSearchResult:
-					// AC5: Process web search results and surface error codes in fallback
+					// Process web search results and surface error codes in fallback
 					if block.WebSearchResult != nil && block.WebSearchResult.IsError {
 						toolResults = append(toolResults, api.ToolResult{
 							ToolUseID: block.WebSearchResult.ToolUseID,
@@ -893,11 +893,11 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				}
 			}
 
-			// AC4: Emit ONE consolidated assistant message for all collected content
+			// Emit ONE consolidated assistant message for all collected content
 			e.emitConsolidatedAssistant(sessionID, thinkingBlocks, &textOutput, toolUseBlocks,
 				e.currentMessageID, e.currentStopReason, e.currentStopSequence, toLoopUsage(e.currentUsage), e.model)
 
-			// AC4: Emit user message wrappers for web search tool results
+			// Emit user message wrappers for web search tool results
 			for _, result := range pendingWebSearchResults {
 				if result.WebSearchResult == nil {
 					continue
@@ -1009,7 +1009,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			}
 		}
 
-		// Capture skill count BEFORE tool execution to detect changes (AC3)
+		// Capture skill count BEFORE tool execution to detect changes
 		prevSkillCount := len(e.streamCfg.ActiveSkills)
 
 		// Execute all tools using the parallel executor with cross-turn state support

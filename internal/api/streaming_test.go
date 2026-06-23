@@ -116,10 +116,10 @@ func makeDelayedServer(t *testing.T, initial []string, delay time.Duration, fina
 }
 
 // ---------------------------------------------------------------------------
-// AC1: streaming default — stream:true on request; SSE event delivery
+// streaming default — stream:true on request; SSE event delivery
 // ---------------------------------------------------------------------------
 
-func TestAC1_StreamingSendsStreamTrue(t *testing.T) {
+func TestStreamingSendsStreamTrue(t *testing.T) {
 	events := []string{
 		sseLine("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"m1","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":5,"output_tokens":1}}}`),
 		sseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
@@ -144,28 +144,28 @@ func TestAC1_StreamingSendsStreamTrue(t *testing.T) {
 	)
 	blocks := readAllBlocks(t, blocksChan)
 
-	// AC1: stream:true in request body
+	// stream:true in request body
 	select {
 	case body := <-bodyCh:
 		assertJSONBody(t, body, "stream", true)
 		assertJSONBody(t, body, "model", "m1")
 	default:
-		t.Error("AC1 FAIL: did not capture request body")
+		t.Error("FAIL: did not capture request body")
 	}
 
-	// AC1: SSE event processing delivers a block
+	// SSE event processing delivers a block
 	if len(blocks) != 1 {
-		t.Errorf("AC1 FAIL: expected 1 block from SSE events, got %d", len(blocks))
+		t.Errorf("FAIL: expected 1 block from SSE events, got %d", len(blocks))
 	} else if blocks[0].Block.Text != "Hello" {
-		t.Errorf("AC1 FAIL: expected text 'Hello', got %q", blocks[0].Block.Text)
+		t.Errorf("FAIL: expected text 'Hello', got %q", blocks[0].Block.Text)
 	}
 
-	// AC2: usage IS correctly extracted from message_delta
+	// usage IS correctly extracted from message_delta
 	if result.Usage.InputTokens != 5 || result.Usage.OutputTokens != 3 {
-		t.Errorf("AC2 FAIL: expected usage (5,3), got (%d,%d)", result.Usage.InputTokens, result.Usage.OutputTokens)
+		t.Errorf("FAIL: expected usage (5,3), got (%d,%d)", result.Usage.InputTokens, result.Usage.OutputTokens)
 	}
 	if result.Model != "m1" {
-		t.Errorf("AC2 FAIL: expected model 'm1', got %q", result.Model)
+		t.Errorf("FAIL: expected model 'm1', got %q", result.Model)
 	}
 	if result.Error != "" {
 		t.Errorf("unexpected error: %q", result.Error)
@@ -173,10 +173,10 @@ func TestAC1_StreamingSendsStreamTrue(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// AC2: content accumulation and yield
+// content accumulation and yield
 // ---------------------------------------------------------------------------
 
-func TestAC2_AccumulatesMultipleTextDeltas(t *testing.T) {
+func TestAccumulatesMultipleTextDeltas(t *testing.T) {
 	events := []string{
 		sseLine("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"m","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":1,"output_tokens":1}}}`),
 		sseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
@@ -201,21 +201,21 @@ func TestAC2_AccumulatesMultipleTextDeltas(t *testing.T) {
 
 	// Multiple text deltas are accumulated correctly
 	if len(blocks) != 1 {
-		t.Fatalf("AC2 FAIL: expected 1 block, got %d", len(blocks))
+		t.Fatalf("FAIL: expected 1 block, got %d", len(blocks))
 	}
 	expected := "The quick brown fox jumps over"
 	if blocks[0].Block.Text != expected {
-		t.Errorf("AC2 FAIL: text accumulation: expected %q, got %q", expected, blocks[0].Block.Text)
+		t.Errorf("FAIL: text accumulation: expected %q, got %q", expected, blocks[0].Block.Text)
 	}
 	if result.Usage.InputTokens != 1 || result.Usage.OutputTokens != 30 {
-		t.Errorf("AC2 FAIL: usage: expected (1,30), got (%d,%d)", result.Usage.InputTokens, result.Usage.OutputTokens)
+		t.Errorf("FAIL: usage: expected (1,30), got (%d,%d)", result.Usage.InputTokens, result.Usage.OutputTokens)
 	}
 	if result.Error != "" {
-		t.Errorf("AC2 FAIL: unexpected error: %s", result.Error)
+		t.Errorf("FAIL: unexpected error: %s", result.Error)
 	}
 }
 
-func TestAC2_UsageFromMessageDelta(t *testing.T) {
+func TestUsageFromMessageDelta(t *testing.T) {
 	events := []string{
 		sseLine("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"m","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":1}}}`),
 		sseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
@@ -238,15 +238,15 @@ func TestAC2_UsageFromMessageDelta(t *testing.T) {
 
 	// Usage IS correctly extracted from message_delta
 	if result.Usage.InputTokens != 10 || result.Usage.OutputTokens != 5 {
-		t.Errorf("AC2 FAIL: expected usage (10,5), got (%d,%d)", result.Usage.InputTokens, result.Usage.OutputTokens)
+		t.Errorf("FAIL: expected usage (10,5), got (%d,%d)", result.Usage.InputTokens, result.Usage.OutputTokens)
 	}
 }
 
-// TestAC2_StopReasonBug documents that stop_reason is NOT correctly extracted
+// TestStopReasonBug documents that stop_reason is NOT correctly extracted
 // from message_delta. The code uses e.Delta.StopDetails.Type (refusal info)
 // instead of e.Delta.StopReason (the actual stop reason).
 // Source: internal/api/client.go:564
-func TestAC2_StopReasonExtraction(t *testing.T) {
+func TestStopReasonExtraction(t *testing.T) {
 	events := []string{
 		sseLine("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"m","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":1,"output_tokens":1}}}`),
 		sseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
@@ -271,17 +271,17 @@ func TestAC2_StopReasonExtraction(t *testing.T) {
 	// (refusal-only field, always "") instead of e.Delta.StopReason
 	// (the actual stop_reason: "end_turn", "tool_use", etc.)
 	if result.StopReason == StopReasonEndTurn {
-		t.Log("AC2 PASS: stop_reason correctly extracted")
+		t.Log("PASS: stop_reason correctly extracted")
 	} else {
-		t.Errorf("AC2 FAIL: stop_reason should be 'end_turn' but got %q — client.go:564 uses e.Delta.StopDetails.Type (refusal) instead of e.Delta.StopReason", result.StopReason)
+		t.Errorf("FAIL: stop_reason should be 'end_turn' but got %q — client.go:564 uses e.Delta.StopDetails.Type (refusal) instead of e.Delta.StopReason", result.StopReason)
 	}
 }
 
 // ---------------------------------------------------------------------------
-// AC1: Cache token extraction from message_delta
+// Cache token extraction from message_delta
 // ---------------------------------------------------------------------------
 
-func TestAC1_CacheTokensExtractedFromMessageDelta(t *testing.T) {
+func TestCacheTokensExtractedFromMessageDelta(t *testing.T) {
 	events := []string{
 		sseLine("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"m","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":5,"output_tokens":1,"cache_read_input_tokens":3,"cache_creation_input_tokens":2}}}`),
 		sseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
@@ -303,26 +303,26 @@ func TestAC1_CacheTokensExtractedFromMessageDelta(t *testing.T) {
 	)
 	readAllBlocks(t, blocksChan)
 
-	// AC1: All four token types extracted from message_delta
+	// All four token types extracted from message_delta
 	if result.Usage.CacheReadInputTokens != 3 {
-		t.Errorf("AC1 FAIL: CacheReadInputTokens = %d, want 3", result.Usage.CacheReadInputTokens)
+		t.Errorf("FAIL: CacheReadInputTokens = %d, want 3", result.Usage.CacheReadInputTokens)
 	}
 	if result.Usage.CacheCreationInputTokens != 1 {
-		t.Errorf("AC1 FAIL: CacheCreationInputTokens = %d, want 1", result.Usage.CacheCreationInputTokens)
+		t.Errorf("FAIL: CacheCreationInputTokens = %d, want 1", result.Usage.CacheCreationInputTokens)
 	}
 	if result.Usage.InputTokens != 5 {
-		t.Errorf("AC1 FAIL: InputTokens = %d, want 5", result.Usage.InputTokens)
+		t.Errorf("FAIL: InputTokens = %d, want 5", result.Usage.InputTokens)
 	}
 	if result.Usage.OutputTokens != 2 {
-		t.Errorf("AC1 FAIL: OutputTokens = %d, want 2", result.Usage.OutputTokens)
+		t.Errorf("FAIL: OutputTokens = %d, want 2", result.Usage.OutputTokens)
 	}
 }
 
-// TestAC1_CacheOnlyMessageDelta exercises the edge case where message_delta
+// TestCacheOnlyMessageDelta exercises the edge case where message_delta
 // contains only cache tokens with zero input/output tokens.
 // The guard at client.go:581 (if e.Usage.InputTokens > 0 || e.Usage.OutputTokens > 0)
 // means this edge case would NOT capture the cache tokens.
-func TestAC1_CacheOnlyMessageDeltaEdgeCase(t *testing.T) {
+func TestCacheOnlyMessageDeltaEdgeCase(t *testing.T) {
 	events := []string{
 		sseLine("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"m","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}`),
 		sseLine("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
@@ -348,13 +348,13 @@ func TestAC1_CacheOnlyMessageDeltaEdgeCase(t *testing.T) {
 	// because e.Usage.InputTokens=0 AND e.Usage.OutputTokens=0
 	// This test documents the guard behavior
 	if result.Usage.CacheReadInputTokens == 5 {
-		t.Log("AC1 EDGE: Cache tokens extracted when input/output are 0")
+		t.Log("EDGE: Cache tokens extracted when input/output are 0")
 	} else {
-		t.Log("AC1 EDGE: Cache tokens NOT extracted when input/output are 0 (guard at client.go:581)")
+		t.Log("EDGE: Cache tokens NOT extracted when input/output are 0 (guard at client.go:581)")
 	}
 }
 
-func TestAC1_NonStreamingCacheTokensExtracted(t *testing.T) {
+func TestNonStreamingCacheTokensExtracted(t *testing.T) {
 	// This test verifies the non-streaming path via a mock server
 	ms := mockapi.NewMockServer()
 	ms.SetPathHandler("POST /v1/messages", func(w http.ResponseWriter, r *http.Request) {
@@ -372,28 +372,28 @@ func TestAC1_NonStreamingCacheTokensExtracted(t *testing.T) {
 	client, _ := NewClientWithModel("m")
 	resp, err := client.SendMessage(context.Background(), nil, nil, nil, []string{}, "")
 	if err != nil {
-		t.Fatalf("AC1 FAIL: SendMessage error = %v", err)
+		t.Fatalf("FAIL: SendMessage error = %v", err)
 	}
 
 	if resp.Usage.CacheReadInputTokens != 3 {
-		t.Errorf("AC1 FAIL: CacheReadInputTokens = %d, want 3", resp.Usage.CacheReadInputTokens)
+		t.Errorf("FAIL: CacheReadInputTokens = %d, want 3", resp.Usage.CacheReadInputTokens)
 	}
 	if resp.Usage.CacheCreationInputTokens != 1 {
-		t.Errorf("AC1 FAIL: CacheCreationInputTokens = %d, want 1", resp.Usage.CacheCreationInputTokens)
+		t.Errorf("FAIL: CacheCreationInputTokens = %d, want 1", resp.Usage.CacheCreationInputTokens)
 	}
 	if resp.Usage.InputTokens != 10 {
-		t.Errorf("AC1 FAIL: InputTokens = %d, want 10", resp.Usage.InputTokens)
+		t.Errorf("FAIL: InputTokens = %d, want 10", resp.Usage.InputTokens)
 	}
 	if resp.Usage.OutputTokens != 5 {
-		t.Errorf("AC1 FAIL: OutputTokens = %d, want 5", resp.Usage.OutputTokens)
+		t.Errorf("FAIL: OutputTokens = %d, want 5", resp.Usage.OutputTokens)
 	}
 }
 
 // ---------------------------------------------------------------------------
-// AC3: non-streaming fallback
+// non-streaming fallback
 // ---------------------------------------------------------------------------
 
-func TestAC3_FallbackOnIncompleteStream(t *testing.T) {
+func TestFallbackOnIncompleteStream(t *testing.T) {
 	// Send all events except message_stop — stream is incomplete
 	events := []string{
 		sseLine("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"m","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":5,"output_tokens":1}}}`),
@@ -443,33 +443,33 @@ func TestAC3_FallbackOnIncompleteStream(t *testing.T) {
 	fallbackMu.Unlock()
 
 	if !called {
-		t.Error("AC3 FAIL: fallback was not called on incomplete stream (no message_stop)")
+		t.Error("FAIL: fallback was not called on incomplete stream (no message_stop)")
 	}
 
 	// The spec says "Partial assistant content from the failed stream is discarded"
 	// stream_event blocks are progress updates and are expected, but final content blocks
 	// should be suppressed when fallback is used.
 	if len(finalBlocks) > 0 {
-		t.Errorf("AC3 FAIL: partial assistant content not discarded — got %d partial block(s) from channel (expected 0)", len(finalBlocks))
+		t.Errorf("FAIL: partial assistant content not discarded — got %d partial block(s) from channel (expected 0)", len(finalBlocks))
 	} else {
-		t.Log("AC3 OK: partial blocks correctly suppressed")
+		t.Log("OK: partial blocks correctly suppressed")
 	}
 
 	// Result should come from fallback
 	if len(result.Blocks) != 1 {
-		t.Errorf("AC3 FAIL: expected 1 block in result (from fallback), got %d", len(result.Blocks))
+		t.Errorf("FAIL: expected 1 block in result (from fallback), got %d", len(result.Blocks))
 	} else if result.Blocks[0].Text != "Fallback response" {
-		t.Errorf("AC3 FAIL: expected result text 'Fallback response', got %q", result.Blocks[0].Text)
+		t.Errorf("FAIL: expected result text 'Fallback response', got %q", result.Blocks[0].Text)
 	}
 	if result.StopReason != StopReasonEndTurn {
-		t.Errorf("AC3 FAIL: expected stop_reason 'end_turn', got %q", result.StopReason)
+		t.Errorf("FAIL: expected stop_reason 'end_turn', got %q", result.StopReason)
 	}
 	if result.Error != "" {
-		t.Errorf("AC3 FAIL: unexpected error: %s", result.Error)
+		t.Errorf("FAIL: unexpected error: %s", result.Error)
 	}
 }
 
-func TestAC3_FallbackOnNonSSEResponse(t *testing.T) {
+func TestFallbackOnNonSSEResponse(t *testing.T) {
 	ms := mockapi.NewMockServer()
 	ms.SetPathHandler("POST /v1/messages", func(w http.ResponseWriter, r *http.Request) {
 		io.ReadAll(r.Body)
@@ -506,20 +506,20 @@ func TestAC3_FallbackOnNonSSEResponse(t *testing.T) {
 	fallbackMu.Unlock()
 
 	if !called {
-		t.Error("AC3 FAIL: fallback not called on non-SSE response")
+		t.Error("FAIL: fallback not called on non-SSE response")
 	}
 	if len(result.Blocks) == 0 {
-		t.Error("AC3 FAIL: expected fallback blocks in result")
+		t.Error("FAIL: expected fallback blocks in result")
 	} else if result.Blocks[0].Text != "Fallback OK" {
-		t.Errorf("AC3 FAIL: expected 'Fallback OK', got %q", result.Blocks[0].Text)
+		t.Errorf("FAIL: expected 'Fallback OK', got %q", result.Blocks[0].Text)
 	}
 }
 
 // ---------------------------------------------------------------------------
-// AC5: idle watchdog
+// idle watchdog
 // ---------------------------------------------------------------------------
 
-func TestAC5_IdleTimeoutDetectedAfterDelayButFallbackNotCalled(t *testing.T) {
+func TestIdleTimeoutDetectedAfterDelayButFallbackNotCalled(t *testing.T) {
 	// Tests the idle-watchdog mechanism.
 	//
 	// The timeout check (client.go:499) runs AFTER stream.Next() returns,
@@ -576,21 +576,21 @@ func TestAC5_IdleTimeoutDetectedAfterDelayButFallbackNotCalled(t *testing.T) {
 
 	// Idle timeout IS detected, but only after stream.Next() unblocks
 	if result.Error == "idle timeout" {
-		t.Logf("AC5: idle timeout detected after %v (server delay was %v)", elapsed, delay)
+		t.Logf("idle timeout detected after %v (server delay was %v)", elapsed, delay)
 	} else {
-		t.Errorf("AC5: expected idle timeout, got result.Error=%q", result.Error)
+		t.Errorf("expected idle timeout, got result.Error=%q", result.Error)
 	}
 
 	// Fallback is NOT called on idle timeout (goroutine returns directly)
 	if called {
-		t.Log("AC5: fallback WAS triggered on idle timeout")
+		t.Log("fallback WAS triggered on idle timeout")
 	} else {
-		t.Errorf("AC5 FAIL: fallback NOT triggered on idle timeout — goroutine returns directly without calling onStreamingFallback (client.go:502)")
+		t.Errorf("FAIL: fallback NOT triggered on idle timeout — goroutine returns directly without calling onStreamingFallback (client.go:502)")
 	}
 
 	// Blocks are lost (0 from channel, none in result)
 	if len(blocks) != 0 {
-		t.Errorf("AC5: expected 0 blocks from channel, got %d", len(blocks))
+		t.Errorf("expected 0 blocks from channel, got %d", len(blocks))
 	}
 }
 
@@ -642,7 +642,7 @@ func TestStreamingMultipleContentBlocks(t *testing.T) {
 	}
 }
 
-// TestFallback_NonStreamingMaxTokensConformance is the AC1 conformance test for
+// TestFallback_NonStreamingMaxTokensConformance is the conformance test for
 // the non-streaming fallback path: the non-streaming /v1/messages request must
 // carry max_tokens resolved from the centralized capability table. Unknown models
 // receive the conservative fallback (16384).
@@ -678,6 +678,6 @@ func TestFallback_NonStreamingMaxTokensConformance(t *testing.T) {
 		t.Fatalf("max_tokens is not a number; got %T (%v)", raw, raw)
 	}
 	if int(num) != 16384 {
-		t.Errorf("AC1 FAIL: non-streaming max_tokens = %d; want 16384 (conservative fallback for unknown model)", int(num))
+		t.Errorf("FAIL: non-streaming max_tokens = %d; want 16384 (conservative fallback for unknown model)", int(num))
 	}
 }

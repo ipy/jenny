@@ -13,6 +13,7 @@ import (
 	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/log"
 	"github.com/ipy/jenny/internal/tool"
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // APIClient defines the interface for an LLM API client used for extraction.
@@ -188,7 +189,7 @@ func (sm *SessionMemory) Update(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("reading session memory file stats: %w", err)
 	}
-	currentContent, err := os.ReadFile(sm.memoryFilePath)
+	currentContent, err := utils.ReadFileSafe(sm.memoryFilePath, constants.MaxMemoryFileReadBytes)
 	if err != nil {
 		return fmt.Errorf("reading session memory file: %w", err)
 	}

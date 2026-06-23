@@ -77,8 +77,8 @@ Implement in this order:
    - Positional prompt and `-p` are mutually exclusive (positional wins when both given)
    - `--model` overrides `ANTHROPIC_MODEL`
    - `-r` wired for session resume
-   - `--mcp-config` wired (AC2)
-   - `--continue` wired (AC1-AC10)
+   - `--mcp-config` wired
+   - `--continue` wired
 
 3. - [x] Anthropic API client — [`anthropic-api-client.md`](./arch/anthropic-api-client.md)
    - System prompt is a top-level parameter, not a `role: system` message
@@ -101,7 +101,7 @@ Implement in this order:
    - [x] DeepSeek `extra_body` thinking mode ✓
    - [x] `reasoning_content` parsing and thinking block capture ✓
    - [x] Thinking/signature persistence in `.jsonl` transcripts ✓
-   - [x] Thinking round-trip for tool calls (AC4) ✓
+   - [x] Thinking round-trip for tool calls ✓
    - [x] Backward compatibility for old transcript formats ✓
 
    5. - [x] Core agent loop — [`agent-loop.md`](./arch/agent-loop.md)
@@ -128,22 +128,22 @@ Implement in this order:
 8. - [x] Stream-json output (NDJSON) — [`stream-json.md`](./arch/stream-json.md)
    - One JSON object per line on stdout; debug on stderr
    - Terminal `{ type: "result", session_id, result, usage }` on successful run
-   - stdout guard implemented (AC3)
+   - stdout guard implemented
    - [x] Stream-json output: aggregated user/assistant/result events + parent_tool_use_id field; field order matches reference
 
 9. - [x] Cost / token tracking — [`cost-tracking.md`](./arch/cost-tracking.md)
    - Track input/output tokens plus cache read/creation per model
    - Persist cost state keyed to session ID; restore only on matching resume
    - Emit usage in stream-json `result` line (`cache_read_input_tokens`, `cache_creation_input_tokens`)
-   - All ACs implemented and tested ✓
+   - All acceptance criteria implemented and tested ✓
 
 10. - [x] MCP config (`--mcp-config`) — [`mcp-config.md`](./arch/mcp-config.md)
     - Load multiple config files; expand env vars in server definitions
-    - **AC1-AC5:** All acceptance criteria implemented and tested ✓
+    - All acceptance criteria implemented and tested ✓
 
 11. - [x] MCP client — [`mcp-client.md`](./arch/mcp-client.md) — partial
     - **stdio transport:** connect, initialize, tool discovery, tool dispatch ✓
-    - **AC1-AC5:** All ACs implemented and tested (stdio only this iteration)
+    - All acceptance criteria implemented and tested (stdio only this iteration)
     - **Deferred:** SSE/HTTP/WebSocket, OAuth, binary persistence, content truncation, resource cache, progress events → P4 (per mcp-client.md defer_to: P4)
 
 #### Tools
@@ -161,11 +161,11 @@ Implement in this order:
 1. - [x] Default tool preset / registry — [`tool-registry.md`](./arch/tool-registry.md)
 2. - [x] QueryEngine lifecycle — [`query-engine.md`](./arch/query-engine.md) — done
    - Persist user message to transcript before API loop ✓
-   - AC1-AC5: persist-before-API, maxTurns, flush on completion, RunStream refactor, turn counter ✓
-   - AC4: WireReadFileCache functional at engine.go:109 ✓
+   - persist-before-API, maxTurns, flush on completion, RunStream refactor, turn counter ✓
+   - WireReadFileCache functional at engine.go:109 ✓
    - **Deferred:** cross-turn state (readFileState round-trip, maxBudgetUsd method, permissionDenials queue) → P3
 3. - [x] Git helpers — [`git-helpers.md`](./tools/git-helpers.md) _(moved from P2)_
-4. - [x] System prompt assembly — [`system-prompt.md`](./arch/system-prompt.md) — AC1-AC5 implemented
+4. - [x] System prompt assembly — [`system-prompt.md`](./arch/system-prompt.md) — implemented
 5. - [x] Parallel tool execution — [`parallel-tool-execution.md`](./arch/parallel-tool-execution.md) _(after tools below)_
 6. - [x] Rate limit handling — [`rate-limit-handling.md`](./arch/rate-limit-handling.md)
 
@@ -190,7 +190,7 @@ Implement in this order:
 
 #### Engine
 
-1. - [x] Message normalization — [`message-normalization.md`](./arch/message-normalization.md) — AC1-AC5 implemented
+1. - [x] Message normalization — [`message-normalization.md`](./arch/message-normalization.md) — implemented
 2. - [x] Context compaction — [`context-compaction.md`](./arch/context-compaction.md)
    - [x] Disambiguate max_tokens stop reason (output cap vs. context exhaustion) — [`context-compaction.md#error-reporting-stop_reason-max_tokens`](./arch/context-compaction.md#error-reporting-stop_reason-max_tokens)
 3. - [x] Sandbox abstraction — [`sandbox.md`](./patterns/sandbox.md)

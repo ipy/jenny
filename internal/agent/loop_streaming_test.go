@@ -19,10 +19,10 @@ import (
 	"github.com/ipy/jenny/internal/tool"
 )
 
-// TestAC1_NoStreamRequestStart verifies that stream_request_start is NOT emitted.
+// TestNoStreamRequestStart verifies that stream_request_start is NOT emitted.
 // Per spec: stream_request_start is a jenny extension that Claude Code QueryEngine
 // discards internally, so it should not be present in Jenny's stream-json output.
-func TestAC1_NoStreamRequestStart(t *testing.T) {
+func TestNoStreamRequestStart(t *testing.T) {
 	server := makeMockStreamServer(t, nil)
 	defer server.Close()
 
@@ -73,17 +73,17 @@ func TestAC1_NoStreamRequestStart(t *testing.T) {
 
 	t.Logf("RunStream completed with: %v", err)
 
-	// AC2 verification: stream_request_start should NOT be present
+	// verification: stream_request_start should NOT be present
 	if strings.Contains(output, "stream_request_start") {
-		t.Error("AC2 FAIL: stream_request_start found in stdout output - jenny extension should be removed")
+		t.Error("FAIL: stream_request_start found in stdout output - jenny extension should be removed")
 	} else {
-		t.Log("AC2 PASS: no stream_request_start in output (jenny extension removed)")
+		t.Log("PASS: no stream_request_start in output (jenny extension removed)")
 	}
 }
 
-// TestAC1_NoStreamRequestStartWhenDisabled verifies that stream_request_start
-// is NOT emitted when streaming is disabled (AC1).
-func TestAC1_NoStreamRequestStartWhenDisabled(t *testing.T) {
+// TestNoStreamRequestStartWhenDisabled verifies that stream_request_start
+// is NOT emitted when streaming is disabled.
+func TestNoStreamRequestStartWhenDisabled(t *testing.T) {
 	server := makeMockStreamServer(t, nil)
 	defer server.Close()
 
@@ -123,9 +123,9 @@ func TestAC1_NoStreamRequestStartWhenDisabled(t *testing.T) {
 	t.Logf("RunStream (disabled) completed with: %v", err)
 
 	if strings.Contains(output, "stream_request_start") {
-		t.Error("AC2 FAIL: stream_request_start found in output when cfg.Enabled=false")
+		t.Error("FAIL: stream_request_start found in output when cfg.Enabled=false")
 	} else {
-		t.Log("AC2 PASS: no stream_request_start when disabled")
+		t.Log("PASS: no stream_request_start when disabled")
 	}
 }
 
@@ -175,7 +175,7 @@ func TestStreamEvent_EmittedWhenFlagOn(t *testing.T) {
 	t.Logf("RunStream completed with: %v", err)
 	t.Logf("Output: %s", output)
 
-	// AC1: At least one line satisfies type == "stream_event"
+	// At least one line satisfies type == "stream_event"
 	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
 	hasStreamEvent := false
 	eventTypes := make(map[string]int)
@@ -201,29 +201,29 @@ func TestStreamEvent_EmittedWhenFlagOn(t *testing.T) {
 	}
 
 	if !hasStreamEvent {
-		t.Error("AC1 FAIL: no stream_event found in output when IncludePartial=true")
+		t.Error("FAIL: no stream_event found in output when IncludePartial=true")
 	} else {
-		t.Log("AC1 PASS: stream_event emitted")
+		t.Log("PASS: stream_event emitted")
 	}
 
-	// AC2: message_start, content_block_delta, and message_stop must appear
+	// message_start, content_block_delta, and message_stop must appear
 	requiredTypes := []string{"message_start", "content_block_delta", "message_stop"}
 	for _, et := range requiredTypes {
 		if eventTypes[et] > 0 {
-			t.Logf("AC2 PASS: %s appeared %d times", et, eventTypes[et])
+			t.Logf("PASS: %s appeared %d times", et, eventTypes[et])
 		} else {
-			t.Errorf("AC2 FAIL: %s not found in event types", et)
+			t.Errorf("FAIL: %s not found in event types", et)
 		}
 	}
 
-	// AC7: Every stdout line in stream-json mode parses as valid JSON
+	// Every stdout line in stream-json mode parses as valid JSON
 	for _, line := range lines {
 		if line == "" {
 			continue
 		}
 		var js any
 		if err := json.Unmarshal([]byte(line), &js); err != nil {
-			t.Errorf("AC7 FAIL: line is not valid JSON: %q - error: %v", line, err)
+			t.Errorf("FAIL: line is not valid JSON: %q - error: %v", line, err)
 		}
 	}
 }
@@ -273,15 +273,15 @@ func TestStreamEvent_NotEmittedWhenFlagOff(t *testing.T) {
 
 	t.Logf("RunStream completed with: %v", err)
 
-	// AC6: With flag off, no stream_event lines appear
+	// With flag off, no stream_event lines appear
 	lines := strings.SplitSeq(strings.TrimRight(output, "\n"), "\n")
 	for line := range lines {
 		if strings.Contains(line, `"type":"stream_event"`) {
-			t.Error("AC6 FAIL: stream_event found in output when IncludePartial=false")
+			t.Error("FAIL: stream_event found in output when IncludePartial=false")
 			return
 		}
 	}
-	t.Log("AC6 PASS: no stream_event when flag is off")
+	t.Log("PASS: no stream_event when flag is off")
 }
 
 // TestStreamEvent_NotEmittedOnFallback verifies that stream_event is NOT
@@ -350,15 +350,15 @@ func TestStreamEvent_NotEmittedOnFallback(t *testing.T) {
 	t.Logf("RunStream completed with: %v", err)
 	t.Logf("Fallback called: %v", fallbackCalled)
 
-	// AC5: Even with flag on, no stream_event on fallback
+	// Even with flag on, no stream_event on fallback
 	lines := strings.SplitSeq(strings.TrimRight(output, "\n"), "\n")
 	for line := range lines {
 		if strings.Contains(line, `"type":"stream_event"`) {
-			t.Error("AC5 FAIL: stream_event found in output on fallback")
+			t.Error("FAIL: stream_event found in output on fallback")
 			return
 		}
 	}
-	t.Log("AC5 PASS: no stream_event on fallback")
+	t.Log("PASS: no stream_event on fallback")
 }
 
 func TestStreamEvent_ThinkingAndSignature(t *testing.T) {
@@ -437,34 +437,34 @@ func TestStreamEvent_ThinkingAndSignature(t *testing.T) {
 	<-done // wait for the pipe drainer
 	output := outputBuf.String()
 
-	// AC1: check thinking_delta in stream_event
+	// check thinking_delta in stream_event
 	if !strings.Contains(output, `"type":"thinking_delta"`) {
-		t.Error("AC1 FAIL: thinking_delta not found in stream_event output")
+		t.Error("FAIL: thinking_delta not found in stream_event output")
 	}
 	if !strings.Contains(output, `"thinking":"thinking about it"`) {
-		t.Error("AC1 FAIL: thinking content not found in stream_event output")
+		t.Error("FAIL: thinking content not found in stream_event output")
 	}
 
-	// AC2: check signature_delta in stream_event
+	// check signature_delta in stream_event
 	if !strings.Contains(output, `"type":"signature_delta"`) {
-		t.Error("AC2 FAIL: signature_delta not found in stream_event output")
+		t.Error("FAIL: signature_delta not found in stream_event output")
 	}
 	if !strings.Contains(output, `"signature":"sig-123"`) {
-		t.Error("AC2 FAIL: signature content not found in stream_event output")
+		t.Error("FAIL: signature content not found in stream_event output")
 	}
 
-	// AC5: engine loop should return only the text content as the result.
+	// engine loop should return only the text content as the result.
 	// Iteration 108 fixes the doc-code-thinking-mismatch: thinking content
 	// is now emitted as its own `type: "thinking"` block (visible in the
 	// stream_event/assistant envelopes) and is NOT concatenated into the
 	// text result. The result should therefore equal the text content only.
 	expectedResult := "Hello"
 	if result != expectedResult {
-		t.Errorf("AC5 FAIL: expected result %q (text only; thinking goes to its own block), got %q", expectedResult, result)
+		t.Errorf("FAIL: expected result %q (text only; thinking goes to its own block), got %q", expectedResult, result)
 	}
 }
 
-// TestStreamingFallbackParityPreserved verifies AC5: when streaming channel yields
+// TestStreamingFallbackParityPreserved verifies that when streaming channel yields
 // nothing but streamResult.Blocks is populated (fallback path), exactly one assistant
 // event is emitted.
 func TestStreamingFallbackParityPreserved(t *testing.T) {
@@ -518,7 +518,7 @@ func TestStreamingFallbackParityPreserved(t *testing.T) {
 	t.Logf("RunStream completed with: %v", err)
 	t.Logf("Fallback output:\n%s", output)
 
-	// AC5: Exactly one assistant line on fallback path
+	// Exactly one assistant line on fallback path
 	assistantCount := 0
 	for line := range strings.SplitSeq(output, "\n") {
 		if strings.Contains(line, `"type":"assistant"`) && strings.Contains(line, `"Fallback text"`) {
@@ -526,9 +526,9 @@ func TestStreamingFallbackParityPreserved(t *testing.T) {
 		}
 	}
 	if assistantCount != 1 {
-		t.Errorf("AC5 FAIL: fallback path should emit 1 assistant, got %d", assistantCount)
+		t.Errorf("FAIL: fallback path should emit 1 assistant, got %d", assistantCount)
 	} else {
-		t.Log("AC5 PASS: fallback path emits one assistant")
+		t.Log("PASS: fallback path emits one assistant")
 	}
 }
 
@@ -592,7 +592,7 @@ func multiTurnTextPlusToolUsesServer() *httptest.Server {
 	return ms.Server
 }
 
-// TestStreamingEmitsOneAssistantPerTurn verifies AC1: when a model turn
+// TestStreamingEmitsOneAssistantPerTurn verifies that when a model turn
 // produces text plus two tool_use blocks, exactly ONE "assistant" line is
 // emitted whose message.content array has length 3 in the order
 // [text, tool_use t1 Read, tool_use t2 Bash]. No other assistant line
@@ -618,7 +618,7 @@ func TestStreamingEmitsOneAssistantPerTurn(t *testing.T) {
 		cfg := StreamConfig{
 			Enabled:        true,
 			SessionManager: sessMgr,
-			SessionID:      "sess_ac1_emission",
+			SessionID:      "sess_one_assistant",
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -629,7 +629,7 @@ func TestStreamingEmitsOneAssistantPerTurn(t *testing.T) {
 		t.Fatalf("RunStream error: %v", runErr)
 	}
 
-	// AC1: Aggregate content blocks from all assistant events.
+	// Aggregate content blocks from all assistant events.
 	assistantEvents := parseAssistantEvents(t, output)
 	var allContent []any
 	for _, ev := range assistantEvents {
@@ -640,53 +640,53 @@ func TestStreamingEmitsOneAssistantPerTurn(t *testing.T) {
 		}
 	}
 	if len(allContent) == 0 {
-		t.Fatalf("AC1 FAIL: no assistant content found; assistant events=%d\noutput:\n%s", len(assistantEvents), output)
+		t.Fatalf("FAIL: no assistant content found; assistant events=%d\noutput:\n%s", len(assistantEvents), output)
 	}
-	t.Logf("AC1 PASS: aggregated %d content blocks from %d assistant events", len(allContent), len(assistantEvents))
+	t.Logf("PASS: aggregated %d content blocks from %d assistant events", len(allContent), len(assistantEvents))
 
-	// AC1: Content array length is 4 in the order [text, tool_use t1, tool_use t2] from Turn 1, plus [text] from Turn 2.
+	// Content array length is 4 in the order [text, tool_use t1, tool_use t2] from Turn 1, plus [text] from Turn 2.
 	if len(allContent) != 4 {
-		t.Fatalf("AC1 FAIL: expected total content array length 4, got %d", len(allContent))
+		t.Fatalf("FAIL: expected total content array length 4, got %d", len(allContent))
 	}
 
 	// Index 0: text block with "Hello" (Turn 1)
 	textBlock, ok := allContent[0].(map[string]any)
 	if !ok {
-		t.Fatalf("AC1 FAIL: allContent[0] is not a map: %T", allContent[0])
+		t.Fatalf("FAIL: allContent[0] is not a map: %T", allContent[0])
 	}
 	if textBlock["type"] != "text" || textBlock["text"] != "Hello" {
-		t.Errorf("AC1 FAIL: allContent[0] is not text block with 'Hello': %v", textBlock)
+		t.Errorf("FAIL: allContent[0] is not text block with 'Hello': %v", textBlock)
 	}
 
 	// Index 1: tool_use t1 read (Turn 1)
 	tu1, ok := allContent[1].(map[string]any)
 	if !ok {
-		t.Fatalf("AC1 FAIL: allContent[1] is not a map: %T", allContent[1])
+		t.Fatalf("FAIL: allContent[1] is not a map: %T", allContent[1])
 	}
 	if tu1["type"] != "tool_use" || tu1["id"] != "t1" || tu1["name"] != "Read" {
-		t.Errorf("AC1 FAIL: allContent[1] is not tool_use 't1'/'Read': %v", tu1)
+		t.Errorf("FAIL: allContent[1] is not tool_use 't1'/'Read': %v", tu1)
 	}
 
 	// Index 2: tool_use t2 bash (Turn 1)
 	tu2, ok := allContent[2].(map[string]any)
 	if !ok {
-		t.Fatalf("AC1 FAIL: allContent[2] is not a map: %T", allContent[2])
+		t.Fatalf("FAIL: allContent[2] is not a map: %T", allContent[2])
 	}
 	if tu2["type"] != "tool_use" || tu2["id"] != "t2" || tu2["name"] != "Bash" {
-		t.Errorf("AC1 FAIL: allContent[2] is not tool_use 't2'/'Bash': %v", tu2)
+		t.Errorf("FAIL: allContent[2] is not tool_use 't2'/'Bash': %v", tu2)
 	}
 
 	// Index 3: text block with "done" (Turn 2)
 	textBlock2, ok := allContent[3].(map[string]any)
 	if !ok {
-		t.Fatalf("AC1 FAIL: allContent[3] is not a map: %T", allContent[3])
+		t.Fatalf("FAIL: allContent[3] is not a map: %T", allContent[3])
 	}
 	if textBlock2["type"] != "text" || textBlock2["text"] != "done" {
-		t.Errorf("AC1 FAIL: allContent[3] is not text block with 'done': %v", textBlock2)
+		t.Errorf("FAIL: allContent[3] is not text block with 'done': %v", textBlock2)
 	}
-	t.Log("AC1 PASS: content array order is correct across aggregated events")
+	t.Log("PASS: content array order is correct across aggregated events")
 
-	// AC1: Verify assistant events have correct message ids
+	// Verify assistant events have correct message ids
 	for _, ev := range assistantEvents {
 		if inner, ok := ev["message"].(map[string]any); ok {
 			msgID, _ := inner["id"].(string)
@@ -698,7 +698,7 @@ func TestStreamingEmitsOneAssistantPerTurn(t *testing.T) {
 	}
 }
 
-// TestStreamingNoTextDuplication verifies AC2: across all assistant events in
+// TestStreamingNoTextDuplication verifies that across all assistant events in
 // the turn-1 output, the exact substring "text":"Hello" appears exactly once
 // (regression: before the fix it appeared N times, where N = number of
 // tool_use blocks in the turn).
@@ -723,7 +723,7 @@ func TestStreamingNoTextDuplication(t *testing.T) {
 		cfg := StreamConfig{
 			Enabled:        true,
 			SessionManager: sessMgr,
-			SessionID:      "sess_ac2_no_dup",
+			SessionID:      "sess_no_dup",
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -739,13 +739,13 @@ func TestStreamingNoTextDuplication(t *testing.T) {
 	// text; consolidated emission makes it 1).
 	count := strings.Count(output, `"text":"Hello"`)
 	if count != 1 {
-		t.Errorf("AC2 FAIL: expected 1 occurrence of '\"text\":\"Hello\"' across all assistant events, got %d\noutput:\n%s", count, output)
+		t.Errorf("FAIL: expected 1 occurrence of '\"text\":\"Hello\"' across all assistant events, got %d\noutput:\n%s", count, output)
 	} else {
-		t.Log("AC2 PASS: 'Hello' text body appears exactly once across all assistant events")
+		t.Log("PASS: 'Hello' text body appears exactly once across all assistant events")
 	}
 }
 
-// TestStreamingTextOnlyTurn verifies AC3: a turn that emits text but no
+// TestStreamingTextOnlyTurn verifies that a turn that emits text but no
 // tool_use (and reaches end_turn) produces exactly one assistant line whose
 // content is a single-element array [text]. No empty/null content blocks, no
 // tool_use content blocks.
@@ -791,7 +791,7 @@ func TestStreamingTextOnlyTurn(t *testing.T) {
 		cfg := StreamConfig{
 			Enabled:        true,
 			SessionManager: sessMgr,
-			SessionID:      "sess_ac3_text_only",
+			SessionID:      "sess_text_only",
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -802,52 +802,52 @@ func TestStreamingTextOnlyTurn(t *testing.T) {
 		t.Fatalf("RunStream error: %v", runErr)
 	}
 
-	// AC3: At least one assistant line (content stop + final usage).
+	// At least one assistant line (content stop + final usage).
 	assistantEvents := parseAssistantEvents(t, output)
 	if len(assistantEvents) < 1 {
-		t.Fatalf("AC3 FAIL: expected at least 1 assistant event, got %d\noutput:\n%s", len(assistantEvents), output)
+		t.Fatalf("FAIL: expected at least 1 assistant event, got %d\noutput:\n%s", len(assistantEvents), output)
 	}
-	t.Logf("AC3 PASS: got %d assistant events", len(assistantEvents))
+	t.Logf("PASS: got %d assistant events", len(assistantEvents))
 
-	// AC3: Content is a single-element array [text].
+	// Content is a single-element array [text].
 	ev := assistantEvents[0]
 	inner, ok := ev["message"].(map[string]any)
 	if !ok {
-		t.Fatalf("AC3 FAIL: assistant.message is not a map: %T", ev["message"])
+		t.Fatalf("FAIL: assistant.message is not a map: %T", ev["message"])
 	}
 	content, ok := inner["content"].([]any)
 	if !ok {
-		t.Fatalf("AC3 FAIL: assistant.message.content is not an array: %T", inner["content"])
+		t.Fatalf("FAIL: assistant.message.content is not an array: %T", inner["content"])
 	}
 	if len(content) != 1 {
-		t.Fatalf("AC3 FAIL: content array length = %d, want 1", len(content))
+		t.Fatalf("FAIL: content array length = %d, want 1", len(content))
 	}
 	block, ok := content[0].(map[string]any)
 	if !ok {
-		t.Fatalf("AC3 FAIL: content[0] is not a map: %T", content[0])
+		t.Fatalf("FAIL: content[0] is not a map: %T", content[0])
 	}
 	if block["type"] != "text" {
-		t.Errorf("AC3 FAIL: content[0].type = %v, want 'text'", block["type"])
+		t.Errorf("FAIL: content[0].type = %v, want 'text'", block["type"])
 	}
 	if block["text"] != "just-text" {
-		t.Errorf("AC3 FAIL: content[0].text = %v, want 'just-text'", block["text"])
+		t.Errorf("FAIL: content[0].text = %v, want 'just-text'", block["text"])
 	}
-	t.Log("AC3 PASS: content is a single-element [text] array")
+	t.Log("PASS: content is a single-element [text] array")
 
-	// AC3: No empty/null content blocks, no tool_use blocks.
+	// No empty/null content blocks, no tool_use blocks.
 	for i, item := range content {
 		b, ok := item.(map[string]any)
 		if !ok {
 			continue
 		}
 		if b["type"] == "tool_use" {
-			t.Errorf("AC3 FAIL: content[%d] is a tool_use block (text-only turn must not emit tool_use)", i)
+			t.Errorf("FAIL: content[%d] is a tool_use block (text-only turn must not emit tool_use)", i)
 		}
 	}
-	t.Log("AC3 PASS: no tool_use blocks in text-only turn")
+	t.Log("PASS: no tool_use blocks in text-only turn")
 }
 
-// TestStreamingToolUseOnlyTurn verifies AC4: a turn that emits one or more
+// TestStreamingToolUseOnlyTurn verifies that a turn that emits one or more
 // tool_use blocks and no text produces exactly one assistant line whose
 // content array contains only the tool_use block(s) — no text block, no
 // empty-string text block.

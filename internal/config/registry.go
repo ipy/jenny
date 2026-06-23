@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/log"
 	"github.com/knadh/koanf/v2"
 )
@@ -245,7 +246,7 @@ func (r *ModelRegistry) fetchWithContext(ctx context.Context) error {
 	}
 
 	// Read response body
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, constants.MaxHTTPBodyReadBytes))
 	if err != nil {
 		log.Warn("registry fetch: failed to read body", "error", err)
 		return err

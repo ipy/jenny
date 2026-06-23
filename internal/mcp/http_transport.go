@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/log"
 )
 
@@ -433,7 +434,7 @@ func (t *HTTPTransport) parseResponse(resp *http.Response, requestID any) (*json
 
 // parseJSONResponse parses a single JSON-RPC response from the body.
 func (t *HTTPTransport) parseJSONResponse(body io.Reader) (*jsonRPCResponse, error) {
-	data, err := io.ReadAll(body)
+	data, err := io.ReadAll(io.LimitReader(body, constants.MaxMCPResponseReadBytes))
 	if err != nil {
 		return nil, fmt.Errorf("reading response body: %w", err)
 	}

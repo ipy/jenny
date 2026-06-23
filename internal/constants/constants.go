@@ -111,3 +111,23 @@ func SpillsDir(sessionID ...string) string {
 // MaxTombstoneRewriteBytes is the maximum file size (50 MiB) before a tombstone
 // rewrite or full rewrite operation is refused to prevent OOM.
 const MaxTombstoneRewriteBytes = 50 * 1024 * 1024
+
+// MaxTranscriptReadBytes is the maximum transcript file size (100 MiB) that
+// will be read into memory. Larger transcripts are truncated.
+const MaxTranscriptReadBytes = 100 * 1024 * 1024
+
+// MaxMemoryFileReadBytes is the maximum size (10 MiB) for reading memory
+// files (MEMORY.md, per-topic .md files). Larger files are truncated.
+const MaxMemoryFileReadBytes = 10 * 1024 * 1024
+
+// MaxCLIPromptReadBytes is the maximum size (10 MiB) for reading CLI
+// prompt files and stdin. Larger input is truncated.
+const MaxCLIPromptReadBytes = 10 * 1024 * 1024
+
+// MaxHTTPBodyReadBytes is the maximum size (10 MiB) for reading HTTP
+// response bodies. Larger responses are truncated.
+const MaxHTTPBodyReadBytes = 10 * 1024 * 1024
+
+// MaxMCPResponseReadBytes is the maximum size (100 MiB) for reading MCP
+// HTTP response bodies. Larger responses are truncated.
+const MaxMCPResponseReadBytes = 100 * 1024 * 1024

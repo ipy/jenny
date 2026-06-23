@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 
 	"github.com/ipy/jenny/internal/constants"
+	"github.com/ipy/jenny/internal/utils"
 )
 
 // CleanUsage is the human-readable help text printed by `jenny clean --help`
@@ -39,7 +40,7 @@ func RunClean(dryRun bool, stdout, stderr io.Writer) int {
 	home := constants.JennyHomeDir()
 	sessionsDir := filepath.Join(home, "sessions")
 
-	entries, err := os.ReadDir(sessionsDir)
+	entries, err := utils.ReadDirSafe(sessionsDir, 0)
 	if err != nil {
 		if os.IsNotExist(err) {
 			fmt.Fprintln(stdout, "nothing to clean")

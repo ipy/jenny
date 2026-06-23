@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/ipy/jenny/internal/constants"
+	"github.com/ipy/jenny/internal/utils"
 )
 
 const (
@@ -225,7 +228,7 @@ func (m *Memdir) TopicPath(memType MemoryType, name string) string {
 // If truncated, the content will include a warning identifying which cap fired.
 func (m *Memdir) ReadIndex() (string, error) {
 	indexPath := m.IndexPath()
-	data, err := os.ReadFile(indexPath)
+		data, err := utils.ReadFileSafe(indexPath, constants.MaxMemoryFileReadBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", nil
@@ -354,7 +357,7 @@ func (m *Memdir) ListTopicFiles(memType MemoryType) ([]string, error) {
 	}
 
 	subdir := filepath.Join(m.memoryPath, string(memType))
-	entries, err := os.ReadDir(subdir)
+	entries, err := utils.ReadDirSafe(subdir, 0)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil

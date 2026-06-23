@@ -12,7 +12,7 @@ func TestSystemPromptDefault(t *testing.T) {
 		{
 			ID:          "system-prompt.default.contains-identity",
 			Category:    "system-prompt",
-			Description: "default prompt starts with AI assistant identity",
+			Description: "default prompt starts with agent identity",
 			Target: harness.TargetInvocation{
 				Kind: "cli",
 				Args: []string{"--print-system-prompt"},
@@ -20,7 +20,7 @@ func TestSystemPromptDefault(t *testing.T) {
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,
 				Stdout: &harness.StdoutExpectation{
-					Contains: []string{"AI assistant"},
+					Contains: []string{"non-interactive autonomous agent"},
 				},
 			},
 		},
@@ -153,7 +153,7 @@ func TestSystemPromptCustom(t *testing.T) {
 				ExitCode: 0,
 				Stdout: &harness.StdoutExpectation{
 					Contains:    []string{"custom test agent"},
-					NotContains: []string{"AI assistant"},
+					NotContains: []string{"non-interactive autonomous agent"},
 				},
 			},
 		},
@@ -174,7 +174,7 @@ func TestSystemPromptAppend(t *testing.T) {
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,
 				Stdout: &harness.StdoutExpectation{
-					Contains: []string{"AI assistant", "APPENDED_CUSTOM_TEXT_XYZ"},
+					Contains: []string{"non-interactive autonomous agent", "APPENDED_CUSTOM_TEXT_XYZ"},
 				},
 			},
 		},
@@ -214,7 +214,7 @@ func TestSystemPromptPrepend(t *testing.T) {
 			Expected: harness.ExpectedBehavior{
 				ExitCode: 0,
 				Stdout: &harness.StdoutExpectation{
-					Contains: []string{"AI assistant", "PREPENDED_CUSTOM_TEXT_XYZ"},
+					Contains: []string{"non-interactive autonomous agent", "PREPENDED_CUSTOM_TEXT_XYZ"},
 				},
 			},
 		},

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/git"
@@ -55,7 +56,8 @@ func (p *Portal) handleMarketplaceBrowse(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Fetch marketplace index
-	resp, err := http.Get(source)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(source)
 	if err != nil {
 		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadGateway)
 		return
@@ -67,7 +69,7 @@ func (p *Portal) handleMarketplaceBrowse(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, constants.MaxHTTPBodyReadBytes))
 	if err != nil {
 		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadGateway)
 		return
@@ -276,7 +278,8 @@ func (p *Portal) handleMarketplaceInstall(w http.ResponseWriter, r *http.Request
 
 // downloadAndExtract downloads a tar.gz file from the given URL and extracts it to destDir.
 func downloadAndExtract(url, destDir string) error {
-	resp, err := http.Get(url)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(url)
 	if err != nil {
 		return fmt.Errorf("failed to download: %w", err)
 	}

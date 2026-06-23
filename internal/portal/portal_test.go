@@ -19,8 +19,8 @@ import (
 	"time"
 )
 
-// TestAC1_PortalStart verifies AC1: portal starts on a random high port and creates lockfile.
-func TestAC1_PortalStart(t *testing.T) {
+// TestPortalStart verifies portal starts on a random high port and creates lockfile.
+func TestPortalStart(t *testing.T) {
 	// Create temp jenny dir
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
@@ -37,16 +37,16 @@ func TestAC1_PortalStart(t *testing.T) {
 
 	// Verify port >= 33669
 	if p.port < 33669 {
-		t.Errorf("AC1 FAIL: port %d < 33669", p.port)
+		t.Errorf("FAIL: port %d < 33669", p.port)
 	}
 
 	// Verify auth token is 64 hex chars
 	if len(p.authToken) != 64 {
-		t.Errorf("AC1 FAIL: auth token length %d != 64", len(p.authToken))
+		t.Errorf("FAIL: auth token length %d != 64", len(p.authToken))
 	}
 	for _, c := range p.authToken {
 		if !strings.Contains("0123456789abcdef", string(c)) {
-			t.Errorf("AC1 FAIL: auth token contains non-hex char: %c", c)
+			t.Errorf("FAIL: auth token contains non-hex char: %c", c)
 		}
 	}
 
@@ -54,29 +54,29 @@ func TestAC1_PortalStart(t *testing.T) {
 	lockPath := filepath.Join(tmpDir, "portal.lock")
 	data, err := os.ReadFile(lockPath)
 	if err != nil {
-		t.Fatal("AC1 FAIL: lockfile not found")
+		t.Fatal("FAIL: lockfile not found")
 	}
 
 	var lf LockfileData
 	if err := json.Unmarshal(data, &lf); err != nil {
-		t.Fatal("AC1 FAIL: invalid lockfile JSON")
+		t.Fatal("FAIL: invalid lockfile JSON")
 	}
 
 	if lf.PID != p.pid {
-		t.Errorf("AC1 FAIL: lockfile pid %d != portal pid %d", lf.PID, p.pid)
+		t.Errorf("FAIL: lockfile pid %d != portal pid %d", lf.PID, p.pid)
 	}
 	if lf.Port != p.port {
-		t.Errorf("AC1 FAIL: lockfile port %d != portal port %d", lf.Port, p.port)
+		t.Errorf("FAIL: lockfile port %d != portal port %d", lf.Port, p.port)
 	}
 	if lf.AuthToken != p.authToken {
-		t.Errorf("AC1 FAIL: lockfile token != portal token")
+		t.Errorf("FAIL: lockfile token != portal token")
 	}
 
-	t.Log("AC1 PASS: portal started on random high port with valid lockfile")
+	t.Log("PASS: portal started on random high port with valid lockfile")
 }
 
-// TestAC2_HealthEndpoint verifies AC2: health endpoint with auth token.
-func TestAC2_HealthEndpoint(t *testing.T) {
+// TestHealthEndpoint verifies health endpoint with auth token.
+func TestHealthEndpoint(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
 		t.Fatal(err)
@@ -98,7 +98,7 @@ func TestAC2_HealthEndpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	if resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("AC2 FAIL: wrong token should return 401, got %d", resp.StatusCode)
+		t.Errorf("FAIL: wrong token should return 401, got %d", resp.StatusCode)
 	}
 	resp.Body.Close()
 
@@ -108,7 +108,7 @@ func TestAC2_HealthEndpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("AC2 FAIL: correct token should return 200, got %d", resp.StatusCode)
+		t.Errorf("FAIL: correct token should return 200, got %d", resp.StatusCode)
 	}
 
 	var result map[string]any
@@ -118,18 +118,18 @@ func TestAC2_HealthEndpoint(t *testing.T) {
 	resp.Body.Close()
 
 	if result["status"] != "ok" {
-		t.Errorf("AC2 FAIL: status should be 'ok', got %v", result["status"])
+		t.Errorf("FAIL: status should be 'ok', got %v", result["status"])
 	}
 	if pid, ok := result["pid"].(float64); !ok || int(pid) != p.pid {
-		t.Errorf("AC2 FAIL: pid mismatch: got %v, want %d", result["pid"], p.pid)
+		t.Errorf("FAIL: pid mismatch: got %v, want %d", result["pid"], p.pid)
 	}
 
-	t.Log("AC2 PASS: health endpoint returns correct status with auth")
+	t.Log("PASS: health endpoint returns correct status with auth")
 }
 
-// TestAC7_IdleTimeout verifies AC7: portal exits after idle timeout.
+// TestIdleTimeout verifies portal exits after idle timeout.
 // Uses injectable exit function to avoid os.Exit panic in tests.
-func TestAC7_IdleTimeout(t *testing.T) {
+func TestIdleTimeout(t *testing.T) {
 	// Create temp jenny dir
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
@@ -154,20 +154,20 @@ func TestAC7_IdleTimeout(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	if !exitCalled {
-		t.Error("AC7 FAIL: exit function should have been called after idle timeout")
+		t.Error("FAIL: exit function should have been called after idle timeout")
 	}
 
 	// Verify lockfile was deleted
 	lockPath := filepath.Join(tmpDir, "portal.lock")
 	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
-		t.Errorf("AC7 FAIL: lockfile should be deleted after idle timeout, got error: %v", err)
+		t.Errorf("FAIL: lockfile should be deleted after idle timeout, got error: %v", err)
 	}
 
-	t.Log("AC7 PASS: portal exits after idle timeout and deletes lockfile")
+	t.Log("PASS: portal exits after idle timeout and deletes lockfile")
 }
 
-// TestAC8_DoubleStart verifies AC8: second portal start fails with appropriate error.
-func TestAC8_DoubleStart(t *testing.T) {
+// TestDoubleStart verifies second portal start fails with appropriate error.
+func TestDoubleStart(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
 		t.Fatal(err)
@@ -184,15 +184,15 @@ func TestAC8_DoubleStart(t *testing.T) {
 	// Try to start second portal
 	_, err = startWithConfig(ctx, tmpDir, 10*time.Minute)
 	if err == nil {
-		t.Error("AC8 FAIL: second portal start should fail")
+		t.Error("FAIL: second portal start should fail")
 	} else if !strings.Contains(err.Error(), "portal already running") {
-		t.Errorf("AC8 FAIL: error should mention 'portal already running', got: %v", err)
+		t.Errorf("FAIL: error should mention 'portal already running', got: %v", err)
 	}
 
-	t.Log("AC8 PASS: second portal start correctly fails")
+	t.Log("PASS: second portal start correctly fails")
 }
 
-// TestSessionList verifies AC3: sessions endpoint returns session list.
+// TestSessionList verifies sessions endpoint returns session list.
 func TestSessionList(t *testing.T) {
 	// Set JENNY_HOME to temp dir so we get a clean session directory
 	tmpDir := t.TempDir()
@@ -259,10 +259,10 @@ func TestSessionList(t *testing.T) {
 		t.Errorf("session %s not found in sessions list", sessionID)
 	}
 
-	t.Log("AC3 PASS: sessions endpoint returns correct session list")
+	t.Log("PASS: sessions endpoint returns correct session list")
 }
 
-// TestStatsEndpoint verifies AC6: stats endpoint returns global stats.
+// TestStatsEndpoint verifies stats endpoint returns global stats.
 func TestStatsEndpoint(t *testing.T) {
 	// Set JENNY_HOME to temp dir so we get a clean session directory
 	tmpDir := t.TempDir()
@@ -296,11 +296,11 @@ func TestStatsEndpoint(t *testing.T) {
 		t.Errorf("total_sessions should be 0, got %d", stats.TotalSessions)
 	}
 
-	t.Log("AC6 PASS: stats endpoint returns valid stats structure")
+	t.Log("PASS: stats endpoint returns valid stats structure")
 }
 
-// TestAC6_TokenCount verifies AC6: stats endpoint correctly counts tokens (not double-counting).
-func TestAC6_TokenCount(t *testing.T) {
+// TestTokenCount verifies stats endpoint correctly counts tokens (not double-counting).
+func TestTokenCount(t *testing.T) {
 	// Set JENNY_HOME to temp dir so we get a clean session directory
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
@@ -349,13 +349,13 @@ func TestAC6_TokenCount(t *testing.T) {
 
 	// Verify total_tokens is 600 (not 1200 which would be double-counting)
 	if stats.TotalTokens != 600 {
-		t.Errorf("AC6 FAIL: total_tokens should be 600, got %d", stats.TotalTokens)
+		t.Errorf("FAIL: total_tokens should be 600, got %d", stats.TotalTokens)
 	}
 
-	t.Log("AC6 PASS: token counting is correct (not double-counted)")
+	t.Log("PASS: token counting is correct (not double-counted)")
 }
 
-// TestKillSession verifies AC5: kill endpoint terminates session.
+// TestKillSession verifies kill endpoint terminates session.
 func TestKillSession(t *testing.T) {
 	// Set JENNY_HOME to temp dir so we get a clean session directory
 	tmpDir := t.TempDir()
@@ -406,10 +406,10 @@ func TestKillSession(t *testing.T) {
 	resp.Body.Close()
 
 	if result["status"] != "killed" {
-		t.Errorf("AC5 FAIL: status should be 'killed', got %v", result["status"])
+		t.Errorf("FAIL: status should be 'killed', got %v", result["status"])
 	}
 
-	t.Log("AC5 PASS: kill endpoint terminates session process")
+	t.Log("PASS: kill endpoint terminates session process")
 }
 
 // TestMissingAuth verifies endpoints require auth token.
@@ -467,8 +467,8 @@ func TestProcessLiveness(t *testing.T) {
 	t.Log("PASS: process liveness detection works correctly")
 }
 
-// TestAC6_ServeHTML verifies AC6: GET / serves index.html from embedded webui dist.
-func TestAC6_ServeHTML(t *testing.T) {
+// TestServeHTML verifies GET / serves index.html from embedded webui dist.
+func TestServeHTML(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
 		t.Fatal(err)
@@ -492,12 +492,12 @@ func TestAC6_ServeHTML(t *testing.T) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("AC6 FAIL: GET / should return 200, got %d", resp.StatusCode)
+		t.Errorf("FAIL: GET / should return 200, got %d", resp.StatusCode)
 	}
 
 	contentType := resp.Header.Get("Content-Type")
 	if !strings.Contains(contentType, "text/html") {
-		t.Errorf("AC6 FAIL: Content-Type should be text/html, got %s", contentType)
+		t.Errorf("FAIL: Content-Type should be text/html, got %s", contentType)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -506,14 +506,14 @@ func TestAC6_ServeHTML(t *testing.T) {
 	}
 
 	if !strings.Contains(string(body), "<title>Jenny Portal") {
-		t.Errorf("AC6 FAIL: response body should contain '<title>Jenny Portal', got: %s", string(body)[:200])
+		t.Errorf("FAIL: response body should contain '<title>Jenny Portal', got: %s", string(body)[:200])
 	}
 
-	t.Log("AC6 PASS: GET / serves index.html with correct content-type and title")
+	t.Log("PASS: GET / serves index.html with correct content-type and title")
 }
 
-// TestAC7_EmptyStats verifies AC7: stats endpoint returns zeroed JSON when no sessions exist.
-func TestAC7_EmptyStats(t *testing.T) {
+// TestEmptyStats verifies stats endpoint returns zeroed JSON when no sessions exist.
+func TestEmptyStats(t *testing.T) {
 	// Set JENNY_HOME to temp dir so we get a clean session directory
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
@@ -534,7 +534,7 @@ func TestAC7_EmptyStats(t *testing.T) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("AC7 FAIL: stats endpoint should return 200, got %d", resp.StatusCode)
+		t.Errorf("FAIL: stats endpoint should return 200, got %d", resp.StatusCode)
 	}
 
 	var stats Stats
@@ -544,23 +544,23 @@ func TestAC7_EmptyStats(t *testing.T) {
 
 	// Verify all fields are zeroed
 	if stats.TotalSessions != 0 {
-		t.Errorf("AC7 FAIL: total_sessions should be 0, got %d", stats.TotalSessions)
+		t.Errorf("FAIL: total_sessions should be 0, got %d", stats.TotalSessions)
 	}
 	if stats.ActiveSessions != 0 {
-		t.Errorf("AC7 FAIL: active_sessions should be 0, got %d", stats.ActiveSessions)
+		t.Errorf("FAIL: active_sessions should be 0, got %d", stats.ActiveSessions)
 	}
 	if stats.TotalCostUSD != 0 {
-		t.Errorf("AC7 FAIL: total_cost_usd should be 0, got %f", stats.TotalCostUSD)
+		t.Errorf("FAIL: total_cost_usd should be 0, got %f", stats.TotalCostUSD)
 	}
 	if stats.TotalTokens != 0 {
-		t.Errorf("AC7 FAIL: total_tokens should be 0, got %d", stats.TotalTokens)
+		t.Errorf("FAIL: total_tokens should be 0, got %d", stats.TotalTokens)
 	}
 
-	t.Log("AC7 PASS: stats endpoint returns zeroed JSON when no sessions exist")
+	t.Log("PASS: stats endpoint returns zeroed JSON when no sessions exist")
 }
 
-// TestAC3_URLFileCleanup verifies AC3: portal URL file is deleted on shutdown.
-func TestAC3_URLFileCleanup(t *testing.T) {
+// TestURLFileCleanup verifies portal URL file is deleted on shutdown.
+func TestURLFileCleanup(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
 		t.Fatal(err)
@@ -583,7 +583,7 @@ func TestAC3_URLFileCleanup(t *testing.T) {
 
 	// Verify URL file exists
 	if _, err := os.Stat(urlFile); os.IsNotExist(err) {
-		t.Fatal("AC3 FAIL: URL file should exist before shutdown")
+		t.Fatal("FAIL: URL file should exist before shutdown")
 	}
 
 	// Shutdown portal
@@ -593,15 +593,15 @@ func TestAC3_URLFileCleanup(t *testing.T) {
 
 	// Verify URL file is deleted
 	if _, err := os.Stat(urlFile); !os.IsNotExist(err) {
-		t.Error("AC3 FAIL: URL file should be deleted after shutdown")
+		t.Error("FAIL: URL file should be deleted after shutdown")
 	}
 
-	t.Log("AC3 PASS: portal URL file is deleted on shutdown")
+	t.Log("PASS: portal URL file is deleted on shutdown")
 }
 
-// TestAC2_WritePortalURLFile verifies AC2: WritePortalURLFile helper creates URL file correctly.
+// TestWritePortalURLFile verifies WritePortalURLFile helper creates URL file correctly.
 // This test exercises the WritePortalURLFile method that cmd/jenny/portal.go uses in non-interactive mode.
-func TestAC2_WritePortalURLFile(t *testing.T) {
+func TestWritePortalURLFile(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
 		t.Fatal(err)
@@ -616,24 +616,24 @@ func TestAC2_WritePortalURLFile(t *testing.T) {
 
 	// Call WritePortalURLFile to write the URL file (what cmd/jenny/portal.go does)
 	if err := p.WritePortalURLFile(); err != nil {
-		t.Fatal("AC2 FAIL: WritePortalURLFile failed: ", err)
+		t.Fatal("FAIL: WritePortalURLFile failed: ", err)
 	}
 
 	// Verify the URL file was created
 	urlFile := p.PortalURLFile()
 	if _, err := os.Stat(urlFile); os.IsNotExist(err) {
-		t.Fatal("AC2 FAIL: URL file should exist after WritePortalURLFile")
+		t.Fatal("FAIL: URL file should exist after WritePortalURLFile")
 	}
 
 	// Verify the URL file has the expected content
 	content, err := os.ReadFile(urlFile)
 	if err != nil {
-		t.Fatal("AC2 FAIL: could not read portal.url file")
+		t.Fatal("FAIL: could not read portal.url file")
 	}
 
 	expectedURL := fmt.Sprintf("http://127.0.0.1:%d?token=%s", p.port, p.authToken)
 	if !strings.Contains(string(content), expectedURL) {
-		t.Errorf("AC2 FAIL: URL file should contain '%s', got: %s", expectedURL, string(content))
+		t.Errorf("FAIL: URL file should contain '%s', got: %s", expectedURL, string(content))
 	}
 
 	// Shutdown portal
@@ -641,15 +641,15 @@ func TestAC2_WritePortalURLFile(t *testing.T) {
 
 	// Verify URL file is deleted after shutdown
 	if _, err := os.Stat(urlFile); !os.IsNotExist(err) {
-		t.Error("AC2 FAIL: portal.url should be deleted after shutdown")
+		t.Error("FAIL: portal.url should be deleted after shutdown")
 	}
 
-	t.Log("AC2 PASS: WritePortalURLFile creates URL file correctly")
+	t.Log("PASS: WritePortalURLFile creates URL file correctly")
 }
 
-// TestAC2_NonInteractiveURLWrite verifies AC2: portal writes URL file in non-interactive mode.
+// TestNonInteractiveURLWrite verifies portal writes URL file in non-interactive mode.
 // This tests the actual code path that cmd/jenny/portal.go uses when !isInteractive().
-func TestAC2_NonInteractiveURLWrite(t *testing.T) {
+func TestNonInteractiveURLWrite(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
 		t.Fatal(err)
@@ -674,16 +674,16 @@ func TestAC2_NonInteractiveURLWrite(t *testing.T) {
 	// Verify the URL file has the expected content
 	content, err := os.ReadFile(urlFile)
 	if err != nil {
-		t.Fatal("AC2 FAIL: could not read portal.url file")
+		t.Fatal("FAIL: could not read portal.url file")
 	}
 	if !strings.Contains(string(content), url) {
-		t.Errorf("AC2 FAIL: URL file should contain '%s', got: %s", url, string(content))
+		t.Errorf("FAIL: URL file should contain '%s', got: %s", url, string(content))
 	}
 
 	// Also verify the PortalURLFile() helper returns the correct path
 	expectedPath := filepath.Join(tmpDir, "portal.url")
 	if p.PortalURLFile() != expectedPath {
-		t.Errorf("AC2 FAIL: PortalURLFile() should return '%s', got: %s", expectedPath, p.PortalURLFile())
+		t.Errorf("FAIL: PortalURLFile() should return '%s', got: %s", expectedPath, p.PortalURLFile())
 	}
 
 	// Cleanup
@@ -691,15 +691,15 @@ func TestAC2_NonInteractiveURLWrite(t *testing.T) {
 
 	// Verify URL file is deleted after shutdown
 	if _, err := os.Stat(urlFile); !os.IsNotExist(err) {
-		t.Error("AC2 FAIL: portal.url should be deleted after shutdown")
+		t.Error("FAIL: portal.url should be deleted after shutdown")
 	}
 
-	t.Log("AC2 PASS: non-interactive URL file write and cleanup works correctly")
+	t.Log("PASS: non-interactive URL file write and cleanup works correctly")
 }
 
-// TestAC2_ShutdownOrder verifies AC3: URL file is removed before lockfile on shutdown.
+// TestShutdownOrder verifies URL file is removed before lockfile on shutdown.
 // This order prevents a stale lockfile check from racing with a fresh portal.url from a new instance.
-func TestAC2_ShutdownOrder(t *testing.T) {
+func TestShutdownOrder(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
 		t.Fatal(err)
@@ -732,18 +732,18 @@ func TestAC2_ShutdownOrder(t *testing.T) {
 
 	// Verify URL file is deleted first
 	if _, err := os.Stat(urlPath); !os.IsNotExist(err) {
-		t.Error("AC3 FAIL: URL file should be deleted first")
+		t.Error("FAIL: URL file should be deleted first")
 	}
 
 	// Verify lockfile is deleted after
 	if _, err := os.Stat(lockPath); !os.IsNotExist(err) {
-		t.Error("AC3 FAIL: lockfile should be deleted after URL file")
+		t.Error("FAIL: lockfile should be deleted after URL file")
 	}
 
-	t.Log("AC3 PASS: shutdown order correct - URL file removed before lockfile")
+	t.Log("PASS: shutdown order correct - URL file removed before lockfile")
 }
 
-// TestStartSession verifies AC1: POST /api/sessions/start spawns a subprocess and returns session info.
+// TestStartSession verifies POST /api/sessions/start spawns a subprocess and returns session info.
 func TestStartSession(t *testing.T) {
 	// Set JENNY_HOME to temp dir
 	tmpDir := t.TempDir()
@@ -811,10 +811,10 @@ func TestStartSession(t *testing.T) {
 		t.Error("pid file should exist")
 	}
 
-	t.Log("AC1 PASS: start session spawns subprocess and returns session info")
+	t.Log("PASS: start session spawns subprocess and returns session info")
 }
 
-// TestResumeSession verifies AC2: POST /api/sessions/:id/resume resumes a session.
+// TestResumeSession verifies POST /api/sessions/:id/resume resumes a session.
 func TestResumeSession(t *testing.T) {
 	// Set JENNY_HOME to temp dir
 	tmpDir := t.TempDir()
@@ -881,7 +881,7 @@ func TestResumeSession(t *testing.T) {
 		t.Error("pid should not be 0")
 	}
 
-	t.Log("AC2 PASS: resume session spawns subprocess with session ID")
+	t.Log("PASS: resume session spawns subprocess with session ID")
 }
 
 // TestStartSessionValidation verifies validation for POST /api/sessions/start.
@@ -928,7 +928,7 @@ func TestStartSessionValidation(t *testing.T) {
 	t.Log("PASS: start session validation works correctly")
 }
 
-// TestStartSession_WithModel verifies AC1: backend accepts optional model field.
+// TestStartSession_WithModel verifies backend accepts optional model field.
 func TestStartSession_WithModel(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
@@ -942,7 +942,7 @@ func TestStartSession_WithModel(t *testing.T) {
 
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", p.port)
 
-	// AC1: POST with model field should be accepted (not return 400)
+	// POST with model field should be accepted (not return 400)
 	body := `{"prompt":"test","model":"deepseek-v4-flash"}`
 	req, _ := http.NewRequest("POST", baseURL+"/api/sessions/start?token="+p.authToken, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -954,17 +954,17 @@ func TestStartSession_WithModel(t *testing.T) {
 
 	// The model field should be accepted - not return 400
 	if resp.StatusCode == http.StatusBadRequest {
-		t.Error("AC1 FAIL: model field should be accepted, not rejected with 400")
+		t.Error("FAIL: model field should be accepted, not rejected with 400")
 	}
 	// Accept 200 (success) or 500 (subprocess spawn failure - os.Executable returns test binary)
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusInternalServerError {
-		t.Errorf("AC1 FAIL: expected 200 or 500, got %d", resp.StatusCode)
+		t.Errorf("FAIL: expected 200 or 500, got %d", resp.StatusCode)
 	}
 
-	t.Log("AC1 PASS: backend accepts optional model field on start session")
+	t.Log("PASS: backend accepts optional model field on start session")
 }
 
-// TestStartSession_WithCWD verifies AC2: backend accepts optional cwd field.
+// TestStartSession_WithCWD verifies backend accepts optional cwd field.
 func TestStartSession_WithCWD(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
@@ -978,7 +978,7 @@ func TestStartSession_WithCWD(t *testing.T) {
 
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", p.port)
 
-	// AC2: POST with cwd field should be accepted (not return 400)
+	// POST with cwd field should be accepted (not return 400)
 	// Use a temp directory that exists for cross-platform compatibility
 	cwdPath := tmpDir
 	body := fmt.Sprintf(`{"prompt":"test","cwd":%q}`, cwdPath)
@@ -992,17 +992,17 @@ func TestStartSession_WithCWD(t *testing.T) {
 
 	// The cwd field should be accepted - not return 400
 	if resp.StatusCode == http.StatusBadRequest {
-		t.Error("AC2 FAIL: cwd field should be accepted, not rejected with 400")
+		t.Error("FAIL: cwd field should be accepted, not rejected with 400")
 	}
 	// Accept 200 (success) or 500 (subprocess spawn failure)
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusInternalServerError {
-		t.Errorf("AC2 FAIL: expected 200 or 500, got %d", resp.StatusCode)
+		t.Errorf("FAIL: expected 200 or 500, got %d", resp.StatusCode)
 	}
 
-	t.Log("AC2 PASS: backend accepts optional cwd field on start session")
+	t.Log("PASS: backend accepts optional cwd field on start session")
 }
 
-// TestDeleteSession verifies AC1: delete endpoint removes session directory.
+// TestDeleteSession verifies delete endpoint removes session directory.
 func TestDeleteSession(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
@@ -1055,10 +1055,10 @@ func TestDeleteSession(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	t.Log("AC1 PASS: delete endpoint removes session directory")
+	t.Log("PASS: delete endpoint removes session directory")
 }
 
-// TestDeleteRunningSession verifies AC1: deleting running session returns 409.
+// TestDeleteRunningSession verifies deleting running session returns 409.
 func TestDeleteRunningSession(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
@@ -1098,10 +1098,10 @@ func TestDeleteRunningSession(t *testing.T) {
 		t.Error("session directory should still exist after failed delete")
 	}
 
-	t.Log("AC1 PASS: deleting running session returns 409")
+	t.Log("PASS: deleting running session returns 409")
 }
 
-// TestDeletedSessionNotInList verifies AC2: after deletion, session no longer appears in list.
+// TestDeletedSessionNotInList verifies after deletion, session no longer appears in list.
 func TestDeletedSessionNotInList(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
@@ -1179,10 +1179,10 @@ func TestDeletedSessionNotInList(t *testing.T) {
 		t.Error("session should not appear in list after deletion")
 	}
 
-	t.Log("AC2 PASS: deleted session no longer appears in sessions list")
+	t.Log("PASS: deleted session no longer appears in sessions list")
 }
 
-// TestListSkills verifies AC1: GET /api/skills returns installed skills.
+// TestListSkills verifies GET /api/skills returns installed skills.
 func TestListSkills(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
@@ -1269,7 +1269,7 @@ func TestListSkills(t *testing.T) {
 		t.Errorf("expected activation_glob '**/*.go', got %q", readmeSkill.ActivationGlob)
 	}
 
-	t.Log("AC1 PASS: skills list returns installed skills with metadata")
+	t.Log("PASS: skills list returns installed skills with metadata")
 }
 
 // TestListSkills_Empty verifies skills endpoint returns [] when no skills installed.
@@ -1307,10 +1307,10 @@ func TestListSkills_Empty(t *testing.T) {
 		t.Fatalf("expected 0 skills, got %d", len(skills))
 	}
 
-	t.Log("AC1 PASS: skills endpoint returns [] when no skills installed")
+	t.Log("PASS: skills endpoint returns [] when no skills installed")
 }
 
-// TestListSkills_TildePath verifies AC3: skill paths use tilde prefix (~/.jenny/skills/).
+// TestListSkills_TildePath verifies skill paths use tilde prefix.
 func TestListSkills_TildePath(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
@@ -1355,15 +1355,15 @@ func TestListSkills_TildePath(t *testing.T) {
 
 	// Verify path starts with ~/.jenny/skills/ prefix (tilde path, not absolute path)
 	if !strings.HasPrefix(skills[0].Path, "~/.jenny/skills/") {
-		t.Errorf("AC3 FAIL: expected path starting with '~/.jenny/skills/', got %q", skills[0].Path)
+		t.Errorf("FAIL: expected path starting with '~/.jenny/skills/', got %q", skills[0].Path)
 	}
 
 	// Ensure it's NOT an absolute path starting with / or a drive letter
 	if strings.HasPrefix(skills[0].Path, "/") || (len(skills[0].Path) > 1 && skills[0].Path[1] == ':') {
-		t.Errorf("AC3 FAIL: path should use tilde prefix, not absolute path: %q", skills[0].Path)
+		t.Errorf("FAIL: path should use tilde prefix, not absolute path: %q", skills[0].Path)
 	}
 
-	t.Logf("AC3 PASS: skill path uses tilde prefix: %s", skills[0].Path)
+	t.Logf("PASS: skill path uses tilde prefix: %s", skills[0].Path)
 }
 
 // TestListSkills_RequiresAuth verifies skills endpoint requires auth.
@@ -1406,7 +1406,7 @@ func TestListSkills_RequiresAuth(t *testing.T) {
 	t.Log("PASS: skills endpoint requires auth token")
 }
 
-// TestListMCPServers verifies AC1: GET /api/mcp/servers returns configured MCP servers.
+// TestListMCPServers verifies GET /api/mcp/servers returns configured MCP servers.
 func TestListMCPServers(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
@@ -1491,7 +1491,7 @@ func TestListMCPServers(t *testing.T) {
 		t.Error("github server should be disabled")
 	}
 
-	t.Log("AC1 PASS: mcp servers endpoint returns configured servers")
+	t.Log("PASS: mcp servers endpoint returns configured servers")
 }
 
 // TestListMCPServers_Empty verifies mcp servers endpoint returns [] when no mcp.json.
@@ -1526,7 +1526,7 @@ func TestListMCPServers_Empty(t *testing.T) {
 		t.Fatalf("expected 0 servers, got %d", len(servers))
 	}
 
-	t.Log("AC1 PASS: mcp servers endpoint returns [] when no mcp.json")
+	t.Log("PASS: mcp servers endpoint returns [] when no mcp.json")
 }
 
 // TestListMCPServers_InvalidJSON verifies mcp servers endpoint skips invalid JSON
@@ -1666,7 +1666,7 @@ func TestListPlugins(t *testing.T) {
 		t.Errorf("expected version '1.0.0', got %q", plugins[0].Version)
 	}
 
-	t.Log("AC1 PASS: plugins list returns installed plugins with metadata")
+	t.Log("PASS: plugins list returns installed plugins with metadata")
 }
 
 func TestListPlugins_Empty(t *testing.T) {
@@ -1706,10 +1706,10 @@ func TestListPlugins_Empty(t *testing.T) {
 		t.Fatalf("expected 0 plugins, got %d", len(plugins))
 	}
 
-	t.Log("AC1 PASS: plugins list returns [] when no plugins are installed")
+	t.Log("PASS: plugins list returns [] when no plugins are installed")
 }
 
-// TestMarketplaceBrowse_InvalidURL verifies AC1: invalid URL returns 400.
+// TestMarketplaceBrowse_InvalidURL verifies invalid URL returns 400.
 func TestMarketplaceBrowse_InvalidURL(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")
 	if err != nil {
@@ -1732,7 +1732,7 @@ func TestMarketplaceBrowse_InvalidURL(t *testing.T) {
 		t.Fatal(err)
 	}
 	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("AC1 FAIL: invalid URL should return 400, got %d", resp.StatusCode)
+		t.Errorf("FAIL: invalid URL should return 400, got %d", resp.StatusCode)
 	}
 	resp.Body.Close()
 
@@ -1742,14 +1742,14 @@ func TestMarketplaceBrowse_InvalidURL(t *testing.T) {
 		t.Fatal(err)
 	}
 	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("AC1 FAIL: file:// URL should return 400, got %d", resp.StatusCode)
+		t.Errorf("FAIL: file:// URL should return 400, got %d", resp.StatusCode)
 	}
 	resp.Body.Close()
 
-	t.Log("AC1 PASS: marketplace browse returns 400 for invalid URLs")
+	t.Log("PASS: marketplace browse returns 400 for invalid URLs")
 }
 
-// TestMarketplaceInstall_AlreadyInstalled verifies AC2: already installed returns 409.
+// TestMarketplaceInstall_AlreadyInstalled verifies already installed returns 409.
 func TestMarketplaceInstall_AlreadyInstalled(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
@@ -1778,11 +1778,11 @@ func TestMarketplaceInstall_AlreadyInstalled(t *testing.T) {
 		t.Fatal(err)
 	}
 	if resp.StatusCode != http.StatusConflict {
-		t.Errorf("AC2 FAIL: already installed should return 409, got %d", resp.StatusCode)
+		t.Errorf("FAIL: already installed should return 409, got %d", resp.StatusCode)
 	}
 	resp.Body.Close()
 
-	t.Log("AC2 PASS: marketplace install returns 409 for already installed")
+	t.Log("PASS: marketplace install returns 409 for already installed")
 }
 
 // TestMarketplaceInstall_Skill verifies skill installation creates directory.
@@ -1931,7 +1931,7 @@ func TestMarketplaceInstall_Validation(t *testing.T) {
 	t.Log("PASS: marketplace install validates request body correctly")
 }
 
-// TestMarketplaceInstall_Skill_Success verifies AC2: skill installation downloads and extracts tar.gz.
+// TestMarketplaceInstall_Skill_Success verifies skill installation downloads and extracts tar.gz.
 func TestMarketplaceInstall_Skill_Success(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("JENNY_HOME", tmpDir)
@@ -1990,7 +1990,7 @@ func TestMarketplaceInstall_Skill_Success(t *testing.T) {
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		t.Errorf("AC2 FAIL: expected 200, got %d: %s", resp.StatusCode, string(bodyBytes))
+		t.Errorf("FAIL: expected 200, got %d: %s", resp.StatusCode, string(bodyBytes))
 		return
 	}
 
@@ -2000,22 +2000,22 @@ func TestMarketplaceInstall_Skill_Success(t *testing.T) {
 	}
 
 	if result.Status != "installed" {
-		t.Errorf("AC2 FAIL: expected status 'installed', got %q", result.Status)
+		t.Errorf("FAIL: expected status 'installed', got %q", result.Status)
 	}
 
 	// Verify skill directory was created
 	skillDir := filepath.Join(tmpDir, "skills", "test-skill")
 	if _, err := os.Stat(skillDir); os.IsNotExist(err) {
-		t.Error("AC2 FAIL: skill directory was not created")
+		t.Error("FAIL: skill directory was not created")
 	}
 
 	// Verify README.md was extracted
 	readmePath := filepath.Join(skillDir, "README.md")
 	if _, err := os.Stat(readmePath); os.IsNotExist(err) {
-		t.Error("AC2 FAIL: README.md was not extracted")
+		t.Error("FAIL: README.md was not extracted")
 	}
 
-	t.Log("AC2 PASS: marketplace install downloads and extracts tar.gz successfully")
+	t.Log("PASS: marketplace install downloads and extracts tar.gz successfully")
 }
 
 // TestMarketplaceInstall_MCP_NoExistingConfig verifies MCP install doesn't panic when mcp.json doesn't exist.
