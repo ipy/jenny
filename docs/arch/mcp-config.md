@@ -56,7 +56,7 @@ When not in strict mode, configs merge in three phases (later phase wins on name
 **Phase 2 — CLI override** (overrides all):
 5. CLI `--mcp-config` files (explicit override, `maps.Copy` overwrites)
 
-`~/.jenny/mcp.json` and `~/.agents/mcp.json` are loaded automatically (no CLI flag required) when not in bare or strict mode. This ensures MCP servers installed via the Portal UI (which writes `~/.jenny/mcp.json`) are also available in CLI sessions.
+`~/.jenny/mcp.json` and `~/.agents/mcp.json` are loaded automatically (no CLI flag required) when not in bare or strict mode.
 
 ## Server Definition Shape
 

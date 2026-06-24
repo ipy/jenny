@@ -855,12 +855,12 @@ func TestParseMaxToolConcurrencyFlagOverridesEnv(t *testing.T) {
 	}
 }
 
-// TestParseCompactKeepArchiveEnvVar verifies JENNY_COMPACT_KEEP_ARCHIVE populates the field.
-func TestParseCompactKeepArchiveEnvVar(t *testing.T) {
+// TestParseSweepKeepArchiveEnvVar verifies JENNY_SWEEP_KEEP_ARCHIVE populates the field.
+func TestParseSweepKeepArchiveEnvVar(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	t.Setenv("JENNY_COMPACT_KEEP_ARCHIVE", "1")
+	t.Setenv("JENNY_SWEEP_KEEP_ARCHIVE", "1")
 
 	os.Args = []string{"jenny", "--print", "hello"}
 
@@ -868,26 +868,26 @@ func TestParseCompactKeepArchiveEnvVar(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !flags.CompactKeepArchive {
-		t.Error("expected compact-keep-archive=true from env")
+	if !flags.SweepKeepArchive {
+		t.Error("expected sweep-keep-archive=true from env")
 	}
 }
 
-// TestParseCompactKeepArchiveFlagOverridesEnv verifies --compact-keep-archive wins.
-func TestParseCompactKeepArchiveFlagOverridesEnv(t *testing.T) {
+// TestParseSweepKeepArchiveFlagOverridesEnv verifies --sweep-keep-archive wins.
+func TestParseSweepKeepArchiveFlagOverridesEnv(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Unsetenv("JENNY_COMPACT_KEEP_ARCHIVE")
+	os.Unsetenv("JENNY_SWEEP_KEEP_ARCHIVE")
 
-	os.Args = []string{"jenny", "--compact-keep-archive", "--print", "hello"}
+	os.Args = []string{"jenny", "--sweep-keep-archive", "--print", "hello"}
 
 	flags, _, err := Parse()
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !flags.CompactKeepArchive {
-		t.Error("expected --compact-keep-archive to set the field to true")
+	if !flags.SweepKeepArchive {
+		t.Error("expected --sweep-keep-archive to set the field to true")
 	}
 }
 

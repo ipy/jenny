@@ -5,13 +5,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ipy/jenny/internal/compact"
 	"github.com/ipy/jenny/internal/constants"
+	"github.com/ipy/jenny/internal/sweep"
 )
 
-// withJennyHome overrides constants.JennyHomeDirFunc for the test, restoring
+// withJennyHomeSweep overrides constants.JennyHomeDirFunc for the test, restoring
 // via t.Cleanup.
-func withJennyHomeCompact(t *testing.T, dir string) {
+func withJennyHomeSweep(t *testing.T, dir string) {
 	t.Helper()
 	orig := constants.JennyHomeDirFunc
 	constants.JennyHomeDirFunc = func() string { return dir }
@@ -24,7 +24,7 @@ func withJennyHomeCompact(t *testing.T, dir string) {
 // the original transcript entries.
 func TestMaybeExtractArchive_ExtractsAndRestoresTranscript(t *testing.T) {
 	home := t.TempDir()
-	withJennyHomeCompact(t, home)
+	withJennyHomeSweep(t, home)
 
 	sessionsDir := filepath.Join(home, "sessions")
 	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
@@ -44,9 +44,9 @@ func TestMaybeExtractArchive_ExtractsAndRestoresTranscript(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	// Compact first — produces sess-1.tar.gz and removes sess-1/.
-	if err := compact.CompactOne(sessionsDir, "sess-1", false, os.Stdout, os.Stderr); err != nil {
-		t.Fatalf("CompactOne: %v", err)
+	// Sweep first — produces sess-1.tar.gz and removes sess-1/.
+	if err := sweep.SweepOne(sessionsDir, "sess-1", false, os.Stdout, os.Stderr); err != nil {
+		t.Fatalf("SweepOne: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(sessionsDir, "sess-1.tar.gz")); err != nil {
 		t.Fatalf("archive missing: %v", err)
@@ -88,7 +88,7 @@ func TestMaybeExtractArchive_ExtractsAndRestoresTranscript(t *testing.T) {
 // if an archive with the same id is sitting next to it.
 func TestMaybeExtractArchive_NoOpWhenDirectoryExists(t *testing.T) {
 	home := t.TempDir()
-	withJennyHomeCompact(t, home)
+	withJennyHomeSweep(t, home)
 	sessionsDir := filepath.Join(home, "sessions")
 	if err := os.MkdirAll(filepath.Join(sessionsDir, "sess-1"), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
@@ -113,17 +113,17 @@ func TestMaybeExtractArchive_NoOpWhenDirectoryExists(t *testing.T) {
 // TestMaybeExtractArchive_KeepArchiveArg: when keepArchive is true,
 // MaybeExtractArchive must rebuild the session directory and leave the
 // archive on disk. This is the call site that previously failed on Windows
-// because the underlying compact.ExtractArchive invoked os.Remove while the
+// because the underlying sweep.ExtractArchive invoked os.Remove while the
 // archive handle was still open; this test exercises the keepArchive=true
 // branch at the session layer to keep that wiring covered alongside the
-// keepArchive test in the compact package.
+// keepArchive test in the sweep package.
 //
-// The keepArchive flag is now sourced from JENNY_COMPACT_KEEP_ARCHIVE /
-// --compact-keep-archive via the unified koanf config layer; this test calls
+// The keepArchive flag is now sourced from JENNY_SWEEP_KEEP_ARCHIVE /
+// --sweep-keep-archive via the unified koanf config layer; this test calls
 // the function with the bool directly.
 func TestMaybeExtractArchive_KeepArchiveArg(t *testing.T) {
 	home := t.TempDir()
-	withJennyHomeCompact(t, home)
+	withJennyHomeSweep(t, home)
 
 	sessionsDir := filepath.Join(home, "sessions")
 	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
@@ -136,8 +136,8 @@ func TestMaybeExtractArchive_KeepArchiveArg(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(sessDir, "transcript.jsonl"), []byte(`{"type":"user","content":"hello"}`+"\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	if err := compact.CompactOne(sessionsDir, "sess-1", false, os.Stdout, os.Stderr); err != nil {
-		t.Fatalf("CompactOne: %v", err)
+	if err := sweep.SweepOne(sessionsDir, "sess-1", false, os.Stdout, os.Stderr); err != nil {
+		t.Fatalf("SweepOne: %v", err)
 	}
 	archive := filepath.Join(sessionsDir, "sess-1.tar.gz")
 
@@ -160,7 +160,7 @@ func TestMaybeExtractArchive_KeepArchiveArg(t *testing.T) {
 		t.Fatalf("MaybeExtractArchive (default): %v", err)
 	}
 	if _, err := os.Stat(archive); !os.IsNotExist(err) {
-		t.Errorf("archive should be removed when JENNY_COMPACT_KEEP_ARCHIVE is empty: err=%v", err)
+		t.Errorf("archive should be removed when JENNY_SWEEP_KEEP_ARCHIVE is empty: err=%v", err)
 	}
 }
 
@@ -168,7 +168,7 @@ func TestMaybeExtractArchive_KeepArchiveArg(t *testing.T) {
 // → no-op success.
 func TestMaybeExtractArchive_NoOpWhenNothingToExtract(t *testing.T) {
 	home := t.TempDir()
-	withJennyHomeCompact(t, home)
+	withJennyHomeSweep(t, home)
 	if err := os.MkdirAll(filepath.Join(home, "sessions"), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}

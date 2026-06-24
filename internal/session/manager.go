@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ipy/jenny/internal/compact"
 	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/log"
+	"github.com/ipy/jenny/internal/sweep"
 	"github.com/ipy/jenny/internal/utils"
 )
 
@@ -620,14 +620,14 @@ func (m *Manager) ListSessions() ([]string, error) {
 }
 
 // MaybeExtractArchive transparently rebuilds a session directory from a
-// companion <id>.tar.gz archive created by `jenny compact`.
+// companion <id>.tar.gz archive created by `jenny sweep`.
 //
 // Resume-time flow:
 //   - If <JENNY_HOME>/sessions/<id>/ already exists, this is a no-op.
 //   - If the directory is absent but <JENNY_HOME>/sessions/<id>.tar.gz is
 //     present, the archive is extracted into the sessions directory. After a
 //     successful extraction the archive is removed unless keepArchive is
-//     true (sourced from JENNY_COMPACT_KEEP_ARCHIVE / --compact-keep-archive
+//     true (sourced from JENNY_SWEEP_KEEP_ARCHIVE / --sweep-keep-archive
 //     via the unified koanf config layer; see docs/arch/koanf-config.md).
 //   - If neither exists, the function returns nil — callers downstream will
 //     surface the usual "session not found" error.
@@ -664,7 +664,7 @@ func MaybeExtractArchive(sessionID string, keepArchive bool) error {
 		return fmt.Errorf("checking archive %s: %w", archivePath, err)
 	}
 
-	if err := compact.ExtractArchive(archivePath, sessionsDir, sessionID, keepArchive); err != nil {
+	if err := sweep.ExtractArchive(archivePath, sessionsDir, sessionID, keepArchive); err != nil {
 		return fmt.Errorf("extracting archive for session %s: %w", sessionID, err)
 	}
 	return nil

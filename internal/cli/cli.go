@@ -57,7 +57,7 @@ type Flags struct {
 	RedactMode             string   `koanf:"redact"`                // --redact: JENNY_REDACT; one of disabled|redact|recover (empty = default)
 	TranscriptDir          string   `koanf:"transcript-dir"`        // --transcript-dir: JENNY_TRANSCRIPT_DIR
 	MaxToolConcurrency     int      `koanf:"max-tool-concurrency"`  // --max-tool-concurrency: JENNY_MAX_TOOL_CONCURRENCY (0 = default)
-	CompactKeepArchive     bool     `koanf:"compact-keep-archive"`  // --compact-keep-archive: JENNY_COMPACT_KEEP_ARCHIVE
+	SweepKeepArchive       bool     `koanf:"sweep-keep-archive"`    // --sweep-keep-archive: JENNY_SWEEP_KEEP_ARCHIVE
 	DisableCompact         bool     `koanf:"disable-compact"`       // --disable-compact: JENNY_DISABLE_COMPACT
 	DisableAutoCompact     bool     `koanf:"disable-auto-compact"`  // --disable-auto-compact: JENNY_DISABLE_AUTO_COMPACT
 	EnableSessionMemory    bool     `koanf:"enable-session-memory"` // --enable-session-memory: JENNY_ENABLE_SESSION_MEMORY
@@ -132,7 +132,7 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	redactModeDefault := k.String("redact")
 	transcriptDirDefault := k.String("transcript-dir")
 	maxToolConcurrencyDefault := k.Int("max-tool-concurrency")
-	compactKeepArchiveDefault := k.Bool("compact-keep-archive")
+	sweepKeepArchiveDefault := k.Bool("sweep-keep-archive")
 	disableCompactDefault := k.Bool("disable-compact")
 	disableAutoCompactDefault := k.Bool("disable-auto-compact")
 	enableSessionMemoryDefault := k.Bool("enable-session-memory")
@@ -263,8 +263,8 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	var maxToolConcurrency int
 	flags.IntVarP(&maxToolConcurrency, "max-tool-concurrency", "", maxToolConcurrencyDefault, "Max parallel tool executions (0 = default 10); JENNY_MAX_TOOL_CONCURRENCY env var is used when unset")
 
-	var compactKeepArchive bool
-	flags.BoolVarP(&compactKeepArchive, "compact-keep-archive", "", compactKeepArchiveDefault, "Keep <id>.tar.gz after resume extraction; JENNY_COMPACT_KEEP_ARCHIVE env var is used when unset")
+	var sweepKeepArchive bool
+	flags.BoolVarP(&sweepKeepArchive, "sweep-keep-archive", "", sweepKeepArchiveDefault, "Keep <id>.tar.gz after resume extraction; JENNY_SWEEP_KEEP_ARCHIVE env var is used when unset")
 
 	var disableCompact bool
 	flags.BoolVarP(&disableCompact, "disable-compact", "", disableCompactDefault, "Disable all compaction; JENNY_DISABLE_COMPACT env var is used when unset")

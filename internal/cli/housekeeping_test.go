@@ -1,6 +1,6 @@
-// Housekeeping regression tests for the docs/arch/clean-compact spec.
+// Housekeeping regression tests for the docs/arch/clean-sweep spec.
 // These tests guard against re-introducing dead helpers and against
-// doc front-matter / EOF regressions in `docs/arch/clean-compact.md`.
+// doc front-matter / EOF regressions in `docs/arch/clean-sweep.md`.
 //
 // Style notes (matching internal/cli/cli_test.go):
 //   - No third-party test deps; stdlib only.
@@ -99,17 +99,17 @@ func selfFile(t *testing.T) string {
 	return abs
 }
 
-// TestNoDeadCleanCompactHelpers verifies that IsCleanSubcommand and
-// IsCompactSubcommand must not be defined anywhere in the repository.
+// TestNoDeadCleanSweepHelpers verifies that IsCleanSubcommand and
+// IsSweepSubcommand must not be defined anywhere in the repository.
 //
 // Note: if a future contributor revives the helpers under a different name
 // (e.g. cli.IsCleanCmd), extend the regex below. If the helpers are
 // intentionally reintroduced, update or delete this test as part of that
 // change — do not silently let the regex drift.
-func TestNoDeadCleanCompactHelpers(t *testing.T) {
+func TestNoDeadCleanSweepHelpers(t *testing.T) {
 	root := repoRoot(t)
 	self := selfFile(t)
-	re := regexp.MustCompile(`func\s+(IsCleanSubcommand|IsCompactSubcommand)\s*\(`)
+	re := regexp.MustCompile(`func\s+(IsCleanSubcommand|IsSweepSubcommand)\s*\(`)
 
 	for _, p := range collectGoFiles(t, root, []string{"internal", "cmd"}) {
 		// Skip this test file: it necessarily mentions the identifiers in
@@ -120,20 +120,20 @@ func TestNoDeadCleanCompactHelpers(t *testing.T) {
 		content := readFileOrFail(t, p)
 		if re.Match(content) {
 			t.Errorf("dead helper redefined in %s\n"+
-				"Delete it; shouldRunClean/shouldRunCompact in cmd/jenny/main.go "+
+				"Delete it; shouldRunClean/shouldRunSweep in cmd/jenny/main.go "+
 				"is the single source of truth.", p)
 		}
 	}
 }
 
-// TestCleanCompactDetectionLivesInMain encodes: shouldRunClean and
-// shouldRunCompact are defined in cmd/jenny/main.go, and no other Go
+// TestCleanSweepDetectionLivesInMain encodes: shouldRunClean and
+// shouldRunSweep are defined in cmd/jenny/main.go, and no other Go
 // file in the tree mentions these identifiers.
 //
 // Note: this test enforces the spec literally — "the only file that
 // mentions those identifiers is `cmd/jenny/main.go`". If the helpers are
 // renamed, update this test and the corresponding callsite together.
-func TestCleanCompactDetectionLivesInMain(t *testing.T) {
+func TestCleanSweepDetectionLivesInMain(t *testing.T) {
 	root := repoRoot(t)
 	mainPath := filepath.Join(root, "cmd", "jenny", "main.go")
 	mainContent := readFileOrFail(t, mainPath)
@@ -141,9 +141,9 @@ func TestCleanCompactDetectionLivesInMain(t *testing.T) {
 	// main.go must contain the function definitions and the call sites.
 	mustContain := []string{
 		"func shouldRunClean(",
-		"func shouldRunCompact(",
+		"func shouldRunSweep(",
 		"shouldRunClean()",
-		"shouldRunCompact()",
+		"shouldRunSweep()",
 	}
 	for _, frag := range mustContain {
 		if !bytes.Contains(mainContent, []byte(frag)) {
@@ -162,7 +162,7 @@ func TestCleanCompactDetectionLivesInMain(t *testing.T) {
 			continue
 		}
 		content := readFileOrFail(t, p)
-		for _, ident := range []string{"shouldRunClean", "shouldRunCompact"} {
+		for _, ident := range []string{"shouldRunClean", "shouldRunSweep"} {
 			if bytes.Contains(content, []byte(ident)) {
 				t.Errorf("%s mentions %s; "+
 					"this identifier must live only in cmd/jenny/main.go",
@@ -172,12 +172,12 @@ func TestCleanCompactDetectionLivesInMain(t *testing.T) {
 	}
 }
 
-// TestCleanCompactDocFrontMatter encodes: docs/arch/clean-compact.md
+// TestCleanSweepDocFrontMatter encodes: docs/arch/clean-sweep.md
 // must contain `status: done`, `spec: complete`, and `code: complete`,
 // and no other status:/spec:/code: line.
-func TestCleanCompactDocFrontMatter(t *testing.T) {
+func TestCleanSweepDocFrontMatter(t *testing.T) {
 	root := repoRoot(t)
-	docPath := filepath.Join(root, "docs", "arch", "clean-compact.md")
+	docPath := filepath.Join(root, "docs", "arch", "clean-sweep.md")
 	content := readFileOrFail(t, docPath)
 
 	scanner := bufio.NewScanner(bytes.NewReader(content))
@@ -205,19 +205,19 @@ func TestCleanCompactDocFrontMatter(t *testing.T) {
 	}
 }
 
-// TestCleanCompactDocHasEofNewline encodes: docs/arch/clean-compact.md must
+// TestCleanSweepDocHasEofNewline encodes: docs/arch/clean-sweep.md must
 // end with a single LF (0x0a) so POSIX text-file tools (wc -l, git diff,
 // markdownlint) behave deterministically.
-func TestCleanCompactDocHasEofNewline(t *testing.T) {
+func TestCleanSweepDocHasEofNewline(t *testing.T) {
 	root := repoRoot(t)
-	docPath := filepath.Join(root, "docs", "arch", "clean-compact.md")
+	docPath := filepath.Join(root, "docs", "arch", "clean-sweep.md")
 	content := readFileOrFail(t, docPath)
 
 	if len(content) == 0 {
-		t.Fatal("docs/arch/clean-compact.md is empty")
+		t.Fatal("docs/arch/clean-sweep.md is empty")
 	}
 	if content[len(content)-1] != '\n' {
-		t.Errorf("docs/arch/clean-compact.md does not end with LF "+
+		t.Errorf("docs/arch/clean-sweep.md does not end with LF "+
 			"(last byte is 0x%02x); append a trailing newline",
 			content[len(content)-1])
 	}

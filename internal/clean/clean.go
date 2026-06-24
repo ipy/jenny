@@ -18,7 +18,7 @@ import (
 )
 
 // CleanUsage is the human-readable help text printed by `jenny clean --help`
-// and referenced from the compact help text.
+// and referenced from the sweep help text.
 const CleanUsage = `Usage: jenny clean [--dry-run]
 
 Remove every session directory under $JENNY_HOME/sessions/.
@@ -27,7 +27,7 @@ Config files at the top of $JENNY_HOME (.env, settings.json, skills/) are preser
 Flags:
   --dry-run   Print "would remove:" lines and exit without deleting anything.
 
-See also: jenny compact — archive each session directory into a single .tar.gz file.
+See also: jenny sweep — archive each session directory into a single .tar.gz file.
 `
 
 // RunClean performs `jenny clean`. Returns the process exit code (0 on success).

@@ -106,7 +106,6 @@ When persistence is disabled (e.g. `--no-session-persistence`):
 
 The `Manager.ListSessions()` method returns session IDs sorted by modification time (most recent first). It is used by:
 - The `--continue` CLI flag to find the most recent session.
-- The Portal's `GET /api/sessions` endpoint.
 
 ### Behavior
 

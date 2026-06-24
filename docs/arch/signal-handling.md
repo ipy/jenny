@@ -50,15 +50,10 @@ Pending HTTP requests built with `http.NewRequestWithContext(ctx, ...)` abort im
 | Ctrl+C during `tool_use` turn (synthetic-result path) | Loop runs one more iteration to deliver the synthetic tool_results to the model, then exits |
 | SIGTERM (`kill <pid>`) | Context cancels (no escalation), process exits cleanly within 1s |
 
-## Portal Unchanged
-
-The `jenny portal` command already has its own signal handler. This fix does not affect portal behavior.
-
 ## Acceptance Criteria
 
 - **AC1:** Running `jenny -p "test"` and pressing Ctrl+C (SIGINT) cancels the context. The agent loop detects `ctx.Err()` and returns with `context.Canceled` error. The process exits cleanly within 1 second.
 - **AC2:** Running `jenny -p "test"` and sending SIGTERM (`kill <pid>`) cancels the context. The process exits cleanly within 1 second.
-- **AC3:** Running `jenny portal` and pressing Ctrl+C still works (portal already has its own signal handler — unchanged).
-- **AC4:** `go test ./cmd/jenny/` passes. `go test ./internal/portal/` passes. No behavioral changes during normal (non-interrupted) execution.
+- **AC3:** `go test ./cmd/jenny/` passes. No behavioral changes during normal (non-interrupted) execution.
 - **AC5:** Pressing Ctrl+C twice within 5 seconds during a `tool_use` turn causes the process to exit with status code 2 within 100ms of the second press, even if the cooperative cancel has not unwound.
 - **AC6:** Pressing Ctrl+C during a `tool_use` turn terminates the loop after at most one additional iteration (the synthetic-result delivery iteration). The process does not loop indefinitely.

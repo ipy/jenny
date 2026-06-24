@@ -741,49 +741,6 @@ func TestLoadEnvFiles_PicksUpJennyEnv(t *testing.T) {
 	}
 }
 
-// TestShouldLaunchPortal_ExplicitPortal tests jenny portal launches the portal.
-func TestShouldLaunchPortal_ExplicitPortal(t *testing.T) {
-	origArgs := os.Args
-	defer func() { os.Args = origArgs }()
-
-	os.Args = []string{"jenny", "portal"}
-	if !shouldLaunchPortal() {
-		t.Error("expected shouldLaunchPortal() = true for 'jenny portal'")
-	}
-}
-
-// TestShouldLaunchPortal_NoArgs tests jenny with no arguments does NOT launch portal.
-// Note: macOS double-clicking a bare executable ALWAYS opens Terminal - this is a
-// macOS limitation. Users who want no-Terminal launch must use the optional .app bundle.
-func TestShouldLaunchPortal_NoArgs(t *testing.T) {
-	origArgs := os.Args
-	defer func() { os.Args = origArgs }()
-
-	os.Args = []string{"jenny"}
-	if shouldLaunchPortal() {
-		t.Error("shouldLaunchPortal() = true for no args, want false (CLI mode)")
-	}
-}
-
-// TestShouldLaunchPortal_OtherArgs tests other arguments stay in CLI mode.
-func TestShouldLaunchPortal_OtherArgs(t *testing.T) {
-	origArgs := os.Args
-	defer func() { os.Args = origArgs }()
-
-	cliArgs := [][]string{
-		{"jenny", "-p", "test"},
-		{"jenny", "--help"},
-		{"jenny", "--version"},
-		{"jenny", "server"},
-	}
-	for _, args := range cliArgs {
-		os.Args = args
-		if shouldLaunchPortal() {
-			t.Errorf("shouldLaunchPortal() = true for args %v, want false (CLI mode)", args)
-		}
-	}
-}
-
 // TestSignalContext_Cancellable tests signal.NotifyContext creates a
 // cancellable context that cancels on SIGINT/SIGTERM.
 func TestSignalContext_Cancellable(t *testing.T) {

@@ -155,7 +155,7 @@ Before checking if a session exists on resume, if the session directory is missi
 
 ### CLI plumbing
 
-The CLI parser detects `clean` and `sweep` subcommands via dedicated helper functions, mirroring the existing portal detection pattern. The main entry point calls these after other subcommand checks.
+The CLI parser detects `clean` and `sweep` subcommands via dedicated helper functions. The main entry point calls these after other subcommand checks.
 
 ### Help output
 
@@ -208,5 +208,5 @@ See also: jenny clean — remove every session directory without archiving.
 - Remote/cloud archival (`s3`, `gs`).
 - Migrating data currently in the legacy `~/.jenny/transcripts/` directory; that path is left as-is.
 - Any change to the on-disk format of `transcript.jsonl`, `config`, or `memory.md`.
-- Any change to portal, MCP, or provider routing code.
+- Any change to MCP or provider routing code.
 - Automated scheduling of `clean` / `sweep` (cron-like behavior).
