@@ -145,19 +145,19 @@ func TestModelRegistryCacheBehavior(t *testing.T) {
 	})
 }
 
-// TestModelRegistryConfigOverride tests user config.json models overrides.
+// TestModelRegistryConfigOverride tests user settings.json models overrides.
 func TestModelRegistryConfigOverride(t *testing.T) {
 	runE2ESuite(t, []*harness.TestCase{
 		{
 			ID:          "registry.config-override.accepted",
 			Category:    "model-registry",
-			Description: "config.json with valid models key is accepted and does not crash jenny",
+			Description: "settings.json with valid models key is accepted and does not crash jenny",
 			Target: harness.TargetInvocation{
 				Kind: "cli",
 				Args: []string{"--offline", "--print-system-prompt"},
 				Env:  []string{"JENNY_HOME=${WORK_DIR}/.jenny"},
 				WorkDirFiles: map[string]string{
-					".jenny/config.json": `{"models": {"claude-sonnet-4-6": {"maxOutput": 99999}}}`,
+					".jenny/settings.json": `{"models": {"claude-sonnet-4-6": {"maxOutput": 99999}}}`,
 				},
 			},
 			Expected: harness.ExpectedBehavior{
@@ -170,7 +170,7 @@ func TestModelRegistryConfigOverride(t *testing.T) {
 		{
 			ID:          "registry.config-override.affects-max-tokens",
 			Category:    "model-registry",
-			Description: "config.json models.maxOutput override changes max_tokens in API request",
+			Description: "settings.json models.maxOutput override changes max_tokens in API request",
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "say hello",
@@ -180,7 +180,7 @@ func TestModelRegistryConfigOverride(t *testing.T) {
 				// Set an explicit model so the test is deterministic regardless of env.
 				Env: []string{"ANTHROPIC_MODEL=claude-sonnet-4-6"},
 				WorkDirFiles: map[string]string{
-					".jenny/config.json": `{"models": {"claude-sonnet-4-6": {"maxOutput": 88888}}}`,
+					".jenny/settings.json": `{"models": {"claude-sonnet-4-6": {"maxOutput": 88888}}}`,
 				},
 			},
 			Expected: harness.ExpectedBehavior{
@@ -211,13 +211,13 @@ func TestModelRegistryMalformedConfig(t *testing.T) {
 		{
 			ID:          "registry.malformed-config.no-crash",
 			Category:    "model-registry",
-			Description: "malformed models key in config.json does not crash jenny (graceful degradation)",
+			Description: "malformed models key in settings.json does not crash jenny (graceful degradation)",
 			Target: harness.TargetInvocation{
 				Kind: "cli",
 				Args: []string{"--offline", "--print-system-prompt"},
 				Env:  []string{"JENNY_HOME=${WORK_DIR}/.jenny"},
 				WorkDirFiles: map[string]string{
-					".jenny/config.json": `{"models": "this-should-be-an-object-not-a-string"}`,
+					".jenny/settings.json": `{"models": "this-should-be-an-object-not-a-string"}`,
 				},
 			},
 			Expected: harness.ExpectedBehavior{
@@ -281,20 +281,20 @@ func TestModelRegistryOfflineNoNetwork(t *testing.T) {
 	})
 }
 
-// TestModelRegistryConfigWarnings verifies that malformed models in config.json
+// TestModelRegistryConfigWarnings verifies that malformed models in settings.json
 // produce warnings on stderr when --verbose is used.
 func TestModelRegistryConfigWarnings(t *testing.T) {
 	runE2ESuite(t, []*harness.TestCase{
 		{
 			ID:          "registry.malformed-models-warns-on-stderr",
 			Category:    "model-registry",
-			Description: "malformed models key in config.json produces a warning on stderr with --verbose",
+			Description: "malformed models key in settings.json produces a warning on stderr with --verbose",
 			Target: harness.TargetInvocation{
 				Kind: "cli",
 				Args: []string{"--offline", "--print-system-prompt", "--verbose"},
 				Env:  []string{"JENNY_HOME=${WORK_DIR}/.jenny"},
 				WorkDirFiles: map[string]string{
-					".jenny/config.json": `{"models": "not-an-object"}`,
+					".jenny/settings.json": `{"models": "not-an-object"}`,
 				},
 			},
 			Expected: harness.ExpectedBehavior{
@@ -307,19 +307,19 @@ func TestModelRegistryConfigWarnings(t *testing.T) {
 	})
 }
 
-// TestModelRegistryConfigEdgeCases tests config.json edge cases that don't crash.
+// TestModelRegistryConfigEdgeCases tests settings.json edge cases that don't crash.
 func TestModelRegistryConfigEdgeCases(t *testing.T) {
 	runE2ESuite(t, []*harness.TestCase{
 		{
 			ID:          "registry.absent-models-key-works",
 			Category:    "model-registry",
-			Description: "config.json without models key works correctly",
+			Description: "settings.json without models key works correctly",
 			Target: harness.TargetInvocation{
 				Kind: "cli",
 				Args: []string{"--offline", "--print-system-prompt"},
 				Env:  []string{"JENNY_HOME=${WORK_DIR}/.jenny"},
 				WorkDirFiles: map[string]string{
-					".jenny/config.json": `{"output-format": "text"}`,
+					".jenny/settings.json": `{"output-format": "text"}`,
 				},
 			},
 			Expected: harness.ExpectedBehavior{
@@ -332,13 +332,13 @@ func TestModelRegistryConfigEdgeCases(t *testing.T) {
 		{
 			ID:          "registry.empty-config-works",
 			Category:    "model-registry",
-			Description: "empty config.json works correctly",
+			Description: "empty settings.json works correctly",
 			Target: harness.TargetInvocation{
 				Kind: "cli",
 				Args: []string{"--offline", "--print-system-prompt"},
 				Env:  []string{"JENNY_HOME=${WORK_DIR}/.jenny"},
 				WorkDirFiles: map[string]string{
-					".jenny/config.json": `{}`,
+					".jenny/settings.json": `{}`,
 				},
 			},
 			Expected: harness.ExpectedBehavior{
@@ -351,13 +351,13 @@ func TestModelRegistryConfigEdgeCases(t *testing.T) {
 		{
 			ID:          "registry.empty-models-key-works",
 			Category:    "model-registry",
-			Description: "config.json with empty models object does not crash",
+			Description: "settings.json with empty models object does not crash",
 			Target: harness.TargetInvocation{
 				Kind: "cli",
 				Args: []string{"--offline", "--print-system-prompt"},
 				Env:  []string{"JENNY_HOME=${WORK_DIR}/.jenny"},
 				WorkDirFiles: map[string]string{
-					".jenny/config.json": `{"models": {}}`,
+					".jenny/settings.json": `{"models": {}}`,
 				},
 			},
 			Expected: harness.ExpectedBehavior{
@@ -370,7 +370,7 @@ func TestModelRegistryConfigEdgeCases(t *testing.T) {
 		{
 			ID:          "registry.no-config-file-works",
 			Category:    "model-registry",
-			Description: "no config.json file at all does not crash",
+			Description: "no settings.json file at all does not crash",
 			Target: harness.TargetInvocation{
 				Kind: "cli",
 				Args: []string{"--offline", "--print-system-prompt"},
@@ -390,7 +390,7 @@ func TestModelRegistryConfigEdgeCases(t *testing.T) {
 }
 
 // TestModelRegistryMalformedModelTypes verifies that various non-object types
-// for the models key in config.json do not crash jenny.
+// for the models key in settings.json do not crash jenny.
 func TestModelRegistryMalformedModelTypes(t *testing.T) {
 	runE2ESuite(t, []*harness.TestCase{
 		{
@@ -402,7 +402,7 @@ func TestModelRegistryMalformedModelTypes(t *testing.T) {
 				Args: []string{"--offline", "--print-system-prompt"},
 				Env:  []string{"JENNY_HOME=${WORK_DIR}/.jenny"},
 				WorkDirFiles: map[string]string{
-					".jenny/config.json": `{"models": ["this", "is", "an", "array"]}`,
+					".jenny/settings.json": `{"models": ["this", "is", "an", "array"]}`,
 				},
 			},
 			Expected: harness.ExpectedBehavior{
@@ -421,7 +421,7 @@ func TestModelRegistryMalformedModelTypes(t *testing.T) {
 				Args: []string{"--offline", "--print-system-prompt"},
 				Env:  []string{"JENNY_HOME=${WORK_DIR}/.jenny"},
 				WorkDirFiles: map[string]string{
-					".jenny/config.json": `{"models": 42}`,
+					".jenny/settings.json": `{"models": 42}`,
 				},
 			},
 			Expected: harness.ExpectedBehavior{
@@ -440,7 +440,7 @@ func TestModelRegistryMalformedModelTypes(t *testing.T) {
 				Args: []string{"--offline", "--print-system-prompt"},
 				Env:  []string{"JENNY_HOME=${WORK_DIR}/.jenny"},
 				WorkDirFiles: map[string]string{
-					".jenny/config.json": `{"models": true}`,
+					".jenny/settings.json": `{"models": true}`,
 				},
 			},
 			Expected: harness.ExpectedBehavior{
@@ -459,7 +459,7 @@ func TestModelRegistryMalformedModelTypes(t *testing.T) {
 				Args: []string{"--offline", "--print-system-prompt"},
 				Env:  []string{"JENNY_HOME=${WORK_DIR}/.jenny"},
 				WorkDirFiles: map[string]string{
-					".jenny/config.json": `{"models": null}`,
+					".jenny/settings.json": `{"models": null}`,
 				},
 			},
 			Expected: harness.ExpectedBehavior{
@@ -472,14 +472,14 @@ func TestModelRegistryMalformedModelTypes(t *testing.T) {
 	})
 }
 
-// TestModelRegistryOverridePriority verifies that user config.json overrides
+// TestModelRegistryOverridePriority verifies that user settings.json overrides
 // survive across registry operations and take priority over cache values.
 func TestModelRegistryOverridePriority(t *testing.T) {
 	runE2ESuite(t, []*harness.TestCase{
 		{
 			ID:          "registry.override.survives-cache-load",
 			Category:    "model-registry",
-			Description: "user override in config.json is accepted when registry cache exists",
+			Description: "user override in settings.json is accepted when registry cache exists",
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "say hello",
@@ -504,8 +504,8 @@ func TestModelRegistryOverridePriority(t *testing.T) {
 							}
 						}
 					}`,
-					".jenny/meta.json":   `{"fetchedAt": "2026-06-19T00:00:00Z", "etag": "test-etag", "schemaVersion": 1}`,
-					".jenny/config.json": `{"models": {"custom-test-model": {"maxOutput": 16000}}}`,
+					".jenny/meta.json":     `{"fetchedAt": "2026-06-19T00:00:00Z", "etag": "test-etag", "schemaVersion": 1}`,
+					".jenny/settings.json": `{"models": {"custom-test-model": {"maxOutput": 16000}}}`,
 				},
 			},
 			Expected: harness.ExpectedBehavior{
@@ -543,8 +543,8 @@ func TestModelRegistryOverridePriority(t *testing.T) {
 							}
 						}
 					}`,
-					".jenny/meta.json":   `{"fetchedAt": "2026-06-19T00:00:00Z", "etag": "test-etag", "schemaVersion": 1}`,
-					".jenny/config.json": `{"models": {"override-only-model": {"maxOutput": 32000}}}`,
+					".jenny/meta.json":     `{"fetchedAt": "2026-06-19T00:00:00Z", "etag": "test-etag", "schemaVersion": 1}`,
+					".jenny/settings.json": `{"models": {"override-only-model": {"maxOutput": 32000}}}`,
 				},
 			},
 			Expected: harness.ExpectedBehavior{
@@ -579,8 +579,8 @@ func TestModelRegistryOverridePriority(t *testing.T) {
 							}
 						}
 					}`,
-					".jenny/meta.json":   `{"fetchedAt": "2026-06-19T00:00:00Z", "etag": "test-etag", "schemaVersion": 1}`,
-					".jenny/config.json": `{"models": {"claude-sonnet-4-6": {"maxOutput": 99999}}}`,
+					".jenny/meta.json":     `{"fetchedAt": "2026-06-19T00:00:00Z", "etag": "test-etag", "schemaVersion": 1}`,
+					".jenny/settings.json": `{"models": {"claude-sonnet-4-6": {"maxOutput": 99999}}}`,
 				},
 			},
 			Expected: harness.ExpectedBehavior{
@@ -593,7 +593,7 @@ func TestModelRegistryOverridePriority(t *testing.T) {
 		{
 			ID:          "registry.override.no-config-uses-cache",
 			Category:    "model-registry",
-			Description: "without config.json overrides, the registry cache value is used as-is",
+			Description: "without settings.json overrides, the registry cache value is used as-is",
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "say hello",
@@ -631,7 +631,7 @@ func TestModelRegistryOverridePriority(t *testing.T) {
 		{
 			ID:          "registry.override.priority-override-wins-over-cache",
 			Category:    "model-registry",
-			Description: "config.json override wins over cache, which wins over bundled default",
+			Description: "settings.json override wins over cache, which wins over bundled default",
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "say hello",
@@ -656,8 +656,8 @@ func TestModelRegistryOverridePriority(t *testing.T) {
 							}
 						}
 					}`,
-					".jenny/meta.json":   `{"fetchedAt": "2026-06-19T00:00:00Z", "etag": "test-etag", "schemaVersion": 1}`,
-					".jenny/config.json": `{"models": {"claude-sonnet-4-6": {"maxOutput": 77777}}}`,
+					".jenny/meta.json":     `{"fetchedAt": "2026-06-19T00:00:00Z", "etag": "test-etag", "schemaVersion": 1}`,
+					".jenny/settings.json": `{"models": {"claude-sonnet-4-6": {"maxOutput": 77777}}}`,
 				},
 			},
 			Expected: harness.ExpectedBehavior{
@@ -670,7 +670,7 @@ func TestModelRegistryOverridePriority(t *testing.T) {
 		{
 			ID:          "registry.override.multiple-overrides-no-crash",
 			Category:    "model-registry",
-			Description: "multiple model overrides in config.json do not cause crashes",
+			Description: "multiple model overrides in settings.json do not cause crashes",
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
 				Prompt:   "say hello",
@@ -702,8 +702,8 @@ func TestModelRegistryOverridePriority(t *testing.T) {
 							}
 						}
 					}`,
-					".jenny/meta.json":   `{"fetchedAt": "2026-06-19T00:00:00Z", "etag": "test-etag", "schemaVersion": 1}`,
-					".jenny/config.json": `{"models": {"test-model-a": {"maxOutput": 44444}, "test-model-b": {"maxOutput": 55555}, "nonexistent": {"maxOutput": 66666}}}`,
+					".jenny/meta.json":     `{"fetchedAt": "2026-06-19T00:00:00Z", "etag": "test-etag", "schemaVersion": 1}`,
+					".jenny/settings.json": `{"models": {"test-model-a": {"maxOutput": 44444}, "test-model-b": {"maxOutput": 55555}, "nonexistent": {"maxOutput": 66666}}}`,
 				},
 			},
 			Expected: harness.ExpectedBehavior{

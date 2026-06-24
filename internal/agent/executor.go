@@ -301,6 +301,31 @@ func (e *ToolExecutor) executeParallel(parentCtx context.Context, batch []toolUs
 				return
 			}
 
+			// Check config-file permission rules
+			if e.streamCfg != nil && e.streamCfg.PermissionRules != nil {
+				primaryArg := tool.PrimaryArgForTool(tw.block.Name, tw.block.Input)
+				if decision := e.streamCfg.PermissionRules.Evaluate(tw.block.Name, primaryArg); decision == tool.PermissionRuleDeny {
+					results[tw.index] = toolResult{
+						ToolUseID: tw.block.ID,
+						Content:   fmt.Sprintf("Permission denied: tool %s is blocked by permission rules", tw.block.Name),
+						IsError:   true,
+					}
+					return
+				}
+			}
+
+			// Run config-file PreToolUse hooks
+			if e.streamCfg != nil && e.streamCfg.ConfigHooks != nil {
+				if blocked, reason := e.streamCfg.ConfigHooks.RunPreToolUse(toolCtx, tw.block.Name, tw.block.Input); blocked {
+					results[tw.index] = toolResult{
+						ToolUseID: tw.block.ID,
+						Content:   reason,
+						IsError:   true,
+					}
+					return
+				}
+			}
+
 			// Run SDK PreToolUse hooks if configured
 			if e.streamCfg != nil {
 				if blocked, reason := RunPreToolUseHooks(toolCtx, e.streamCfg, tw.block.Name, tw.block.Input, tw.block.ID, e.streamCfg.SessionID, e.cwd); blocked {
@@ -341,6 +366,10 @@ func (e *ToolExecutor) executeParallel(parentCtx context.Context, batch []toolUs
 					ToolUseID: tw.block.ID,
 					Content:   execResult.Content,
 					IsError:   execResult.IsError,
+				}
+				// Run config-file PostToolUse hooks
+				if e.streamCfg != nil && e.streamCfg.ConfigHooks != nil {
+					e.streamCfg.ConfigHooks.RunPostToolUse(toolCtx, tw.block.Name, tw.block.Input, execResult.Content)
 				}
 			}
 		}(tw)
@@ -396,6 +425,31 @@ func (e *ToolExecutor) executeSerial(parentCtx context.Context, batch []toolUseW
 			continue
 		}
 
+		// Check config-file permission rules
+		if e.streamCfg != nil && e.streamCfg.PermissionRules != nil {
+			primaryArg := tool.PrimaryArgForTool(tw.block.Name, tw.block.Input)
+			if decision := e.streamCfg.PermissionRules.Evaluate(tw.block.Name, primaryArg); decision == tool.PermissionRuleDeny {
+				results[tw.index] = toolResult{
+					ToolUseID: tw.block.ID,
+					Content:   fmt.Sprintf("Permission denied: tool %s is blocked by permission rules", tw.block.Name),
+					IsError:   true,
+				}
+				continue
+			}
+		}
+
+		// Run config-file PreToolUse hooks
+		if e.streamCfg != nil && e.streamCfg.ConfigHooks != nil {
+			if blocked, reason := e.streamCfg.ConfigHooks.RunPreToolUse(toolCtx, tw.block.Name, tw.block.Input); blocked {
+				results[tw.index] = toolResult{
+					ToolUseID: tw.block.ID,
+					Content:   reason,
+					IsError:   true,
+				}
+				continue
+			}
+		}
+
 		// Run SDK PreToolUse hooks if configured
 		if e.streamCfg != nil {
 			if blocked, reason := RunPreToolUseHooks(toolCtx, e.streamCfg, tw.block.Name, tw.block.Input, tw.block.ID, e.streamCfg.SessionID, e.cwd); blocked {
@@ -437,6 +491,10 @@ func (e *ToolExecutor) executeSerial(parentCtx context.Context, batch []toolUseW
 				ToolUseID: tw.block.ID,
 				Content:   execResult.Content,
 				IsError:   execResult.IsError,
+			}
+			// Run config-file PostToolUse hooks
+			if e.streamCfg != nil && e.streamCfg.ConfigHooks != nil {
+				e.streamCfg.ConfigHooks.RunPostToolUse(toolCtx, tw.block.Name, tw.block.Input, execResult.Content)
 			}
 			// Also abort on logical error for shell if it's considered a "failure"
 			if isShellTool(tw.block.Name) && execResult.IsError {

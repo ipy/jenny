@@ -74,7 +74,7 @@ Named subagents inherit `PermissionLevel` from parent `StreamConfig` (AC7). Anti
 
 ## Model Aliases
 
-`sonnet`, `opus`, `haiku` map to concrete models when passed as the subagent `model` parameter. Unknown values pass through unchanged (direct pass-through; no separate resolver step at runtime).
+`sonnet`, `opus`, `haiku` map to concrete model identifiers (e.g., `claude-sonnet-4-6`, `claude-opus-4-7`). Aliases are resolved for both the main agent model (`--model`) and subagent models. Unknown values pass through unchanged. Each alias can be overridden via environment variable (`ANTHROPIC_DEFAULT_SONNET_MODEL`, etc.).
 
 ## One-Shot Types
 

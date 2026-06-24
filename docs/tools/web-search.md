@@ -34,7 +34,7 @@ Web search via native provider server-side search or client-provider fallback. T
 
 ## Strategy Selection
 
-The tool's behavior is governed by a `WebSearchConfig` resolved through koanf layering (`.jenny/config.json` + `JENNY_*` env vars). The top-level strategy selector `web-search.provider` chooses the execution mode:
+The tool's behavior is governed by a `WebSearchConfig` resolved through koanf layering (`.jenny/settings.json` + `JENNY_*` env vars). The top-level strategy selector `web-search.provider` chooses the execution mode:
 
 | Value | Behavior |
 |-------|----------|

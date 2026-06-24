@@ -20,13 +20,15 @@ Migrate CLI flag parsing from the standard library `flag` package to `koanf` wit
 
 1. **CLI Flags**: Command-line arguments via `pflag`
 2. **Environment Variables**: Prefixed with `JENNY_` (e.g., `JENNY_MODEL`, `JENNY_OUTPUT_FORMAT`)
-3. **JSON Configuration**: `.jenny/config.json` in the current working directory
+3. **Project JSON**: `.jenny/settings.json` in the current working directory
+4. **Global JSON**: `~/.jenny/settings.json` (user-level defaults)
 
 ## Loading Order (Lowest to Highest Precedence)
 
-1. JSON File: `k.Load(file.Provider(".jenny/config.json"), json.Parser())` — ignore error if file missing
-2. Environment Variables: `k.Load(env.Provider("JENNY_", ".", transformFunc), nil)` — transform strips `JENNY_` prefix, lowercases, replaces `_` with `-`
-3. CLI Flags: `k.Load(posflag.Provider(flags, ".", k), nil)`
+1. Global JSON: `k.Load(file.Provider(globalConfigPath), json.Parser())` — ignore error if file missing. Path is `<JENNY_HOME>/settings.json` where `JENNY_HOME` defaults to `~/.jenny`.
+2. Project JSON: `k.Load(file.Provider(".jenny/settings.json"), json.Parser())` — ignore error if file missing. Project-level settings override global.
+3. Environment Variables: `k.Load(env.Provider("JENNY_", ".", transformFunc), nil)` — transform strips `JENNY_` prefix, lowercases, replaces `_` with `-`
+4. CLI Flags: `k.Load(posflag.Provider(flags, ".", k), nil)`
 
 ## Struct Tags
 
@@ -68,7 +70,7 @@ For any given config key:
 
 1. CLI flag (highest) — e.g. `--redact-mode=disabled`
 2. `JENNY_*` env var — e.g. `JENNY_REDACT=disabled`
-3. `.jenny/config.json` field — e.g. `{"redact": "disabled"}`
+3. `.jenny/settings.json` field — e.g. `{"redact": "disabled"}`
 4. Built-in default (lowest) — e.g. `redact` (one-way mode)
 
 ## Out of Koanf Layer
@@ -93,7 +95,6 @@ A small number of environment variables are intentionally read directly via `os.
 ## Out of Scope
 
 - YAML support
-- System-wide/global configs (`~/.jenny/config.json`)
 - Removing existing `.env` loading
 - Changes to agent runtime logic
 

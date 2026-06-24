@@ -28,7 +28,7 @@ Specifications for high-availability routing across multiple LLM providers, mode
 
 ## Configuration
 
-All routing configuration lives in a `routes` key within `config.json`, loaded through the standard koanf layering (CLI > env > config file). All field names use **kebab-case** for consistency with the rest of the configuration surface.
+All routing configuration lives in a `routes` key within `settings.json`, loaded through the standard koanf layering (CLI > env > config file). All field names use **kebab-case** for consistency with the rest of the configuration surface.
 
 The configuration is split into **Resource Definitions** (Providers) and **Execution Policies** (Profiles).
 
@@ -189,7 +189,7 @@ When no file-based `routes` configuration is present (or as a supplement), the r
 
 ### Precedence
 
-If `config.json` contains a `routes` block, those definitions load first. Environment-synthesized providers are appended only when no provider with the same name already exists. This allows a stable `config.json` for most models while quickly adding or overriding a provider via a single environment variable.
+If `settings.json` contains a `routes` block, those definitions load first. Environment-synthesized providers are appended only when no provider with the same name already exists. This allows a stable `settings.json` for most models while quickly adding or overriding a provider via a single environment variable.
 
 ### Env-Only Provider Priority Order
 

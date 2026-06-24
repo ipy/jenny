@@ -65,6 +65,7 @@ type Flags struct {
 	RoutesProfile          string   `koanf:"routes-profile"`        // --routes-profile: JENNY_ROUTES_PROFILE: select active routing profile
 	RefreshRegistry        bool     `koanf:"refresh-registry"`      // --refresh-registry: synchronously fetch model registry
 	Offline                bool     `koanf:"offline"`               // --offline: skip all network fetch, use cache as-is
+	IncludeHookEvents      bool     `koanf:"include-hook-events"`   // --include-hook-events: include hook events in stream output
 }
 
 // envTransform transforms environment variable names from JENNY_* format to
@@ -80,9 +81,15 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	// Create koanf instance with "." delimiter.
 	k := koanf.New(".")
 
-	// 1. Load JSON config from .jenny/config.json (lowest precedence).
+	// 1a. Load global JSON config from ~/.jenny/settings.json (lowest precedence).
 	// Ignore error if file does not exist.
-	_ = k.Load(file.Provider(".jenny/config.json"), json.Parser())
+	if globalDir := constants.JennyHomeDir(); globalDir != "" {
+		_ = k.Load(file.Provider(globalDir+"/settings.json"), json.Parser())
+	}
+
+	// 1b. Load project JSON config from .jenny/settings.json (overrides global).
+	// Ignore error if file does not exist.
+	_ = k.Load(file.Provider(".jenny/settings.json"), json.Parser())
 
 	// 2. Load environment variables prefixed with JENNY_.
 	_ = k.Load(env.Provider("JENNY_", ".", envTransform), nil)
@@ -163,7 +170,7 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	flags.BoolVarP(&skipPerms, "dangerously-skip-permissions", "", skipPermsDefault, "Skip permissions")
 
 	var allowSkipPerms bool
-	flags.BoolVarP(&allowSkipPerms, "allow-dangerously-skip-permissions", "", false, "Alias for --dangerously-skip-permissions (SDK compatibility)")
+	flags.BoolVarP(&allowSkipPerms, "allow-dangerously-skip-permissions", "", false, "Add bypassPermissions as an option without activating it")
 
 	var permLevel string
 	flags.StringVarP(&permLevel, "permission-level", "", permLevelDefault, "Permission level (read, analyze, edit, execute, unrestricted)")
@@ -197,11 +204,13 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	var deniedTools []string
 	flags.StringSliceVarP(&deniedTools, "deny-tool", "", deniedToolsDefault, "Tool name to deny (can be specified multiple times)")
 
-	var allowedTools []string
-	flags.StringSliceVar(&allowedTools, "allowedTools", nil, "SDK tool allowlist (comma-separated)")
+	var allowedTools, allowedToolsKebab []string
+	flags.StringSliceVar(&allowedTools, "allowedTools", nil, "Tools that execute without prompting; supports rule syntax like Bash(git *)")
+	flags.StringSliceVar(&allowedToolsKebab, "allowed-tools", nil, "Alias for --allowedTools")
 
-	var disallowedTools []string
-	flags.StringSliceVar(&disallowedTools, "disallowedTools", nil, "SDK tool blocklist (comma-separated)")
+	var disallowedTools, disallowedToolsKebab []string
+	flags.StringSliceVar(&disallowedTools, "disallowedTools", nil, "Deny rules; bare names remove tools, scoped rules deny matching calls")
+	flags.StringSliceVar(&disallowedToolsKebab, "disallowed-tools", nil, "Alias for --disallowedTools")
 
 	var toolsPreset string
 	flags.StringVar(&toolsPreset, "tools", "", "SDK tool preset")
@@ -246,7 +255,7 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	flags.IntVar(&maxThinkingTokens, "max-thinking-tokens", 0, "Alias for --thinking-budget (SDK compatibility)")
 
 	var redactMode string
-	flags.StringVarP(&redactMode, "redact", "", redactModeDefault, "Secret redaction mode (disabled, redact, recover); JENNY_REDACT env var or .jenny/config.json is used when unset")
+	flags.StringVarP(&redactMode, "redact", "", redactModeDefault, "Secret redaction mode (disabled, redact, recover); JENNY_REDACT env var or .jenny/settings.json is used when unset")
 
 	var transcriptDir string
 	flags.StringVarP(&transcriptDir, "transcript-dir", "", transcriptDirDefault, "Override transcript directory; JENNY_TRANSCRIPT_DIR env var is used when unset")
@@ -274,6 +283,10 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 
 	var offline bool
 	flags.BoolVarP(&offline, "offline", "", offlineDefault, "Skip all network fetch, use cached data as-is")
+
+	includeHookEventsDefault := k.Bool("include-hook-events")
+	var includeHookEvents bool
+	flags.BoolVarP(&includeHookEvents, "include-hook-events", "", includeHookEventsDefault, "Include hook lifecycle events in stream output (requires --output-format stream-json)")
 
 	// SDK-compatibility flags: accepted but not acted on.
 	var sdkBetas, sdkJsonSchema, sdkFallbackModel, sdkResumeSessionAt, sdkSettingSources string
@@ -320,10 +333,10 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	// - p: stored as []string in koanf, but struct expects string (join with newline).
 	parsed.Prompt = strings.Join(k.Strings("print"), "\n")
 
-	// --allow-dangerously-skip-permissions is an alias for --dangerously-skip-permissions
-	if allowSkipPerms {
-		parsed.SkipPermissions = true
-	}
+	// --allow-dangerously-skip-permissions does NOT activate bypass in jenny's
+	// headless mode. It adds bypassPermissions as an option without enabling it.
+	// Use --dangerously-skip-permissions to actually bypass.
+	_ = allowSkipPerms
 
 	// --max-thinking-tokens is an alias for --thinking-budget
 	if flags.Changed("max-thinking-tokens") && !flags.Changed("thinking-budget") {
@@ -342,9 +355,21 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 		}
 	}
 
-	// --disallowedTools merges into DeniedTools
-	if len(disallowedTools) > 0 {
-		parsed.DeniedTools = append(parsed.DeniedTools, disallowedTools...)
+	// Merge kebab-case aliases into primary flags
+	if len(allowedToolsKebab) > 0 && len(allowedTools) == 0 {
+		allowedTools = allowedToolsKebab
+	}
+	if len(disallowedToolsKebab) > 0 && len(disallowedTools) == 0 {
+		disallowedTools = disallowedToolsKebab
+	}
+
+	// --disallowedTools: bare names (no parens) remove the tool from the
+	// registry (like --deny-tool). Scoped patterns like Bash(rm *) are kept
+	// as DisallowedTools for runtime deny evaluation via PermissionRules.
+	for _, dt := range disallowedTools {
+		if !strings.Contains(dt, "(") {
+			parsed.DeniedTools = append(parsed.DeniedTools, dt)
+		}
 	}
 
 	// --allowedTools and --tools: store for downstream filtering

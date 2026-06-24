@@ -72,9 +72,9 @@ type ModelPricing struct {
 	UnknownModel     bool
 }
 
-// PricingOverride allows partial field-level overrides from config.json.
+// PricingOverride allows partial field-level overrides from settings.json.
 // JSON tags match the upstream registry format (camelCase), consistent with
-// how the models key in config.json mirrors the registry schema directly.
+// how the models key in settings.json mirrors the registry schema directly.
 type PricingOverride struct {
 	InputUSD         *float64 `json:"input"`
 	OutputUSD        *float64 `json:"output"`
@@ -84,7 +84,7 @@ type PricingOverride struct {
 
 // ModelOverride defines user-configurable overrides for a single model.
 // JSON tags match the upstream registry format (camelCase), not snake_case,
-// so that config.json models blocks mirror the registry schema directly.
+// so that settings.json models blocks mirror the registry schema directly.
 type ModelOverride struct {
 	MaxOutput     *int             `json:"maxOutput"`
 	ContextWindow *int             `json:"contextWindow"`
@@ -99,7 +99,7 @@ type ModelOverride struct {
 
 // ModelRegistry holds the parsed model registry data and user overrides.
 // It supports lazy loading from a cache file and field-level user overrides.
-// Resolution order: user config.json override > upstream snapshot > (caller's bundled defaults).
+// Resolution order: user settings.json override > upstream snapshot > (caller's bundled defaults).
 type ModelRegistry struct {
 	mu      sync.RWMutex
 	fetchMu sync.Mutex // serializes fetch calls, not held during HTTP request
@@ -376,10 +376,10 @@ func (r *ModelRegistry) Abilities(model string) ([]string, bool) {
 }
 
 // ---------------------------------------------------------------------------
-// User override (config.json models key)
+// User override (settings.json models key)
 // ---------------------------------------------------------------------------
 
-// ParseConfigModels parses the "models" key from config.json.
+// ParseConfigModels parses the "models" key from settings.json.
 // Returns a map of model ID -> override, or an error if the JSON is malformed.
 // A missing or unexpected "models" type returns a nil error with nil map.
 func (r *ModelRegistry) ParseConfigModels(configData []byte) (map[string]*ModelOverride, error) {
@@ -387,7 +387,7 @@ func (r *ModelRegistry) ParseConfigModels(configData []byte) (map[string]*ModelO
 		Models json.RawMessage `json:"models"`
 	}
 	if err := json.Unmarshal(configData, &raw); err != nil {
-		log.Warn("registry: failed to parse config.json", "error", err)
+		log.Warn("registry: failed to parse settings.json", "error", err)
 		return nil, err
 	}
 
@@ -397,14 +397,14 @@ func (r *ModelRegistry) ParseConfigModels(configData []byte) (map[string]*ModelO
 
 	var models map[string]*ModelOverride
 	if err := json.Unmarshal(raw.Models, &models); err != nil {
-		log.Warn("registry: malformed models block in config.json, treating as empty", "error", err)
+		log.Warn("registry: malformed models block in settings.json, treating as empty", "error", err)
 		return nil, err
 	}
 	return models, nil
 }
 
 // ParseConfigModelsFromKoanf extracts the "models" key from a koanf instance
-// that has already loaded config.json. It produces the same result as
+// that has already loaded settings.json. It produces the same result as
 // ParseConfigModels would for the same JSON content.
 // Returns (nil, nil) when the "models" key is absent or not a valid object.
 func (r *ModelRegistry) ParseConfigModelsFromKoanf(k *koanf.Koanf) (map[string]*ModelOverride, error) {
@@ -420,7 +420,7 @@ func (r *ModelRegistry) ParseConfigModelsFromKoanf(k *koanf.Koanf) (map[string]*
 	// koanf parses JSON objects as map[string]interface{}.
 	modelsMap, ok := raw.(map[string]interface{})
 	if !ok {
-		log.Warn("registry: models key in config.json is not a JSON object, treating as empty")
+		log.Warn("registry: models key in settings.json is not a JSON object, treating as empty")
 		return nil, nil
 	}
 
@@ -434,13 +434,13 @@ func (r *ModelRegistry) ParseConfigModelsFromKoanf(k *koanf.Koanf) (map[string]*
 
 	var models map[string]*ModelOverride
 	if err := json.Unmarshal(data, &models); err != nil {
-		log.Warn("registry: malformed models block in config.json, treating as empty", "error", err)
+		log.Warn("registry: malformed models block in settings.json, treating as empty", "error", err)
 		return nil, nil
 	}
 	return models, nil
 }
 
-// ApplyUserOverrides applies model overrides from config.json.
+// ApplyUserOverrides applies model overrides from settings.json.
 // Overrides are applied on top of the cached registry data; they don't affect
 // models that don't exist in the registry. If the cache has not been loaded yet,
 // the overrides are stored and will be applied when the cache is loaded.

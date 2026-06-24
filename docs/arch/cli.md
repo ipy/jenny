@@ -69,13 +69,14 @@ jenny --prompt-file - < prompt.txt
 | `--refresh-registry` | Synchronously fetch the latest model registry. |
 | `--offline` | Skip all network fetch, use cached data as-is. |
 | `--input-format <fmt>` | Input format: `text` (default) or `stream-json`. When `stream-json`, prompt is read from stdin as NDJSON instead of CLI args. See [sdk-input-protocol.md](./sdk-input-protocol.md). |
-| `--allow-dangerously-skip-permissions` | Alias for `--dangerously-skip-permissions` (SDK compatibility). |
+| `--allow-dangerously-skip-permissions` | Add `bypassPermissions` as an available option without activating it. In jenny's headless mode this is accepted but does not activate bypass (use `--dangerously-skip-permissions` or `--permission-mode bypassPermissions` to bypass). |
 | `--max-thinking-tokens <n>` | Alias for `--thinking-budget` (SDK compatibility). |
 | `--permission-mode <mode>` | SDK permission mode. Maps: `default` → `edit`, `acceptEdits` → `edit`, `bypassPermissions` → `unrestricted`, `plan` → `read`, `dontAsk` → `unrestricted`. |
 | `--permission-prompt-tool <name>` | Permission prompt handler. `stdio` triggers control protocol on stdin/stdout. See [sdk-input-protocol.md](./sdk-input-protocol.md). |
-| `--allowedTools <list>` | Comma-separated allowlist of tool names. When set, only listed tools are available. |
-| `--disallowedTools <list>` | Comma-separated blocklist of tool names (equivalent to `--deny-tool`). |
+| `--allowedTools <list>`, `--allowed-tools` | Tools that execute without prompting. Supports permission rule syntax: `"Bash(git log *)" "Read"`. Entries are merged into `permissions.allow` rules. |
+| `--disallowedTools <list>`, `--disallowed-tools` | Deny rules. A bare tool name removes the tool from context (like `--deny-tool`). A scoped rule like `Bash(rm *)` leaves the tool available and denies only matching calls. |
 | `--tools <preset>` | Tool preset name or empty string to disable defaults. |
+| `--include-hook-events` | Include hook lifecycle events in stream output. Requires `--output-format stream-json`. |
 | `--betas <list>` | Comma-separated beta feature flags (accepted, not acted on). |
 | `--json-schema <json>` | JSON schema for structured output. |
 | `--debug-to-stderr` | Route debug output to stderr (jenny always routes debug to stderr). |
@@ -97,7 +98,7 @@ jenny --prompt-file - < prompt.txt
 | Positional + `--prompt-file` both given | When `--prompt-file` is set, positional args are **ignored**; only `--prompt-file` values are used |
 | `--output-format stream-json` | Requires prompt (`-p`, positional, or `--input-format stream-json`) |
 | `--input-format stream-json` | Prompt comes from stdin NDJSON, not CLI args. No `-p` or positional required. |
-| `--allow-dangerously-skip-permissions` | Equivalent to `--dangerously-skip-permissions`; both set same flag |
+| `--allow-dangerously-skip-permissions` | Accepted but does **not** activate bypass. Use `--dangerously-skip-permissions` to bypass. |
 | `--max-thinking-tokens` | Equivalent to `--thinking-budget`; both set same field |
 | `--include-partial-messages` | Requires `--output-format stream-json` |
 | `--continue` with no prior sessions | Exit non-zero with error "no sessions to continue" |
@@ -108,7 +109,7 @@ jenny --prompt-file - < prompt.txt
 | `--continue` with `-r` | Exit non-zero with error "--continue is mutually exclusive with -r/--resume" |
 | `--continue` with `--no-session-persistence` | Exit non-zero with error "--continue requires session persistence" |
 | `--refresh-registry` with `--offline` | Exit non-zero with error "--refresh-registry and --offline are mutually exclusive" |
-| Boolean flag negation | `--flag=false` is accepted and overrides a `true` set in `.jenny/config.json` or via `JENNY_*`. The absence of the flag is the only way to leave the value at its low-precedence default. `--no-<flag>` is **not** a registered form. |
+| Boolean flag negation | `--flag=false` is accepted and overrides a `true` set in `.jenny/settings.json` or via `JENNY_*`. The absence of the flag is the only way to leave the value at its low-precedence default. `--no-<flag>` is **not** a registered form. |
 
 ## Exit Codes
 
@@ -169,8 +170,9 @@ All Jenny-owned env vars and CLI flags listed above go through the unified [koan
 
 1. CLI flag (highest)
 2. `JENNY_*` env var
-3. `.jenny/config.json` field
-4. Built-in default (lowest)
+3. `.jenny/settings.json` (project-level, in CWD)
+4. `~/.jenny/settings.json` (global user-level)
+5. Built-in default (lowest)
 
 ## Jenny Gaps vs Target Spec
 

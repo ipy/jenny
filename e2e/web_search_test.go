@@ -236,7 +236,7 @@ func TestWebSearchClientAPIKeyPlainForm(t *testing.T) {
 }
 
 // TestWebSearchJSONConfigDisabled verifies JSON config web-search.provider=disabled
-// is read from .jenny/config.json.
+// is read from .jenny/settings.json.
 func TestWebSearchJSONConfigDisabled(t *testing.T) {
 	mock := mockapi.NewMockServer(mockapi.WithCassetteDir(cassetteDir))
 	defer mock.Close()
@@ -248,7 +248,7 @@ func TestWebSearchJSONConfigDisabled(t *testing.T) {
 	}
 
 	configJSON := `{"web-search": {"provider": "disabled"}}`
-	if err := os.WriteFile(filepath.Join(jennyConfigDir, "config.json"), []byte(configJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(jennyConfigDir, "settings.json"), []byte(configJSON), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -272,7 +272,7 @@ func TestWebSearchJSONConfigDisabled(t *testing.T) {
 }
 
 // TestWebSearchJSONConfigNative verifies JSON config web-search.provider=native
-// is read from .jenny/config.json.
+// is read from .jenny/settings.json.
 func TestWebSearchJSONConfigNative(t *testing.T) {
 	mock := mockapi.NewMockServer(mockapi.WithCassetteDir(cassetteDir))
 	defer mock.Close()
@@ -284,7 +284,7 @@ func TestWebSearchJSONConfigNative(t *testing.T) {
 	}
 
 	configJSON := `{"web-search": {"provider": "native"}}`
-	if err := os.WriteFile(filepath.Join(jennyConfigDir, "config.json"), []byte(configJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(jennyConfigDir, "settings.json"), []byte(configJSON), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -321,7 +321,7 @@ func TestWebSearchConfigPrecedenceEnvWins(t *testing.T) {
 
 	// JSON config sets provider=disabled
 	configJSON := `{"web-search": {"provider": "disabled"}}`
-	if err := os.WriteFile(filepath.Join(jennyConfigDir, "config.json"), []byte(configJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(jennyConfigDir, "settings.json"), []byte(configJSON), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -360,7 +360,7 @@ func TestWebSearchConfigPrecedenceEnvDisabledOverJSON(t *testing.T) {
 
 	// JSON config sets provider=native
 	configJSON := `{"web-search": {"provider": "native"}}`
-	if err := os.WriteFile(filepath.Join(jennyConfigDir, "config.json"), []byte(configJSON), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(jennyConfigDir, "settings.json"), []byte(configJSON), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

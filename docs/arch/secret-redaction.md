@@ -106,7 +106,7 @@ Informs the agent of the existence and format of redacted content. Instructs the
 
 ## Configuration
 
-The redact mode is read from the unified koanf config layer (`.jenny/config.json`, `JENNY_*` env vars, then CLI flags — highest precedence wins). See [cli.md](./cli.md) for the full precedence rule.
+The redact mode is read from the unified koanf config layer (`.jenny/settings.json`, `JENNY_*` env vars, then CLI flags — highest precedence wins). See [cli.md](./cli.md) for the full precedence rule.
 
 ### Environment Variables
 

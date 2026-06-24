@@ -34,7 +34,7 @@ The `.jenny` directory can exist in two locations:
 ### Project-Local Layout (`<project-root>/.jenny/`)
 
 The project-local `.jenny/` directory may contain:
-- `config.json` — project-specific configuration (model overrides, permission level, etc.)
+- `settings.json` — project-specific configuration (model overrides, permission level, etc.)
 - `pricing.json` — custom per-model pricing overrides
 - `.env` — environment variable overrides
 - `mcp-resources/` — MCP resource persistence scoped to project

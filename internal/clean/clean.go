@@ -22,7 +22,7 @@ import (
 const CleanUsage = `Usage: jenny clean [--dry-run]
 
 Remove every session directory under $JENNY_HOME/sessions/.
-Config files at the top of $JENNY_HOME (.env, config.json, skills/) are preserved.
+Config files at the top of $JENNY_HOME (.env, settings.json, skills/) are preserved.
 
 Flags:
   --dry-run   Print "would remove:" lines and exit without deleting anything.

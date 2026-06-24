@@ -249,13 +249,13 @@ func TestRegistryCacheLoading(t *testing.T) {
 	})
 }
 
-// TestRegistryConfigOverride verifies user config.json models key overrides
+// TestRegistryConfigOverride verifies user settings.json models key overrides
 // take precedence over cache values.
 func TestRegistryConfigOverride(t *testing.T) {
-	t.Run("valid models override in config.json", func(t *testing.T) {
+	t.Run("valid models override in settings.json", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
-		// Write a config.json with a models override
+		// Write a settings.json with a models override
 		configJSON := map[string]any{
 			"models": map[string]any{
 				"claude-sonnet-4-6": map[string]any{
@@ -267,7 +267,7 @@ func TestRegistryConfigOverride(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(tmpDir, "config.json"), data, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(tmpDir, "settings.json"), data, 0644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -279,7 +279,7 @@ func TestRegistryConfigOverride(t *testing.T) {
 		// Config should load without errors
 	})
 
-	t.Run("malformed models key in config.json is warned", func(t *testing.T) {
+	t.Run("malformed models key in settings.json is warned", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		// Malformed models block as a string instead of object
@@ -290,7 +290,7 @@ func TestRegistryConfigOverride(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(tmpDir, "config.json"), data, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(tmpDir, "settings.json"), data, 0644); err != nil {
 			t.Fatal(err)
 		}
 

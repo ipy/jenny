@@ -297,7 +297,7 @@ func NewQueryEngine(cfg *StreamConfig, tools []tool.Tool, model string, opts ...
 
 	// Default client if none provided
 	if e.client == nil {
-		client, err := api.NewClientWithModel(model)
+		client, err := api.NewClientWithModel(ResolveModel(model))
 		if err != nil {
 			return nil, fmt.Errorf("API client creation failed: %w", err)
 		}

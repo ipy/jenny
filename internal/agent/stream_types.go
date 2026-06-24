@@ -34,6 +34,7 @@ type StreamConfig struct {
 	Enabled              bool
 	Verbose              bool
 	IncludePartial       bool
+	IncludeHookEvents    bool
 	SessionID            string
 	SessionManager       *session.Manager
 	HistoryMessages      []api.Message               // Messages loaded from transcript for resume
@@ -58,24 +59,26 @@ type StreamConfig struct {
 	// Non-compacted: survives context compaction.
 	PermissionDenials []string // Denied tool executions (toolName + inputKey pairs) for cross-turn caching
 	// Non-compacted: survives context compaction.
-	DiscoveredSkillNames []string             // Skill names discovered during execution for cross-turn persistence
-	IsForkChild          bool                 // True when this session is a fork child (subagent spawned another agent)
-	StructuredSchema     map[string]any       // JSON schema for structured output (non-interactive only)
-	StructuredDenyRules  []string             // Tool names to deny; checked by engine to enforce
-	IsNamedAgent         bool                 // True when this session is a named swarm agent
-	MaxIterations        int                  // Maximum loop iterations (0 = unlimited)
-	RedactMode           redact.RedactMode    // Secret redaction mode
-	Effort               string               // Reasoning effort level (low, medium, high) for OpenAI/DeepSeek
-	ThinkingBudget       int                  // Maximum thinking tokens for Anthropic
-	MaxToolConcurrency   int                  // Max parallel tool executions (0 = default 10); overrides env via koanf
-	DisableCompact       bool                 // When true, all compaction is disabled
-	DisableAutoCompact   bool                 // When true, only auto-compact is disabled
-	EnableSessionMemory  bool                 // When true, session-memory compaction branch is enabled
-	DisableAutoMemory    bool                 // When true, the auto-memory directory is suppressed entirely
-	ParentEngine         *QueryEngine         // Parent engine for subagent cost merge (set before RunStream)
-	PermissionLevel      tool.PermissionLevel // Parent's permission level for subagent inheritance
-	TaskStore            *tool.TaskStore      // Shared task store for persistence across sessions
-	SDKHookRunner        SDKHookRunner        // SDK hook runner for PreToolUse hooks (nil when not in SDK mode)
+	DiscoveredSkillNames []string              // Skill names discovered during execution for cross-turn persistence
+	IsForkChild          bool                  // True when this session is a fork child (subagent spawned another agent)
+	StructuredSchema     map[string]any        // JSON schema for structured output (non-interactive only)
+	StructuredDenyRules  []string              // Tool names to deny; checked by engine to enforce
+	IsNamedAgent         bool                  // True when this session is a named swarm agent
+	MaxIterations        int                   // Maximum loop iterations (0 = unlimited)
+	RedactMode           redact.RedactMode     // Secret redaction mode
+	Effort               string                // Reasoning effort level (low, medium, high) for OpenAI/DeepSeek
+	ThinkingBudget       int                   // Maximum thinking tokens for Anthropic
+	MaxToolConcurrency   int                   // Max parallel tool executions (0 = default 10); overrides env via koanf
+	DisableCompact       bool                  // When true, all compaction is disabled
+	DisableAutoCompact   bool                  // When true, only auto-compact is disabled
+	EnableSessionMemory  bool                  // When true, session-memory compaction branch is enabled
+	DisableAutoMemory    bool                  // When true, the auto-memory directory is suppressed entirely
+	ParentEngine         *QueryEngine          // Parent engine for subagent cost merge (set before RunStream)
+	PermissionLevel      tool.PermissionLevel  // Parent's permission level for subagent inheritance
+	TaskStore            *tool.TaskStore       // Shared task store for persistence across sessions
+	SDKHookRunner        SDKHookRunner         // SDK hook runner for PreToolUse hooks (nil when not in SDK mode)
+	PermissionRules      *tool.PermissionRules // Permission rules (allow/deny) from config
+	ConfigHooks          *ConfigHooks          // Config-file hooks (PreToolUse, PostToolUse, etc.)
 }
 
 // SetActiveSkills sets the active skills list for the system prompt.

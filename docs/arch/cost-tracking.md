@@ -103,7 +103,7 @@ Users can supply custom per-model pricing via `.jenny/pricing.json` in the proje
 `GetModelPricing` resolves pricing via a 4-tier cascade:
 
 1. **Custom pricing** (`.jenny/pricing.json`) — highest priority
-2. **External model registry** (`config.GlobalRegistry().Pricing(model)`) — fetched from a remote URL with 24-hour ETag-based caching. Supports `config.json`-based `ModelOverride`/`PricingOverride` field-level overrides.
+2. **External model registry** (`config.GlobalRegistry().Pricing(model)`) — fetched from a remote URL with 24-hour ETag-based caching. Supports `settings.json`-based `ModelOverride`/`PricingOverride` field-level overrides.
 3. **DefaultPricing** — bundled pricing table
 4. **UnknownModelPricing** — conservative fallback with `hasUnknownModelCost` flag
 

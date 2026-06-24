@@ -81,7 +81,7 @@ const testModelsJSON = `{
   }
 }`
 
-// testConfigJSON is a models override block as it would appear in config.json
+// testConfigJSON is a models override block as it would appear in settings.json
 func testConfigJSON(models map[string]any) string {
 	m := map[string]any{"models": models}
 	b, _ := json.Marshal(m)
@@ -650,13 +650,13 @@ func TestCapabilityCacheIsLazy(t *testing.T) {
 	}
 }
 
-// TestConfigModelsMergePricingFields verifies that config.json models key
+// TestConfigModelsMergePricingFields verifies that settings.json models key
 // merging works field-by-field for pricing.
 func TestConfigModelsMergePricingFields(t *testing.T) {
 	log.ResetForTest()
 	r := newRegistryWithFixture(t, testModelsJSON)
 
-	// config.json models with a single pricing field
+	// settings.json models with a single pricing field
 	configJSON := testConfigJSON(map[string]any{
 		"deepseek-v4-pro": map[string]any{
 			"pricing": map[string]any{
@@ -693,7 +693,7 @@ func TestConfigModelsMergePricingFields(t *testing.T) {
 	}
 }
 
-// TestConfigModelsMalformedWarn verifies that malformed config.json returns an error.
+// TestConfigModelsMalformedWarn verifies that malformed settings.json returns an error.
 func TestConfigModelsMalformedWarn(t *testing.T) {
 	log.ResetForTest()
 	r := newRegistryWithFixture(t, testModelsJSON)

@@ -210,7 +210,7 @@ Jenny fetches a community-maintained model registry (`aidy-models`) to keep capa
 
 Capability and pricing lookups consult three sources, in order:
 
-1. **User config.json override** — `config.json`'s `models` key, a sparse patch keyed by model ID. Supports partial field-level overrides for `maxOutput`, `contextWindow`, `pricing` (field-by-field merge), `modalities`, and `abilities`. A malformed block emits a WARN log and is treated as empty.
+1. **User settings.json override** — `settings.json`'s `models` key, a sparse patch keyed by model ID. Supports partial field-level overrides for `maxOutput`, `contextWindow`, `pricing` (field-by-field merge), `modalities`, and `abilities`. A malformed block emits a WARN log and is treated as empty.
 2. **External registry snapshot** — `~/.jenny/models.json`, fetched from `aidy-models` on startup. Contains 6700+ models across 190+ providers.
 3. **Bundled defaults** — the capability table in `internal/api/model_caps.go` and the pricing table in `internal/agent/cost.go`.
 
@@ -220,9 +220,9 @@ Capability and pricing lookups consult three sources, in order:
 |------|------|--------|
 | `~/.jenny/models.json` | Upstream registry snapshot (verbatim JSON, ~5.5MB) | jenny (fetch on startup) |
 | `~/.jenny/meta.json` | Fetch metadata (fetchedAt, ETag, schemaVersion) and exchange rates | jenny |
-| `config.json` → `models` key | User-supplied field overrides on individual models | user (handwritten) |
+| `settings.json` → `models` key | User-supplied field overrides on individual models | user (handwritten) |
 
-`models.json` and `meta.json` are separate files so their lifecycles do not collide: the fetch goroutine rewrites them; the user rewrites `config.json`. A user editing their override block does not race with a fetch.
+`models.json` and `meta.json` are separate files so their lifecycles do not collide: the fetch goroutine rewrites them; the user rewrites `settings.json`. A user editing their override block does not race with a fetch.
 
 ### Fetch Strategy
 

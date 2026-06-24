@@ -157,7 +157,7 @@ Following [koanf-config.md](../arch/koanf-config.md) layering (highest to lowest
 
 1. **CLI Flag**: `--permission-level <level>`
 2. **Environment Variable**: `JENNY_PERMISSION_LEVEL` → koanf key `permission-level`
-3. **JSON Config**: `.jenny/config.json` key `"permission-level"` (dashed, matching koanf convention)
+3. **JSON Config**: `.jenny/settings.json` key `"permission-level"` (dashed, matching koanf convention)
 
 ### Backward Compatibility
 
@@ -205,7 +205,7 @@ When both `--dangerously-skip-permissions` and `--permission-level` are specifie
 - **AC5:** `--dangerously-skip-permissions` maps to `unrestricted` with no behavior change.
 - **AC6:** Both `--dangerously-skip-permissions` and `--permission-level` specified → unrestricted + warning logged to stderr (structured log, following [structured-logging.md](../arch/structured-logging.md)).
 - **AC7:** Subagent receives parent's `PermissionLevel` via tool-context config and cannot escalate beyond it (see [swarm.md](./swarm.md)).
-- **AC8:** Configuration precedence: CLI flag > `JENNY_PERMISSION_LEVEL` env > `.jenny/config.json` key (see [koanf-config.md](../arch/koanf-config.md)).
+- **AC8:** Configuration precedence: CLI flag > `JENNY_PERMISSION_LEVEL` env > `.jenny/settings.json` key (see [koanf-config.md](../arch/koanf-config.md)).
 - **AC9:** Write/Edit at `edit` and `execute` require a prior `Read` of the same path; `unrestricted` skips the check.
 
 ## Related

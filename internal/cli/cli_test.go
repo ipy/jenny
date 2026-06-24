@@ -1002,7 +1002,7 @@ func TestParseDisableAutoMemoryFlagOverridesEnv(t *testing.T) {
 // TestParseBoolFlagExplicitFalseOverridesConfig is a regression test for the
 // pflag + koanf chain. pflag's BoolVar accepts `--flag=false` as an explicit
 // negation, and posflag.Provider writes that value into koanf, which then
-// overrides the lower-precedence config.json. This test pins that behaviour
+// overrides the lower-precedence settings.json. This test pins that behaviour
 // so a future refactor doesn't accidentally drop it.
 func TestParseBoolFlagExplicitFalseOverridesConfig(t *testing.T) {
 	origArgs := os.Args
@@ -1015,13 +1015,13 @@ func TestParseBoolFlagExplicitFalseOverridesConfig(t *testing.T) {
 		os.Chdir(origDir)
 	}()
 
-	// Stage a project-local .jenny/config.json with the flag set to true.
+	// Stage a project-local .jenny/settings.json with the flag set to true.
 	tmpDir := t.TempDir()
 	jennyDir := tmpDir + "/.jenny"
 	if err := os.MkdirAll(jennyDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(jennyDir+"/config.json",
+	if err := os.WriteFile(jennyDir+"/settings.json",
 		[]byte(`{"disable-compact": true, "disable-auto-memory": true}`),
 		0o644); err != nil {
 		t.Fatalf("write config: %v", err)
@@ -1031,7 +1031,7 @@ func TestParseBoolFlagExplicitFalseOverridesConfig(t *testing.T) {
 	}
 
 	// Pass --disable-compact=false and --disable-auto-memory=false explicitly.
-	// The CLI flag must win over the config.json values.
+	// The CLI flag must win over the settings.json values.
 	os.Args = []string{"jenny", "--disable-compact=false", "--disable-auto-memory=false", "--print", "hello"}
 
 	flags, _, err := Parse()
@@ -1039,15 +1039,15 @@ func TestParseBoolFlagExplicitFalseOverridesConfig(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if flags.DisableCompact {
-		t.Errorf("expected --disable-compact=false to override config.json true, got true")
+		t.Errorf("expected --disable-compact=false to override settings.json true, got true")
 	}
 	if flags.DisableAutoMemory {
-		t.Errorf("expected --disable-auto-memory=false to override config.json true, got true")
+		t.Errorf("expected --disable-auto-memory=false to override settings.json true, got true")
 	}
 }
 
 // TestParseBoolFlagAbsentUsesConfig verifies that without an explicit CLI flag,
-// the value from .jenny/config.json flows through into the parsed Flags.
+// the value from .jenny/settings.json flows through into the parsed Flags.
 func TestParseBoolFlagAbsentUsesConfig(t *testing.T) {
 	origArgs := os.Args
 	origDir, err := os.Getwd()
@@ -1064,7 +1064,7 @@ func TestParseBoolFlagAbsentUsesConfig(t *testing.T) {
 	if err := os.MkdirAll(jennyDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(jennyDir+"/config.json",
+	if err := os.WriteFile(jennyDir+"/settings.json",
 		[]byte(`{"disable-compact": true}`), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -1079,7 +1079,7 @@ func TestParseBoolFlagAbsentUsesConfig(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !flags.DisableCompact {
-		t.Errorf("expected config.json disable-compact=true to flow through, got false")
+		t.Errorf("expected settings.json disable-compact=true to flow through, got false")
 	}
 }
 
@@ -1111,8 +1111,8 @@ func TestParseAllowDangerouslySkipPermissions(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if !flags.SkipPermissions {
-		t.Error("expected skip-permissions to be true via --allow-dangerously-skip-permissions")
+	if flags.SkipPermissions {
+		t.Error("expected skip-permissions to be false; --allow-dangerously-skip-permissions should not activate bypass")
 	}
 }
 
@@ -1213,6 +1213,92 @@ func TestParseSDKCompatibilityFlags(t *testing.T) {
 	}
 }
 
+func TestParseGlobalConfigLoaded(t *testing.T) {
+	origArgs := os.Args
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	defer func() {
+		os.Args = origArgs
+		os.Chdir(origDir)
+	}()
+
+	// Set up a fake JENNY_HOME with settings.json
+	fakeHome := t.TempDir()
+	t.Setenv("JENNY_HOME", fakeHome)
+	if err := os.WriteFile(fakeHome+"/settings.json",
+		[]byte(`{"model": "global-model", "verbose": true}`), 0o644); err != nil {
+		t.Fatalf("write global config: %v", err)
+	}
+
+	// CWD without project config
+	tmpCWD := t.TempDir()
+	if err := os.Chdir(tmpCWD); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+
+	os.Args = []string{"jenny", "--print", "hello"}
+
+	flags, _, err := Parse()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if flags.Model != "global-model" {
+		t.Errorf("expected model 'global-model' from global config, got %q", flags.Model)
+	}
+	if !flags.Verbose {
+		t.Error("expected verbose=true from global config")
+	}
+}
+
+func TestParseProjectConfigOverridesGlobal(t *testing.T) {
+	origArgs := os.Args
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	defer func() {
+		os.Args = origArgs
+		os.Chdir(origDir)
+	}()
+
+	// Set up global config
+	fakeHome := t.TempDir()
+	t.Setenv("JENNY_HOME", fakeHome)
+	if err := os.WriteFile(fakeHome+"/settings.json",
+		[]byte(`{"model": "global-model", "verbose": true}`), 0o644); err != nil {
+		t.Fatalf("write global config: %v", err)
+	}
+
+	// Set up project config that overrides model but not verbose
+	tmpCWD := t.TempDir()
+	jennyDir := tmpCWD + "/.jenny"
+	if err := os.MkdirAll(jennyDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(jennyDir+"/settings.json",
+		[]byte(`{"model": "project-model"}`), 0o644); err != nil {
+		t.Fatalf("write project config: %v", err)
+	}
+	if err := os.Chdir(tmpCWD); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+
+	os.Args = []string{"jenny", "--print", "hello"}
+
+	flags, _, err := Parse()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if flags.Model != "project-model" {
+		t.Errorf("expected model 'project-model' (project overrides global), got %q", flags.Model)
+	}
+	if !flags.Verbose {
+		t.Error("expected verbose=true (inherited from global config)")
+	}
+}
+
 func TestParseSDKFullSpawn(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
@@ -1245,5 +1331,79 @@ func TestParseSDKFullSpawn(t *testing.T) {
 	}
 	if len(flags.AllowedTools) != 7 {
 		t.Errorf("expected 7 allowed tools, got %d", len(flags.AllowedTools))
+	}
+}
+
+func TestParseAllowedToolsKebabCase(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "--allowed-tools", "Read,Write,Bash", "--print", "hello"}
+
+	flags, _, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if len(flags.AllowedTools) != 3 {
+		t.Errorf("expected 3 allowed tools via --allowed-tools, got %d: %v", len(flags.AllowedTools), flags.AllowedTools)
+	}
+}
+
+func TestParseDisallowedToolsKebabCase(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "--disallowed-tools", "Bash,Write", "--print", "hello"}
+
+	flags, _, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if len(flags.DisallowedTools) != 2 {
+		t.Errorf("expected 2 disallowed tools via --disallowed-tools, got %d", len(flags.DisallowedTools))
+	}
+}
+
+func TestParseDisallowedToolsScopedNotInDeniedTools(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "--disallowedTools", "Edit,Bash(rm *)", "--print", "hello"}
+
+	flags, _, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	// Bare name "Edit" should be in DeniedTools (removes from registry).
+	found := false
+	for _, d := range flags.DeniedTools {
+		if d == "Edit" {
+			found = true
+		}
+		if d == "Bash(rm *)" {
+			t.Error("scoped rule Bash(rm *) should NOT be in DeniedTools")
+		}
+	}
+	if !found {
+		t.Error("expected bare name 'Edit' to be merged into DeniedTools")
+	}
+	// Scoped pattern should remain in DisallowedTools for permission rules.
+	if len(flags.DisallowedTools) != 2 {
+		t.Errorf("expected 2 DisallowedTools entries, got %d", len(flags.DisallowedTools))
+	}
+}
+
+func TestParseIncludeHookEvents(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"jenny", "--include-hook-events", "--output-format", "stream-json", "--input-format", "stream-json"}
+
+	flags, _, err := Parse()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !flags.IncludeHookEvents {
+		t.Error("expected IncludeHookEvents to be true")
 	}
 }

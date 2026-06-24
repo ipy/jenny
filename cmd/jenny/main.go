@@ -28,6 +28,7 @@ import (
 	"github.com/ipy/jenny/internal/skills"
 	"github.com/ipy/jenny/internal/tool"
 	"github.com/joho/godotenv"
+	"github.com/knadh/koanf/v2"
 )
 
 // --version and the stream-json claude_code_version field must agree.
@@ -151,7 +152,7 @@ func run() error {
 		return nil
 	}
 
-	// Initialize the global model registry early so that config.json models
+	// Initialize the global model registry early so that settings.json models
 	// block validation (WARN on malformed) happens even for --print-system-prompt.
 	// Cache is stored at ~/.jenny/models.json with metadata in ~/.jenny/meta.json.
 	registryCachePath := filepath.Join(constants.JennyHomeDir(), "models.json")
@@ -166,9 +167,9 @@ func run() error {
 		reg.SetOffline(true)
 		log.Debug("registry: offline mode enabled, using cache as-is")
 	}
-	// Load user model overrides from config.json via the existing koanf instance.
+	// Load user model overrides from settings.json via the existing koanf instance.
 	// Do this early so diagnostics (e.g. WARN on malformed models block) are emitted
-	// before any early exit. koanf already loaded .jenny/config.json during cli.Parse().
+	// before any early exit. koanf already loaded .jenny/settings.json during cli.Parse().
 	if reg != nil {
 		if models, err := reg.ParseConfigModelsFromKoanf(k); err == nil && models != nil {
 			if err := reg.ApplyUserOverrides(models); err != nil {
@@ -244,7 +245,7 @@ func run() error {
 		}()
 	}
 
-	// Initialize the multi-provider router from config.json via koanf (or env).
+	// Initialize the multi-provider router from settings.json via koanf (or env).
 	// Idempotent: subsequent calls are no-ops.
 	routerCfg, err := router.LoadConfigFromKoanf(k)
 	if err != nil {
@@ -262,7 +263,7 @@ func run() error {
 
 	// Create session manager for transcript persistence.
 	// Transcript directory flows through the koanf config layer
-	// (--transcript-dir / JENNY_TRANSCRIPT_DIR / .jenny/config.json).
+	// (--transcript-dir / JENNY_TRANSCRIPT_DIR / .jenny/settings.json).
 	sessionManager, err := session.NewManager(flags.TranscriptDir, flags.NoSessionPersistence)
 	if err != nil {
 		return fmt.Errorf("creating session manager: %w", err)
@@ -555,7 +556,7 @@ func run() error {
 
 	// Redact mode is read by the unified koanf config layer (cli.Flags.RedactMode):
 	//   1. --redact CLI flag (highest)
-	//   2. JENNY_REDACT env var / .jenny/config.json
+	//   2. JENNY_REDACT env var / .jenny/settings.json
 	//   3. Default "redact" (one-way) when nothing is set, applied by ParseRedactMode.
 	redactMode := redact.ParseRedactMode(flags.RedactMode)
 
@@ -571,10 +572,15 @@ func run() error {
 
 	// Build stream config
 	// Create ReadFileCache and pass it through StreamConfig for engine-level wiring
+	// Build permission rules: start from settings.json, then merge CLI flags.
+	permRules := loadPermissionRules(k)
+	permRules = mergeCliPermissionRules(permRules, flags)
+
 	streamCfg := agent.StreamConfig{
 		Enabled:             flags.OutputFormat == "stream-json",
 		Verbose:             flags.Verbose,
 		IncludePartial:      flags.IncludePartialMessages,
+		IncludeHookEvents:   flags.IncludeHookEvents,
 		SessionID:           sessionID,
 		SessionManager:      sessionManager,
 		HistoryMessages:     historyMessages,
@@ -603,6 +609,8 @@ func run() error {
 		SubagentModel:       flags.SubagentModel,
 		PermissionLevel:     permLevel,
 		TaskStore:           taskStore,
+		PermissionRules:     permRules,
+		ConfigHooks:         loadConfigHooks(k),
 	}
 
 	// Set parent config on runner for named agent inheritance
@@ -769,4 +777,56 @@ func buildPrintTools(flags *cli.Flags) []tool.Tool {
 	tools = append(tools, agentTool)
 
 	return tools
+}
+
+// mergeCliPermissionRules merges --allowedTools and scoped --disallowedTools entries
+// into the permission rules loaded from settings.json.
+func mergeCliPermissionRules(rules *tool.PermissionRules, flags *cli.Flags) *tool.PermissionRules {
+	var cliAllow []string
+	var cliDeny []string
+
+	cliAllow = append(cliAllow, flags.AllowedTools...)
+	for _, dt := range flags.DisallowedTools {
+		if strings.Contains(dt, "(") {
+			cliDeny = append(cliDeny, dt)
+		}
+	}
+
+	if len(cliAllow) == 0 && len(cliDeny) == 0 {
+		return rules
+	}
+	if rules == nil {
+		rules = &tool.PermissionRules{}
+	}
+	rules.Allow = append(rules.Allow, cliAllow...)
+	rules.Deny = append(rules.Deny, cliDeny...)
+	return rules
+}
+
+// loadPermissionRules extracts permissions.allow and permissions.deny from the
+// koanf config instance. Returns nil if no rules are defined.
+func loadPermissionRules(k *koanf.Koanf) *tool.PermissionRules {
+	allow := k.Strings("permissions.allow")
+	deny := k.Strings("permissions.deny")
+	if len(allow) == 0 && len(deny) == 0 {
+		return nil
+	}
+	return &tool.PermissionRules{
+		Allow: allow,
+		Deny:  deny,
+	}
+}
+
+// loadConfigHooks extracts hooks from the koanf config instance.
+// Returns nil if no hooks are defined.
+func loadConfigHooks(k *koanf.Koanf) *agent.ConfigHooks {
+	raw := k.Get("hooks")
+	if raw == nil {
+		return nil
+	}
+	rawMap, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	return agent.ParseConfigHooks(map[string]any{"hooks": rawMap})
 }
