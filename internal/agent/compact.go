@@ -258,7 +258,7 @@ func (e *QueryEngine) compactMessages(ctx context.Context, messages []api.Messag
 //
 // The summary is the only preserved context from dropped messages. Each item
 // ensures the model can continue correctly after compaction.
-const compactSummaryRequirements = `Provide a comprehensive summary of the entire conversation so far. Output ONLY the summary text. Do not continue any prior conversation or call any tools.
+const compactSummaryRequirements = `Provide a comprehensive summary of the entire conversation so far. Output ONLY the summary text.
 
 For every claim, tag it with a confidence level: [CONFIRMED] for observed facts, [SPECULATIVE] for reasoned but unverified judgments, [UNVERIFIED] for stated intent not yet acted on, [EXCLUDED] for approaches tried and rejected or ruled out.
 
@@ -275,12 +275,12 @@ For every claim, tag it with a confidence level: [CONFIRMED] for observed facts,
 // for in-session compaction. It reuses the session's system prompt and tools
 // so the entire prefix is a cache hit. Wrapped in <system-reminder> to
 // override the agent persona.
-var inSessionCompactPrompt = "<system-reminder>\nThe context window is approaching its limit. This is a separate compaction request.\n</system-reminder>\n" + compactSummaryRequirements
+var inSessionCompactPrompt = "<system-reminder>\nThe context window is approaching its limit. This is a separate compaction request. Do not continue any prior conversation or call any tools.\n</system-reminder>\n" + compactSummaryRequirements
 
 // fallbackCompactSystemPrompt is the system prompt for fallback summary
 // compaction. It uses the same summary requirements as in-session compaction
 // to ensure consistent output format.
-var fallbackCompactSystemPrompt = []string{"You are a helpful assistant that summarizes conversations. " + compactSummaryRequirements}
+var fallbackCompactSystemPrompt = []string{"You are a helpful assistant that summarizes conversations. Do not continue the conversation or call any tools. " + compactSummaryRequirements}
 
 // inSessionCompact performs compaction by appending a summary instruction to the
 // existing message chain, sharing the cached system prompt + tools + message
