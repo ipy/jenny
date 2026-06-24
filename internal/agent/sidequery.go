@@ -208,8 +208,10 @@ func (sq *SideQuery) executeFork(ctx context.Context, sqctx *SideQueryContext) (
 	}, nil
 }
 
-// executeSummary condenses the conversation and sends a separate request,
-// optionally using a cheaper model.
+// executeSummary renders the conversation into a single user message and sends
+// it as a separate request, optionally using a cheaper model. The message
+// history is flattened into a text transcript so the LLM sees a clean,
+// structured input rather than a multi-turn conversation it must untangle.
 func (sq *SideQuery) executeSummary(ctx context.Context, sqctx *SideQueryContext) (*SideQueryResult, error) {
 	if sq.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -237,26 +239,26 @@ func (sq *SideQuery) executeSummary(ctx context.Context, sqctx *SideQueryContext
 		client.SetThinkingConfig(sqctx.ThinkingConfig)
 	}
 
-	summaryMessages := prepareSummaryMessages(sq.Messages)
-	summaryMessages = truncateLargeToolResults(summaryMessages, 2000)
-
-	if sq.SummaryMaxMessages > 0 && len(summaryMessages) > sq.SummaryMaxMessages {
-		summaryMessages = summaryMessages[len(summaryMessages)-sq.SummaryMaxMessages:]
+	msgs := sq.Messages
+	if sq.SummaryMaxMessages > 0 && len(msgs) > sq.SummaryMaxMessages {
+		msgs = msgs[len(msgs)-sq.SummaryMaxMessages:]
 	}
 
-	// Ensure first message is a user message
-	for len(summaryMessages) > 0 && summaryMessages[0].Role != api.RoleUser {
-		summaryMessages = summaryMessages[1:]
-	}
+	transcript := renderConversationText(msgs)
 
+	var content string
 	if sq.Prompt != "" {
-		summaryMessages = append(summaryMessages, api.Message{
-			Role:    api.RoleUser,
-			Content: sq.Prompt,
-		})
+		content = transcript + "\n\n" + sq.Prompt
+	} else {
+		content = transcript
 	}
 
-	resp, err := client.SendMessage(ctx, summaryMessages, nil, nil, sq.SummarySystemPrompt, "")
+	singleMessage := []api.Message{{
+		Role:    api.RoleUser,
+		Content: content,
+	}}
+
+	resp, err := client.SendMessage(ctx, singleMessage, nil, nil, sq.SummarySystemPrompt, "")
 	if err != nil {
 		return nil, fmt.Errorf("side query %s summary API call: %w", sq.Name, err)
 	}
@@ -274,6 +276,79 @@ func (sq *SideQuery) executeSummary(ctx context.Context, sqctx *SideQueryContext
 		Usage: resp.Usage,
 		Mode:  SideQueryModeSummary,
 	}, nil
+}
+
+const summaryToolResultMaxLen = 2000
+
+// renderConversationText converts a message history into a plain-text
+// transcript suitable for sending as a single user message. Each message
+// is labeled with its role; tool calls and results get structured labels.
+// Media, thinking blocks, and signatures are stripped.
+func renderConversationText(messages []api.Message) string {
+	if len(messages) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	for i, msg := range messages {
+		if i > 0 {
+			sb.WriteByte('\n')
+		}
+
+		// Render tool results (user messages carrying tool responses)
+		if len(msg.ToolResults) > 0 {
+			for j, tr := range msg.ToolResults {
+				if j > 0 {
+					sb.WriteByte('\n')
+				}
+				if tr.IsError {
+					sb.WriteString("[tool_result: error]\n")
+				} else {
+					sb.WriteString("[tool_result]\n")
+				}
+				content := tr.Content
+				if len(content) > summaryToolResultMaxLen {
+					half := summaryToolResultMaxLen / 2
+					content = content[:half] + "\n... [truncated] ...\n" + content[len(content)-half:]
+				}
+				sb.WriteString(content)
+				sb.WriteByte('\n')
+			}
+			// Also render any text content on the same message
+			if msg.Content != "" {
+				sb.WriteString("[user]\n")
+				sb.WriteString(stripMediaMarkers(msg.Content))
+				sb.WriteByte('\n')
+			}
+			continue
+		}
+
+		// Render text content
+		switch msg.Role {
+		case "user":
+			sb.WriteString("[user]\n")
+			sb.WriteString(stripMediaMarkers(msg.Content))
+			sb.WriteByte('\n')
+		case "assistant":
+			if msg.Content != "" {
+				sb.WriteString("[assistant]\n")
+				sb.WriteString(msg.Content)
+				sb.WriteByte('\n')
+			}
+			for _, tu := range msg.ToolUse {
+				sb.WriteString("[tool_use: ")
+				sb.WriteString(tu.Name)
+				sb.WriteString("]\n")
+			}
+		default:
+			sb.WriteString("[")
+			sb.WriteString(msg.Role)
+			sb.WriteString("]\n")
+			sb.WriteString(msg.Content)
+			sb.WriteByte('\n')
+		}
+	}
+	return sb.String()
 }
 
 // estimateForkCost estimates the cost of fork mode. The entire message prefix
@@ -296,13 +371,29 @@ func (sq *SideQuery) estimateForkCost(sqctx *SideQueryContext) float64 {
 		float64(sq.MaxTokens)*pricing.OutputUSD
 }
 
-// estimateSummaryCost estimates the cost of summary mode.
+// estimateSummaryCost estimates the cost of summary mode. The estimate uses
+// the raw message token count as a proxy for the rendered transcript size
+// (thinking/signature are excluded but the text overhead of labels is minor).
 func (sq *SideQuery) estimateSummaryCost(sqctx *SideQueryContext) float64 {
 	msgs := sq.Messages
 	if sq.SummaryMaxMessages > 0 && len(msgs) > sq.SummaryMaxMessages {
 		msgs = msgs[len(msgs)-sq.SummaryMaxMessages:]
 	}
-	inputTokens := estimateTokens(msgs) + estimateStringTokens(sq.Prompt)
+
+	// Approximate: rendered transcript ≈ text content of messages (thinking/sig stripped)
+	var textTokens int
+	for _, m := range msgs {
+		textTokens += estimateStringTokens(m.Content)
+		textTokens += len(m.ToolUse) * 10 // label overhead per tool call
+		for _, tr := range m.ToolResults {
+			content := tr.Content
+			if len(content) > summaryToolResultMaxLen {
+				content = content[:summaryToolResultMaxLen]
+			}
+			textTokens += estimateStringTokens(content)
+		}
+	}
+	inputTokens := textTokens + estimateStringTokens(sq.Prompt)
 
 	model := sqctx.Model
 	if sq.SummaryModel != "" {
