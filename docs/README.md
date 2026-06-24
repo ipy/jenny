@@ -84,6 +84,7 @@ Specifications for the core agent engine and infrastructure.
 | [parallel-tool-execution.md](./arch/parallel-tool-execution.md) | Concurrent tool execution |
 | [provider-architecture.md](./arch/provider-architecture.md) | API provider and client architecture |
 | [provider-aware-fixes.md](./arch/provider-aware-fixes.md) | Provider-specific API fix rationale |
+| [qa-gate.md](./arch/qa-gate.md) | QA gate for end_turn deliverable verification |
 | [query-engine.md](./arch/query-engine.md) | QueryEngine lifecycle and state |
 | [rate-limit-handling.md](./arch/rate-limit-handling.md) | API retry and rate limit handling |
 | [session-memory.md](./arch/session-memory.md) | Session-scoped memory storage |
@@ -188,6 +189,7 @@ Registry → QueryEngine → git → system prompt → Read/Glob/Grep → securi
 | Sandbox | [sandbox.md](./patterns/sandbox.md) |
 | Notebook edit | [notebook-edit.md](./tools/notebook-edit.md) |
 | MCP resources | [list-mcp-resources.md](./tools/list-mcp-resources.md), [read-mcp-resource.md](./tools/read-mcp-resource.md) |
+| QA gate | [qa-gate.md](./arch/qa-gate.md) |
 
 ### P3 — Optional enhancements
 

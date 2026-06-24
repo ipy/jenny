@@ -22,7 +22,8 @@ import (
 // progress eval). Set high enough that thinking models don't starve the JSON output:
 // the prompt + expected response is ~200 tokens, but thinking models share the output
 // budget between thinking blocks and visible text, so a larger headroom is needed.
-const forkMaxTokens = 1024
+// Increased from 1024 to accommodate accept_criteria/constraints in complexity eval.
+const forkMaxTokens = 2048
 
 // SubmitMessage runs a single query turn: persist message, run agent loop,
 // flush state on completion. Returns the text result and error.
@@ -350,6 +351,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 						})
 						e.persistSystemReminder(sessionID, reminder)
 					}
+					e.qaCompactSeen = true
 					log.Debug("Context compaction succeeded", "newMessageCount", len(messages))
 				} else {
 					// Compaction failed - increment failure counter with persistence

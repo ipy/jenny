@@ -74,8 +74,9 @@ func (e *QueryEngine) handleStopReason(
 }
 
 // handleStopEndTurn processes the end_turn stop reason: validates structured
-// output, determines final result, emits NDJSON success result, resets compaction
-// counter, runs memory extraction, and returns the final result.
+// output, determines final result, runs QA gate if triggered, emits NDJSON
+// success result, resets compaction counter, runs memory extraction, and
+// returns the final result.
 func (e *QueryEngine) handleStopEndTurn(
 	ctx context.Context,
 	resp *api.Response,
@@ -102,18 +103,36 @@ func (e *QueryEngine) handleStopEndTurn(
 			finalResult = e.structuredOutputResult
 		}
 	}
+
+	// Append orphan tool results before QA evaluation so the full context is available
 	if len(toolResults) > 0 {
-		// Send tool results back to model before ending
 		userMsg := buildToolResultUserMsg(toolResults)
 		*messages = append(*messages, userMsg)
-		// end_turn means the model is done - output final result
-		if e.streamCfg.Enabled {
-			e.emitSuccessResult(resp, finalResult, sessionID)
-		}
-		// Reset compaction failure counter on successful API response
-		e.resetCompactFailCount()
-		return finalResult, nil, false
 	}
+
+	// QA gate: intercept end_turn for complex tasks
+	if e.shouldTriggerQA() {
+		verdict, err := e.runQAGate(ctx, *messages, sessionID)
+		if err != nil {
+			log.Warn("QA gate error, proceeding with delivery", "error", err)
+		} else {
+			// Emit qa_eval stream event
+			e.emitQAEvalEvent(verdict, sessionID)
+
+			if verdict.Verdict == "FAIL" && e.qaRetryCount < qaMaxRetries {
+				e.qaRetryCount++
+				feedbackMsg := buildQAFeedbackMessage(verdict, e.qaRetryCount, qaMaxRetries)
+				*messages = append(*messages, feedbackMsg)
+				log.Info("QA gate FAIL, retrying",
+					"retry", e.qaRetryCount,
+					"gaps", verdict.Gaps,
+				)
+				return "", nil, true
+			}
+			// PASS or retries exhausted — proceed to delivery
+		}
+	}
+
 	// Output final result
 	if e.streamCfg.Enabled {
 		e.emitSuccessResult(resp, finalResult, sessionID)
@@ -401,6 +420,30 @@ func (e *QueryEngine) emitSuccessResult(resp *api.Response, finalResult, session
 		TotalCostUSD:    e.costState.TotalCostUSD,
 		ModelUsage:      e.buildModelUsage(),
 		FastModeState:   "off",
+	}
+	data, _ := json.Marshal(msg)
+	fmt.Fprintln(os.Stdout, string(data))
+}
+
+// emitQAEvalEvent emits a system/qa_eval stream event with the QA verdict.
+func (e *QueryEngine) emitQAEvalEvent(v *qaVerdict, sessionID string) {
+	if !e.streamCfg.Enabled || v == nil {
+		return
+	}
+	e.mu.Lock()
+	totalCost := e.costState.TotalCostUSD
+	modelUsage := e.buildModelUsage()
+	e.mu.Unlock()
+
+	msg := StreamMessage{
+		Type:         "system",
+		Subtype:      "qa_eval",
+		Result:       qaEvalResultJSON(v, e.qaRetryCount, qaMaxRetries),
+		SessionID:    sessionID,
+		Uuid:         GenerateUUID(),
+		DurationMs:   time.Since(e.startTime).Milliseconds(),
+		TotalCostUSD: totalCost,
+		ModelUsage:   modelUsage,
 	}
 	data, _ := json.Marshal(msg)
 	fmt.Fprintln(os.Stdout, string(data))

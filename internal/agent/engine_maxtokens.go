@@ -12,12 +12,16 @@ import (
 
 // ComplexityResult holds the parsed result from a fork-based complexity evaluation.
 // Four orthogonal dimensions are evaluated independently and combined internally.
+// Also captures acceptance criteria and constraints for QA gate evaluation.
 type ComplexityResult struct {
 	ReasoningDepth       int  `json:"reasoning_depth"`
 	CodeVolume           int  `json:"code_volume"`
 	DomainSpecialization int  `json:"domain_specialization"`
 	IntegrationBreadth   int  `json:"integration_breadth"`
 	NeedWrite            bool `json:"need_write"`
+
+	AcceptCriteria []string `json:"accept_criteria,omitempty"`
+	Constraints    []string `json:"constraints,omitempty"`
 }
 
 // OverallComplexity computes a weighted aggregate from the four dimensions.
@@ -328,7 +332,7 @@ const complexityEvalPrompt = `<system-reminder>
 This is a separate meta-evaluation request. Prior conversation is from another agent, do not continue it or call any tools.
 </system-reminder>
 Evaluate the task being worked on across these dimensions. Respond ONLY with a JSON object, no other text, comments or fences:
-{"reasoning_depth": <1-5>, "code_volume": <1-5>, "domain_specialization": <1-5>, "integration_breadth": <1-5>, "need_write": <true/false>}
+{"reasoning_depth": <1-5>, "code_volume": <1-5>, "domain_specialization": <1-5>, "integration_breadth": <1-5>, "need_write": <true/false>, "accept_criteria": ["criterion 1", ...], "constraints": ["constraint 1", ...]}
 
 Dimension rubrics (pick the LOWEST level that fits for each):
 
@@ -360,7 +364,11 @@ INTEGRATION BREADTH — how many components or files are touched:
   4 = Cross-module. e.g., change a shared interface used by 5+ consumers.
   5 = System-wide. e.g., migrate a database schema affecting all layers.
 
-need_write=true if the task involves writing/modifying code, articles, or other complex artifacts.`
+need_write=true if the task involves writing/modifying code, articles, or other complex artifacts.
+
+accept_criteria: List the concrete, measurable acceptance criteria for the user's request. Derive these from the user's first message. Each criterion should be independently verifiable. If the request is vague, infer the most reasonable criteria. Return an empty list only for trivial tasks.
+
+constraints: List any constraints or restrictions stated or implied by the user (e.g., "must use existing API", "no new dependencies", "backward compatible"). Return an empty list if none.`
 
 // forkComplexityEval is deprecated — complexity eval now uses the SideQuery
 // framework via dispatchComplexityEval in engine_loop.go. This function is
