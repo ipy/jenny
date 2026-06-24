@@ -1,4 +1,4 @@
-package compact
+package sweep
 
 import (
 	"archive/tar"
@@ -79,19 +79,19 @@ func listArchive(t *testing.T, path string) []string {
 	return names
 }
 
-// TestCompactDryRun_NoMutation
-func TestCompactDryRun_NoMutation(t *testing.T) {
+// TestSweepDryRun_NoMutation
+func TestSweepDryRun_NoMutation(t *testing.T) {
 	home := t.TempDir()
 	withJennyHome(t, home)
 	dir := makeFullSessionLayout(t, home, "sess-1")
 
 	var stdout, stderr bytes.Buffer
-	rc := RunCompact("", true, false, &stdout, &stderr)
+	rc := RunSweep("", true, false, &stdout, &stderr)
 	if rc != 0 {
-		t.Errorf("RunCompact(dryRun) rc = %d, want 0 (stderr=%q)", rc, stderr.String())
+		t.Errorf("RunSweep(dryRun) rc = %d, want 0 (stderr=%q)", rc, stderr.String())
 	}
 	out := stdout.String()
-	want := "would compact: sess-1 (keep transcript.jsonl, config, memory.md; archive scratchpad/, spills/, mcp-resources/)"
+	want := "would sweep: sess-1 (keep transcript.jsonl, config, memory.md; archive scratchpad/, spills/, mcp-resources/)"
 	if !strings.Contains(out, want) {
 		t.Errorf("stdout missing %q:\n%s", want, out)
 	}
@@ -110,8 +110,8 @@ func TestCompactDryRun_NoMutation(t *testing.T) {
 	}
 }
 
-// TestCompactSingle_ProducesArchiveAndRemovesDir
-func TestCompactSingle_ProducesArchiveAndRemovesDir(t *testing.T) {
+// TestSweepSingle_ProducesArchiveAndRemovesDir
+func TestSweepSingle_ProducesArchiveAndRemovesDir(t *testing.T) {
 	home := t.TempDir()
 	withJennyHome(t, home)
 	dir := makeFullSessionLayout(t, home, "sess-1")
@@ -129,8 +129,8 @@ func TestCompactSingle_ProducesArchiveAndRemovesDir(t *testing.T) {
 
 	sessionsDir := filepath.Join(home, "sessions")
 	var stdout, stderr bytes.Buffer
-	if err := CompactOne(sessionsDir, "sess-1", false, &stdout, &stderr); err != nil {
-		t.Fatalf("CompactOne: %v (stderr=%q)", err, stderr.String())
+	if err := SweepOne(sessionsDir, "sess-1", false, &stdout, &stderr); err != nil {
+		t.Fatalf("SweepOne: %v (stderr=%q)", err, stderr.String())
 	}
 
 	archivePath := filepath.Join(sessionsDir, "sess-1.tar.gz")
@@ -169,8 +169,8 @@ func TestCompactSingle_ProducesArchiveAndRemovesDir(t *testing.T) {
 	}
 }
 
-// TestCompactBatch_SkipsArchivesAndUnrecognized
-func TestCompactBatch_SkipsArchivesAndUnrecognized(t *testing.T) {
+// TestSweepBatch_SkipsArchivesAndUnrecognized
+func TestSweepBatch_SkipsArchivesAndUnrecognized(t *testing.T) {
 	home := t.TempDir()
 	withJennyHome(t, home)
 	sessionsDir := filepath.Join(home, "sessions")
@@ -178,7 +178,7 @@ func TestCompactBatch_SkipsArchivesAndUnrecognized(t *testing.T) {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
-	// 1) Real session dir — should be compacted.
+	// 1) Real session dir — should be swept.
 	makeFullSessionLayout(t, home, "real-1")
 
 	// 2) Existing .tar.gz archive — should be skipped on stdout.
@@ -194,12 +194,12 @@ func TestCompactBatch_SkipsArchivesAndUnrecognized(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	rc := RunCompact("", false, false, &stdout, &stderr)
+	rc := RunSweep("", false, false, &stdout, &stderr)
 	if rc != 0 {
-		t.Errorf("RunCompact rc = %d, want 0 (stderr=%q)", rc, stderr.String())
+		t.Errorf("RunSweep rc = %d, want 0 (stderr=%q)", rc, stderr.String())
 	}
 
-	// Real session compacted.
+	// Real session swept.
 	if _, err := os.Stat(filepath.Join(sessionsDir, "real-1")); !os.IsNotExist(err) {
 		t.Errorf("real-1 dir survived: err=%v", err)
 	}
@@ -224,8 +224,8 @@ func TestCompactBatch_SkipsArchivesAndUnrecognized(t *testing.T) {
 	}
 }
 
-// TestCompact_ArchiveNameCollision_Refuses
-func TestCompact_ArchiveNameCollision_Refuses(t *testing.T) {
+// TestSweep_ArchiveNameCollision_Refuses
+func TestSweep_ArchiveNameCollision_Refuses(t *testing.T) {
 	home := t.TempDir()
 	withJennyHome(t, home)
 	sessionsDir := filepath.Join(home, "sessions")
@@ -242,9 +242,9 @@ func TestCompact_ArchiveNameCollision_Refuses(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	err := CompactOne(sessionsDir, "sess-1", false, &stdout, &stderr)
+	err := SweepOne(sessionsDir, "sess-1", false, &stdout, &stderr)
 	if err == nil {
-		t.Fatalf("CompactOne without --force: expected error, got nil")
+		t.Fatalf("SweepOne without --force: expected error, got nil")
 	}
 	if !strings.Contains(stderr.String(), "refusing to overwrite existing archive: sess-1.tar.gz") {
 		t.Errorf("stderr missing refusal message:\n%s", stderr.String())
@@ -259,8 +259,8 @@ func TestCompact_ArchiveNameCollision_Refuses(t *testing.T) {
 	}
 }
 
-// TestCompact_ArchiveNameCollision_ForceOverwrites
-func TestCompact_ArchiveNameCollision_ForceOverwrites(t *testing.T) {
+// TestSweep_ArchiveNameCollision_ForceOverwrites
+func TestSweep_ArchiveNameCollision_ForceOverwrites(t *testing.T) {
 	home := t.TempDir()
 	withJennyHome(t, home)
 	sessionsDir := filepath.Join(home, "sessions")
@@ -274,8 +274,8 @@ func TestCompact_ArchiveNameCollision_ForceOverwrites(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	if err := CompactOne(sessionsDir, "sess-1", true, &stdout, &stderr); err != nil {
-		t.Fatalf("CompactOne with --force: %v (stderr=%q)", err, stderr.String())
+	if err := SweepOne(sessionsDir, "sess-1", true, &stdout, &stderr); err != nil {
+		t.Fatalf("SweepOne with --force: %v (stderr=%q)", err, stderr.String())
 	}
 	// Should now be a real tarball.
 	names := listArchive(t, collision)
@@ -284,8 +284,8 @@ func TestCompact_ArchiveNameCollision_ForceOverwrites(t *testing.T) {
 	}
 }
 
-// TestCompact_HonorsJennyHome
-func TestCompact_HonorsJennyHome(t *testing.T) {
+// TestSweep_HonorsJennyHome
+func TestSweep_HonorsJennyHome(t *testing.T) {
 	realHome := t.TempDir()
 	altHome := t.TempDir()
 	withJennyHome(t, altHome)
@@ -311,12 +311,12 @@ func TestCompact_HonorsJennyHome(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	rc := RunCompact("", false, false, &stdout, &stderr)
+	rc := RunSweep("", false, false, &stdout, &stderr)
 	if rc != 0 {
-		t.Errorf("RunCompact rc = %d, want 0 (stderr=%q)", rc, stderr.String())
+		t.Errorf("RunSweep rc = %d, want 0 (stderr=%q)", rc, stderr.String())
 	}
 
-	// alt home compacted.
+	// alt home swept.
 	if _, err := os.Stat(filepath.Join(altSessions, "alpha.tar.gz")); err != nil {
 		t.Errorf("alpha.tar.gz missing in alt home: %v", err)
 	}
@@ -346,8 +346,8 @@ func TestExtractArchive_RestoresContents(t *testing.T) {
 
 	sessionsDir := filepath.Join(home, "sessions")
 	var stdout, stderr bytes.Buffer
-	if err := CompactOne(sessionsDir, "sess-1", false, &stdout, &stderr); err != nil {
-		t.Fatalf("CompactOne: %v (stderr=%q)", err, stderr.String())
+	if err := SweepOne(sessionsDir, "sess-1", false, &stdout, &stderr); err != nil {
+		t.Fatalf("SweepOne: %v (stderr=%q)", err, stderr.String())
 	}
 	archive := filepath.Join(sessionsDir, "sess-1.tar.gz")
 
@@ -382,8 +382,8 @@ func TestExtractArchive_KeepArchiveEnv(t *testing.T) {
 	withJennyHome(t, home)
 	makeFullSessionLayout(t, home, "sess-1")
 	sessionsDir := filepath.Join(home, "sessions")
-	if err := CompactOne(sessionsDir, "sess-1", false, io.Discard, io.Discard); err != nil {
-		t.Fatalf("CompactOne: %v", err)
+	if err := SweepOne(sessionsDir, "sess-1", false, io.Discard, io.Discard); err != nil {
+		t.Fatalf("SweepOne: %v", err)
 	}
 	archive := filepath.Join(sessionsDir, "sess-1.tar.gz")
 
@@ -399,17 +399,17 @@ func TestExtractArchive_KeepArchiveEnv(t *testing.T) {
 	}
 }
 
-// TestCompact_HelpOutput — usage mentions clean, --dry-run, --force.
-func TestCompact_HelpOutput(t *testing.T) {
+// TestSweep_HelpOutput — usage mentions clean, --dry-run, --force.
+func TestSweep_HelpOutput(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	rc := RunCompactHelp(&stdout, &stderr)
+	rc := RunSweepHelp(&stdout, &stderr)
 	if rc != 0 {
-		t.Errorf("RunCompactHelp rc = %d, want 0 (stderr=%q)", rc, stderr.String())
+		t.Errorf("RunSweepHelp rc = %d, want 0 (stderr=%q)", rc, stderr.String())
 	}
 	out := stdout.String()
-	for _, want := range []string{"compact", "clean", "--dry-run", "--force"} {
+	for _, want := range []string{"sweep", "clean", "--dry-run", "--force"} {
 		if !strings.Contains(out, want) {
-			t.Errorf("compact --help output missing %q:\n%s", want, out)
+			t.Errorf("sweep --help output missing %q:\n%s", want, out)
 		}
 	}
 }

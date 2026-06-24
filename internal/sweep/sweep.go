@@ -1,10 +1,10 @@
-// Package compact implements the `jenny compact` housekeeping subcommand.
+// Package sweep implements the `jenny sweep` housekeeping subcommand.
 //
-// `jenny compact` archives each <JENNY_HOME>/sessions/<id>/ directory into a
+// `jenny sweep` archives each <JENNY_HOME>/sessions/<id>/ directory into a
 // sibling <id>.tar.gz using tar+gzip, then removes the directory. Resuming
 // such an archived session transparently extracts the archive via
 // ExtractArchive (called from internal/session.MaybeExtractArchive).
-package compact
+package sweep
 
 import (
 	"archive/tar"
@@ -20,45 +20,45 @@ import (
 	"github.com/ipy/jenny/internal/utils"
 )
 
-// CompactUsage is the human-readable help text printed by `jenny compact --help`.
-const CompactUsage = `Usage: jenny compact [<id>] [--dry-run] [--force]
+// SweepUsage is the human-readable help text printed by `jenny sweep --help`.
+const SweepUsage = `Usage: jenny sweep [<id>] [--dry-run] [--force]
 
-Compact session directories under $JENNY_HOME/sessions/. Each session directory
+Sweep session directories under $JENNY_HOME/sessions/. Each session directory
 is archived into <id>.tar.gz using tar+gzip, then removed. Resume transparently
 extracts the archive on demand.
 
 Flags:
-  --dry-run   Print "would compact:" lines and exit without writing any archive.
+  --dry-run   Print "would sweep:" lines and exit without writing any archive.
   --force     Overwrite an existing <id>.tar.gz archive (default refuses).
 
 Archive retention after resume:
   By default the archive is removed after a successful resume extraction.
-  Set JENNY_COMPACT_KEEP_ARCHIVE to a non-empty value to keep the archive.
+  Set JENNY_SWEEP_KEEP_ARCHIVE to a non-empty value to keep the archive.
 
 See also: jenny clean — remove every session directory without archiving.
 `
 
-// dryRunSummary is the per-session summary printed by `jenny compact --dry-run`.
-const dryRunSummary = "would compact: %s (keep transcript.jsonl, config, memory.md; archive scratchpad/, spills/, mcp-resources/)"
+// dryRunSummary is the per-session summary printed by `jenny sweep --dry-run`.
+const dryRunSummary = "would sweep: %s (keep transcript.jsonl, config, memory.md; archive scratchpad/, spills/, mcp-resources/)"
 
 // sessionsDir returns the canonical sessions directory for the current
-// JENNY_HOME. Used by RunCompact and exposed for tests that want a fixed path.
+// JENNY_HOME. Used by RunSweep and exposed for tests that want a fixed path.
 func sessionsDir() string {
 	return filepath.Join(constants.JennyHomeDir(), "sessions")
 }
 
-// RunCompact performs `jenny compact [id]`. When id is empty, every direct
+// RunSweep performs `jenny sweep [id]`. When id is empty, every direct
 // child of the sessions directory is considered; otherwise only the named
 // child. Returns the process exit code (0 on success).
 //
 // stdout/stderr receive the per-entry skip messages. A non-empty id that
 // fails (e.g. archive collision without --force) yields a non-zero return.
-func RunCompact(id string, dryRun, force bool, stdout, stderr io.Writer) int {
+func RunSweep(id string, dryRun, force bool, stdout, stderr io.Writer) int {
 	sessDir := sessionsDir()
 
 	if id != "" {
-		if err := compactEntry(sessDir, id, dryRun, force, stdout, stderr); err != nil {
-			// compactEntry already printed stderr detail; surface non-zero.
+		if err := sweepEntry(sessDir, id, dryRun, force, stdout, stderr); err != nil {
+			// sweepEntry already printed stderr detail; surface non-zero.
 			return 1
 		}
 		return 0
@@ -71,19 +71,19 @@ func RunCompact(id string, dryRun, force bool, stdout, stderr io.Writer) int {
 		if os.IsNotExist(err) {
 			return 0
 		}
-		fmt.Fprintf(stderr, "jenny compact: reading sessions directory: %v\n", err)
+		fmt.Fprintf(stderr, "jenny sweep: reading sessions directory: %v\n", err)
 		return 1
 	}
 	for _, e := range entries {
-		if err := compactEntry(sessDir, e.Name(), dryRun, force, stdout, stderr); err != nil {
-			fmt.Fprintf(stderr, "jenny compact: %s: %v\n", e.Name(), err)
+		if err := sweepEntry(sessDir, e.Name(), dryRun, force, stdout, stderr); err != nil {
+			fmt.Fprintf(stderr, "jenny sweep: %s: %v\n", e.Name(), err)
 			// Do not abort the whole batch — keep processing siblings.
 		}
 	}
 	return 0
 }
 
-// compactEntry handles a single direct child of the sessions directory.
+// sweepEntry handles a single direct child of the sessions directory.
 //
 // Behaviour matrix:
 //   - *.tar.gz              → stdout "skip (already archived): <name>"
@@ -93,7 +93,7 @@ func RunCompact(id string, dryRun, force bool, stdout, stderr io.Writer) int {
 // On a single-id invocation an archive collision without --force surfaces as
 // an error returned to the caller; on batch mode it is skipped silently via
 // the "already archived" branch (the sibling .tar.gz is the prior artifact).
-func compactEntry(sessionsDir, name string, dryRun, force bool, stdout, stderr io.Writer) error {
+func sweepEntry(sessionsDir, name string, dryRun, force bool, stdout, stderr io.Writer) error {
 	full := filepath.Join(sessionsDir, name)
 
 	// 1) Archive sibling → skip.
@@ -128,16 +128,16 @@ func compactEntry(sessionsDir, name string, dryRun, force bool, stdout, stderr i
 		return nil
 	}
 
-	return CompactOne(sessionsDir, name, force, stdout, stderr)
+	return SweepOne(sessionsDir, name, force, stdout, stderr)
 }
 
-// CompactOne compacts a single session directory into a sibling .tar.gz
+// SweepOne sweeps a single session directory into a sibling .tar.gz
 // archive and removes the original directory. Exposed for direct test use.
 //
 // Refuses to overwrite an existing archive unless force is true. Returns an
 // error on archive collisions in single-id mode; the caller decides whether
 // to surface or swallow it.
-func CompactOne(sessionsDir, id string, force bool, stdout, stderr io.Writer) error {
+func SweepOne(sessionsDir, id string, force bool, stdout, stderr io.Writer) error {
 	srcDir := filepath.Join(sessionsDir, id)
 	archivePath := filepath.Join(sessionsDir, id+".tar.gz")
 	tmpPath := archivePath + ".tmp"
@@ -165,7 +165,7 @@ func CompactOne(sessionsDir, id string, force bool, stdout, stderr io.Writer) er
 
 	// Atomic rename: on POSIX, this is the moment readers either see the new
 	// archive or nothing at all (no half-written file). Concurrent resume
-	// calls that arrive mid-compact will see no archive until the rename
+	// calls that arrive mid-sweep will see no archive until the rename
 	// completes.
 	if err := os.Rename(tmpPath, archivePath); err != nil {
 		_ = os.Remove(tmpPath)
@@ -369,7 +369,7 @@ func ExtractArchive(archivePath, destParent, id string, keepArchive bool) error 
 }
 
 // knownFlag returns true when s is a long-form flag (--flag) or short-form
-// flag (-f) that ParseCompactArgs recognises. This is used to reorder args
+// flag (-f) that ParseSweepArgs recognises. This is used to reorder args
 // so that flags survive Go's flag package restriction that stops parsing
 // after the first non-flag argument.
 func knownFlag(s string) bool {
@@ -380,13 +380,13 @@ func knownFlag(s string) bool {
 	return false
 }
 
-// ParseCompactArgs parses the args slice (excluding the subcommand name
-// itself) for `jenny compact`. Returns (positional id, dryRun, force, help).
+// ParseSweepArgs parses the args slice (excluding the subcommand name
+// itself) for `jenny sweep`. Returns (positional id, dryRun, force, help).
 //
 // Go's flag package stops parsing at the first non-flag argument, so we
 // reorder known flags before any positional id to support both
-// `jenny compact <id> --force` and `jenny compact --force <id>`.
-func ParseCompactArgs(args []string) (id string, dryRun, force, help bool, err error) {
+// `jenny sweep <id> --force` and `jenny sweep --force <id>`.
+func ParseSweepArgs(args []string) (id string, dryRun, force, help bool, err error) {
 	// Separate known flags from positional args, preserving relative order
 	// among flags so the last flag value wins (e.g. --force after --dry-run).
 	var flagArgs, positional []string
@@ -400,9 +400,9 @@ func ParseCompactArgs(args []string) (id string, dryRun, force, help bool, err e
 		}
 	}
 
-	fs := flag.NewFlagSet("jenny compact", flag.ContinueOnError)
+	fs := flag.NewFlagSet("jenny sweep", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	fs.BoolVar(&dryRun, "dry-run", false, "Print would-compact lines and exit")
+	fs.BoolVar(&dryRun, "dry-run", false, "Print would-sweep lines and exit")
 	fs.BoolVar(&force, "force", false, "Overwrite an existing archive")
 	fs.BoolVar(&help, "help", false, "Print usage and exit")
 	fs.BoolVar(&help, "h", false, "Print usage and exit (alias)")
@@ -411,7 +411,7 @@ func ParseCompactArgs(args []string) (id string, dryRun, force, help bool, err e
 	}
 	rest := fs.Args()
 	if len(rest) > 1 {
-		return "", false, false, false, fmt.Errorf("jenny compact: at most one positional id is allowed")
+		return "", false, false, false, fmt.Errorf("jenny sweep: at most one positional id is allowed")
 	}
 	if len(rest) == 1 {
 		id = rest[0]
@@ -419,11 +419,11 @@ func ParseCompactArgs(args []string) (id string, dryRun, force, help bool, err e
 	return id, dryRun, force, help, nil
 }
 
-// RunCompactHelp prints the compact help text to stdout and returns 0.
-func RunCompactHelp(stdout, stderr io.Writer) int {
-	_, err := io.WriteString(stdout, CompactUsage)
+// RunSweepHelp prints the sweep help text to stdout and returns 0.
+func RunSweepHelp(stdout, stderr io.Writer) int {
+	_, err := io.WriteString(stdout, SweepUsage)
 	if err != nil {
-		fmt.Fprintf(stderr, "jenny compact: writing help: %v\n", err)
+		fmt.Fprintf(stderr, "jenny sweep: writing help: %v\n", err)
 		return 1
 	}
 	return 0

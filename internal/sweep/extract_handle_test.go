@@ -1,4 +1,4 @@
-package compact
+package sweep
 
 import (
 	"os"
@@ -10,11 +10,11 @@ import (
 
 // archiveSession creates the canonical session layout under
 // <root>/sessions/<id>/ (transcript.jsonl, config, memory.md,
-// scratchpad/notes.md) and then runs CompactOne so the on-disk layout is
-// exactly what `jenny compact` would produce. Returns the archive path.
+// scratchpad/notes.md) and then runs SweepOne so the on-disk layout is
+// exactly what `jenny sweep` would produce. Returns the archive path.
 //
 // The session directory is created at <root>/sessions/<id>/ (not <root>/<id>/)
-// because CompactOne looks it up as <sessionsDir>/<id>.
+// because SweepOne looks it up as <sessionsDir>/<id>.
 func archiveSession(t *testing.T, root, id string, transcriptBytes []byte) string {
 	t.Helper()
 	sessionsDir := filepath.Join(root, "sessions")
@@ -33,8 +33,8 @@ func archiveSession(t *testing.T, root, id string, transcriptBytes []byte) strin
 			t.Fatalf("WriteFile(%q): %v", rel, err)
 		}
 	}
-	if err := CompactOne(sessionsDir, id, false, os.Stdout, os.Stderr); err != nil {
-		t.Fatalf("CompactOne: %v", err)
+	if err := SweepOne(sessionsDir, id, false, os.Stdout, os.Stderr); err != nil {
+		t.Fatalf("SweepOne: %v", err)
 	}
 	return filepath.Join(sessionsDir, id+".tar.gz")
 }
