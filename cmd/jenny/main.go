@@ -27,6 +27,7 @@ import (
 	"github.com/ipy/jenny/internal/skills"
 	"github.com/ipy/jenny/internal/sweep"
 	"github.com/ipy/jenny/internal/tool"
+	"github.com/ipy/jenny/internal/update"
 	"github.com/joho/godotenv"
 	"github.com/knadh/koanf/v2"
 )
@@ -37,6 +38,8 @@ import (
 var version = constants.Version
 
 func main() {
+	update.TryLaunchManaged()
+
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -183,47 +186,12 @@ func run() error {
 	// the canonical site; flags.Verbose here is the CLI-flag-driven override.
 	log.SetVerbose(flags.Verbose)
 
-	// --refresh-registry: synchronous fetch, blocking, errors surface.
-	// When --offline is also set, skip the fetch with a clear warning since the
-	// two flags are mutually exclusive (enforced by cli.Parse).
-	if flags.RefreshRegistry && reg != nil {
-		if flags.Offline {
-			log.Warn("registry: --refresh-registry ignored because --offline is active")
-		} else {
-			if err := reg.Fetch(); err != nil {
-				return fmt.Errorf("failed to refresh model registry: %w", err)
-			}
-			log.Info("registry: refreshed successfully")
-		}
-	}
-
-	// If no --refresh-registry and not offline, start background fetch with 3s soft timeout.
-	// Uses FetchContext with a 30s total deadline so the HTTP request can be cancelled
-	// when the 3s soft timeout fires, preventing goroutine leaks.
-	if reg != nil && !flags.RefreshRegistry && !flags.Offline && reg.ShouldFetch() {
+	// Background self-update: fetch info endpoint, download binary/models from CDN.
+	if !flags.Offline {
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-
-			done := make(chan error, 1)
-			go func() {
-				done <- reg.FetchContext(ctx)
-			}()
-
-			select {
-			case err := <-done:
-				if err != nil {
-					log.Warn("registry: background fetch failed", "error", err)
-				}
-			case <-time.After(3 * time.Second):
-				log.Debug("registry: background fetch still running (soft timeout), cancelling")
-				cancel()
-				// Drain the done channel to avoid goroutine leak from the inner goroutine.
-				// FetchContext will return with a context error after cancel.
-				if err := <-done; err != nil {
-					log.Debug("registry: background fetch cancelled", "error", err)
-				}
-			}
+			updateCtx, updateCancel := context.WithTimeout(context.Background(), 90*time.Second)
+			defer updateCancel()
+			update.RunBackgroundUpdate(updateCtx, constants.JennyHomeDir(), version, reg)
 		}()
 	}
 

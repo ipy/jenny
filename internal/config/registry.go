@@ -2,26 +2,14 @@
 package config
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
-	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/log"
 	"github.com/knadh/koanf/v2"
 )
-
-// DefaultRegistryURL is the community-maintained model registry.
-const DefaultRegistryURL = "https://raw.githubusercontent.com/ImSingee/aidy-models/master/models.json"
-
-// CacheValidity is the maximum age of a cached registry before a refresh is attempted.
-const CacheValidity = 24 * time.Hour
 
 // ---------------------------------------------------------------------------
 // Registry JSON schema types (matching aidy-models format)
@@ -53,9 +41,10 @@ type registryEnvelope struct {
 
 // MetaFile stores fetch metadata alongside the cached models.json.
 type MetaFile struct {
-	FetchedAt     time.Time `json:"fetchedAt"`
-	ETag          string    `json:"etag"`
-	SchemaVersion int       `json:"schemaVersion"`
+	FetchedAt     string `json:"fetchedAt"`
+	ETag          string `json:"etag"`
+	SchemaVersion int    `json:"schemaVersion"`
+	ModelsVersion string `json:"modelsVersion,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -100,13 +89,13 @@ type ModelOverride struct {
 // ModelRegistry holds the parsed model registry data and user overrides.
 // It supports lazy loading from a cache file and field-level user overrides.
 // Resolution order: user settings.json override > upstream snapshot > (caller's bundled defaults).
+// The cache file is maintained by the update package (CDN download + SHA verification).
 type ModelRegistry struct {
-	mu      sync.RWMutex
-	fetchMu sync.Mutex // serializes fetch calls, not held during HTTP request
+	mu       sync.RWMutex
+	reloadMu sync.Mutex // serializes Reload calls
 
 	// Configuration
 	cachePath string
-	fetchURL  string
 	offline   bool
 
 	// Cached state
@@ -131,167 +120,24 @@ type modelSnapshot struct {
 func NewModelRegistry(cachePath string) *ModelRegistry {
 	return &ModelRegistry{
 		cachePath:  cachePath,
-		fetchURL:   DefaultRegistryURL,
 		models:     make(map[string]*modelSnapshot),
 		overrides:  make(map[string]*ModelOverride),
 		loadCalled: false,
 	}
 }
 
-// SetOffline enables or disables offline mode (disables all fetch attempts).
+// SetOffline enables or disables offline mode.
 func (r *ModelRegistry) SetOffline(offline bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.offline = offline
 }
 
-// ShouldFetch returns true if the registry should be fetched:
-//   - false if offline mode is active
-//   - true if no cache file exists
-//   - true if the cache is older than CacheValidity
-//   - false if the cache is fresh
-func (r *ModelRegistry) ShouldFetch() bool {
+// IsOffline returns whether offline mode is active.
+func (r *ModelRegistry) IsOffline() bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-
-	if r.offline {
-		return false
-	}
-
-	// Check if cache file exists
-	if _, err := os.Stat(r.cachePath); os.IsNotExist(err) {
-		return true
-	}
-
-	// Check meta for age
-	metaPath := r.metaPath()
-	meta, _ := r.readMetaLocked(metaPath)
-	if meta == nil {
-		return true
-	}
-	return time.Since(meta.FetchedAt) > CacheValidity
-}
-
-// Fetch downloads the model registry, respecting ETags for conditional requests.
-// It writes the response to the cache file and updates meta.json.
-// On network errors, the existing cache is preserved (if any).
-// The HTTP request is performed outside the write lock so lookups are not blocked.
-// Fetch uses a background context with a 30s HTTP client timeout.
-func (r *ModelRegistry) Fetch() error {
-	return r.fetchWithContext(context.Background())
-}
-
-// FetchContext downloads the model registry like Fetch, but accepts a context
-// to control cancellation of the HTTP request. When the context is cancelled,
-// the in-flight HTTP request is aborted.
-func (r *ModelRegistry) FetchContext(ctx context.Context) error {
-	return r.fetchWithContext(ctx)
-}
-
-// fetchWithContext contains the shared fetch implementation.
-func (r *ModelRegistry) fetchWithContext(ctx context.Context) error {
-	// Serialize fetch calls so only one fetch runs at a time.
-	r.fetchMu.Lock()
-	defer r.fetchMu.Unlock()
-
-	// Check offline mode — Fetch() is a direct call (not background), so it must
-	// respect the offline flag just like ShouldFetch() does.
-	r.mu.RLock()
-	offline := r.offline
-	r.mu.RUnlock()
-	if offline {
-		return fmt.Errorf("registry fetch: offline mode is active")
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.getFetchURL(), nil)
-	if err != nil {
-		log.Warn("registry fetch: failed to create request", "error", err)
-		return err
-	}
-
-	// Add ETag header from meta if available (read-only, no lock needed for meta path).
-	metaPath := r.metaPath()
-	r.mu.RLock()
-	etag := ""
-	if meta, err := r.readMetaLocked(metaPath); err == nil && meta != nil && meta.ETag != "" {
-		etag = meta.ETag
-	}
-	r.mu.RUnlock()
-	if etag != "" {
-		req.Header.Set("If-None-Match", etag)
-	}
-
-	// Perform HTTP request OUTSIDE the write lock.
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Warn("registry fetch: network error, preserving cache", "error", err)
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotModified {
-		// 304: cache is still valid, update fetchedAt
-		r.mu.Lock()
-		r.updateMetaTimestampLocked(metaPath)
-		r.mu.Unlock()
-		log.Debug("registry fetch: 304 Not Modified, cache is fresh")
-		return nil
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		err := fmt.Errorf("registry fetch: HTTP %d", resp.StatusCode)
-		log.Warn("registry fetch: unexpected status", "status", resp.StatusCode)
-		return err
-	}
-
-	// Read response body
-	body, err := io.ReadAll(io.LimitReader(resp.Body, constants.MaxHTTPBodyReadBytes))
-	if err != nil {
-		log.Warn("registry fetch: failed to read body", "error", err)
-		return err
-	}
-
-	// Parse into a temporary map first — do NOT mutate r.models yet.
-	tmpModels, err := parseBodyToModels(body)
-	if err != nil {
-		log.Warn("registry fetch: parse error, preserving cache", "error", err)
-		return err
-	}
-
-	// Write cache file atomically (write to temp, then rename).
-	tmpPath := r.cachePath + ".tmp"
-	if err := os.WriteFile(tmpPath, body, 0644); err != nil {
-		log.Warn("registry fetch: failed to write cache", "error", err)
-		return err
-	}
-	if err := os.Rename(tmpPath, r.cachePath); err != nil {
-		log.Warn("registry fetch: failed to rename cache", "error", err)
-		os.Remove(tmpPath)
-		return err
-	}
-
-	// Write meta.
-	newETag := resp.Header.Get("ETag")
-	meta := MetaFile{
-		FetchedAt:     time.Now(),
-		ETag:          newETag,
-		SchemaVersion: 1,
-	}
-	metaData, _ := json.Marshal(meta)
-	os.WriteFile(metaPath, metaData, 0644)
-
-	// Only now, after cache and meta are persisted, swap in-memory state.
-	r.mu.Lock()
-	r.models = tmpModels
-	r.meta = &meta
-	r.loadCalled = true
-	r.applyOverridesLocked()
-	modelCount := len(r.models)
-	r.mu.Unlock()
-
-	log.Debug("registry fetch: successful", "models", modelCount)
-	return nil
+	return r.offline
 }
 
 // ---------------------------------------------------------------------------
@@ -472,9 +318,6 @@ func (r *ModelRegistry) applyOverridesLocked() {
 	for modelID, override := range r.overrides {
 		snap, ok := r.models[modelID]
 		if !ok {
-			// Model not in cache — create a new snapshot from the override fields.
-			// Fields not specified in the override remain at their zero value;
-			// callers fall back to bundled defaults for those fields.
 			snap = &modelSnapshot{}
 			r.models[modelID] = snap
 		}
@@ -538,11 +381,29 @@ func (r *ModelRegistry) ensureLoaded() {
 	if err := r.loadFromCacheLocked(); err != nil {
 		log.Warn("registry: failed to load cache, starting empty", "error", err)
 	}
-	// Re-apply any user overrides that were set before the cache was loaded.
-	// This handles both the case where the cache was just loaded and the case
-	// where there was no cache file (empty models).
 	r.applyOverridesLocked()
 	r.loadCalled = true
+}
+
+// Reload re-reads the cache file from disk and refreshes in-memory state.
+// Called by the update package after it writes a new models.json to disk.
+func (r *ModelRegistry) Reload() error {
+	r.reloadMu.Lock()
+	defer r.reloadMu.Unlock()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if err := r.loadFromCacheLocked(); err != nil {
+		return err
+	}
+	r.applyOverridesLocked()
+	return nil
+}
+
+// MetaPath returns the path to the meta.json file for external consumers.
+func (r *ModelRegistry) MetaPath() string {
+	return r.metaPath()
 }
 
 // loadFromCache reads the cache file and parses it. Exported for testing.
@@ -562,7 +423,6 @@ func (r *ModelRegistry) loadFromCacheLocked() error {
 	}
 
 	if err := r.parseFromBytesLocked(data); err != nil {
-		// Corrupt cache: rename to .broken and treat as missing
 		log.Warn("registry: corrupt cache file, renaming to .broken", "path", r.cachePath, "error", err)
 		brokenPath := r.cachePath + ".broken"
 		if renameErr := os.Rename(r.cachePath, brokenPath); renameErr != nil {
@@ -572,7 +432,7 @@ func (r *ModelRegistry) loadFromCacheLocked() error {
 		return err
 	}
 
-	// Read meta for ETag tracking
+	// Read meta
 	metaPath := r.metaPath()
 	if meta, err := r.readMetaLocked(metaPath); err == nil && meta != nil {
 		r.meta = meta
@@ -603,9 +463,7 @@ func (r *ModelRegistry) parseFromBytesLocked(data []byte) error {
 	return nil
 }
 
-// parseBodyToModels parses registry JSON from bytes and returns the model map
-// WITHOUT mutating the receiver. Used by Fetch() so in-memory state is only
-// updated after the cache file is successfully written.
+// parseBodyToModels parses registry JSON from bytes and returns the model map.
 func parseBodyToModels(data []byte) (map[string]*modelSnapshot, error) {
 	var env registryEnvelope
 	if err := json.Unmarshal(data, &env); err != nil {
@@ -629,15 +487,6 @@ func parseBodyToModels(data []byte) (map[string]*modelSnapshot, error) {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-func (r *ModelRegistry) getFetchURL() string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	if r.fetchURL != "" {
-		return r.fetchURL
-	}
-	return DefaultRegistryURL
-}
-
 func (r *ModelRegistry) metaPath() string {
 	return filepath.Join(filepath.Dir(r.cachePath), "meta.json")
 }
@@ -652,16 +501,6 @@ func (r *ModelRegistry) readMetaLocked(metaPath string) (*MetaFile, error) {
 		return nil, err
 	}
 	return &meta, nil
-}
-
-func (r *ModelRegistry) updateMetaTimestampLocked(metaPath string) {
-	meta, err := r.readMetaLocked(metaPath)
-	if err != nil || meta == nil {
-		return
-	}
-	meta.FetchedAt = time.Now()
-	data, _ := json.Marshal(meta)
-	os.WriteFile(metaPath, data, 0644)
 }
 
 // parsePricingFromRegistry converts registry pricing ($/1M tokens) to per-token USD.
