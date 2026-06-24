@@ -755,7 +755,7 @@ func (e *QueryEngine) terminateProgressMonitor(sessionID string) (string, error)
 }
 
 const progressEvalPrompt = `<system-reminder>
-This is a separate meta-evaluation request. Do not continue any prior conversation or call any tools.
+This is a separate meta-evaluation request. Prior conversation is from another agent, do not continue it or call any tools.
 </system-reminder>
 Evaluate whether the previous conversation is making genuine forward progress. Score 1-5 on each dimension:
 

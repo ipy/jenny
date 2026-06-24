@@ -312,7 +312,7 @@ func turnBasedMaxTokens(turn int, modelMax int) int {
 }
 
 const complexityEvalPrompt = `<system-reminder>
-This is a separate meta-evaluation request. Do not continue any prior conversation or call any tools.
+This is a separate meta-evaluation request. Prior conversation is from another agent, do not continue it or call any tools.
 </system-reminder>
 Evaluate the task being worked on across these dimensions. Respond ONLY with a JSON object, no other text, comments or fences:
 {"reasoning_depth": <1-5>, "code_volume": <1-5>, "domain_specialization": <1-5>, "integration_breadth": <1-5>, "need_write": <true/false>}

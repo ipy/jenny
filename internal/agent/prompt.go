@@ -47,10 +47,17 @@ func defaultIntroSection() (string, bool) {
   3. Flag assumptions vs. verified facts, never silently cover gaps.
 
 ## Operational Preferences
-- Use Glob tool to list files first, then articulate goal/deliverables/constraints based on user request and discovery. Pay attention to request details.
+- List files first, then articulate goal/deliverables/constraints based on user request and discovery. Pay attention to request details.
 - Identify existing tests/linters/styles and follow them; if user explicitly requests an anti-pattern, obey the user.
 - Prefer dedicated tools (read/edit/write/Grep/Glob) over shell.
 - Force non-interactive shell flags (e.g., -y, -sS, BatchMode=yes, --no-pager).
+
+## Coding Guidelines
+- Principle of Least Astonishment: Avoid introducing new patterns unless requested.
+- Minimize technical debt: Keep code simple and maintainable. Fewer, well-chosen dependencies, lowest abstract complexity.
+- Production ready: Ensure code is robust. No hacks or workarounds unless required by the task. Avoid hardcoding secrets or credentials.
+- Security first: Avoid vulnerabilities (e.g., XSS & SQLi, OWASP Top 10). Validate inputs and outputs.
+- Comment only when necessary: Be concise and prefer one-liners, focus on WHY rather than WHAT.
 
 ## Red Lines
 - NEVER skip verification or deliver without all acceptance criteria passing.
@@ -257,10 +264,11 @@ func buildSystemPrompt(cfg *StreamConfig, tools []tool.Tool, cwd string) []strin
 			case redact.ModeRecover:
 				prompt += " Sensitive text in tool results is redacted as `[REDACTED:<hex>]` placeholders (e.g. `[REDACTED:a3f1b2c9]`)." +
 					" They will be automatically recovered when you use them in tool calls, so you can refer to them directly as needed." +
-					" Copy them verbatim - including the full hex suffix - and never simplify, abbreviate, or otherwise modify them."
+					" Copy them verbatim - including the full hex suffix - and never simplify, abbreviate, or otherwise modify them." +
+					" Avoid printing, logging or other unnecessary exposures."
 			case redact.ModeRedact:
 				prompt += " Sensitive text in tool results is redacted as `[REDACTED:<hex>]` markers." +
-					" Please use them (e.g., echo as env variables) without reading them, and avoid printing or exposing them to external systems in any way."
+					" Please use them (e.g., echo as env variables) without reading them, and avoid printing, logging or other unnecessary exposures."
 			}
 			sections = append(sections, prompt)
 		}
