@@ -186,7 +186,7 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	flags.BoolVarP(&forkSession, "fork-session", "", forkSessionDefault, "Fork resumed session to new ID")
 
 	var continueFlag bool
-	flags.BoolVarP(&continueFlag, "continue", "", continueDefault, "Resume most recent session")
+	flags.BoolVarP(&continueFlag, "continue", "c", continueDefault, "Resume most recent session")
 
 	var mcpConfig []string
 	flags.StringSliceVarP(&mcpConfig, "mcp-config", "", mcpConfigDefault, "MCP configuration file path(s) (can be specified multiple times)")

@@ -36,7 +36,7 @@ jenny --prompt-file - < prompt.txt
 | `--version`, `-v` | Prints `<semver> (jenny)` and exits 0. |
 | `--model <name>` | Override model (beats `ANTHROPIC_MODEL` env) |
 | `-r`, `--resume <session_id>` | Resume session from transcript |
-| `--continue` | Resume most recent session in project |
+| `-c`, `--continue` | Resume most recent session in project |
 | `--fork-session` | Fork resumed session to new ID |
 | `--output-format <fmt>` | `text` (default) or `stream-json` |
 | `--include-partial-messages` | Include partial messages in output (requires `--output-format stream-json`) |
