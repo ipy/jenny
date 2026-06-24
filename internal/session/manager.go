@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -167,6 +168,44 @@ func ValidateSessionID(id string) error {
 // TranscriptDir returns the configured transcript directory.
 func (m *Manager) TranscriptDir() string {
 	return m.transcriptDir
+}
+
+// pidPath returns the path to the pid file for a session.
+func (m *Manager) pidPath(sessionID string) string {
+	if sessionID == "" || utils.ContainsPathTraversal(sessionID) {
+		return ""
+	}
+	return filepath.Join(m.jennyDir, "sessions", sessionID, "pid")
+}
+
+// WritePID writes the current process PID to the session's pid file.
+func (m *Manager) WritePID(sessionID string) error {
+	if m.Disabled {
+		return nil
+	}
+	path := m.pidPath(sessionID)
+	if path == "" {
+		return fmt.Errorf("invalid session ID")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("creating pid parent dir: %w", err)
+	}
+	return os.WriteFile(path, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o644)
+}
+
+// RemovePID removes the session's pid file.
+func (m *Manager) RemovePID(sessionID string) error {
+	if m.Disabled {
+		return nil
+	}
+	path := m.pidPath(sessionID)
+	if path == "" {
+		return nil
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 // transcriptPath returns the path to the transcript file for a session.

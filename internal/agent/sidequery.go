@@ -337,21 +337,21 @@ func renderConversationText(messages []api.Message) string {
 				sb.WriteString(msg.Content)
 				sb.WriteByte('\n')
 			}
-		for _, tu := range msg.ToolUse {
-			sb.WriteString("[tool_use: ")
-			sb.WriteString(tu.Name)
-			if len(tu.Input) > 0 {
-				if inputJSON, err := json.Marshal(tu.Input); err == nil {
-					s := string(inputJSON)
-					if len(s) > summaryToolInputMaxLen {
-						s = s[:summaryToolInputMaxLen] + "...truncated"
+			for _, tu := range msg.ToolUse {
+				sb.WriteString("[tool_use: ")
+				sb.WriteString(tu.Name)
+				if len(tu.Input) > 0 {
+					if inputJSON, err := json.Marshal(tu.Input); err == nil {
+						s := string(inputJSON)
+						if len(s) > summaryToolInputMaxLen {
+							s = s[:summaryToolInputMaxLen] + "...truncated"
+						}
+						sb.WriteByte(' ')
+						sb.WriteString(s)
 					}
-					sb.WriteByte(' ')
-					sb.WriteString(s)
 				}
+				sb.WriteString("]\n")
 			}
-			sb.WriteString("]\n")
-		}
 		default:
 			sb.WriteString("[")
 			sb.WriteString(msg.Role)

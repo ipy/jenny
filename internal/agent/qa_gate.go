@@ -334,4 +334,3 @@ func qaEvalResultJSON(v *qaVerdict, retryCount, maxRetries int) string {
 	data, _ := json.Marshal(payload)
 	return string(data)
 }
-

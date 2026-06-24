@@ -2,6 +2,7 @@ package clean
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -253,5 +254,53 @@ func TestClean_HonorsJennyHome(t *testing.T) {
 	// real home: sentinel must survive.
 	if _, err := os.Stat(filepath.Join(realSentinel, "transcript.jsonl")); err != nil {
 		t.Errorf("real home sentinel was removed: %v", err)
+	}
+}
+
+// TestClean_SkipsRunningSession — session with live pid is skipped.
+func TestClean_SkipsRunningSession(t *testing.T) {
+	home := t.TempDir()
+	withJennyHome(t, home)
+
+	sessionsDir := filepath.Join(home, "sessions")
+	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	// Live session with our own PID.
+	liveDir := filepath.Join(sessionsDir, "live-session")
+	if err := os.MkdirAll(liveDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(liveDir, "pid"), []byte(fmt.Sprintf("%d\n", os.Getpid())), 0o644); err != nil {
+		t.Fatalf("WriteFile pid: %v", err)
+	}
+
+	// Stale session with a non-existent PID.
+	staleDir := filepath.Join(sessionsDir, "stale-session")
+	if err := os.MkdirAll(staleDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(staleDir, "pid"), []byte("99999\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile stale pid: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	rc := RunClean(false, &stdout, &stderr)
+	if rc != 0 {
+		t.Errorf("RunClean rc = %d, want 0 (stderr=%q)", rc, stderr.String())
+	}
+
+	// Live session survived.
+	if _, err := os.Stat(liveDir); err != nil {
+		t.Errorf("live-session removed despite running pid: err=%v", err)
+	}
+	if !strings.Contains(stdout.String(), "skip (running): live-session") {
+		t.Errorf("stdout missing skip (running) for live-session:\n%s", stdout.String())
+	}
+
+	// Stale session removed.
+	if _, err := os.Stat(staleDir); !os.IsNotExist(err) {
+		t.Errorf("stale-session survived: err=%v", err)
 	}
 }

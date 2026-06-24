@@ -38,7 +38,7 @@ Both commands resolve the jenny home directory via `constants.JennyHomeDir()` (w
 
 ### Behavior
 
-1. Walk `<home>/sessions/`. For each direct child that is a regular directory, print or delete it.
+1. Walk `<home>/sessions/`. For each direct child that is a regular directory, print or delete it. Directories containing a `pid` file whose process is still alive are skipped with `skip (running): <id>` on stdout.
 2. If `<home>/sessions/` does not exist or has no entries, print `nothing to clean` and exit 0.
 3. After real deletion, recreate `<home>/sessions/` (empty) so future sessions can be appended without an extra `mkdir`.
 4. Never touch files outside `<home>/sessions/`.
@@ -85,9 +85,10 @@ jenny sweep <id> --force    # overwrite existing archive
    - If `<id>` is given, target the single child `sessions/<id>/`.
    - Otherwise, iterate every direct child of `sessions/`.
 2. For each child:
-   - **Directory containing `transcript.jsonl`**: sweep it.
+   - **Directory containing `pid` file with a live process**: skip with `skip (running): <id>` on stdout.
+   - **Directory containing `transcript.jsonl` or `config`**: sweep it.
    - **`*.tar.gz` archive**: skip with `skip (already archived): <id>.tar.gz` on stdout.
-   - **Anything else (file or dir without `transcript.jsonl`)**: report `skip (unrecognized): <name>` on stderr, leave on disk.
+   - **Anything else (file or dir without `transcript.jsonl` or `config`)**: report `skip (unrecognized): <name>` on stderr, leave on disk.
 3. Sweep flow for a session directory:
    1. If `<home>/sessions/<id>.tar.gz` exists and `--force` is not set, emit `refusing to overwrite existing archive: <id>.tar.gz` on stderr. For single-id invocation this is a hard failure; for batch mode the entry is skipped and processing continues.
    2. Stream the directory into `<home>/sessions/<id>.tar.gz.tmp` using `archive/tar` + `compress/gzip` (stdlib only).

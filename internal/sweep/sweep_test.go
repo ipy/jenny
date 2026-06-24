@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -193,6 +194,15 @@ func TestSweepBatch_SkipsArchivesAndUnrecognized(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
+	// 4) Directory with config but no transcript.jsonl — should be swept (not unrecognized).
+	partialDir := filepath.Join(sessionsDir, "partial-session")
+	if err := os.MkdirAll(partialDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(partialDir, "config"), []byte("cost=0\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
 	var stdout, stderr bytes.Buffer
 	rc := RunSweep("", false, false, &stdout, &stderr)
 	if rc != 0 {
@@ -221,6 +231,14 @@ func TestSweepBatch_SkipsArchivesAndUnrecognized(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "skip (unrecognized): loose.txt") {
 		t.Errorf("stderr missing skip line for loose.txt:\n%s", stderr.String())
+	}
+
+	// Partial session (config only) swept.
+	if _, err := os.Stat(partialDir); !os.IsNotExist(err) {
+		t.Errorf("partial-session dir survived: err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(sessionsDir, "partial-session.tar.gz")); err != nil {
+		t.Errorf("partial-session.tar.gz missing: %v", err)
 	}
 }
 
@@ -396,6 +414,52 @@ func TestExtractArchive_KeepArchiveEnv(t *testing.T) {
 	}
 	if _, err := os.Stat(archive); err != nil {
 		t.Errorf("archive removed despite keepArchive=true: %v", err)
+	}
+}
+
+// TestSweepBatch_SkipsRunningSession — session with live pid file is skipped.
+func TestSweepBatch_SkipsRunningSession(t *testing.T) {
+	home := t.TempDir()
+	withJennyHome(t, home)
+	sessionsDir := filepath.Join(home, "sessions")
+	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	// A real session directory with a live pid (our own PID).
+	dir := makeFullSessionLayout(t, home, "live-session")
+	pidPath := filepath.Join(dir, "pid")
+	if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d\n", os.Getpid())), 0o644); err != nil {
+		t.Fatalf("WriteFile pid: %v", err)
+	}
+
+	// A stale session with a non-existent pid.
+	staleDir := makeFullSessionLayout(t, home, "stale-session")
+	stalePidPath := filepath.Join(staleDir, "pid")
+	if err := os.WriteFile(stalePidPath, []byte("99999\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile stale pid: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	rc := RunSweep("", false, false, &stdout, &stderr)
+	if rc != 0 {
+		t.Errorf("RunSweep rc = %d, want 0 (stderr=%q)", rc, stderr.String())
+	}
+
+	// Live session skipped.
+	if _, err := os.Stat(dir); err != nil {
+		t.Errorf("live-session dir was removed despite running pid: err=%v", err)
+	}
+	if !strings.Contains(stdout.String(), "skip (running): live-session") {
+		t.Errorf("stdout missing skip (running) for live-session:\n%s", stdout.String())
+	}
+
+	// Stale session swept.
+	if _, err := os.Stat(staleDir); !os.IsNotExist(err) {
+		t.Errorf("stale-session dir survived: err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(sessionsDir, "stale-session.tar.gz")); err != nil {
+		t.Errorf("stale-session.tar.gz missing: %v", err)
 	}
 }
 

@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -116,5 +117,86 @@ func TestReadFileSafe_NotExist(t *testing.T) {
 	_, err := ReadFileSafe("/nonexistent/file.txt", 1024)
 	if err == nil {
 		t.Fatal("expected error for nonexistent file")
+	}
+}
+
+func TestIsSessionRunning_LivePID(t *testing.T) {
+	sessionsDir := t.TempDir()
+	sessionID := "live-session"
+	sessionDir := filepath.Join(sessionsDir, sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	pidPath := filepath.Join(sessionDir, "pid")
+	if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d\n", os.Getpid())), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if !IsSessionRunning(sessionsDir, sessionID) {
+		t.Error("IsSessionRunning returned false for our own PID")
+	}
+}
+
+func TestIsSessionRunning_StalePID(t *testing.T) {
+	sessionsDir := t.TempDir()
+	sessionID := "stale-session"
+	sessionDir := filepath.Join(sessionsDir, sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	pidPath := filepath.Join(sessionDir, "pid")
+	if err := os.WriteFile(pidPath, []byte("99999\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if IsSessionRunning(sessionsDir, sessionID) {
+		t.Error("IsSessionRunning returned true for non-existent PID 99999")
+	}
+}
+
+func TestIsSessionRunning_NoPIDFile(t *testing.T) {
+	sessionsDir := t.TempDir()
+	sessionID := "no-pid-session"
+	sessionDir := filepath.Join(sessionsDir, sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	if IsSessionRunning(sessionsDir, sessionID) {
+		t.Error("IsSessionRunning returned true when no pid file exists")
+	}
+}
+
+func TestIsSessionRunning_EmptyPIDFile(t *testing.T) {
+	sessionsDir := t.TempDir()
+	sessionID := "empty-pid-session"
+	sessionDir := filepath.Join(sessionsDir, sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	pidPath := filepath.Join(sessionDir, "pid")
+	if err := os.WriteFile(pidPath, []byte("\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if IsSessionRunning(sessionsDir, sessionID) {
+		t.Error("IsSessionRunning returned true for empty pid file")
+	}
+}
+
+func TestIsSessionRunning_GarbagePID(t *testing.T) {
+	sessionsDir := t.TempDir()
+	sessionID := "garbage-pid-session"
+	sessionDir := filepath.Join(sessionsDir, sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	pidPath := filepath.Join(sessionDir, "pid")
+	if err := os.WriteFile(pidPath, []byte("not-a-pid\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	if IsSessionRunning(sessionsDir, sessionID) {
+		t.Error("IsSessionRunning returned true for garbage pid file")
 	}
 }

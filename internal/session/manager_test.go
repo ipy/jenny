@@ -1506,3 +1506,59 @@ func TestLoadTranscriptTruncated(t *testing.T) {
 		t.Errorf("entry 2: type=%s content=%s, want user/How are you?", loaded[2].Type, loaded[2].Content)
 	}
 }
+
+// TestManager_WriteAndRemovePID verifies that WritePID creates a pid file
+// with the current process PID and RemovePID removes it.
+func TestManager_WriteAndRemovePID(t *testing.T) {
+	m, err := NewManager(t.TempDir(), false)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	sessionID := "pid-test-session"
+	pidPath := filepath.Join(m.jennyDir, "sessions", sessionID, "pid")
+
+	// No pid file initially.
+	if _, err := os.Stat(pidPath); !os.IsNotExist(err) {
+		t.Fatalf("pid file exists before WritePID: err=%v", err)
+	}
+
+	// Write PID.
+	if err := m.WritePID(sessionID); err != nil {
+		t.Fatalf("WritePID() error = %v", err)
+	}
+
+	data, err := os.ReadFile(pidPath)
+	if err != nil {
+		t.Fatalf("ReadFile pid: %v", err)
+	}
+	got := strings.TrimSpace(string(data))
+	want := fmt.Sprintf("%d", os.Getpid())
+	if got != want {
+		t.Errorf("pid file = %q, want %q", got, want)
+	}
+
+	// Remove PID.
+	if err := m.RemovePID(sessionID); err != nil {
+		t.Fatalf("RemovePID() error = %v", err)
+	}
+	if _, err := os.Stat(pidPath); !os.IsNotExist(err) {
+		t.Errorf("pid file exists after RemovePID: err=%v", err)
+	}
+}
+
+// TestManager_PIDDisabled — when disabled, WritePID and RemovePID are no-ops.
+func TestManager_PIDDisabled(t *testing.T) {
+	m, err := NewManager(t.TempDir(), true)
+	if err != nil {
+		t.Fatalf("NewManager(disabled) error = %v", err)
+	}
+	sessionID := "pid-disabled-session"
+
+	if err := m.WritePID(sessionID); err != nil {
+		t.Errorf("WritePID(disabled) error = %v, want nil", err)
+	}
+	if err := m.RemovePID(sessionID); err != nil {
+		t.Errorf("RemovePID(disabled) error = %v, want nil", err)
+	}
+}

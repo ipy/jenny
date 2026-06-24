@@ -87,7 +87,8 @@ func RunSweep(id string, dryRun, force bool, stdout, stderr io.Writer) int {
 //
 // Behaviour matrix:
 //   - *.tar.gz              → stdout "skip (already archived): <name>"
-//   - dir w/ transcript     → run the archive flow (or dry-run summary)
+//   - dir w/ live pid       → stdout "skip (running): <name>"
+//   - dir w/ transcript or config → run the archive flow (or dry-run summary)
 //   - anything else          → stderr "skip (unrecognized): <name>"
 //
 // On a single-id invocation an archive collision without --force surfaces as
@@ -117,10 +118,18 @@ func sweepEntry(sessionsDir, name string, dryRun, force bool, stdout, stderr io.
 		return nil
 	}
 
-	// 3) Directory that lacks a transcript.jsonl → not a session.
-	if _, err := os.Stat(filepath.Join(full, "transcript.jsonl")); err != nil {
-		fmt.Fprintf(stderr, "skip (unrecognized): %s\n", name)
+	// 3) Directory with a live pid file → running session, skip.
+	if utils.IsSessionRunning(sessionsDir, name) {
+		fmt.Fprintf(stdout, "skip (running): %s\n", name)
 		return nil
+	}
+
+	// 4) Directory that lacks both transcript.jsonl and config → not a session.
+	if _, err := os.Stat(filepath.Join(full, "transcript.jsonl")); err != nil {
+		if _, err := os.Stat(filepath.Join(full, "config")); err != nil {
+			fmt.Fprintf(stderr, "skip (unrecognized): %s\n", name)
+			return nil
+		}
 	}
 
 	if dryRun {

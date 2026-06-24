@@ -46,6 +46,7 @@ The project-local `.jenny/` directory may contain:
 Each session has a dedicated folder to prevent file "sprawl" and ensure all data related to a single conversation is co-located.
 
 ### 1. Core Session Data
+*   **`pid`**: Contains the PID of the running jenny process for this session. Created at session startup, removed on graceful exit. Used by `clean` and `sweep` to skip running sessions.
 *   **`transcript.jsonl`**: The source of truth for the conversation. Contains all messages, tool calls, tool results, and state snapshots.
 *   **`config`**: Session-specific cost state, token usage, and metadata.
 *   **`memory.md`**: The "long-term memory" for this session. A summarized markdown file that the agent uses to maintain context.

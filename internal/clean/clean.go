@@ -66,6 +66,10 @@ func RunClean(dryRun bool, stdout, stderr io.Writer) int {
 
 	for _, e := range targets {
 		full := filepath.Join(sessionsDir, e.Name())
+		if utils.IsSessionRunning(sessionsDir, e.Name()) {
+			fmt.Fprintf(stdout, "skip (running): %s\n", e.Name())
+			continue
+		}
 		if dryRun {
 			fmt.Fprintf(stdout, "would remove: %s\n", full)
 			continue

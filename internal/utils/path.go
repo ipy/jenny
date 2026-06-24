@@ -3,6 +3,10 @@ package utils
 import (
 	"io"
 	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
 )
 
 // ReadDirBatchSize is the batch size for file.ReadDir to prevent OOM on
@@ -65,4 +69,28 @@ func ContainsPathTraversal(s string) bool {
 		}
 	}
 	return false
+}
+
+// IsSessionRunning checks whether a session directory has a pid file whose
+// process is still alive. Returns true only if the pid file exists and the
+// process is still running (verified via signal 0).
+func IsSessionRunning(sessionsDir, sessionID string) bool {
+	pidPath := filepath.Join(sessionsDir, sessionID, "pid")
+	data, err := os.ReadFile(pidPath)
+	if err != nil {
+		return false
+	}
+	pidStr := strings.TrimSpace(string(data))
+	if pidStr == "" {
+		return false
+	}
+	pid, err := strconv.Atoi(pidStr)
+	if err != nil {
+		return false
+	}
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	return proc.Signal(syscall.Signal(0)) == nil
 }

@@ -339,6 +339,16 @@ func run() error {
 		return fmt.Errorf("creating scratchpad directory: %w", err)
 	}
 
+	// Write PID file so sweep/clean can skip running sessions.
+	if err := sessionManager.WritePID(sessionID); err != nil {
+		return fmt.Errorf("writing PID file: %w", err)
+	}
+	defer func() {
+		if err := sessionManager.RemovePID(sessionID); err != nil {
+			log.Warn("removing PID file", "session_id", sessionID, "error", err)
+		}
+	}()
+
 	// Load MCP configuration
 	var mcpConfig map[string]mcp.MCPServerDef
 	var mcpTools []tool.Tool
