@@ -4,7 +4,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -183,30 +182,6 @@ var Verification = SubagentType{
 	mcpServers:              []string{},
 }
 
-// modelAliases maps model alias names to concrete model identifiers.
-// Concrete identifiers are resolved from env vars with hardcoded fallbacks.
-var modelAliases = map[string]string{
-	"sonnet": getEnvOrDefault("ANTHROPIC_DEFAULT_SONNET_MODEL", "claude-sonnet-4-6"),
-	"opus":   getEnvOrDefault("ANTHROPIC_DEFAULT_OPUS_MODEL", "claude-opus-4-7"),
-	"haiku":  getEnvOrDefault("ANTHROPIC_DEFAULT_HAIKU_MODEL", "claude-haiku-4-5-20251001"),
-}
-
-func getEnvOrDefault(envVar, defaultVal string) string {
-	if v := os.Getenv(envVar); v != "" {
-		return v
-	}
-	return defaultVal
-}
-
-// ResolveModel resolves a model alias to its concrete model identifier.
-// If the alias is unknown, returns the input unchanged.
-func ResolveModel(alias string) string {
-	if resolved, ok := modelAliases[strings.ToLower(alias)]; ok {
-		return resolved
-	}
-	return alias
-}
-
 // resolveSubagentModel resolves the model to use for a subagent.
 // Resolution order:
 //  1. params.Model (if not empty and not "inherit") — resolved via ResolveModel
@@ -217,7 +192,7 @@ func resolveSubagentModel(paramsModel string, configSubagentModel string, client
 		return ResolveModel(paramsModel)
 	}
 	if configSubagentModel != "" {
-		return configSubagentModel
+		return ResolveModel(configSubagentModel)
 	}
 	// Provider-specific defaults — check via type assertion on the Requester
 	type providerKind interface {

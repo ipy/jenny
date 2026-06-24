@@ -99,20 +99,31 @@ When resuming, `extractSkillsFromManifest()` parses the frozen system prompt's "
 
 `system_reminder` entries are persisted with `Type: system, Subtype: system_reminder` and store the full `<system-reminder>` XML content. On resume, `RebuildMessages` restores them as `IsVirtual: true` user messages, keeping the message chain structurally identical.
 
+## Side Query Cache Sharing
+
+Side queries (complexity eval, progress eval) use the SideQuery framework (`internal/agent/sidequery.go`) which ensures cache prefix alignment with the main session. In fork mode:
+
+- The fork client is created with the same resolved model (`ResolveModel`), same `ThinkingConfig` (fixed `budget_tokens`), same system prompt, and same tools as the main session
+- The full message history is copied and the evaluation prompt is appended as a new user message
+- Since the prefix (system → tools → messages) is byte-identical to the main session, the fork gets a cache read on the entire prefix; only the appended evaluation prompt is cold content
+- The `SideQueryContext` captures these immutable parameters once at session start and is shared by all side queries
+
+**Critical:** The thinking budget is fixed for the session (see `dynamic-max-tokens.md`). This means side query fork clients automatically share the same `thinking.budget_tokens` as the main session, ensuring cache key compatibility.
+
 ## Compaction Integration
 
 ### Insert-then-Compress
 
 Compaction first attempts `inSessionCompact`: appending a compaction instruction as a user message to the existing chain and calling `SendMessage` with the session's system prompt and tools. This shares the cached prefix, so only the instruction itself is cold content.
 
-Fallback to `forkSummaryAgent` (independent call, no cache sharing) when:
+Fallback to `fallbackSummaryCompact` (independent call, no cache sharing) when:
 - API returns a prompt-too-long error
 - Model produces tool_use blocks instead of summary text
 - Summary text is empty
 
 ### Cost Tracking
 
-Both `inSessionCompact` and `forkSummaryAgent` call `AccumulateUsage` with the compaction response's `Usage`.
+Both `inSessionCompact` and `fallbackSummaryCompact` call `AccumulateUsage` with `resolvedModelForCost(e.model, resp.Model)` and the compaction response's `Usage`, ensuring accurate cost tracking even when `e.model` is an alias.
 
 ### Summary Persistence
 

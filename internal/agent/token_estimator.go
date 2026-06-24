@@ -240,3 +240,42 @@ func (e *TokenEstimator) getOutputCorrection(model string) float64 {
 func estimateCharsetFromCount(totalChars int) (asciiCount, mbCount int) {
 	return totalChars, 0
 }
+
+// ---------------------------------------------------------------------------
+// Uncalibrated estimation helpers — used by SideQuery cost estimation,
+// compact fallback (when TokenEstimator is nil), and engine_loop token checks.
+// These are the simpler, non-EWMA versions with fixed ratios.
+// ---------------------------------------------------------------------------
+
+// estimateTokens estimates the token count for a message chain using a
+// charset-aware heuristic. ASCII/Latin text uses ~4 chars/token; multi-byte
+// characters (CJK, emoji) use ~1.5 chars/token.
+func estimateTokens(messages []api.Message) int {
+	total := 0
+	for _, msg := range messages {
+		total += estimateStringTokens(msg.Content)
+		total += estimateStringTokens(msg.Thinking)
+		total += estimateStringTokens(msg.Signature)
+		for _, tu := range msg.ToolUse {
+			total += len(tu.Name) + 50
+			inputBytes, _ := json.Marshal(tu.Input)
+			total += estimateStringTokens(string(inputBytes))
+		}
+		for _, tr := range msg.ToolResults {
+			total += estimateStringTokens(tr.Content) + 50
+		}
+	}
+	return total
+}
+
+// estimateStringTokens estimates the token count for a string using charset-aware
+// heuristics. ASCII chars → ~4 chars/token, multi-byte runes → ~1.5 chars/token.
+func estimateStringTokens(s string) int {
+	if len(s) == 0 {
+		return 0
+	}
+	asciiChars, multiByteRunes := estimateCharset(s)
+	asciiTokens := asciiChars * 10 / 40  // asciiChars / 4.0
+	mbTokens := multiByteRunes * 10 / 15 // multiByteRunes / 1.5
+	return asciiTokens + mbTokens
+}

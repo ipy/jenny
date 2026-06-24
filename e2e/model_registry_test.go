@@ -118,7 +118,7 @@ func TestModelRegistryCacheBehavior(t *testing.T) {
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 4096,
+						MaxTokens: 40448, // fixedThinking(64000*60/100) + earlyCompletion(2048)
 					},
 				},
 			},
@@ -189,7 +189,7 @@ func TestModelRegistryConfigOverride(t *testing.T) {
 				// auto-compact threshold enough that the full system prompt
 				// triggers compact before the first turn. Request[0] is the
 				// compact summary (SUMMARY_MAX_TOKENS=20000). Request[1] is
-				// the normal agent turn (earlyTurnCap=min(4096,88888)=4096).
+				// the normal agent turn: fixedThinking(88888*60/100=53332) + earlyCompletion(2048) = 55380.
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
@@ -197,7 +197,7 @@ func TestModelRegistryConfigOverride(t *testing.T) {
 					},
 					{
 						Index:     1,
-						MaxTokens: 4096,
+						MaxTokens: 55380,
 					},
 				},
 			},

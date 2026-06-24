@@ -12,7 +12,7 @@ func TestAPIMaxTokens(t *testing.T) {
 		{
 			ID:          "api.max-tokens.default",
 			Category:    "api-protocol",
-			Description: "turn 1 max_tokens uses earlyTurnCap (4096 for sonnet-4-6 with maxOut=64000)",
+			Description: "turn 1 max_tokens = fixedThinkingBudget + earlyCompletion (sonnet-4-6: 38400+2048=40448)",
 			Tags:        []string{"api"},
 			Target: harness.TargetInvocation{
 				Kind:     "prompt",
@@ -27,7 +27,7 @@ func TestAPIMaxTokens(t *testing.T) {
 				APIRequests: []harness.APIRequestExpectation{
 					{
 						Index:     0,
-						MaxTokens: 4096,
+						MaxTokens: 40448, // 64000*60/100 + min(2048,64000)
 					},
 				},
 			},

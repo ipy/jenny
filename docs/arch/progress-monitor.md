@@ -188,10 +188,11 @@ Each dimension is scored 1–5. The aggregate is a weighted average.
 
 ### Fork Implementation
 
-The fork follows the same pattern as the complexity evaluation fork, with a channel-based handoff to eliminate data races:
+The fork is dispatched via the unified SideQuery framework (`dispatchProgressEval`), which ensures the fork client uses the exact same cache prefix (model, thinking config, system prompt, tools) as the main session:
 
+- Uses `SideQuery.ExecuteFork()` with the shared `SideQueryContext` — model is resolved via `ResolveModel`, thinking config is the session's fixed value
 - Copies the full conversation history and appends the judge prompt as a final user message, preserving the shared prefix for prompt cache hits
-- Uses a separate API client with `max_tokens` overridden to a constant (`forkMaxTokens`, 1024), shared with the complexity eval fork and set high enough for thinking models that share the output budget
+- Uses `max_tokens` overridden to a constant (`forkMaxTokens`, 1024), set high enough for thinking models that share the output budget
 - Runs with a 30-second timeout via `context.WithTimeout`
 - Does not block the main loop — the fork runs in a goroutine and sends the result to the main loop via a buffered channel (`forkResultCh`, capacity 1, non-blocking send with drop-if-full)
 - The main loop drains the channel via `DrainForkResult()` before each `CheckAndInject()` call, ensuring the result is applied on the main goroutine
@@ -210,7 +211,7 @@ The fork follows the same pattern as the complexity evaluation fork, with a chan
 - **Pre-API check:** Before compaction and normalization, before each API call. Dispatches the L1-second fork-judge if `ShouldForkProgressEval()` returns true, drains any pending fork result via `DrainForkResult()`, then calls `CheckAndInject()` to inject L1/L2 reminders or trigger L3 termination.
 - **Post-tool scoring:** After `executeAndProcessTools`. Calls `RecordTurn()` to score the turn and update escalation state, then `SetProgressLevel()` to sync the level to the max_tokens controller.
 - **Fork-judge callback:** The fork goroutine sends the result via `forkResultCh` (non-blocking send). The main loop drains it via `DrainForkResult()` before `CheckAndInject`, calling `ApplyProgressEvalResult` on the main goroutine — eliminating data races.
-- **max_tokens coupling:** L1 caps at 8192, L2 caps at 4096, L3 caps at 2048 (via `dynamic-max-tokens`), all with a floor of 2048.
+- **max_tokens coupling:** L1 caps completion at 8192, L2 caps at 4096, L3 caps at 2048 (via `dynamic-max-tokens`). Only the completion budget is capped — the thinking budget is fixed for the session and never modified.
 
 ## Invariants
 

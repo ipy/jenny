@@ -86,19 +86,42 @@ func TestTurnBasedMaxTokens(t *testing.T) {
 
 func TestMaxTokensController_EarlyTurnBudget(t *testing.T) {
 	c := NewMaxTokensController("deepseek-chat")
+	fixedThinking := c.FixedThinkingBudget()
 	for turn := 1; turn <= 3; turn++ {
 		budget := c.ComputeBudget(turn)
-		if budget.TotalBudget != 8192 {
-			t.Errorf("turn %d: expected total 8192, got %d", turn, budget.TotalBudget)
-		}
-		if budget.ThinkingBudget <= 0 {
-			t.Errorf("turn %d: thinking budget should be positive, got %d", turn, budget.ThinkingBudget)
+		if budget.ThinkingBudget != fixedThinking {
+			t.Errorf("turn %d: thinking budget should be fixed at %d, got %d", turn, fixedThinking, budget.ThinkingBudget)
 		}
 		if budget.CompletionBudget <= 0 {
 			t.Errorf("turn %d: completion budget should be positive, got %d", turn, budget.CompletionBudget)
 		}
-		if budget.ThinkingBudget+budget.CompletionBudget != budget.TotalBudget {
+		if budget.TotalBudget != budget.ThinkingBudget+budget.CompletionBudget {
 			t.Errorf("turn %d: thinking(%d) + completion(%d) != total(%d)", turn, budget.ThinkingBudget, budget.CompletionBudget, budget.TotalBudget)
+		}
+	}
+}
+
+func TestMaxTokensController_ThinkingBudgetIsFixed(t *testing.T) {
+	c := NewMaxTokensController("deepseek-chat")
+	fixedThinking := c.FixedThinkingBudget()
+
+	c.SetComplexityResult(&ComplexityResult{
+		ReasoningDepth: 5, CodeVolume: 5, DomainSpecialization: 5, IntegrationBreadth: 5, NeedWrite: true,
+	})
+
+	for _, turn := range []int{1, 3, 5, 10, 20} {
+		budget := c.ComputeBudget(turn)
+		if budget.ThinkingBudget != fixedThinking {
+			t.Errorf("turn %d: thinking budget should be fixed at %d, got %d", turn, fixedThinking, budget.ThinkingBudget)
+		}
+	}
+
+	// Thinking budget should also remain fixed across progress levels
+	for _, level := range []ProgressLevel{ProgressLevelNone, ProgressLevelL1, ProgressLevelL2, ProgressLevelL3} {
+		c.SetProgressLevel(level)
+		budget := c.ComputeBudget(5)
+		if budget.ThinkingBudget != fixedThinking {
+			t.Errorf("level %d: thinking budget should be fixed at %d, got %d", level, fixedThinking, budget.ThinkingBudget)
 		}
 	}
 }
@@ -127,22 +150,23 @@ func TestMaxTokensController_ProgressLevelCaps(t *testing.T) {
 		ReasoningDepth: 5, CodeVolume: 5, DomainSpecialization: 5, IntegrationBreadth: 5, NeedWrite: true,
 	})
 
+	// Progress caps now apply to completion budget only (thinking is fixed)
 	c.SetProgressLevel(ProgressLevelL1)
 	budget := c.ComputeBudget(5)
-	if budget.TotalBudget > 8192 {
-		t.Errorf("L1 should cap total at 8192, got %d", budget.TotalBudget)
+	if budget.CompletionBudget > 8192 {
+		t.Errorf("L1 should cap completion at 8192, got %d", budget.CompletionBudget)
 	}
 
 	c.SetProgressLevel(ProgressLevelL2)
 	budget = c.ComputeBudget(5)
-	if budget.TotalBudget > 4096 {
-		t.Errorf("L2 should cap total at 4096, got %d", budget.TotalBudget)
+	if budget.CompletionBudget > 4096 {
+		t.Errorf("L2 should cap completion at 4096, got %d", budget.CompletionBudget)
 	}
 
 	c.SetProgressLevel(ProgressLevelL3)
 	budget = c.ComputeBudget(5)
-	if budget.TotalBudget > 2048 {
-		t.Errorf("L3 should cap total at 2048, got %d", budget.TotalBudget)
+	if budget.CompletionBudget > 2048 {
+		t.Errorf("L3 should cap completion at 2048, got %d", budget.CompletionBudget)
 	}
 }
 

@@ -3,13 +3,11 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/ipy/jenny/internal/api"
 	"github.com/ipy/jenny/internal/log"
@@ -170,49 +168,6 @@ func (e *PromptTooLongError) Error() string {
 	return fmt.Sprintf("prompt too long: estimated %d tokens exceeds blocking limit %d", e.EstimatedTokens, e.Limit)
 }
 
-// estimateTokens estimates the token count for a message chain using a
-// charset-aware heuristic. ASCII/Latin text uses ~4 chars/token; multi-byte
-// characters (CJK, emoji) use ~1.5 chars/token.
-func estimateTokens(messages []api.Message) int {
-	total := 0
-	for _, msg := range messages {
-		total += estimateStringTokens(msg.Content)
-		total += estimateStringTokens(msg.Thinking)
-		total += estimateStringTokens(msg.Signature)
-		for _, tu := range msg.ToolUse {
-			total += len(tu.Name) + 50
-			inputBytes, _ := json.Marshal(tu.Input)
-			total += estimateStringTokens(string(inputBytes))
-		}
-		for _, tr := range msg.ToolResults {
-			total += estimateStringTokens(tr.Content) + 50
-		}
-	}
-	return total
-}
-
-// estimateStringTokens estimates the token count for a string using charset-aware
-// heuristics. ASCII chars → ~4 chars/token, multi-byte runes → ~1.5 chars/token.
-func estimateStringTokens(s string) int {
-	if len(s) == 0 {
-		return 0
-	}
-	asciiChars := 0
-	multiByteRunes := 0
-	for i := 0; i < len(s); {
-		r, size := utf8.DecodeRuneInString(s[i:])
-		if r < 128 {
-			asciiChars++
-		} else {
-			multiByteRunes++
-		}
-		i += size
-	}
-	asciiTokens := asciiChars * 10 / 40  // asciiChars / 4.0
-	mbTokens := multiByteRunes * 10 / 15 // multiByteRunes / 1.5
-	return asciiTokens + mbTokens
-}
-
 // newCompactConfigForModel creates a CompactConfig using model-specific parameters
 // from api.ModelParams, with overrides sourced from streamCfg (which is itself
 // populated by the koanf config layer — see docs/arch/koanf-config.md).
@@ -256,7 +211,7 @@ func readEnvInt(key string, defaultVal int) int {
 // Strategy order:
 //  1. In-session compaction (shares system+tools+message cache with main session)
 //  2. Session-memory compaction (when enabled)
-//  3. Fork summary agent (independent call, no cache sharing)
+//  3. Fallback summary compact (independent call, no cache sharing)
 func (e *QueryEngine) compactMessages(ctx context.Context, messages []api.Message, cfg CompactConfig, systemPrompt []string) ([]api.Message, error) {
 	log.Debug("Starting context compaction", "messageCount", len(messages))
 
@@ -289,29 +244,21 @@ func (e *QueryEngine) compactMessages(ctx context.Context, messages []api.Messag
 		if err == nil {
 			return compacted, nil
 		}
-		log.Debug("Session memory compaction not available, falling back to summary agent")
+		log.Debug("Session memory compaction not available, falling back to summary compact")
 	}
 
-	// Step 3: Fork summary agent (independent call, no cache sharing)
-	return e.forkSummaryAgent(ctx, messages, cfg, systemPrompt)
+	// Step 3: Fallback summary compact (independent call, no cache sharing)
+	return e.fallbackSummaryCompact(ctx, messages, cfg, systemPrompt)
 }
 
-// inSessionCompactPrompt is the instruction appended to the message chain
-// for in-session compaction. It reuses the session's system prompt and tools
-// so the entire prefix is a cache hit.
+// compactSummaryRequirements is the shared summary specification used by both
+// in-session compaction and fallback summary compaction. Both paths must produce
+// identical output format so the compacted chain is consistent regardless of
+// which path succeeded.
 //
 // The summary is the only preserved context from dropped messages. Each item
-// below ensures the model can continue correctly after compaction. For every
-// claim in the summary, distinguish confidence level:
-//
-//	[CONFIRMED] — observed, measured, or explicitly stated
-//	[SPECULATIVE] — reasoned but not yet verified
-//	[UNVERIFIED] — stated intent or assumption, not yet acted on
-//	[EXCLUDED] — tried and rejected, or ruled out by analysis
-const inSessionCompactPrompt = `<system-reminder>
-The context window is approaching its limit. This is a separate compaction request. Do not continue any prior conversation or call any tools.
-</system-reminder>
-Provide a comprehensive summary of the entire conversation so far. Output ONLY the summary text.
+// ensures the model can continue correctly after compaction.
+const compactSummaryRequirements = `Provide a comprehensive summary of the entire conversation so far. Output ONLY the summary text. Do not continue any prior conversation or call any tools.
 
 For every claim, tag it with a confidence level: [CONFIRMED] for observed facts, [SPECULATIVE] for reasoned but unverified judgments, [UNVERIFIED] for stated intent not yet acted on, [EXCLUDED] for approaches tried and rejected or ruled out.
 
@@ -323,6 +270,17 @@ For every claim, tag it with a confidence level: [CONFIRMED] for observed facts,
 6. Key technical concepts — APIs, libraries, patterns, constraints, or domain knowledge relevant to the task
 7. Current work — exactly what was being done when compaction triggered (the last few turns)
 8. Next steps — actionable outstanding tasks, unresolved questions, or explicit next actions the user requested`
+
+// inSessionCompactPrompt is the instruction appended to the message chain
+// for in-session compaction. It reuses the session's system prompt and tools
+// so the entire prefix is a cache hit. Wrapped in <system-reminder> to
+// override the agent persona.
+var inSessionCompactPrompt = "<system-reminder>\nThe context window is approaching its limit. This is a separate compaction request.\n</system-reminder>\n" + compactSummaryRequirements
+
+// fallbackCompactSystemPrompt is the system prompt for fallback summary
+// compaction. It uses the same summary requirements as in-session compaction
+// to ensure consistent output format.
+var fallbackCompactSystemPrompt = []string{"You are a helpful assistant that summarizes conversations. " + compactSummaryRequirements}
 
 // inSessionCompact performs compaction by appending a summary instruction to the
 // existing message chain, sharing the cached system prompt + tools + message
@@ -344,7 +302,7 @@ func (e *QueryEngine) inSessionCompact(ctx context.Context, messages []api.Messa
 	}
 
 	e.mu.Lock()
-	AccumulateUsage(e.costState, e.model, resp.Usage)
+	AccumulateUsage(e.costState, resolvedModelForCost(e.model, resp.Model), resp.Usage)
 	e.mu.Unlock()
 
 	// Reject if the model made tool calls instead of producing a summary
@@ -374,67 +332,61 @@ func (e *QueryEngine) trySessionMemoryCompact(ctx context.Context, messages []ap
 	return nil, fmt.Errorf("session memory compaction not implemented")
 }
 
-// forkSummaryAgent forks a single-turn API call to generate a summary of the
-// conversation history. Uses proportional dropping: on each retry, drops 25%
-// of remaining messages from the head instead of a single API-round group.
-func (e *QueryEngine) forkSummaryAgent(ctx context.Context, messages []api.Message, cfg CompactConfig, systemPrompt []string) ([]api.Message, error) {
-	// Prepare messages for summary call (strip images/documents)
-	summaryMessages := prepareSummaryMessages(messages)
-
-	// Truncate large tool results before sending to summary agent
-	summaryMessages = truncateLargeToolResults(summaryMessages, 2000)
-
-	summarySystemPrompt := []string{"You are a helpful assistant that summarizes conversations concisely. For every claim, tag confidence: [CONFIRMED] observed fact, [SPECULATIVE] reasoned but unverified, [UNVERIFIED] stated intent not yet acted on, [EXCLUDED] tried and rejected or ruled out. Cover: (1) primary request and user intent — explicit and implicit, (2) key decisions and rationale, (3) excluded paths — approaches tried and rejected or ruled out, with reasons, (4) errors and fixes, (5) files modified with specific identifiers (function names, type names), (6) key technical concepts, (7) current work when compaction triggered, (8) actionable next steps."}
-
-	// Disable thinking for the summary call — thinking is wasted overhead for a
-	// one-shot summarization task. Restore both overrides when done.
-	e.client.SetThinkingConfig(api.ThinkingConfig{})
-	defer func() {
-		if e.streamCfg != nil {
-			e.client.SetThinkingConfig(api.ThinkingConfig{
-				Effort:       e.streamCfg.Effort,
-				BudgetTokens: e.streamCfg.ThinkingBudget,
-			})
+// fallbackSummaryCompact generates a summary of the conversation history as a
+// last-resort compaction strategy. Delegates to SideQuery in summary mode
+// (creates its own client, disables thinking, uses fallbackCompactSystemPrompt).
+// On prompt-too-long errors, retries with proportional dropping: each retry
+// drops 25% of remaining messages from the head.
+func (e *QueryEngine) fallbackSummaryCompact(ctx context.Context, messages []api.Message, cfg CompactConfig, systemPrompt []string) ([]api.Message, error) {
+	sqctx := e.sideQueryCtx
+	if sqctx == nil {
+		sqctx = &SideQueryContext{
+			Model:     ResolveModel(e.model),
+			CostState: e.costState,
+			CostMu:    &e.mu,
 		}
-		e.client.SetMaxTokensOverride(0)
-	}()
-	e.client.SetMaxTokensOverride(SUMMARY_MAX_TOKENS)
+	}
 
+	currentMessages := messages
 	var lastErr error
 	maxRetries := 5
 
 	for attempt := range maxRetries {
 		if attempt > 0 {
-			log.Debug("Retrying summary agent", "attempt", attempt+1, "messageCount", len(summaryMessages))
-			dropCount := len(summaryMessages) / 4
+			log.Debug("Retrying fallback summary compact", "attempt", attempt+1, "messageCount", len(currentMessages))
+			dropCount := len(currentMessages) / 4
 			if dropCount < 1 {
 				dropCount = 1
 			}
-			if len(summaryMessages)-dropCount < 4 {
-				return nil, fmt.Errorf("cannot retry summary: too few messages remaining (%d)", len(summaryMessages))
+			if len(currentMessages)-dropCount < 4 {
+				return nil, fmt.Errorf("cannot retry summary: too few messages remaining (%d)", len(currentMessages))
 			}
-			summaryMessages = summaryMessages[dropCount:]
-			// Advance past any orphaned tool_result message (user msg with
-			// ToolResults but no preceding assistant tool_use) to maintain
-			// the tool_use/tool_result pairing invariant.
-			for len(summaryMessages) > 0 {
-				m := summaryMessages[0]
+			currentMessages = currentMessages[dropCount:]
+			for len(currentMessages) > 0 {
+				m := currentMessages[0]
 				if m.Role == api.RoleUser && len(m.ToolResults) > 0 {
-					summaryMessages = summaryMessages[1:]
+					currentMessages = currentMessages[1:]
 					continue
 				}
 				break
 			}
-			// Ensure first remaining message is a user message for valid API request
-			for len(summaryMessages) > 0 && summaryMessages[0].Role != api.RoleUser {
-				summaryMessages = summaryMessages[1:]
+			for len(currentMessages) > 0 && currentMessages[0].Role != api.RoleUser {
+				currentMessages = currentMessages[1:]
 			}
-			if len(summaryMessages) < 2 {
-				return nil, fmt.Errorf("cannot retry summary: too few messages remaining after alignment (%d)", len(summaryMessages))
+			if len(currentMessages) < 2 {
+				return nil, fmt.Errorf("cannot retry summary: too few messages remaining after alignment (%d)", len(currentMessages))
 			}
 		}
 
-		resp, err := e.client.SendMessage(ctx, summaryMessages, nil, nil, summarySystemPrompt, "")
+		sq := &SideQuery{
+			Name:                "compact_fallback",
+			Messages:            currentMessages,
+			MaxTokens:           SUMMARY_MAX_TOKENS,
+			SummarySystemPrompt: fallbackCompactSystemPrompt,
+			DisableThinking:     true,
+		}
+
+		result, err := sq.ExecuteSummary(ctx, sqctx)
 		if err != nil {
 			lastErr = err
 			if isPromptTooLongError(err) {
@@ -443,26 +395,15 @@ func (e *QueryEngine) forkSummaryAgent(ctx context.Context, messages []api.Messa
 			return nil, err
 		}
 
-		e.mu.Lock()
-		AccumulateUsage(e.costState, e.model, resp.Usage)
-		e.mu.Unlock()
-
-		var summaryText strings.Builder
-		for _, block := range resp.Content {
-			if block.Type == api.BlockTypeText {
-				summaryText.WriteString(block.Text)
-			}
-		}
-
-		if summaryText.String() == "" {
+		if result.Text == "" {
 			lastErr = fmt.Errorf("empty summary response")
 			continue
 		}
 
-		return buildCompactedChain(messages, summaryText.String()), nil
+		return buildCompactedChain(messages, result.Text), nil
 	}
 
-	return nil, fmt.Errorf("summary agent failed after %d attempts: %w", maxRetries, lastErr)
+	return nil, fmt.Errorf("fallback summary compact failed after %d attempts: %w", maxRetries, lastErr)
 }
 
 // truncateLargeToolResults truncates tool result content that exceeds maxLen
@@ -697,7 +638,7 @@ func (e *QueryEngine) emergencyCompact(ctx context.Context, messages []api.Messa
 	resp, err := e.client.SendMessage(ctx, messagesForSummary, e.toolParams, nil, systemPrompt, "")
 	if err == nil {
 		e.mu.Lock()
-		AccumulateUsage(e.costState, e.model, resp.Usage)
+		AccumulateUsage(e.costState, resolvedModelForCost(e.model, resp.Model), resp.Usage)
 		e.mu.Unlock()
 
 		var summary strings.Builder

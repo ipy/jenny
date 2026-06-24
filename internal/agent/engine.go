@@ -81,6 +81,9 @@ type QueryEngine struct {
 	// Dynamic max_tokens controller
 	maxTokensCtrl *MaxTokensController
 
+	// Side query context — captures immutable session parameters for cache-sharing forks
+	sideQueryCtx *SideQueryContext
+
 	// Progress monitor (circuit breaker)
 	progressMonitor *ProgressMonitor
 
@@ -304,14 +307,6 @@ func NewQueryEngine(cfg *StreamConfig, tools []tool.Tool, model string, opts ...
 		e.client = client
 	}
 
-	// Wire thinking config (Effort, BudgetTokens) from StreamConfig to client/provider
-	if e.client != nil {
-		e.client.SetThinkingConfig(api.ThinkingConfig{
-			Effort:       cfg.Effort,
-			BudgetTokens: cfg.ThinkingBudget,
-		})
-	}
-
 	// Finalize model and compact config
 	if e.model == "" {
 		if model != "" {
@@ -323,8 +318,33 @@ func NewQueryEngine(cfg *StreamConfig, tools []tool.Tool, model string, opts ...
 	e.requestedModel = e.model
 	e.compactConfig = newCompactConfigForModel(e.model, e.streamCfg)
 
-	// Initialize dynamic max_tokens and progress monitor
+	// Initialize dynamic max_tokens controller (determines the fixed thinking budget)
 	e.maxTokensCtrl = NewMaxTokensController(e.model)
+
+	// Wire thinking config using the FIXED thinking budget from the controller.
+	// This value is set once and never changes, ensuring prompt cache stability.
+	sessionThinkingConfig := api.ThinkingConfig{
+		Effort:       cfg.Effort,
+		BudgetTokens: e.maxTokensCtrl.FixedThinkingBudget(),
+	}
+	if cfg.ThinkingBudget > 0 {
+		// Explicit CLI override takes precedence — still fixed for the session
+		sessionThinkingConfig.BudgetTokens = cfg.ThinkingBudget
+	}
+	if e.client != nil {
+		e.client.SetThinkingConfig(sessionThinkingConfig)
+	}
+
+	// Initialize side query context (captures immutable session params for fork reuse)
+	e.sideQueryCtx = &SideQueryContext{
+		Model:          e.model,
+		RequestedModel: e.requestedModel,
+		ThinkingConfig: sessionThinkingConfig,
+		CostState:      e.costState,
+		CostMu:         &e.mu,
+		StreamCfg:      e.streamCfg,
+	}
+
 	e.progressMonitor = NewProgressMonitor()
 	e.thinkingMonitor = NewThinkingMonitor()
 

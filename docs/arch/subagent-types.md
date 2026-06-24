@@ -74,7 +74,12 @@ Named subagents inherit `PermissionLevel` from parent `StreamConfig` (AC7). Anti
 
 ## Model Aliases
 
-`sonnet`, `opus`, `haiku` map to concrete model identifiers (e.g., `claude-sonnet-4-6`, `claude-opus-4-7`). Aliases are resolved for both the main agent model (`--model`) and subagent models. Unknown values pass through unchanged. Each alias can be overridden via environment variable (`ANTHROPIC_DEFAULT_SONNET_MODEL`, etc.).
+`sonnet`, `opus`, `haiku` map to concrete model identifiers (e.g., `claude-sonnet-4-6`, `claude-opus-4-7`). Aliases are resolved for the main agent model (`--model`), subagent models, and side-query fork clients (progress eval, complexity eval, summary). Unknown values pass through unchanged. Each alias can be overridden via environment variable (`ANTHROPIC_DEFAULT_SONNET_MODEL`, etc.).
+
+Resolution lives in `internal/agent/model_resolve.go` (exported `ResolveModel` function) and is applied at every client-creation boundary:
+- `NewQueryEngine` main client
+- `resolveSubagentModel` (params model, config subagent model, and provider default)
+- `SideQuery.executeFork` / `executeSummary`
 
 ## One-Shot Types
 

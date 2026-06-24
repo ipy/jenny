@@ -58,8 +58,17 @@ type TokenBudget struct {
 	TotalBudget      int // ThinkingBudget + CompletionBudget (what gets sent to unified-budget APIs)
 }
 
-// MaxTokensController manages dynamic max_tokens computation with separate
-// thinking and completion budgets.
+// MaxTokensController manages dynamic max_tokens computation with a FIXED
+// thinking budget and variable completion budget.
+//
+// The thinking budget (budget_tokens for Anthropic) is determined once at
+// session start and never changes. This is critical for prompt cache
+// stability: Anthropic's cache key includes thinking parameters, so any
+// change to budget_tokens invalidates the entire cached prefix.
+//
+// To control thinking intensity without changing the budget, use
+// ThinkingGuidanceHint() to generate prompt-based guidance that can be
+// injected as a <system-reminder> message.
 type MaxTokensController struct {
 	mu               sync.RWMutex
 	complexityResult *ComplexityResult
@@ -68,6 +77,9 @@ type MaxTokensController struct {
 	progressLevel    ProgressLevel
 	justEscalated    bool // true for exactly one ComputeBudget call after a level escalation
 
+	// Fixed thinking budget — set once, never changes.
+	fixedThinkingBudget int
+
 	// Per-turn state for adaptive adjustments
 	lastStopReason string // "max_tokens", "end_turn", "tool_use", etc.
 	lastHadToolUse bool   // whether last turn contained tool calls
@@ -75,10 +87,30 @@ type MaxTokensController struct {
 }
 
 // NewMaxTokensController creates a new controller for the given model.
+// The thinking budget is computed once and remains constant for the session.
 func NewMaxTokensController(model string) *MaxTokensController {
+	modelMax := api.ModelParams(model).MaxOutputTokens
 	return &MaxTokensController{
-		modelMax: api.ModelParams(model).MaxOutputTokens,
+		modelMax:            modelMax,
+		fixedThinkingBudget: computeFixedThinkingBudget(modelMax),
 	}
+}
+
+// computeFixedThinkingBudget determines a generous, fixed thinking budget.
+// The budget is large enough for deep reasoning on complex tasks; the model
+// self-regulates actual usage. Using a fixed value prevents cache invalidation.
+func computeFixedThinkingBudget(modelMax int) int {
+	budget := modelMax * 60 / 100
+	if budget < 1024 {
+		budget = 1024
+	}
+	return budget
+}
+
+// FixedThinkingBudget returns the session's immutable thinking budget.
+// Use this when creating side query clients that must share the cache prefix.
+func (c *MaxTokensController) FixedThinkingBudget() int {
+	return c.fixedThinkingBudget
 }
 
 // SetProgressLevel updates the progress monitor level.
@@ -128,42 +160,43 @@ func (c *MaxTokensController) ShouldFork() bool {
 }
 
 // ComputeBudget returns the token budget for the given turn.
+// ThinkingBudget is ALWAYS the fixed value — only CompletionBudget varies.
 func (c *MaxTokensController) ComputeBudget(turn int) TokenBudget {
 	c.mu.Lock()
 	cr := c.complexityResult
 	level := c.progressLevel
 	lastStop := c.lastStopReason
 	lastWrite := c.lastHadWrite
-	reflectionTurn := c.justEscalated
-	c.justEscalated = false // consume: boost applies to exactly one turn
+	c.justEscalated = false
 	c.mu.Unlock()
 
-	if turn <= 3 {
-		return c.earlyTurnBudget()
-	}
+	thinking := c.fixedThinkingBudget
 
-	var thinking, completion int
-	if cr != nil {
-		thinking = c.thinkingBudget(cr, turn, level, reflectionTurn)
+	var completion int
+	if turn <= 3 {
+		completion = c.earlyCompletionBudget()
+	} else if cr != nil {
 		completion = c.completionBudget(cr, turn, level, lastStop, lastWrite)
 	} else {
 		tb := turnBasedMaxTokens(turn, c.modelMax)
-		thinking = tb * 40 / 100
-		completion = tb - thinking
+		completion = tb * 60 / 100
+	}
+
+	completion = c.applyCompletionCap(completion, level)
+
+	// Ensure minimum completion room
+	if completion < 1024 {
+		completion = 1024
 	}
 
 	total := thinking + completion
-	total = c.applyProgressCap(total, level)
-
 	if total > c.modelMax {
 		total = c.modelMax
-	}
-
-	// Re-proportion thinking/completion after capping
-	if thinking+completion > 0 && total < thinking+completion {
-		ratio := float64(thinking) / float64(thinking+completion)
-		thinking = int(float64(total) * ratio)
 		completion = total - thinking
+		if completion < 1024 {
+			completion = 1024
+			thinking = total - completion
+		}
 	}
 
 	log.Debug("TokenBudget computed",
@@ -172,7 +205,6 @@ func (c *MaxTokensController) ComputeBudget(turn int) TokenBudget {
 		"completion", completion,
 		"total", total,
 		"level", level,
-		"reflection", reflectionTurn,
 		"hasComplexity", cr != nil,
 	)
 	return TokenBudget{ThinkingBudget: thinking, CompletionBudget: completion, TotalBudget: total}
@@ -184,53 +216,12 @@ func (c *MaxTokensController) ComputeEffective(turn int) int {
 	return c.ComputeBudget(turn).TotalBudget
 }
 
-func (c *MaxTokensController) earlyTurnBudget() TokenBudget {
-	cap := 8192
-	if c.modelMax < 100_000 {
-		cap = min(4096, c.modelMax)
-	} else {
-		cap = min(8192, c.modelMax)
+// earlyCompletionBudget returns the completion budget for turns 1-3.
+func (c *MaxTokensController) earlyCompletionBudget() int {
+	if c.modelMax >= 100_000 {
+		return min(4096, c.modelMax)
 	}
-	thinking := cap * 30 / 100
-	completion := cap - thinking
-	return TokenBudget{ThinkingBudget: thinking, CompletionBudget: completion, TotalBudget: cap}
-}
-
-// thinkingBudget calculates the thinking token allocation based on complexity and turn state.
-// reflectionTurn is true for exactly one turn after a progress level escalation,
-// granting a one-shot thinking boost so the agent can reflect on why it's stuck.
-// All subsequent turns at the same level get tightened budgets to force action.
-func (c *MaxTokensController) thinkingBudget(cr *ComplexityResult, turn int, level ProgressLevel, reflectionTurn bool) int {
-	intensity := cr.ThinkingIntensity() // 1-5
-	// Base: per intensity level, with model-proportional scaling
-	base := intensity * c.modelMax / 100
-
-	if reflectionTurn && (level == ProgressLevelL1 || level == ProgressLevelL2) {
-		// One-shot reflection boost: the agent just got flagged as stuck,
-		// give it extra thinking capacity to reconsider its approach.
-		base = base * 160 / 100
-	} else {
-		// Steady-state: tighten thinking to push toward action, not rumination.
-		switch level {
-		case ProgressLevelL1:
-			base = base * 70 / 100
-		case ProgressLevelL2, ProgressLevelL3:
-			base = base * 40 / 100
-		}
-	}
-
-	// Cap thinking at 60% of model max to leave room for output
-	maxThinking := c.modelMax * 60 / 100
-	if base > maxThinking {
-		base = maxThinking
-	}
-
-	// Anthropic enforces a minimum of 1024 for budget_tokens.
-	if base < 1024 {
-		base = 1024
-	}
-
-	return base
+	return min(2048, c.modelMax)
 }
 
 // completionBudget calculates the completion token allocation.
@@ -265,8 +256,9 @@ func (c *MaxTokensController) completionBudget(cr *ComplexityResult, turn int, l
 	return base
 }
 
-// applyProgressCap applies progress-level-based caps to the total budget.
-func (c *MaxTokensController) applyProgressCap(total int, level ProgressLevel) int {
+// applyCompletionCap applies progress-level-based caps to the completion budget.
+// Only completion is capped — the thinking budget is immutable.
+func (c *MaxTokensController) applyCompletionCap(completion int, level ProgressLevel) int {
 	var cap int
 	switch level {
 	case ProgressLevelL3:
@@ -276,18 +268,39 @@ func (c *MaxTokensController) applyProgressCap(total int, level ProgressLevel) i
 	case ProgressLevelL1:
 		cap = 8192
 	default:
-		return total
+		return completion
 	}
-	if c.modelMax < cap {
-		cap = c.modelMax
-	}
-	if cap < 2048 {
-		cap = 2048
-	}
-	if total > cap {
+	if completion > cap {
 		return cap
 	}
-	return total
+	return completion
+}
+
+// ThinkingGuidanceHint returns a prompt-based hint for controlling the model's
+// thinking intensity. This replaces the old approach of dynamically changing
+// budget_tokens, which caused cache invalidation.
+//
+// The hint is injected as part of a <system-reminder> when the agent's behavior
+// deviates from expectations (e.g., stuck at a progress level, or early turns
+// where brief thinking suffices).
+func (c *MaxTokensController) ThinkingGuidanceHint(turn int) string {
+	c.mu.RLock()
+	cr := c.complexityResult
+	level := c.progressLevel
+	c.mu.RUnlock()
+
+	switch {
+	case turn <= 2:
+		return "This is an early exploration turn. Think briefly — focus on understanding the task and gathering information before deep analysis."
+	case level >= ProgressLevelL2:
+		return "You appear to be stuck. Think very briefly about what is fundamentally different from what you have already tried, then take a concrete, different action immediately. Do not repeat prior approaches."
+	case level >= ProgressLevelL1:
+		return "Progress has stalled. Reflect briefly on why current approaches are failing, then pivot to a substantively different strategy."
+	case cr != nil && cr.ThinkingIntensity() <= 2:
+		return "This is a straightforward task. Keep your thinking concise and move directly to action."
+	default:
+		return ""
+	}
 }
 
 // turnBasedMaxTokens returns the schedule-based default for a given turn.
@@ -349,8 +362,9 @@ INTEGRATION BREADTH — how many components or files are touched:
 
 need_write=true if the task involves writing/modifying code, articles, or other complex artifacts.`
 
-// forkComplexityEval sends a side request to evaluate task complexity.
-// It reuses the cached system prompt prefix for cache hits.
+// forkComplexityEval is deprecated — complexity eval now uses the SideQuery
+// framework via dispatchComplexityEval in engine_loop.go. This function is
+// retained only for tests that call it directly.
 func forkComplexityEval(ctx context.Context, client api.Requester, messages []api.Message, systemPrompt []string, tools []api.ToolParam) (*ComplexityResult, string, api.Usage, error) {
 	evalMsg := api.Message{
 		Role:    api.RoleUser,
@@ -384,13 +398,6 @@ func forkComplexityEval(ctx context.Context, client api.Requester, messages []ap
 	cr.DomainSpecialization = clampDim(cr.DomainSpecialization)
 	cr.IntegrationBreadth = clampDim(cr.IntegrationBreadth)
 
-	log.Debug("Complexity eval result",
-		"reasoning_depth", cr.ReasoningDepth,
-		"code_volume", cr.CodeVolume,
-		"domain_specialization", cr.DomainSpecialization,
-		"integration_breadth", cr.IntegrationBreadth,
-		"need_write", cr.NeedWrite,
-	)
 	return &cr, resp.Model, resp.Usage, nil
 }
 

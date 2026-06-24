@@ -815,9 +815,30 @@ func (m *mockCompactClient) SetMaxTokensOverride(n int) {}
 // SetDynamicThinkingBudget implements api.Requester.
 func (m *mockCompactClient) SetDynamicThinkingBudget(n int) {}
 
+// newTestEngine creates a QueryEngine with the given mock client, wiring up
+// sideQueryCtx.ClientFactory so that fallbackSummaryCompact (via SideQuery)
+// routes calls through the mock.
+func newTestEngine(mock api.Requester) *QueryEngine {
+	costState := &CostState{ModelUsage: make(map[string]ModelUsage)}
+	e := &QueryEngine{
+		client:    mock,
+		model:     "test-model",
+		costState: costState,
+	}
+	e.sideQueryCtx = &SideQueryContext{
+		Model:     "test-model",
+		CostState: costState,
+		CostMu:    &e.mu,
+		ClientFactory: func(model string) (api.Requester, error) {
+			return mock, nil
+		},
+	}
+	return e
+}
+
 // TestInSessionCompact_Behavior_WithLargeMessages verifies that when
 // estimated tokens exceed effectiveContextWindow - MIN_SAFETY_OVERHEAD - SUMMARY_MAX_TOKENS,
-// compactMessages succeeds via forkSummaryAgent fallback (proving inSessionCompact was skipped).
+// compactMessages succeeds via fallbackSummaryCompact (proving inSessionCompact was skipped).
 // This is a behavioral test that actually calls compactMessages — not just setup math.
 func TestInSessionCompact_Behavior_WithLargeMessages(t *testing.T) {
 	cfg := CompactConfig{
@@ -842,20 +863,16 @@ func TestInSessionCompact_Behavior_WithLargeMessages(t *testing.T) {
 		t.Fatalf("test setup: estimated %d should exceed maxMessagesTokens %d", estimated, maxMessagesTokens)
 	}
 
-	// Create engine with mock client
 	mock := &mockCompactClient{}
-	engine := &QueryEngine{
-		client:    mock,
-		costState: &CostState{ModelUsage: make(map[string]ModelUsage)},
-	}
+	engine := newTestEngine(mock)
 
-	// compactMessages should succeed via forkSummaryAgent fallback
+	// compactMessages should succeed via fallbackSummaryCompact
 	_, err := engine.compactMessages(context.Background(), messages, cfg, []string{"test system prompt"})
 	if err != nil {
 		t.Fatalf("compactMessages with large messages should succeed via fallback, got error: %v", err)
 	}
 
-	// The safety check skipped inSessionCompact, but forkSummaryAgent was called.
+	// The safety check skipped inSessionCompact, but fallbackSummaryCompact was called.
 	// Success here proves the skip logic worked (inSessionCompact would have overflowed).
 	t.Logf("PASS: compactMessages succeeded with large messages (%d estimated tokens, limit %d)",
 		estimated, maxMessagesTokens)
@@ -883,12 +900,8 @@ func TestInSessionCompact_Behavior_WithSmallMessages(t *testing.T) {
 		t.Fatalf("test setup: estimated %d should be within maxMessagesTokens %d", estimated, maxMessagesTokens)
 	}
 
-	// Create engine with mock client
 	mock := &mockCompactClient{}
-	engine := &QueryEngine{
-		client:    mock,
-		costState: &CostState{ModelUsage: make(map[string]ModelUsage)},
-	}
+	engine := newTestEngine(mock)
 
 	// compactMessages should succeed (via inSessionCompact or fallback)
 	_, err := engine.compactMessages(context.Background(), messages, cfg, []string{"test system prompt"})
@@ -967,11 +980,11 @@ func TestIsPromptTooLongError_AllSubstrings(t *testing.T) {
 }
 
 // ============================================================
-// 175K messages in 200K window: forkSummaryAgent retries, succeeds
+// 175K messages in 200K window: fallbackSummaryCompact retries, succeeds
 // ============================================================
 
 // mockForkRetryClient simulates a compaction API that returns a prompt-too-long error
-// on the first forkSummaryAgent call (identified by summary systemPrompt) and
+// on the first fallbackSummaryCompact call (identified by fallbackCompactSystemPrompt) and
 // succeeds on retry.
 type mockForkRetryClient struct {
 	mockCompactClient
@@ -979,8 +992,8 @@ type mockForkRetryClient struct {
 
 func (m *mockForkRetryClient) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 	m.calls++
-	// forkSummaryAgent uses summarySystemPrompt; first such call returns prompt-too-long
-	if strings.Contains(strings.Join(systemPrompt, "\n\n"), "summarizes conversations concisely") && m.calls == 1 {
+	// fallbackSummaryCompact uses fallbackCompactSystemPrompt; first such call returns prompt-too-long
+	if strings.Contains(strings.Join(systemPrompt, "\n\n"), "summarizes conversations") && m.calls == 1 {
 		return nil, fmt.Errorf("context window exceeds limit (2013)")
 	}
 	return &api.Response{
@@ -994,7 +1007,7 @@ func (m *mockForkRetryClient) SendMessage(ctx context.Context, messages []api.Me
 }
 
 // Test175KTokensForkRetries verifies that with ~175K tokens in a 200K context window,
-// inSessionCompact is skipped, forkSummaryAgent retries after dropping groups, and
+// inSessionCompact is skipped, fallbackSummaryCompact retries after dropping groups, and
 // compaction succeeds with a valid summary + preserved trailing messages.
 func Test175KTokensForkRetries(t *testing.T) {
 	cfg := CompactConfig{
@@ -1045,18 +1058,15 @@ func Test175KTokensForkRetries(t *testing.T) {
 	}
 
 	mock := &mockForkRetryClient{}
-	engine := &QueryEngine{
-		client:    mock,
-		costState: &CostState{ModelUsage: make(map[string]ModelUsage)},
-	}
+	engine := newTestEngine(mock)
 
 	result, err := engine.compactMessages(context.Background(), messages, cfg, []string{"test system prompt"})
 	if err != nil {
-		t.Fatalf("FAIL: compactMessages should succeed via forkSummaryAgent retry, got error: %v", err)
+		t.Fatalf("FAIL: compactMessages should succeed via fallbackSummaryCompact retry, got error: %v", err)
 	}
 
 	if mock.calls < 2 {
-		t.Errorf("FAIL: expected forkSummaryAgent to retry (calls >= 2), got %d calls", mock.calls)
+		t.Errorf("FAIL: expected fallbackSummaryCompact to retry (calls >= 2), got %d calls", mock.calls)
 	}
 
 	if len(result) == 0 {
@@ -1096,7 +1106,7 @@ func Test175KTokensForkRetries(t *testing.T) {
 
 // mock1MWindowClient tracks whether inSessionCompact was called by checking the systemPrompt.
 // inSessionCompact passes the original systemPrompt from compactMessages ([]string{"test system prompt"}),
-// while forkSummaryAgent uses its own summarySystemPrompt.
+// while fallbackSummaryCompact uses fallbackCompactSystemPrompt.
 type mock1MWindowClient struct {
 	mockCompactClient
 	inSessionCompactCalled bool
@@ -1105,8 +1115,8 @@ type mock1MWindowClient struct {
 func (m *mock1MWindowClient) SendMessage(ctx context.Context, messages []api.Message, tools []api.ToolParam, toolResults []api.ToolResult, systemPrompt []string, systemPromptSuffix string) (*api.Response, error) {
 	m.calls++
 	// inSessionCompact passes the original systemPrompt (same as compactMessages received),
-	// while forkSummaryAgent uses summarySystemPrompt.
-	if !strings.Contains(strings.Join(systemPrompt, "\n\n"), "summarizes conversations concisely") {
+	// while fallbackSummaryCompact uses fallbackCompactSystemPrompt.
+	if !strings.Contains(strings.Join(systemPrompt, "\n\n"), "summarizes conversations") {
 		m.inSessionCompactCalled = true
 	}
 	return &api.Response{
@@ -1145,10 +1155,7 @@ func TestDeepSeek1MWindowUsesInSessionCompact(t *testing.T) {
 	t.Logf("estimated tokens = %d, maxMessagesTokens = %d, within margin", estimated, maxMessagesTokens)
 
 	mock := &mock1MWindowClient{}
-	engine := &QueryEngine{
-		client:    mock,
-		costState: &CostState{ModelUsage: make(map[string]ModelUsage)},
-	}
+	engine := newTestEngine(mock)
 
 	_, err := engine.compactMessages(context.Background(), messages, cfg, []string{"test system prompt"})
 	if err != nil {
@@ -1166,11 +1173,11 @@ func TestDeepSeek1MWindowUsesInSessionCompact(t *testing.T) {
 }
 
 // ============================================================
-// forkSummaryAgent exhausts all retries, returns underlying error
+// fallbackSummaryCompact exhausts all retries, returns underlying error
 // ============================================================
 
-// mockExhaustClient always returns a prompt-too-long error for forkSummaryAgent calls
-// (nil tools) so retries are exhausted.
+// mockExhaustClient always returns a prompt-too-long error for fallbackSummaryCompact
+// calls (nil tools) so retries are exhausted.
 type mockExhaustClient struct {
 	mockCompactClient
 }
@@ -1191,7 +1198,7 @@ func (m *mockExhaustClient) SendMessage(ctx context.Context, messages []api.Mess
 }
 
 // TestForkRetriesExhaustedReturnsUnderlyingError verifies that when the
-// forkSummaryAgent retry group-dropping exhausts all retries, compactMessages
+// fallbackSummaryCompact retry group-dropping exhausts all retries, compactMessages
 // returns the underlying error (not a generic "compaction failed" error).
 func TestForkRetriesExhaustedReturnsUnderlyingError(t *testing.T) {
 	cfg := CompactConfig{
@@ -1222,14 +1229,11 @@ func TestForkRetriesExhaustedReturnsUnderlyingError(t *testing.T) {
 	t.Logf("estimated tokens = %d, maxMessagesTokens = %d", estimated, maxMessagesTokens)
 
 	mock := &mockExhaustClient{}
-	engine := &QueryEngine{
-		client:    mock,
-		costState: &CostState{ModelUsage: make(map[string]ModelUsage)},
-	}
+	engine := newTestEngine(mock)
 
 	_, err := engine.compactMessages(context.Background(), messages, cfg, []string{"test system prompt"})
 	if err == nil {
-		t.Fatal("FAIL: compactMessages should return error when forkSummaryAgent exhausts retries")
+		t.Fatal("FAIL: compactMessages should return error when fallbackSummaryCompact exhausts retries")
 	}
 
 	errStr := err.Error()

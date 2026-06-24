@@ -154,7 +154,7 @@ Loading older transcripts that lack `thinking` and `signature` fields does not c
 
 | Provider | Thinking Config Field | Notes |
 |----------|----------------------|-------|
-| Anthropic | `thinking.budget_tokens` | Set via `--thinking-budget`; wired through `ThinkingConfig.BudgetTokens` |
+| Anthropic | `thinking.budget_tokens` | Fixed for the session. Default: 60% of model max output tokens (min 1024). Overridable via `--thinking-budget` (still fixed once set). Never modified per-turn — cache stability critical. |
 | OpenAI Chat | `reasoning_effort` | Top-level field |
 | OpenAI Responses | `reasoning_config.effort` | When `OPENAI_WIRE_API=responses` |
 | DeepSeek | `extra_body.thinking.type` | `extra_body: {"thinking": {"type": "enabled"}}`; also sends `reasoning_effort` when effort is configured |

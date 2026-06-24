@@ -159,6 +159,13 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 	// but currently providers handle the slice.
 	systemPrompt := e.streamCfg.CachedSystemPrompt
 
+	// Populate SideQueryContext with frozen prompt and tools so fork queries
+	// share the exact same cache prefix as the main session.
+	if e.sideQueryCtx != nil {
+		e.sideQueryCtx.SystemPrompt = systemPrompt
+		e.sideQueryCtx.Tools = e.toolParams
+	}
+
 	// When stream-json mode is active, redirect debug logs to stderr
 	// to prevent interleaving with NDJSON output on stdout
 	if e.streamCfg.Enabled {
@@ -274,131 +281,13 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		// Progress monitor: dispatch L1-second fork-judge if needed, then drain results
 		if e.progressMonitor.ShouldForkProgressEval() {
 			e.progressMonitor.MarkForkDispatched()
-			forkMessages := make([]api.Message, len(messages))
-			copy(forkMessages, messages)
-			forkModel := e.model
-			if e.requestedModel != "" {
-				forkModel = e.requestedModel
-			}
-			forkTools := e.toolParams
-			parentCtx := ctx
-			go func() {
-				forkCtx, forkCancel := context.WithTimeout(context.WithoutCancel(parentCtx), 30*time.Second)
-				defer forkCancel()
-				forkClient, err := api.NewClientWithModel(forkModel)
-				if err != nil {
-					log.Debug("Progress eval fork client creation failed", "error", err)
-					return
-				}
-				forkClient.SetMaxTokensOverride(forkMaxTokens)
-				forkClient.SetThinkingConfig(api.ThinkingConfig{
-					Effort:       e.streamCfg.Effort,
-					BudgetTokens: e.streamCfg.ThinkingBudget,
-				})
-				result, model, usage, err := forkProgressEval(forkCtx, forkClient, forkMessages, systemPrompt, forkTools)
-				if err != nil {
-					log.Debug("Progress eval fork failed", "error", err)
-					return
-				}
-				if parentCtx.Err() != nil {
-					log.Debug("Progress eval completed but session already ended, discarding result")
-					return
-				}
-				// Accumulate cost for the side request
-				e.mu.Lock()
-				if model != "" {
-					AccumulateUsage(e.costState, model, usage)
-				}
-				totalCost := e.costState.TotalCostUSD
-				modelUsage := e.buildModelUsage()
-				e.mu.Unlock()
-				// Send result to main loop via channel (non-blocking, drop if full)
-				select {
-				case e.progressMonitor.forkResultCh <- result:
-				default:
-				}
-				log.Info("Progress eval result",
-					"overall", result.Overall,
-					"meaningful_progress", result.MeaningfulProgress,
-					"reasoning", result.Reasoning,
-				)
-				if e.streamCfg.Enabled {
-					msg := StreamMessage{
-						Type:         "system",
-						Subtype:      "progress_eval",
-						Result:       progressEvalResultJSON(result),
-						Uuid:         GenerateUUID(),
-						TotalCostUSD: totalCost,
-						ModelUsage:   modelUsage,
-					}
-					data, _ := json.Marshal(msg)
-					fmt.Fprintln(os.Stdout, string(data))
-				}
-			}()
+			e.dispatchProgressEval(ctx, messages, "progress_eval")
 		}
 
 		// L3 fork-judge: dispatch before hard termination to give agent a last chance
 		if e.progressMonitor.ShouldForkL3ProgressEval() {
 			e.progressMonitor.MarkL3ForkDispatched()
-			forkMessages := make([]api.Message, len(messages))
-			copy(forkMessages, messages)
-			forkModel := e.model
-			if e.requestedModel != "" {
-				forkModel = e.requestedModel
-			}
-			forkTools := e.toolParams
-			parentCtx := ctx
-			go func() {
-				forkCtx, forkCancel := context.WithTimeout(context.WithoutCancel(parentCtx), 30*time.Second)
-				defer forkCancel()
-				forkClient, err := api.NewClientWithModel(forkModel)
-				if err != nil {
-					log.Debug("L3 progress eval fork client creation failed", "error", err)
-					return
-				}
-				forkClient.SetMaxTokensOverride(forkMaxTokens)
-				forkClient.SetThinkingConfig(api.ThinkingConfig{
-					Effort:       e.streamCfg.Effort,
-					BudgetTokens: e.streamCfg.ThinkingBudget,
-				})
-				result, model, usage, err := forkProgressEval(forkCtx, forkClient, forkMessages, systemPrompt, forkTools)
-				if err != nil {
-					log.Debug("L3 progress eval fork failed", "error", err)
-					return
-				}
-				if parentCtx.Err() != nil {
-					log.Debug("L3 progress eval completed but session already ended, discarding result")
-					return
-				}
-				e.mu.Lock()
-				if model != "" {
-					AccumulateUsage(e.costState, model, usage)
-				}
-				totalCost := e.costState.TotalCostUSD
-				modelUsage := e.buildModelUsage()
-				e.mu.Unlock()
-				select {
-				case e.progressMonitor.forkResultCh <- result:
-				default:
-				}
-				log.Info("L3 progress eval result",
-					"overall", result.Overall,
-					"meaningful_progress", result.MeaningfulProgress,
-					"reasoning", result.Reasoning,
-				)
-				if e.streamCfg.Enabled {
-					msg := StreamMessage{
-						Type:         "system",
-						Subtype:      "progress_eval",
-						Result:       progressEvalResultJSON(result),
-						Uuid:         GenerateUUID(),
-						TotalCostUSD: totalCost,
-						ModelUsage:   modelUsage,
-					}
-					data, _ := json.Marshal(msg)
-					fmt.Fprintln(os.Stdout, string(data))
-				}
-			}()
+			e.dispatchProgressEval(ctx, messages, "L3 progress_eval")
 		}
 
 		// Drain any pending fork result before checking escalation
@@ -487,10 +376,26 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			return e.client.SendMessage(fallbackCtx, messages, e.toolParams, nil, systemPrompt, "")
 		}
 
-		// Dynamic token budget: compute and set thinking + completion budgets
+		// Dynamic token budget: thinking is fixed, only completion varies.
+		// SetDynamicThinkingBudget is NOT called — budget_tokens never changes
+		// after session start, ensuring prompt cache stability.
 		turnBudget := e.maxTokensCtrl.ComputeBudget(e.turnCount)
 		e.client.SetMaxTokensOverride(turnBudget.TotalBudget)
-		e.client.SetDynamicThinkingBudget(turnBudget.ThinkingBudget)
+
+		// Inject thinking guidance hint as a transient user message.
+		// This replaces the old approach of changing budget_tokens per turn,
+		// which caused cache invalidation. The hint is appended before the API
+		// call and stripped afterwards — it does not persist in the history.
+		// It's placed at the end so the existing prefix remains a cache hit.
+		var thinkingHintInjected bool
+		if hint := e.maxTokensCtrl.ThinkingGuidanceHint(e.turnCount); hint != "" {
+			messages = append(messages, api.Message{
+				Role:      api.RoleUser,
+				Content:   "<system-reminder>\n" + hint + "\n</system-reminder>",
+				IsVirtual: true,
+			})
+			thinkingHintInjected = true
+		}
 
 		// Use streaming API
 		// Track API call duration
@@ -647,6 +552,12 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		}
 		e.totalAPIDurationMs += time.Since(apiStartTime).Milliseconds()
 		apiCancel()
+
+		// Strip transient thinking guidance hint before building assistant message
+		if thinkingHintInjected && len(messages) > 0 && messages[len(messages)-1].IsVirtual {
+			messages = messages[:len(messages)-1]
+			thinkingHintInjected = false
+		}
 
 		// Emit final thinking_tokens events for all active thinking blocks
 		// before the consolidated assistant message. This ensures final totals are
@@ -1109,67 +1020,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			// a valid tool_use/tool_result sequence.
 			e.toolResultCount += len(execToolResults)
 			if e.toolResultCount >= 3 && e.maxTokensCtrl.ShouldFork() {
-				forkMessages := make([]api.Message, len(messages))
-				copy(forkMessages, messages)
-				forkModel := e.model
-				if e.requestedModel != "" {
-					forkModel = e.requestedModel
-				}
-				forkTools := e.toolParams
-				parentCtx := ctx
-				go func() {
-					forkCtx, forkCancel := context.WithTimeout(context.WithoutCancel(parentCtx), 30*time.Second)
-					defer forkCancel()
-					forkClient, err := api.NewClientWithModel(forkModel)
-					if err != nil {
-						log.Debug("Complexity eval fork client creation failed", "error", err)
-						return
-					}
-					forkClient.SetMaxTokensOverride(forkMaxTokens)
-					forkClient.SetThinkingConfig(api.ThinkingConfig{
-						Effort:       e.streamCfg.Effort,
-						BudgetTokens: e.streamCfg.ThinkingBudget,
-					})
-					cr, model, usage, err := forkComplexityEval(forkCtx, forkClient, forkMessages, systemPrompt, forkTools)
-					if err != nil {
-						log.Debug("Complexity eval fork failed", "error", err)
-						return
-					}
-					// Check if parent session was cancelled while we were evaluating
-					if parentCtx.Err() != nil {
-						log.Debug("Complexity eval completed but session already ended, discarding result")
-						return
-					}
-					// Accumulate cost for the side request
-					e.mu.Lock()
-					if model != "" {
-						AccumulateUsage(e.costState, model, usage)
-					}
-					totalCost := e.costState.TotalCostUSD
-					modelUsage := e.buildModelUsage()
-					e.mu.Unlock()
-					e.maxTokensCtrl.SetComplexityResult(cr)
-					log.Info("Complexity eval result",
-						"reasoning_depth", cr.ReasoningDepth,
-						"code_volume", cr.CodeVolume,
-						"domain_specialization", cr.DomainSpecialization,
-						"integration_breadth", cr.IntegrationBreadth,
-						"need_write", cr.NeedWrite,
-					)
-					if e.streamCfg.Enabled {
-						crJSON, _ := json.Marshal(cr)
-						msg := StreamMessage{
-							Type:         "system",
-							Subtype:      "complexity_eval",
-							Result:       string(crJSON),
-							Uuid:         GenerateUUID(),
-							TotalCostUSD: totalCost,
-							ModelUsage:   modelUsage,
-						}
-						data, _ := json.Marshal(msg)
-						fmt.Fprintln(os.Stdout, string(data))
-					}
-				}()
+				e.dispatchComplexityEval(ctx, messages)
 			}
 			continue
 		}
@@ -1180,4 +1031,140 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 	}
 
 	return "", fmt.Errorf("max iterations (%d) exceeded", maxIterations)
+}
+
+// dispatchProgressEval launches a progress evaluation side query as a goroutine.
+// Uses the unified SideQuery framework to share the exact same cache prefix as
+// the main session.
+func (e *QueryEngine) dispatchProgressEval(ctx context.Context, messages []api.Message, label string) {
+	forkMessages := make([]api.Message, len(messages))
+	copy(forkMessages, messages)
+	parentCtx := ctx
+	sqctx := e.sideQueryCtx
+
+	go func() {
+		sq := &SideQuery{
+			Name:      "progress_eval",
+			Messages:  forkMessages,
+			Prompt:    progressEvalPrompt,
+			MaxTokens: forkMaxTokens,
+			Timeout:   30 * time.Second,
+		}
+
+		forkCtx := context.WithoutCancel(parentCtx)
+		sqResult, err := sq.ExecuteFork(forkCtx, sqctx)
+		if err != nil {
+			log.Debug(label+" fork failed", "error", err)
+			return
+		}
+		if parentCtx.Err() != nil {
+			log.Debug(label + " completed but session already ended, discarding result")
+			return
+		}
+
+		result, err := parseProgressEvalResponse(sqResult.Text)
+		if err != nil {
+			log.Debug(label+" parse failed", "error", err)
+			return
+		}
+
+		select {
+		case e.progressMonitor.forkResultCh <- result:
+		default:
+		}
+
+		log.Info(label+" result",
+			"overall", result.Overall,
+			"meaningful_progress", result.MeaningfulProgress,
+			"reasoning", result.Reasoning,
+		)
+
+		if e.streamCfg.Enabled {
+			e.mu.Lock()
+			totalCost := e.costState.TotalCostUSD
+			modelUsage := e.buildModelUsage()
+			e.mu.Unlock()
+
+			msg := StreamMessage{
+				Type:         "system",
+				Subtype:      "progress_eval",
+				Result:       progressEvalResultJSON(result),
+				Uuid:         GenerateUUID(),
+				TotalCostUSD: totalCost,
+				ModelUsage:   modelUsage,
+			}
+			data, _ := json.Marshal(msg)
+			fmt.Fprintln(os.Stdout, string(data))
+		}
+	}()
+}
+
+// dispatchComplexityEval launches a complexity evaluation side query as a goroutine.
+// Uses the unified SideQuery framework for cache-sharing forks.
+func (e *QueryEngine) dispatchComplexityEval(ctx context.Context, messages []api.Message) {
+	forkMessages := make([]api.Message, len(messages))
+	copy(forkMessages, messages)
+	parentCtx := ctx
+	sqctx := e.sideQueryCtx
+
+	go func() {
+		sq := &SideQuery{
+			Name:      "complexity_eval",
+			Messages:  forkMessages,
+			Prompt:    complexityEvalPrompt,
+			MaxTokens: forkMaxTokens,
+			Timeout:   30 * time.Second,
+		}
+
+		forkCtx := context.WithoutCancel(parentCtx)
+		sqResult, err := sq.ExecuteFork(forkCtx, sqctx)
+		if err != nil {
+			log.Debug("Complexity eval fork failed", "error", err)
+			return
+		}
+		if parentCtx.Err() != nil {
+			log.Debug("Complexity eval completed but session already ended, discarding result")
+			return
+		}
+
+		text := extractJSON(sqResult.Text)
+		var cr ComplexityResult
+		if err := json.Unmarshal([]byte(text), &cr); err != nil {
+			log.Debug("Complexity eval parse failed", "error", err)
+			return
+		}
+		cr.ReasoningDepth = clampDim(cr.ReasoningDepth)
+		cr.CodeVolume = clampDim(cr.CodeVolume)
+		cr.DomainSpecialization = clampDim(cr.DomainSpecialization)
+		cr.IntegrationBreadth = clampDim(cr.IntegrationBreadth)
+
+		e.maxTokensCtrl.SetComplexityResult(&cr)
+
+		log.Info("Complexity eval result",
+			"reasoning_depth", cr.ReasoningDepth,
+			"code_volume", cr.CodeVolume,
+			"domain_specialization", cr.DomainSpecialization,
+			"integration_breadth", cr.IntegrationBreadth,
+			"need_write", cr.NeedWrite,
+		)
+
+		if e.streamCfg.Enabled {
+			e.mu.Lock()
+			totalCost := e.costState.TotalCostUSD
+			modelUsage := e.buildModelUsage()
+			e.mu.Unlock()
+
+			crJSON, _ := json.Marshal(&cr)
+			msg := StreamMessage{
+				Type:         "system",
+				Subtype:      "complexity_eval",
+				Result:       string(crJSON),
+				Uuid:         GenerateUUID(),
+				TotalCostUSD: totalCost,
+				ModelUsage:   modelUsage,
+			}
+			data, _ := json.Marshal(msg)
+			fmt.Fprintln(os.Stdout, string(data))
+		}
+	}()
 }
