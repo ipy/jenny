@@ -2,9 +2,9 @@
 title: QA Gate
 slug: qa-gate
 priority: P2
-status: not_started
+status: partial
 spec: complete
-code: not_started
+code: partial
 package: internal/agent
 depends_on:
   - side-query
@@ -27,7 +27,7 @@ Acceptance criteria and constraints are extracted by extending the existing comp
 
 These fields are added to the same JSON response alongside the four complexity dimensions. The `forkMaxTokens` budget is increased to accommodate the longer output.
 
-**Fallback:** When the complexity eval has not yet fired by the time QA triggers (e.g., tasks completing in fewer than 3 tool turns), a synchronous summary-mode side query extracts acceptance criteria from the conversation at QA time.
+**Fallback:** When the complexity eval has not yet fired by the time QA triggers (e.g., tasks completing in fewer than 3 tool turns), the same `complexityEvalPrompt` is executed synchronously via SideQuery. One API call produces both the complexity dimensions and the acceptance criteria. The result is stored in `MaxTokensController`, so the dynamic token budget also benefits from the late evaluation. No separate AC-only query is ever sent.
 
 ## Trigger Conditions
 
@@ -92,7 +92,7 @@ shouldTriggerQA()
     │
     ▼ true
 extractAcceptCriteria()
-    │  (from ComplexityResult if available, otherwise synchronous fallback)
+    │  (from ComplexityResult if available, otherwise synchronous complexityEval)
     │
     ▼
 runQAGate()
@@ -157,8 +157,10 @@ Emitted after each QA evaluation (both PASS and FAIL):
 
 All API calls from QA gate operations are accumulated in the session's `CostState`:
 
-- Acceptance criteria extraction (fallback side query) via `SideQuery.AccumulateUsage`
+- Synchronous complexity eval fallback (if needed) via `SideQuery.Execute` → `AccumulateUsage`
 - Verification subagent via `RunStream` → child engine `AccumulateUsage`, then cost merge back to parent
+
+No separate acceptance-criteria-only query is ever sent. When the async complexity eval has already fired, the QA gate reads from the cached `ComplexityResult` at zero additional cost.
 
 ## Invariants
 

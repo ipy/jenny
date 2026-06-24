@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -279,6 +280,7 @@ func (sq *SideQuery) executeSummary(ctx context.Context, sqctx *SideQueryContext
 }
 
 const summaryToolResultMaxLen = 2000
+const summaryToolInputMaxLen = 500
 
 // renderConversationText converts a message history into a plain-text
 // transcript suitable for sending as a single user message. Each message
@@ -335,11 +337,21 @@ func renderConversationText(messages []api.Message) string {
 				sb.WriteString(msg.Content)
 				sb.WriteByte('\n')
 			}
-			for _, tu := range msg.ToolUse {
-				sb.WriteString("[tool_use: ")
-				sb.WriteString(tu.Name)
-				sb.WriteString("]\n")
+		for _, tu := range msg.ToolUse {
+			sb.WriteString("[tool_use: ")
+			sb.WriteString(tu.Name)
+			if len(tu.Input) > 0 {
+				if inputJSON, err := json.Marshal(tu.Input); err == nil {
+					s := string(inputJSON)
+					if len(s) > summaryToolInputMaxLen {
+						s = s[:summaryToolInputMaxLen] + "...truncated"
+					}
+					sb.WriteByte(' ')
+					sb.WriteString(s)
+				}
 			}
+			sb.WriteString("]\n")
+		}
 		default:
 			sb.WriteString("[")
 			sb.WriteString(msg.Role)

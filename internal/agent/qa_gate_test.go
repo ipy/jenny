@@ -234,14 +234,14 @@ func TestExtractAcceptCriteria_EmptyComplexityResult(t *testing.T) {
 		streamCfg:     &StreamConfig{Enabled: true},
 		maxTokensCtrl: NewMaxTokensController("test-model"),
 	}
-	// No complexity result set
+	// No complexity result and no sideQueryCtx — returns nil without API call
 	messages := []api.Message{
 		{Role: api.RoleUser, Content: "Please add a login page with email validation and error handling"},
 	}
 	ac, _ := e.extractAcceptCriteria(messages)
-	// Without complexity result and no SideQuery client factory,
-	// fallback should produce criteria from conversation or empty list
-	_ = ac // Just verify no panic
+	if ac != nil {
+		t.Errorf("expected nil AC without sideQueryCtx, got %v", ac)
+	}
 }
 
 func TestBuildFileSummary(t *testing.T) {

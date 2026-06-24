@@ -97,44 +97,55 @@ func (e *QueryEngine) runQAGate(ctx context.Context, messages []api.Message, ses
 	return verdict, nil
 }
 
-// extractAcceptCriteria retrieves acceptance criteria from the complexity result
-// or falls back to extracting them from the conversation via a side query.
+// extractAcceptCriteria retrieves acceptance criteria from the complexity result.
+// If the async complexity eval hasn't fired yet, runs it synchronously using the
+// same complexityEvalPrompt — one query yields both complexity dimensions and AC,
+// feeding maxTokensCtrl as a side-effect. No separate AC-only query is ever sent.
 func (e *QueryEngine) extractAcceptCriteria(messages []api.Message) (acceptCriteria []string, constraints []string) {
-	// Primary: from complexity eval result
 	cr := e.maxTokensCtrl.GetComplexityResult()
 	if cr != nil && len(cr.AcceptCriteria) > 0 {
 		return cr.AcceptCriteria, cr.Constraints
 	}
 
-	// Fallback: synchronous extraction from conversation via SideQuery
+	// Complexity eval never fired — run it synchronously with the same prompt
+	// so one API call produces both complexity dimensions and acceptance criteria.
 	if e.sideQueryCtx == nil || len(messages) == 0 {
 		return nil, nil
 	}
 
 	sq := &SideQuery{
-		Name:      "qa_accept_criteria",
+		Name:      "complexity_eval",
 		Messages:  messages,
-		Prompt:    acExtractionPrompt,
+		Prompt:    complexityEvalPrompt,
 		MaxTokens: forkMaxTokens,
-		Timeout:   15 * time.Second,
+		Timeout:   30 * time.Second,
 	}
 
 	ctx := context.Background()
 	result, err := sq.Execute(ctx, e.sideQueryCtx)
 	if err != nil {
-		log.Debug("AC extraction side query failed", "error", err)
+		log.Debug("Synchronous complexity eval for QA gate failed", "error", err)
 		return nil, nil
 	}
 
 	text := extractJSON(result.Text)
-	var parsed struct {
-		AcceptCriteria []string `json:"accept_criteria"`
-		Constraints    []string `json:"constraints"`
-	}
+	var parsed ComplexityResult
 	if err := json.Unmarshal([]byte(text), &parsed); err != nil {
-		log.Debug("AC extraction parse failed", "error", err)
+		log.Debug("Synchronous complexity eval parse failed", "error", err)
 		return nil, nil
 	}
+	parsed.ReasoningDepth = clampDim(parsed.ReasoningDepth)
+	parsed.CodeVolume = clampDim(parsed.CodeVolume)
+	parsed.DomainSpecialization = clampDim(parsed.DomainSpecialization)
+	parsed.IntegrationBreadth = clampDim(parsed.IntegrationBreadth)
+
+	// Store result so maxTokensCtrl also benefits from the late eval
+	e.maxTokensCtrl.SetComplexityResult(&parsed)
+	log.Info("Synchronous complexity eval for QA gate",
+		"overall", parsed.OverallComplexity(),
+		"accept_criteria", len(parsed.AcceptCriteria),
+	)
+
 	return parsed.AcceptCriteria, parsed.Constraints
 }
 
@@ -324,13 +335,3 @@ func qaEvalResultJSON(v *qaVerdict, retryCount, maxRetries int) string {
 	return string(data)
 }
 
-const acExtractionPrompt = `<system-reminder>
-This is a separate meta-evaluation request. Prior conversation is from another agent, do not continue it or call any tools.
-</system-reminder>
-Extract the acceptance criteria and constraints from the user's initial request in this conversation.
-Respond ONLY with a JSON object, no other text, comments or fences:
-{"accept_criteria": ["criterion 1", "criterion 2", ...], "constraints": ["constraint 1", ...]}
-
-accept_criteria: List concrete, measurable acceptance criteria. Each should be independently verifiable (e.g., "function X returns correct results for edge cases", "test coverage includes Y").
-constraints: List any explicit or implied constraints (e.g., "must use existing API", "no new dependencies", "backward compatible").
-Return empty lists if the request is too vague to derive meaningful criteria.`

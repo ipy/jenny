@@ -61,7 +61,8 @@ Condenses the conversation into a shorter request. Useful for cheaper models or 
 
 **Message flattening:** Instead of forwarding the multi-turn message history as-is (which LLMs summarize poorly due to interleaved roles, tool calls, and tool results), Summary mode renders the entire conversation into a single plain-text transcript and sends it as one user message. The rendering:
 
-- Labels each message with its role (`[user]`, `[assistant]`, `[tool_use: <name>]`, `[tool_result]`)
+- Labels each message with its role (`[user]`, `[assistant]`, `[tool_use: <name> {input}]`, `[tool_result]`)
+- Includes serialized JSON input parameters for tool_use blocks (truncated to 500 chars to avoid bloating the summary with large file contents)
 - Strips media (images/documents replaced with markers), thinking blocks, and signatures
 - Truncates large tool results to 2000 characters
 - Optionally limits to the last N messages (`SummaryMaxMessages`) before rendering

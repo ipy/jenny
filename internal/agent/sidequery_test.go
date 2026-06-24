@@ -104,8 +104,11 @@ func TestRenderConversationText_ToolUseAndResults(t *testing.T) {
 
 	text := renderConversationText(messages)
 
-	if !strings.Contains(text, "[tool_use: read]") {
-		t.Error("expected [tool_use: read] label")
+	if !strings.Contains(text, "[tool_use: read") {
+		t.Error("expected [tool_use: read ...] label")
+	}
+	if !strings.Contains(text, `"/tmp/test.go"`) {
+		t.Error("expected tool input path in rendered text")
 	}
 	if !strings.Contains(text, "package main") {
 		t.Error("expected tool result content")
@@ -231,14 +234,64 @@ func TestRenderConversationText_MultipleToolUses(t *testing.T) {
 
 	text := renderConversationText(messages)
 
-	if !strings.Contains(text, "[tool_use: read]") {
-		t.Error("expected [tool_use: read] label")
+	if !strings.Contains(text, "[tool_use: read") {
+		t.Error("expected [tool_use: read ...] label")
 	}
-	if !strings.Contains(text, "[tool_use: glob]") {
-		t.Error("expected [tool_use: glob] label")
+	if !strings.Contains(text, `"a.go"`) {
+		t.Error("expected tool input path for read tool")
+	}
+	if !strings.Contains(text, "[tool_use: glob") {
+		t.Error("expected [tool_use: glob ...] label")
+	}
+	if !strings.Contains(text, `"*.go"`) {
+		t.Error("expected glob pattern in tool input")
 	}
 	if strings.Count(text, "[tool_result]") != 2 {
 		t.Errorf("expected 2 [tool_result] labels, got %d", strings.Count(text, "[tool_result]"))
+	}
+}
+
+func TestRenderConversationText_LargeToolInputTruncated(t *testing.T) {
+	largeContent := strings.Repeat("x", 1000)
+	messages := []api.Message{
+		{
+			Role: "assistant",
+			ToolUse: []api.ToolUseBlock{
+				{ID: "tu_1", Name: "write", Input: map[string]any{
+					"path":    "/tmp/big.txt",
+					"content": largeContent,
+				}},
+			},
+		},
+	}
+
+	text := renderConversationText(messages)
+
+	if strings.Contains(text, largeContent) {
+		t.Error("full large tool input should have been truncated")
+	}
+	if !strings.Contains(text, "[tool_use: write") {
+		t.Error("expected [tool_use: write ...] label")
+	}
+	if !strings.Contains(text, "...truncated") {
+		t.Error("expected truncation marker in tool input")
+	}
+}
+
+func TestRenderConversationText_EmptyInput(t *testing.T) {
+	messages := []api.Message{
+		{
+			Role: "assistant",
+			ToolUse: []api.ToolUseBlock{
+				{ID: "tu_1", Name: "bash", Input: map[string]any{}},
+			},
+		},
+	}
+
+	text := renderConversationText(messages)
+
+	if !strings.Contains(text, "[tool_use: bash]") {
+		t.Error("expected [tool_use: bash] without input for empty map")
 	}
 }
 
