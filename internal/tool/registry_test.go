@@ -22,20 +22,18 @@ func (t *mockTool) Execute(ctx context.Context, input map[string]any, cwd string
 // baseToolCount returns the number of tools produced by WithBaseTools() on the
 // current platform. This varies because Windows adds PowerShellTool
 // unconditionally, while Unix uses BashTool. On Windows, BashTool is also added
-// if bash.exe is found in PATH. The 4 task tracking tools (TaskCreate, TaskGet,
-// TaskList, TaskUpdate) are always registered, making the total 8 on Unix.
+// if bash.exe is found in PATH. Task tracking tools are NOT included (off by
+// default), making the total 4 on Unix.
 func baseToolCount() int {
 	if runtime.GOOS == "windows" {
-		// Read + PowerShell + Glob + Grep + 4 task tools = 8; +1 if bash.exe is in PATH
-		// (MCP tools excluded unless hasMCPServers=true)
+		// Read + PowerShell + Glob + Grep = 4; +1 if bash.exe is in PATH
 		if _, err := exec.LookPath("bash.exe"); err == nil {
-			return 9
+			return 5
 		}
-		return 8
+		return 4
 	}
-	// Unix: Read + Bash + Glob + Grep + 4 task tools = 8
-	// (MCP tools excluded unless hasMCPServers=true)
-	return 8
+	// Unix: Read + Bash + Glob + Grep = 4
+	return 4
 }
 
 // baseToolCountWithMCP returns the expected number of base tools including MCP interaction tools.
@@ -382,8 +380,9 @@ func TestReadFileCacheWireToTools(t *testing.T) {
 	t.Log("ReadTool created with ReadFileCache support")
 }
 
-// TestTaskCreateAppearsByDefault verifies that TaskCreate is always registered.
-func TestTaskCreateAppearsByDefault(t *testing.T) {
+// TestTaskToolsAbsentByDefault verifies that task tracking tools are not
+// registered when enable-tasks is not set.
+func TestTaskToolsAbsentByDefault(t *testing.T) {
 	tools := NewRegistry().
 		WithBaseTools().
 		Build()
@@ -393,18 +392,28 @@ func TestTaskCreateAppearsByDefault(t *testing.T) {
 		names[t.Name()] = true
 	}
 
-	if !names["TaskCreate"] {
-		t.Error("expected 'TaskCreate' tool by default")
+	taskTools := []string{"TaskCreate", "TaskGet", "TaskList", "TaskUpdate"}
+	for _, name := range taskTools {
+		if names[name] {
+			t.Errorf("'%s' should NOT be registered by default", name)
+		}
 	}
 
-	t.Log("TaskCreate tool appears by default")
+	store := NewRegistry().WithBaseTools().Build()
+	_ = store
+	reg := NewRegistry().WithBaseTools()
+	reg.Build()
+	if reg.GetTaskStore() != nil {
+		t.Error("GetTaskStore() should return nil when tasks are not enabled")
+	}
 }
 
-// TestTaskGetListUpdateAppearByDefault verifies that TaskGet, TaskList, and
-// TaskUpdate are always registered.
-func TestTaskGetListUpdateAppearByDefault(t *testing.T) {
+// TestTaskToolsRegisteredWhenEnabled verifies that task tracking tools are
+// registered when WithTaskTrackingEnabled(true) is set.
+func TestTaskToolsRegisteredWhenEnabled(t *testing.T) {
 	tools := NewRegistry().
 		WithBaseTools().
+		WithTaskTrackingEnabled(true).
 		Build()
 
 	names := make(map[string]bool)
@@ -412,17 +421,32 @@ func TestTaskGetListUpdateAppearByDefault(t *testing.T) {
 		names[t.Name()] = true
 	}
 
-	if !names["TaskGet"] {
-		t.Error("expected 'TaskGet' tool by default")
+	taskTools := []string{"TaskCreate", "TaskGet", "TaskList", "TaskUpdate"}
+	for _, name := range taskTools {
+		if !names[name] {
+			t.Errorf("expected '%s' tool when tasks enabled", name)
+		}
 	}
-	if !names["TaskList"] {
-		t.Error("expected 'TaskList' tool by default")
-	}
-	if !names["TaskUpdate"] {
-		t.Error("expected 'TaskUpdate' tool by default")
-	}
+}
 
-	t.Log("TaskGet, TaskList, TaskUpdate appear by default")
+// TestTaskStoreNilWhenDisabled verifies GetTaskStore returns nil when
+// task tracking is not enabled.
+func TestTaskStoreNilWhenDisabled(t *testing.T) {
+	reg := NewRegistry().WithBaseTools()
+	reg.Build()
+	if reg.GetTaskStore() != nil {
+		t.Error("GetTaskStore() should return nil when tasks not enabled")
+	}
+}
+
+// TestTaskStoreCreatedWhenEnabled verifies GetTaskStore returns a store when
+// task tracking is enabled.
+func TestTaskStoreCreatedWhenEnabled(t *testing.T) {
+	reg := NewRegistry().WithBaseTools().WithTaskTrackingEnabled(true)
+	reg.Build()
+	if reg.GetTaskStore() == nil {
+		t.Error("GetTaskStore() should return non-nil TaskStore when tasks enabled")
+	}
 }
 
 // --strict-mcp-config suppresses all built-in tools. With WithStrictMCP

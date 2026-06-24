@@ -66,6 +66,8 @@ type Flags struct {
 	RefreshRegistry        bool     `koanf:"refresh-registry"`      // --refresh-registry: synchronously fetch model registry
 	Offline                bool     `koanf:"offline"`               // --offline: skip all network fetch, use cache as-is
 	IncludeHookEvents      bool     `koanf:"include-hook-events"`   // --include-hook-events: include hook events in stream output
+	EnableTasks            bool     `koanf:"enable-tasks"`          // --enable-tasks: JENNY_ENABLE_TASKS
+	DynamicMCP             bool     `koanf:"dynamic-mcp"`           // --dynamic-mcp: JENNY_DYNAMIC_MCP
 }
 
 // envTransform transforms environment variable names from JENNY_* format to
@@ -287,6 +289,14 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	includeHookEventsDefault := k.Bool("include-hook-events")
 	var includeHookEvents bool
 	flags.BoolVarP(&includeHookEvents, "include-hook-events", "", includeHookEventsDefault, "Include hook lifecycle events in stream output (requires --output-format stream-json)")
+
+	enableTasksDefault := k.Bool("enable-tasks")
+	var enableTasks bool
+	flags.BoolVarP(&enableTasks, "enable-tasks", "", enableTasksDefault, "Enable task tracking tools (TaskCreate/Get/List/Update)")
+
+	dynamicMCPDefault := k.Bool("dynamic-mcp")
+	var dynamicMCP bool
+	flags.BoolVarP(&dynamicMCP, "dynamic-mcp", "", dynamicMCPDefault, "Use single call_mcp tool instead of per-MCP-tool registration")
 
 	// SDK-compatibility flags: accepted but not acted on.
 	var sdkBetas, sdkJsonSchema, sdkFallbackModel, sdkResumeSessionAt, sdkSettingSources string

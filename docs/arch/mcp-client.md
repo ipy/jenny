@@ -200,6 +200,41 @@ type Transport interface {
 
 This allows the Client to be transport-agnostic after connection. The `doRequest` method routes to the appropriate transport and handles session re-initialization for HTTP.
 
+## Dynamic MCP Loading
+
+By default, all MCP tools are discovered at startup and registered as individual tools in the model's tool list. This can cause prompt cache invalidation when resuming/continuing sessions if the MCP server set has changed.
+
+An alternative **dynamic MCP loading** mode defers tool discovery to call time via a single `call_mcp` tool.
+
+### Activation
+
+| Setting | Value |
+|---------|-------|
+| CLI flag | `--dynamic-mcp` |
+| Environment variable | `JENNY_DYNAMIC_MCP` |
+| Settings JSON key | `dynamic-mcp` |
+
+### Behavior
+
+When `dynamic-mcp` is enabled:
+
+1. MCP servers are still connected at startup (via `ConnectAll`).
+2. Individual MCP tools (`mcp__<server>__<tool>`) are **not** registered in the model's tool list.
+3. A single `call_mcp` tool is registered instead.
+4. The model calls `call_mcp` with `server`, `tool`, and `arguments` parameters.
+5. `call_mcp` looks up the connected MCP client, validates the tool exists, and delegates to `Client.CallTool`.
+6. `list_mcp_resources` and `read_mcp_resource` tools are still registered normally (unaffected).
+
+### Advantages
+
+- **Stable tool list:** The model's tool list does not change when MCP servers are added or removed, preserving prompt cache across resume/continue.
+- **Reduced tool count:** One tool instead of N, reducing system prompt size.
+
+### Trade-offs
+
+- The model must know server and tool names (provided in system prompt or via `call_mcp` error messages that list available options).
+- No per-tool JSON schema validation at the model level.
+
 ## Acceptance Criteria
 
 - **AC1:** Stdio transport connects with valid `command` config (existing behavior).
@@ -212,3 +247,5 @@ This allows the Client to be transport-agnostic after connection. The `doRequest
 - **AC8:** Resource cache cleared on disconnect.
 - **AC9:** Tools discovered via HTTP transport are registered identically to stdio tools.
 - **AC10:** Existing stdio tests pass unchanged (no regression).
+- **AC11:** When `dynamic-mcp` is enabled, individual MCP tools are omitted; only `call_mcp` is registered.
+- **AC12:** `call_mcp` tool correctly delegates to the target MCP server and tool.

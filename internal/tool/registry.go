@@ -39,6 +39,8 @@ type Registry struct {
 	exitWorktreeEnabled    bool
 	sessionID              string
 	hasMCPServers          bool
+	taskTrackingEnabled    bool
+	dynamicMCP             bool
 }
 
 // NewRegistry creates a new Registry.
@@ -212,6 +214,21 @@ func (r *Registry) WithHasMCPServers(has bool) *Registry {
 	return r
 }
 
+// WithTaskTrackingEnabled enables or disables the task tracking tools
+// (TaskCreate, TaskGet, TaskList, TaskUpdate).
+func (r *Registry) WithTaskTrackingEnabled(enabled bool) *Registry {
+	r.taskTrackingEnabled = enabled
+	return r
+}
+
+// WithDynamicMCP enables dynamic MCP mode: instead of registering individual
+// MCP tools, a single call_mcp tool is registered that delegates to connected
+// MCP servers at call time.
+func (r *Registry) WithDynamicMCP(enabled bool) *Registry {
+	r.dynamicMCP = enabled
+	return r
+}
+
 // GetSkillActivator returns the skill activator if skills framework is enabled.
 // This allows the caller to wire the activator to the QueryEngine for active skill tracking.
 func (r *Registry) GetSkillActivator() SkillActivator {
@@ -331,12 +348,14 @@ func (r *Registry) Build() []Tool {
 			}
 		}
 
-		// Register task tracking tools (always enabled).
-		r.taskStore = NewTaskStore()
-		r.baseTools = append(r.baseTools, NewTaskCreateTool(r.taskStore))
-		r.baseTools = append(r.baseTools, NewTaskGetTool(r.taskStore))
-		r.baseTools = append(r.baseTools, NewTaskListTool(r.taskStore))
-		r.baseTools = append(r.baseTools, NewTaskUpdateTool(r.taskStore))
+		// Register task tracking tools when enabled.
+		if r.taskTrackingEnabled {
+			r.taskStore = NewTaskStore()
+			r.baseTools = append(r.baseTools, NewTaskCreateTool(r.taskStore))
+			r.baseTools = append(r.baseTools, NewTaskGetTool(r.taskStore))
+			r.baseTools = append(r.baseTools, NewTaskListTool(r.taskStore))
+			r.baseTools = append(r.baseTools, NewTaskUpdateTool(r.taskStore))
+		}
 
 		// Add WebFetch tool if enabled (P3).
 		if r.webFetchEnabled {
@@ -397,20 +416,51 @@ func (r *Registry) Build() []Tool {
 		result = append(result, t)
 	}
 
-	// Add MCP tools, skipping those that collide with built-ins
-	for _, t := range r.mcpTools {
-		name := t.Name()
-		if r.denyRules[name] {
-			continue
+	if r.dynamicMCP && r.hasMCPServers {
+		// Dynamic MCP mode: register call_mcp instead of individual MCP tools.
+		// Non-MCP tools from mcpTools (e.g. list_mcp_resources) are still added.
+		callMcp := NewCallMcpTool()
+		name := callMcp.Name()
+		if !r.denyRules[name] {
+			if enabled, ok := r.enabled[name]; !ok || enabled {
+				seen[name] = len(result)
+				result = append(result, callMcp)
+			}
 		}
-		if enabled, ok := r.enabled[name]; ok && !enabled {
-			continue
+		for _, t := range r.mcpTools {
+			name := t.Name()
+			if r.denyRules[name] {
+				continue
+			}
+			if enabled, ok := r.enabled[name]; ok && !enabled {
+				continue
+			}
+			if _, exists := seen[name]; exists {
+				continue
+			}
+			// Skip individual MCP tools (mcp__*); keep non-MCP tools like list_mcp_resources
+			if len(name) > 5 && name[:5] == "mcp__" {
+				continue
+			}
+			seen[name] = len(result)
+			result = append(result, t)
 		}
-		if _, exists := seen[name]; exists {
-			continue // built-in wins
+	} else {
+		// Static MCP mode (default): add MCP tools, skipping collisions with built-ins
+		for _, t := range r.mcpTools {
+			name := t.Name()
+			if r.denyRules[name] {
+				continue
+			}
+			if enabled, ok := r.enabled[name]; ok && !enabled {
+				continue
+			}
+			if _, exists := seen[name]; exists {
+				continue // built-in wins
+			}
+			seen[name] = len(result)
+			result = append(result, t)
 		}
-		seen[name] = len(result)
-		result = append(result, t)
 	}
 
 	return result

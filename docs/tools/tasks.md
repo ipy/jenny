@@ -21,7 +21,7 @@ Task-related tool specifications for the task tracking system and background tas
 
 ### Overview
 
-Creates tracked tasks. Always enabled.
+Creates tracked tasks. Registered only when `enable-tasks` is set.
 
 ### Parameters
 
@@ -33,7 +33,7 @@ Hooks may block creation; on failure the error is returned (no task rollback).
 
 ### Acceptance Criteria
 
-- **AC1:** Always enabled.
+- **AC1:** Registered only when `enable-tasks` is set.
 - **AC2:** Hook failure returns error without creating a task.
 
 ## TaskGet Tool

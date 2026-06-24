@@ -53,7 +53,14 @@ Built-ins appear first for prompt cache stability.
 
 ## Task tracking
 
-Task tracking tools (TaskCreate, TaskGet, TaskUpdate, TaskList) are always registered.
+Task tracking tools (TaskCreate, TaskGet, TaskUpdate, TaskList) are **off by default** and gated by the `enable-tasks` setting. The setting is available as:
+
+- CLI flag: `--enable-tasks`
+- Environment variable: `JENNY_ENABLE_TASKS`
+- Settings JSON key: `enable-tasks`
+
+When disabled (default), no TaskStore is created and `GetTaskStore()` returns nil. Session persistence of task state is skipped when the store is nil.
+
 TaskStop and TaskOutput are independent and controlled by their own feature flags (`WithTaskStopEnabled`, `WithTaskOutputEnabled`).
 
 ## Feature Flags
@@ -64,7 +71,7 @@ TaskStop and TaskOutput are independent and controlled by their own feature flag
 | LSP | `WithLSPEnabled(true)` + `WithLSPClient(client)` |
 | EnterWorktree / ExitWorktree | `WithEnterWorktreeEnabled` / `WithExitWorktreeEnabled` |
 | WebFetch / WebSearch | `WithWebFetchEnabled` / `WithWebSearchEnabled` |
-| TaskCreate / TaskGet / TaskUpdate / TaskList | Always on |
+| TaskCreate / TaskGet / TaskUpdate / TaskList | `WithTaskTrackingEnabled(true)` |
 | TaskStop | `WithTaskStopEnabled(true)` |
 | TaskOutput | `WithTaskOutputEnabled(true)` |
 | Skills framework | `WithSkillsFrameworkEnabled(true, skills)` |
@@ -73,7 +80,11 @@ TaskStop and TaskOutput are independent and controlled by their own feature flag
 
 ## MCP Tools
 
-Merged after built-ins via `WithMCPTools`; names prefixed `mcp__<server>__<tool>` (convention applied by the MCP integration layer before tools reach the registry).
+Two modes are available for MCP tool integration:
+
+**Static mode (default):** Individual MCP tools are merged after built-ins via `WithMCPTools`; names prefixed `mcp__<server>__<tool>` (convention applied by the MCP integration layer before tools reach the registry).
+
+**Dynamic mode** (`--dynamic-mcp`): Individual MCP tools are not registered. A single `call_mcp` tool is registered instead, which accepts `server`, `tool`, and `arguments` parameters and delegates to the connected MCP client at call time. This keeps the tool list stable across session resume/continue even when MCP servers change.
 
 ## Edge Cases
 
@@ -86,7 +97,7 @@ Merged after built-ins via `WithMCPTools`; names prefixed `mcp__<server>__<tool>
 ## Acceptance Criteria
 
 - **AC1:** Denied tools absent from model tool list.
-- **AC2:** Task tracking tools registered unconditionally.
+- **AC2:** Task tracking tools registered only when `enable-tasks` is set; absent by default.
 - **AC3:** LSP only when enabled with client.
 - **AC4:** MCP tools appended with correct prefix.
 - **AC5:** Tool list in system prompt matches registered set.

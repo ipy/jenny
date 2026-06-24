@@ -485,6 +485,8 @@ func run() error {
 		WithDenyRules(flags.DeniedTools).
 		WithPermissionLevel(permLevel).
 		WithStrictMCP(flags.StrictMCP).
+		WithTaskTrackingEnabled(flags.EnableTasks).
+		WithDynamicMCP(flags.DynamicMCP).
 		WithSkillsFrameworkEnabled(!flags.Bare, discoveredSkills)
 
 	// Resolve web search configuration from koanf and wire client providers.

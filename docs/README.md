@@ -109,6 +109,7 @@ Specifications for individual tool implementations.
 | Spec | Description |
 |------|-------------|
 | [bash.md](./tools/bash.md) | Shell command execution with sandbox |
+| [call-mcp.md](./tools/call-mcp.md) | Dynamic MCP tool invocation |
 | [dangerous-command-gate.md](./tools/dangerous-command-gate.md) | Security gate for dangerous commands |
 | [edit.md](./tools/edit.md) | In-place file editing |
 | [enter-worktree.md](./tools/enter-worktree.md) | Enter git worktree for isolation |

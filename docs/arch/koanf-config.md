@@ -60,6 +60,8 @@ See [cli.md](./cli.md) for the complete flag and environment variable catalog.
 | `JENNY_DISABLE_AUTO_COMPACT` | `disable-auto-compact` | bool | Disable auto-compact only |
 | `JENNY_ENABLE_SESSION_MEMORY` | `enable-session-memory` | bool | Enable session-memory compaction branch |
 | `JENNY_DISABLE_AUTO_MEMORY` | `disable-auto-memory` | bool | Disable auto-memory directory entirely |
+| `JENNY_ENABLE_TASKS` | `enable-tasks` | bool | Enable task tracking tools (TaskCreate/Get/List/Update) |
+| `JENNY_DYNAMIC_MCP` | `dynamic-mcp` | bool | Use single call_mcp tool instead of per-MCP-tool registration |
 | `JENNY_ROUTES_PROFILE` | `routes-profile` | string | Select active routing profile |
 | `JENNY_REFRESH_REGISTRY` | `refresh-registry` | bool | Synchronously fetch model registry |
 | `JENNY_OFFLINE` | `offline` | bool | Skip network fetch, use cached data |

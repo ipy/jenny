@@ -1551,6 +1551,17 @@ func (c *Client) Disconnect() {
 	bumpCacheGen()
 }
 
+// GetConnectedServerNames returns the names of all connected MCP servers.
+func GetConnectedServerNames() []string {
+	clientsMu.RLock()
+	defer clientsMu.RUnlock()
+	names := make([]string, 0, len(clients))
+	for name := range clients {
+		names = append(names, name)
+	}
+	return names
+}
+
 // GetClient returns the client for a given normalized server name.
 func GetClient(serverName string) *Client {
 	clientsMu.RLock()
