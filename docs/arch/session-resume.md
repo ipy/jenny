@@ -84,7 +84,7 @@ When changes are detected, `<system-reminder>` blocks are injected as virtual us
 
 ## Archive Extraction
 
-`MaybeExtractArchive` transparently extracts `.tar.gz` session archives (created by `jenny compact`) before resume. If a session directory does not exist but a sibling `.tar.gz` archive does, the archive is extracted to recreate the session directory.
+`MaybeExtractArchive` transparently extracts `.tar.gz` session archives (created by `jenny sweep`) before resume. If a session directory does not exist but a sibling `.tar.gz` archive does, the archive is extracted to recreate the session directory.
 
 ## Queue-Only Filtering
 

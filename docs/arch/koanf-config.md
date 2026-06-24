@@ -55,7 +55,7 @@ See [cli.md](./cli.md) for the complete flag and environment variable catalog.
 | `JENNY_REDACT` | `redact` | string | `disabled`/`redact` (default)/`recover` |
 | `JENNY_TRANSCRIPT_DIR` | `transcript-dir` | string | Override transcript directory |
 | `JENNY_MAX_TOOL_CONCURRENCY` | `max-tool-concurrency` | int | Max parallel tool executions (0 = default 10) |
-| `JENNY_COMPACT_KEEP_ARCHIVE` | `compact-keep-archive` | bool | Keep `<id>.tar.gz` after resume extraction |
+| `JENNY_SWEEP_KEEP_ARCHIVE` | `sweep-keep-archive` | bool | Keep `<id>.tar.gz` after resume extraction |
 | `JENNY_DISABLE_COMPACT` | `disable-compact` | bool | Disable all compaction (manual + auto) |
 | `JENNY_DISABLE_AUTO_COMPACT` | `disable-auto-compact` | bool | Disable auto-compact only |
 | `JENNY_ENABLE_SESSION_MEMORY` | `enable-session-memory` | bool | Enable session-memory compaction branch |

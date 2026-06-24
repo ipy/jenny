@@ -201,7 +201,7 @@ func TestClean_NothingToClean_MissingSessionsDir(t *testing.T) {
 	}
 }
 
-// TestClean_HelpOutput — usage must mention `clean`, `compact`, and `--dry-run`.
+// TestClean_HelpOutput — usage must mention `clean`, `sweep`, and `--dry-run`.
 func TestClean_HelpOutput(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	rc := RunCleanHelp(&stdout, &stderr)
@@ -209,7 +209,7 @@ func TestClean_HelpOutput(t *testing.T) {
 		t.Errorf("RunCleanHelp rc = %d, want 0 (stderr=%q)", rc, stderr.String())
 	}
 	out := stdout.String()
-	for _, want := range []string{"clean", "compact", "--dry-run"} {
+	for _, want := range []string{"clean", "sweep", "--dry-run"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("clean --help output missing %q:\n%s", want, out)
 		}

@@ -56,7 +56,7 @@ jenny --prompt-file - < prompt.txt
 | `--redact <mode>` | Secret redaction mode: `disabled`, `redact` (default), `recover`. See [secret-redaction.md](./secret-redaction.md). Overrides `JENNY_REDACT`. |
 | `--transcript-dir <path>` | Override transcript directory. Overrides `JENNY_TRANSCRIPT_DIR`. |
 | `--max-tool-concurrency <n>` | Max parallel tool executions. Overrides `JENNY_MAX_TOOL_CONCURRENCY`. |
-| `--compact-keep-archive` | Keep `<id>.tar.gz` after resume extraction. Overrides `JENNY_COMPACT_KEEP_ARCHIVE`. |
+| `--sweep-keep-archive` | Keep `<id>.tar.gz` after resume extraction. Overrides `JENNY_SWEEP_KEEP_ARCHIVE`. |
 | `--disable-compact` | Disable all compaction. Overrides `JENNY_DISABLE_COMPACT`. |
 | `--disable-auto-compact` | Disable auto-compact only. Overrides `JENNY_DISABLE_AUTO_COMPACT`. |
 | `--enable-session-memory` | Enable session-memory compaction branch. Overrides `JENNY_ENABLE_SESSION_MEMORY`. |
@@ -145,7 +145,7 @@ Help (`-h`) exits 0. Version (`--version`) uses `constants.Version` for unified 
 | `JENNY_REDACT` | Default secret redaction mode (`disabled`, `redact` (default), `recover`). `--redact` overrides this. |
 | `JENNY_TRANSCRIPT_DIR` | Override transcript directory (default: `~/.jenny/transcripts`). `--transcript-dir` overrides this. |
 | `JENNY_MAX_TOOL_CONCURRENCY` | Default max parallel tool executions. `--max-tool-concurrency` overrides this. |
-| `JENNY_COMPACT_KEEP_ARCHIVE` | Keep `<id>.tar.gz` after resume extraction. `--compact-keep-archive` overrides this. |
+| `JENNY_SWEEP_KEEP_ARCHIVE` | Keep `<id>.tar.gz` after resume extraction. `--sweep-keep-archive` overrides this. |
 | `JENNY_DISABLE_COMPACT` | Disable all compaction. `--disable-compact` overrides this. |
 | `JENNY_DISABLE_AUTO_COMPACT` | Disable auto-compact only. `--disable-auto-compact` overrides this. |
 | `JENNY_ENABLE_SESSION_MEMORY` | Enable session-memory compaction branch. `--enable-session-memory` overrides this. |

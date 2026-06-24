@@ -83,7 +83,7 @@ func TestExtractArchiveClosesHandleBeforeRemove(t *testing.T) {
 //   - os.Remove(archivePath) is the last filesystem operation in the
 //     function body when keepArchive=false (no other os.* call follows it).
 func TestExtractArchiveRemoveOrdering(t *testing.T) {
-	src, err := os.ReadFile(filepath.Join("compact.go"))
+	src, err := os.ReadFile(filepath.Join("sweep.go"))
 	if err != nil {
 		t.Fatalf("ReadFile(compact.go): %v", err)
 	}
