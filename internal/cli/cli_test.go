@@ -783,42 +783,6 @@ func TestParseRedactModeInvalid(t *testing.T) {
 	}
 }
 
-// TestParseTranscriptDirEnvVar verifies JENNY_TRANSCRIPT_DIR populates the field.
-func TestParseTranscriptDirEnvVar(t *testing.T) {
-	origArgs := os.Args
-	defer func() { os.Args = origArgs }()
-
-	t.Setenv("JENNY_TRANSCRIPT_DIR", "/tmp/jenny-transcripts")
-
-	os.Args = []string{"jenny", "--print", "hello"}
-
-	flags, _, err := Parse()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if flags.TranscriptDir != "/tmp/jenny-transcripts" {
-		t.Errorf("expected transcript-dir from env, got %q", flags.TranscriptDir)
-	}
-}
-
-// TestParseTranscriptDirFlagOverridesEnv verifies --transcript-dir wins over JENNY_TRANSCRIPT_DIR.
-func TestParseTranscriptDirFlagOverridesEnv(t *testing.T) {
-	origArgs := os.Args
-	defer func() { os.Args = origArgs }()
-
-	t.Setenv("JENNY_TRANSCRIPT_DIR", "/tmp/from-env")
-
-	os.Args = []string{"jenny", "--transcript-dir", "/tmp/from-flag", "--print", "hello"}
-
-	flags, _, err := Parse()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if flags.TranscriptDir != "/tmp/from-flag" {
-		t.Errorf("expected --transcript-dir to win over env, got %q", flags.TranscriptDir)
-	}
-}
-
 // TestParseMaxToolConcurrencyEnvVar verifies JENNY_MAX_TOOL_CONCURRENCY populates the field.
 func TestParseMaxToolConcurrencyEnvVar(t *testing.T) {
 	origArgs := os.Args

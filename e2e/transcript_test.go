@@ -19,7 +19,7 @@ func TestTranscriptCreation(t *testing.T) {
 				Format:   "stream-json",
 				Cassette: "echo-hello",
 				Env: []string{
-					"JENNY_TRANSCRIPT_DIR=${WORK_DIR}",
+					"JENNY_HOME=${WORK_DIR}",
 				},
 			},
 			Expected: harness.ExpectedBehavior{
@@ -47,7 +47,7 @@ func TestTranscriptEntriesValid(t *testing.T) {
 				Format:   "stream-json",
 				Cassette: "echo-hello",
 				Env: []string{
-					"JENNY_TRANSCRIPT_DIR=${WORK_DIR}",
+					"JENNY_HOME=${WORK_DIR}",
 				},
 			},
 			Expected: harness.ExpectedBehavior{
@@ -78,7 +78,7 @@ func TestTranscriptSessionIDIsUUID(t *testing.T) {
 				Format:   "stream-json",
 				Cassette: "echo-hello",
 				Env: []string{
-					"JENNY_TRANSCRIPT_DIR=${WORK_DIR}",
+					"JENNY_HOME=${WORK_DIR}",
 				},
 			},
 			Expected: harness.ExpectedBehavior{
@@ -111,7 +111,7 @@ func TestTranscriptNoSessionPersistence(t *testing.T) {
 				Cassette: "echo-hello",
 				Args:     []string{"--no-session-persistence"},
 				Env: []string{
-					"JENNY_TRANSCRIPT_DIR=${WORK_DIR}",
+					"JENNY_HOME=${WORK_DIR}",
 				},
 			},
 			Expected: harness.ExpectedBehavior{
@@ -140,7 +140,7 @@ func TestTranscriptEntriesHaveUUID(t *testing.T) {
 				Format:   "stream-json",
 				Cassette: "echo-hello",
 				Env: []string{
-					"JENNY_TRANSCRIPT_DIR=${WORK_DIR}",
+					"JENNY_HOME=${WORK_DIR}",
 				},
 			},
 			Expected: harness.ExpectedBehavior{
@@ -179,7 +179,7 @@ func TestTranscriptResume(t *testing.T) {
 	}
 
 	workDir := t.TempDir()
-	envWithDir := append(env, "JENNY_TRANSCRIPT_DIR="+workDir)
+	envWithDir := append(env, "JENNY_HOME="+workDir)
 
 	// Run 1
 	res1 := harness.RunJennyInDir(t, workDir, envWithDir, "--output-format", "stream-json", "-p", "hi")
@@ -238,7 +238,7 @@ func TestTranscriptContinue(t *testing.T) {
 	}
 
 	workDir := t.TempDir()
-	envWithDir := append(env, "JENNY_TRANSCRIPT_DIR="+workDir)
+	envWithDir := append(env, "JENNY_HOME="+workDir)
 
 	res1 := harness.RunJennyInDir(t, workDir, envWithDir, "--output-format", "stream-json", "-p", "hi")
 	if res1.ExitCode != 0 {

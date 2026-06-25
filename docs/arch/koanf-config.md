@@ -53,7 +53,6 @@ See [cli.md](./cli.md) for the complete flag and environment variable catalog.
 | `JENNY_MCP_CONFIG` | `mcp-config` | []string | MCP config file paths |
 | `JENNY_PERMISSION_LEVEL` | `permission-level` | string | `read`/`analyze`/`edit`/`execute`/`unrestricted` |
 | `JENNY_REDACT` | `redact` | string | `disabled`/`redact` (default)/`recover` |
-| `JENNY_TRANSCRIPT_DIR` | `transcript-dir` | string | Override transcript directory |
 | `JENNY_MAX_TOOL_CONCURRENCY` | `max-tool-concurrency` | int | Max parallel tool executions (0 = default 10) |
 | `JENNY_SWEEP_KEEP_ARCHIVE` | `sweep-keep-archive` | bool | Keep `<id>.tar.gz` after resume extraction |
 | `JENNY_DISABLE_COMPACT` | `disable-compact` | bool | Disable all compaction (manual + auto) |

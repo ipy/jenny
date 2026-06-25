@@ -55,7 +55,6 @@ type Flags struct {
 	Effort                 string   `koanf:"effort"`                // --effort: reasoning effort level (low, medium, high)
 	ThinkingBudget         int      `koanf:"thinking-budget"`       // --thinking-budget: maximum thinking tokens for Anthropic
 	RedactMode             string   `koanf:"redact"`                // --redact: JENNY_REDACT; one of disabled|redact|recover (empty = default)
-	TranscriptDir          string   `koanf:"transcript-dir"`        // --transcript-dir: JENNY_TRANSCRIPT_DIR
 	MaxToolConcurrency     int      `koanf:"max-tool-concurrency"`  // --max-tool-concurrency: JENNY_MAX_TOOL_CONCURRENCY (0 = default)
 	SweepKeepArchive       bool     `koanf:"sweep-keep-archive"`    // --sweep-keep-archive: JENNY_SWEEP_KEEP_ARCHIVE
 	DisableCompact         bool     `koanf:"disable-compact"`       // --disable-compact: JENNY_DISABLE_COMPACT
@@ -132,7 +131,6 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	effortDefault := k.String("effort")
 	thinkingBudgetDefault := k.Int("thinking-budget")
 	redactModeDefault := k.String("redact")
-	transcriptDirDefault := k.String("transcript-dir")
 	maxToolConcurrencyDefault := k.Int("max-tool-concurrency")
 	sweepKeepArchiveDefault := k.Bool("sweep-keep-archive")
 	disableCompactDefault := k.Bool("disable-compact")
@@ -258,9 +256,6 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 
 	var redactMode string
 	flags.StringVarP(&redactMode, "redact", "", redactModeDefault, "Secret redaction mode (disabled, redact, recover); JENNY_REDACT env var or .jenny/settings.json is used when unset")
-
-	var transcriptDir string
-	flags.StringVarP(&transcriptDir, "transcript-dir", "", transcriptDirDefault, "Override transcript directory; JENNY_TRANSCRIPT_DIR env var is used when unset")
 
 	var maxToolConcurrency int
 	flags.IntVarP(&maxToolConcurrency, "max-tool-concurrency", "", maxToolConcurrencyDefault, "Max parallel tool executions (0 = default 10); JENNY_MAX_TOOL_CONCURRENCY env var is used when unset")

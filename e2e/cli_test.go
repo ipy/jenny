@@ -214,7 +214,7 @@ func TestCLISessionResume(t *testing.T) {
 				Args: []string{"--continue", "-p", "hello"},
 				Env: []string{
 					"ANTHROPIC_AUTH_TOKEN=dummy",
-					"JENNY_TRANSCRIPT_DIR=${WORK_DIR}/.jenny-transcripts",
+					"JENNY_HOME=${WORK_DIR}/.jenny",
 				},
 			},
 			Expected: harness.ExpectedBehavior{

@@ -348,6 +348,13 @@ func RunJennyInDir(t testing.TB, dir string, env []string, args ...string) RunRe
 		dir = repoRoot
 	}
 
+	// Auto-isolate: if the caller did not pin JENNY_HOME, point it at a
+	// per-run temp dir under the working dir so sessions, scratchpads, and
+	// spills never leak into the user's real ~/.jenny. Test code that needs
+	// a different JENNY_HOME (e.g. sharing sessions across invocations) must
+	// set it explicitly in env.
+	env = injectJennyHome(env, dir)
+
 	// Inject --verbose for stream-json (required by some binaries like claude)
 	args = injectVerboseForStreamJSON(args)
 
@@ -407,6 +414,30 @@ func RunJennyInDir(t testing.TB, dir string, env []string, args ...string) RunRe
 // IsValidUUID checks if a string is a valid UUID v7.
 func IsValidUUID(s string) bool {
 	return utils.IsValidUUID(s)
+}
+
+// injectJennyHome ensures JENNY_HOME points at an isolated subdir under the
+// working dir unless the caller already set it. This mirrors what runE2ESuite
+// does for declarative cases, and prevents imperative RunJenny calls from
+// leaking sessions/scratchpads into the user's real ~/.jenny.
+func injectJennyHome(env []string, dir string) []string {
+	for _, e := range env {
+		if strings.HasPrefix(e, "JENNY_HOME=") {
+			return env
+		}
+	}
+	// Also check inherited environment so a stray host JENNY_HOME can't leak.
+	// RunJennyInDir passes os.Environ() to cmd.Env, so setenv on the test
+	// process would still reach the child; callers that need that escape
+	// hatch should set it in env explicitly.
+	if _, ok := os.LookupEnv("JENNY_HOME"); ok {
+		// Honour the existing value — child will inherit it via os.Environ().
+		return env
+	}
+	home := filepath.Join(dir, ".jenny")
+	// Best-effort: child will surface any real error.
+	_ = os.MkdirAll(home, 0o755)
+	return append(env, "JENNY_HOME="+home)
 }
 
 // injectVerboseForStreamJSON adds --verbose if --output-format stream-json is present.

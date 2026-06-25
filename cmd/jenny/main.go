@@ -212,9 +212,8 @@ func run() error {
 	}
 
 	// Create session manager for transcript persistence.
-	// Transcript directory flows through the koanf config layer
-	// (--transcript-dir / JENNY_TRANSCRIPT_DIR / .jenny/settings.json).
-	sessionManager, err := session.NewManager(flags.TranscriptDir, flags.NoSessionPersistence)
+	// jenny home is resolved via JENNY_HOME (see internal/constants).
+	sessionManager, err := session.NewManager("", flags.NoSessionPersistence)
 	if err != nil {
 		return fmt.Errorf("creating session manager: %w", err)
 	}
