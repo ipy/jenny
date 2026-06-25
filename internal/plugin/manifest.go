@@ -45,6 +45,7 @@ type PluginManifest struct {
 	Keywords    []string                 `json:"keywords,omitempty"`
 	Skills      string                   `json:"skills,omitempty"`
 	MCPServers  string                   `json:"mcpServers,omitempty"`
+	LSPServers  string                   `json:"lspServers,omitempty"`
 	Hooks       string                   `json:"hooks,omitempty"`
 	Apps        string                   `json:"apps,omitempty"`
 	Interface   *PluginManifestInterface `json:"interface,omitempty"`

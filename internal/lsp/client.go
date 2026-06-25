@@ -104,3 +104,12 @@ type Client interface {
 	// OutgoingCalls returns outgoing calls from the symbol at the given position.
 	OutgoingCalls(ctx context.Context, uri string, line int, character int) ([]CallHierarchyItem, error)
 }
+
+// ServerConfig describes how to start and connect to a language server.
+type ServerConfig struct {
+	Command             string            // executable name or path
+	Args                []string          // command arguments
+	ExtensionToLanguage map[string]string // ".go" -> "go", ".ts" -> "typescript"
+	Env                 map[string]string // extra environment variables
+	WorkspaceFolder     string            // workspace root URI (file:///...)
+}

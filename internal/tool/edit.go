@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/constants"
+	"github.com/ipy/jenny/internal/lsp"
 )
 
 // EditTool performs exact string replacement in files.
@@ -24,6 +25,7 @@ type EditTool struct {
 	permissionLevel PermissionLevel
 	allowedPaths    []string // If set, edits are restricted to these paths only
 	activator       SkillActivator
+	lspManager      *lsp.ServerManager
 	sessionID       string
 }
 
@@ -70,6 +72,12 @@ func (t *EditTool) WithReadFileCache(cache *ReadFileCache) *EditTool {
 // WithSkillActivator sets the skill activator for path-triggered activation.
 func (t *EditTool) WithSkillActivator(activator SkillActivator) *EditTool {
 	t.activator = activator
+	return t
+}
+
+// WithLSPManager sets the LSP server manager for didChange/didSave notifications.
+func (t *EditTool) WithLSPManager(manager *lsp.ServerManager) *EditTool {
+	t.lspManager = manager
 	return t
 }
 
@@ -735,6 +743,12 @@ func (t *EditTool) finalizeEdit(filePath, newContent string, entry *ReadFileEntr
 
 	// Update readFileCache after successful edit
 	t.readCache.RecordRead(filePath, newContent, newMtime, true, 0, 0)
+
+	// Notify LSP server about file change and save
+	if t.lspManager != nil {
+		_ = t.lspManager.ChangeFile(filePath, newContent)
+		_ = t.lspManager.SaveFile(filePath)
+	}
 
 	return &ToolResult{
 		Content: fmt.Sprintf("Edited %s: replaced %d occurrence(s)", filePath, count),

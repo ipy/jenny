@@ -58,6 +58,9 @@ func (p *LoadedPlugin) Validate() error {
 	if err := validateRelativePath(p.Manifest.Apps); err != nil {
 		return err
 	}
+	if err := validateRelativePath(p.Manifest.LSPServers); err != nil {
+		return err
+	}
 
 	// Validate interface URLs if set
 	if p.Manifest.Interface != nil {

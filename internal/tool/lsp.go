@@ -15,14 +15,39 @@ const (
 	maxFileSize = 10 * 1024 * 1024
 )
 
-// LSPTool provides Language Server Protocol operations for code intelligence.
-type LSPTool struct {
-	client lsp.Client
+// lspManager is the interface LSPTool uses to interact with the LSP system.
+// *lsp.ServerManager satisfies this interface.
+type lspManager interface {
+	Connected() bool
+	IsFileOpen(path string) bool
+	OpenFile(path, content string) error
+	ChangeFile(path, content string) error
+	SaveFile(path string) error
+	CloseFile(path string) error
+	GoToDefinition(ctx context.Context, uri string, line, character int) ([]lsp.Location, error)
+	FindReferences(ctx context.Context, uri string, line, character int) ([]lsp.Reference, error)
+	Hover(ctx context.Context, uri string, line, character int) (*lsp.HoverResult, error)
+	DocumentSymbol(ctx context.Context, uri string) ([]lsp.DocumentSymbol, error)
+	WorkspaceSymbol(ctx context.Context, query string) ([]lsp.WorkspaceSymbol, error)
+	GoToImplementation(ctx context.Context, uri string, line, character int) ([]lsp.Location, error)
+	PrepareCallHierarchy(ctx context.Context, uri string, line, character int) ([]lsp.CallHierarchyItem, error)
+	IncomingCalls(ctx context.Context, uri string, line, character int) ([]lsp.CallHierarchyItem, error)
+	OutgoingCalls(ctx context.Context, uri string, line, character int) ([]lsp.CallHierarchyItem, error)
 }
 
-// NewLSPTool creates a new LSP tool with the given client.
-func NewLSPTool(client lsp.Client) *LSPTool {
-	return &LSPTool{client: client}
+// LSPTool provides Language Server Protocol operations for code intelligence.
+type LSPTool struct {
+	manager lspManager
+}
+
+// NewLSPTool creates a new LSP tool with the given server manager.
+func NewLSPTool(manager *lsp.ServerManager) *LSPTool {
+	return &LSPTool{manager: manager}
+}
+
+// newLSPToolForTesting creates a new LSP tool with any lspManager implementation.
+func newLSPToolForTesting(manager lspManager) *LSPTool {
+	return &LSPTool{manager: manager}
 }
 
 // Name returns the tool name.
@@ -71,8 +96,8 @@ func (t *LSPTool) InputSchema() map[string]any {
 
 // Execute runs the LSP tool with the given input.
 func (t *LSPTool) Execute(ctx context.Context, input map[string]any, cwd string) (*ToolResult, error) {
-	// Check if LSP client is connected
-	if !t.client.Connected() {
+	// Check if any LSP server is connected
+	if !t.manager.Connected() {
 		return &ToolResult{
 			Content: "LSP server not connected.",
 			IsError: true,
@@ -148,6 +173,16 @@ func (t *LSPTool) Execute(ctx context.Context, input map[string]any, cwd string)
 		character = int(c) - 1
 	}
 
+	// Ensure file is open in LSP server for file-based operations
+	if filePath != "" && operation != "workspaceSymbol" {
+		if !t.manager.IsFileOpen(filePath) {
+			content, err := os.ReadFile(filePath)
+			if err == nil {
+				_ = t.manager.OpenFile(filePath, string(content))
+			}
+		}
+	}
+
 	// Execute the operation
 	switch operation {
 	case "goToDefinition":
@@ -179,7 +214,7 @@ func (t *LSPTool) Execute(ctx context.Context, input map[string]any, cwd string)
 // executeGoToDefinition executes the goToDefinition operation.
 func (t *LSPTool) executeGoToDefinition(ctx context.Context, input map[string]any, line, character int) (*ToolResult, error) {
 	uri, _ := input["uri"].(string)
-	locations, err := t.client.GoToDefinition(ctx, uri, line, character)
+	locations, err := t.manager.GoToDefinition(ctx, uri, line, character)
 	if err != nil {
 		return &ToolResult{
 			Content: fmt.Sprintf("goToDefinition failed: %v", err),
@@ -208,7 +243,7 @@ func (t *LSPTool) executeGoToDefinition(ctx context.Context, input map[string]an
 // executeFindReferences executes the findReferences operation.
 func (t *LSPTool) executeFindReferences(ctx context.Context, input map[string]any, line, character int, cwd string) (*ToolResult, error) {
 	uri, _ := input["uri"].(string)
-	references, err := t.client.FindReferences(ctx, uri, line, character)
+	references, err := t.manager.FindReferences(ctx, uri, line, character)
 	if err != nil {
 		return &ToolResult{
 			Content: fmt.Sprintf("findReferences failed: %v", err),
@@ -251,7 +286,7 @@ func (t *LSPTool) executeFindReferences(ctx context.Context, input map[string]an
 // executeHover executes the hover operation.
 func (t *LSPTool) executeHover(ctx context.Context, input map[string]any, line, character int) (*ToolResult, error) {
 	uri, _ := input["uri"].(string)
-	result, err := t.client.Hover(ctx, uri, line, character)
+	result, err := t.manager.Hover(ctx, uri, line, character)
 	if err != nil {
 		return &ToolResult{
 			Content: fmt.Sprintf("hover failed: %v", err),
@@ -275,7 +310,7 @@ func (t *LSPTool) executeHover(ctx context.Context, input map[string]any, line, 
 // executeDocumentSymbol executes the documentSymbol operation.
 func (t *LSPTool) executeDocumentSymbol(ctx context.Context, input map[string]any) (*ToolResult, error) {
 	uri, _ := input["uri"].(string)
-	symbols, err := t.client.DocumentSymbol(ctx, uri)
+	symbols, err := t.manager.DocumentSymbol(ctx, uri)
 	if err != nil {
 		return &ToolResult{
 			Content: fmt.Sprintf("documentSymbol failed: %v", err),
@@ -308,7 +343,7 @@ func (t *LSPTool) executeDocumentSymbol(ctx context.Context, input map[string]an
 // executeWorkspaceSymbol executes the workspaceSymbol operation.
 func (t *LSPTool) executeWorkspaceSymbol(ctx context.Context, input map[string]any, cwd string) (*ToolResult, error) {
 	query, _ := input["query"].(string)
-	symbols, err := t.client.WorkspaceSymbol(ctx, query)
+	symbols, err := t.manager.WorkspaceSymbol(ctx, query)
 	if err != nil {
 		return &ToolResult{
 			Content: fmt.Sprintf("workspaceSymbol failed: %v", err),
@@ -350,7 +385,7 @@ func (t *LSPTool) executeWorkspaceSymbol(ctx context.Context, input map[string]a
 // executeGoToImplementation executes the goToImplementation operation.
 func (t *LSPTool) executeGoToImplementation(ctx context.Context, input map[string]any, line, character int) (*ToolResult, error) {
 	uri, _ := input["uri"].(string)
-	locations, err := t.client.GoToImplementation(ctx, uri, line, character)
+	locations, err := t.manager.GoToImplementation(ctx, uri, line, character)
 	if err != nil {
 		return &ToolResult{
 			Content: fmt.Sprintf("goToImplementation failed: %v", err),
@@ -379,7 +414,7 @@ func (t *LSPTool) executeGoToImplementation(ctx context.Context, input map[strin
 // executePrepareCallHierarchy executes the prepareCallHierarchy operation.
 func (t *LSPTool) executePrepareCallHierarchy(ctx context.Context, input map[string]any, line, character int) (*ToolResult, error) {
 	uri, _ := input["uri"].(string)
-	items, err := t.client.PrepareCallHierarchy(ctx, uri, line, character)
+	items, err := t.manager.PrepareCallHierarchy(ctx, uri, line, character)
 	if err != nil {
 		return &ToolResult{
 			Content: fmt.Sprintf("prepareCallHierarchy failed: %v", err),
@@ -408,7 +443,7 @@ func (t *LSPTool) executePrepareCallHierarchy(ctx context.Context, input map[str
 // executeIncomingCalls executes the incomingCalls operation.
 func (t *LSPTool) executeIncomingCalls(ctx context.Context, input map[string]any, line, character int) (*ToolResult, error) {
 	uri, _ := input["uri"].(string)
-	items, err := t.client.IncomingCalls(ctx, uri, line, character)
+	items, err := t.manager.IncomingCalls(ctx, uri, line, character)
 	if err != nil {
 		return &ToolResult{
 			Content: fmt.Sprintf("incomingCalls failed: %v", err),
@@ -437,7 +472,7 @@ func (t *LSPTool) executeIncomingCalls(ctx context.Context, input map[string]any
 // executeOutgoingCalls executes the outgoingCalls operation.
 func (t *LSPTool) executeOutgoingCalls(ctx context.Context, input map[string]any, line, character int) (*ToolResult, error) {
 	uri, _ := input["uri"].(string)
-	items, err := t.client.OutgoingCalls(ctx, uri, line, character)
+	items, err := t.manager.OutgoingCalls(ctx, uri, line, character)
 	if err != nil {
 		return &ToolResult{
 			Content: fmt.Sprintf("outgoingCalls failed: %v", err),

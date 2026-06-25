@@ -67,6 +67,7 @@ type Flags struct {
 	IncludeHookEvents      bool     `koanf:"include-hook-events"`   // --include-hook-events: include hook events in stream output
 	EnableTasks            bool     `koanf:"enable-tasks"`          // --enable-tasks: JENNY_ENABLE_TASKS
 	DynamicMCP             bool     `koanf:"dynamic-mcp"`           // --dynamic-mcp: JENNY_DYNAMIC_MCP
+	LSP                    bool     `koanf:"lsp"`                   // --lsp: JENNY_LSP
 }
 
 // envTransform transforms environment variable names from JENNY_* format to
@@ -292,6 +293,10 @@ func Parse() (*Flags, *koanf.Koanf, error) {
 	dynamicMCPDefault := k.Bool("dynamic-mcp")
 	var dynamicMCP bool
 	flags.BoolVarP(&dynamicMCP, "dynamic-mcp", "", dynamicMCPDefault, "Use single call_mcp tool instead of per-MCP-tool registration")
+
+	lspDefault := k.Bool("lsp")
+	var lsp bool
+	flags.BoolVarP(&lsp, "lsp", "", lspDefault, "Enable Language Server Protocol integration (auto-discovers from plugins)")
 
 	// SDK-compatibility flags: accepted but not acted on.
 	var sdkBetas, sdkJsonSchema, sdkFallbackModel, sdkResumeSessionAt, sdkSettingSources string

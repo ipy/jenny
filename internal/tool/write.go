@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/constants"
+	"github.com/ipy/jenny/internal/lsp"
 )
 
 // WriteTool writes content to files with read-before-write validation.
@@ -19,6 +20,7 @@ type WriteTool struct {
 	permissionLevel PermissionLevel
 	allowedPaths    []string // If set, writes are restricted to these paths only
 	activator       SkillActivator
+	lspManager      *lsp.ServerManager
 	sessionID       string
 }
 
@@ -65,6 +67,12 @@ func (t *WriteTool) WithReadFileCache(cache *ReadFileCache) *WriteTool {
 // WithSkillActivator sets the skill activator for path-triggered activation.
 func (t *WriteTool) WithSkillActivator(activator SkillActivator) *WriteTool {
 	t.activator = activator
+	return t
+}
+
+// WithLSPManager sets the LSP server manager for didChange/didSave notifications.
+func (t *WriteTool) WithLSPManager(manager *lsp.ServerManager) *WriteTool {
+	t.lspManager = manager
 	return t
 }
 
@@ -293,6 +301,12 @@ func (t *WriteTool) Execute(ctx context.Context, input map[string]any, cwd strin
 
 	// Update readFileCache after successful write
 	t.readCache.UpdateAfterWrite(filePath, content, newMtime)
+
+	// Notify LSP server about file change and save
+	if t.lspManager != nil {
+		_ = t.lspManager.ChangeFile(filePath, content)
+		_ = t.lspManager.SaveFile(filePath)
+	}
 
 	return &ToolResult{
 		Content: fmt.Sprintf("Wrote %s: %d bytes", filePath, len(content)),

@@ -12,7 +12,6 @@ require (
 	github.com/knadh/koanf/providers/rawbytes v1.0.0
 	github.com/knadh/koanf/v2 v2.3.5
 	github.com/spf13/pflag v1.0.10
-	golang.org/x/sys v0.46.0
 )
 
 require (
@@ -24,4 +23,5 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
 )

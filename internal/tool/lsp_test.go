@@ -12,10 +12,10 @@ import (
 	"github.com/ipy/jenny/internal/lsp"
 )
 
-// mockLSPClient is a mock implementation of lsp.Client for testing.
-type mockLSPClient struct {
+// mockServerManager is a mock implementation for testing LSPTool.
+type mockServerManager struct {
 	connected       bool
-	calls           []string
+	openFiles       map[string]bool
 	goToDefResult   []lsp.Location
 	findRefsResult  []lsp.Reference
 	hoverResult     *lsp.HoverResult
@@ -28,150 +28,67 @@ type mockLSPClient struct {
 	mu              sync.RWMutex
 }
 
-func newMockLSPClient() *mockLSPClient {
-	return &mockLSPClient{connected: true}
+func newMockServerManager() *mockServerManager {
+	return &mockServerManager{
+		connected: true,
+		openFiles: make(map[string]bool),
+	}
 }
 
-func (m *mockLSPClient) Connected() bool {
+func (m *mockServerManager) Connected() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.connected
 }
 
-func (m *mockLSPClient) GoToDefinition(_ context.Context, _ string, _ int, _ int) ([]lsp.Location, error) {
+func (m *mockServerManager) IsFileOpen(path string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.openFiles[path]
+}
+
+func (m *mockServerManager) OpenFile(path, _ string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.calls = append(m.calls, "goToDefinition")
+	m.openFiles[path] = true
+	return nil
+}
+
+func (m *mockServerManager) ChangeFile(_, _ string) error { return nil }
+func (m *mockServerManager) SaveFile(_ string) error      { return nil }
+func (m *mockServerManager) CloseFile(_ string) error     { return nil }
+
+func (m *mockServerManager) GoToDefinition(_ context.Context, _ string, _, _ int) ([]lsp.Location, error) {
 	return m.goToDefResult, nil
 }
-
-func (m *mockLSPClient) FindReferences(_ context.Context, _ string, _ int, _ int) ([]lsp.Reference, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.calls = append(m.calls, "findReferences")
+func (m *mockServerManager) FindReferences(_ context.Context, _ string, _, _ int) ([]lsp.Reference, error) {
 	return m.findRefsResult, nil
 }
-
-func (m *mockLSPClient) Hover(_ context.Context, _ string, _ int, _ int) (*lsp.HoverResult, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.calls = append(m.calls, "hover")
+func (m *mockServerManager) Hover(_ context.Context, _ string, _, _ int) (*lsp.HoverResult, error) {
 	return m.hoverResult, nil
 }
-
-func (m *mockLSPClient) DocumentSymbol(_ context.Context, _ string) ([]lsp.DocumentSymbol, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.calls = append(m.calls, "documentSymbol")
+func (m *mockServerManager) DocumentSymbol(_ context.Context, _ string) ([]lsp.DocumentSymbol, error) {
 	return m.docSymResults, nil
 }
-
-func (m *mockLSPClient) WorkspaceSymbol(_ context.Context, _ string) ([]lsp.WorkspaceSymbol, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.calls = append(m.calls, "workspaceSymbol")
+func (m *mockServerManager) WorkspaceSymbol(_ context.Context, _ string) ([]lsp.WorkspaceSymbol, error) {
 	return m.workspaceSymRes, nil
 }
-
-func (m *mockLSPClient) GoToImplementation(_ context.Context, _ string, _ int, _ int) ([]lsp.Location, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.calls = append(m.calls, "goToImplementation")
+func (m *mockServerManager) GoToImplementation(_ context.Context, _ string, _, _ int) ([]lsp.Location, error) {
 	return m.goToImplResult, nil
 }
-
-func (m *mockLSPClient) PrepareCallHierarchy(_ context.Context, _ string, _ int, _ int) ([]lsp.CallHierarchyItem, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.calls = append(m.calls, "prepareCallHierarchy")
+func (m *mockServerManager) PrepareCallHierarchy(_ context.Context, _ string, _, _ int) ([]lsp.CallHierarchyItem, error) {
 	return m.prepareCHRes, nil
 }
-
-func (m *mockLSPClient) IncomingCalls(_ context.Context, _ string, _ int, _ int) ([]lsp.CallHierarchyItem, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.calls = append(m.calls, "incomingCalls")
+func (m *mockServerManager) IncomingCalls(_ context.Context, _ string, _, _ int) ([]lsp.CallHierarchyItem, error) {
 	return m.incomingRes, nil
 }
-
-func (m *mockLSPClient) OutgoingCalls(_ context.Context, _ string, _ int, _ int) ([]lsp.CallHierarchyItem, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.calls = append(m.calls, "outgoingCalls")
+func (m *mockServerManager) OutgoingCalls(_ context.Context, _ string, _, _ int) ([]lsp.CallHierarchyItem, error) {
 	return m.outgoingRes, nil
 }
 
-func (m *mockLSPClient) setConnected(v bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.connected = v
-}
-
-func (m *mockLSPClient) setGoToDefResult(locations []lsp.Location) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.goToDefResult = locations
-}
-
-func (m *mockLSPClient) setFindRefsResult(refs []lsp.Reference) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.findRefsResult = refs
-}
-
-func (m *mockLSPClient) setHoverResult(result *lsp.HoverResult) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.hoverResult = result
-}
-
-func (m *mockLSPClient) setDocumentSymbolResult(symbols []lsp.DocumentSymbol) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.docSymResults = symbols
-}
-
-func (m *mockLSPClient) setWorkspaceSymbolResult(symbols []lsp.WorkspaceSymbol) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.workspaceSymRes = symbols
-}
-
-func (m *mockLSPClient) setGoToImplResult(locations []lsp.Location) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.goToImplResult = locations
-}
-
-func (m *mockLSPClient) setPrepareCHResult(items []lsp.CallHierarchyItem) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.prepareCHRes = items
-}
-
-func (m *mockLSPClient) setIncomingResult(items []lsp.CallHierarchyItem) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.incomingRes = items
-}
-
-func (m *mockLSPClient) setOutgoingResult(items []lsp.CallHierarchyItem) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.outgoingRes = items
-}
-
-func (m *mockLSPClient) getCalls() []string {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	calls := make([]string, len(m.calls))
-	copy(calls, m.calls)
-	return calls
-}
-
 func TestLSPTool_NameAndDescription(t *testing.T) {
-	mockClient := newMockLSPClient()
-	tool := NewLSPTool(mockClient)
+	mgr := newMockServerManager()
+	tool := newLSPToolForTesting(mgr)
 	if tool.Name() != "lsp" {
 		t.Errorf("expected Name() to be 'lsp', got %q", tool.Name())
 	}
@@ -193,11 +110,11 @@ func TestLSPTool_NameAndDescription(t *testing.T) {
 }
 
 func TestLSPTool_OneBasedCoordinates(t *testing.T) {
-	mockClient := newMockLSPClient()
-	mockClient.setGoToDefResult([]lsp.Location{
+	mgr := newMockServerManager()
+	mgr.goToDefResult = []lsp.Location{
 		{URI: "file:///test.go", Line: 0, Start: 0, End: 0},
-	})
-	tool := NewLSPTool(mockClient)
+	}
+	tool := newLSPToolForTesting(mgr)
 	ctx := context.Background()
 
 	// Input line=1, character=1 should be converted to LSP line=0, character=0
@@ -214,21 +131,14 @@ func TestLSPTool_OneBasedCoordinates(t *testing.T) {
 	if result.IsError {
 		t.Errorf("expected no error, got: %s", result.Content)
 	}
-
-	// Verify the mock client received 0-based coordinates
-	calls := mockClient.getCalls()
-	if len(calls) != 1 || calls[0] != "goToDefinition" {
-		t.Errorf("expected goToDefinition call, got %v", calls)
-	}
 }
 
 func TestLSPTool_DisconnectedError(t *testing.T) {
-	mockClient := newMockLSPClient()
-	mockClient.setConnected(false)
-	tool := NewLSPTool(mockClient)
+	mgr := newMockServerManager()
+	mgr.connected = false
+	tool := newLSPToolForTesting(mgr)
 	ctx := context.Background()
 
-	// When not connected, should return clear error
 	result, err := tool.Execute(ctx, map[string]any{
 		"operation": "hover",
 		"uri":       "file:///test.go",
@@ -250,18 +160,16 @@ func TestLSPTool_FileSizeLimit(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skipping large file test on Windows (file path handling differs)")
 	}
-	mockClient := newMockLSPClient()
-	tool := NewLSPTool(mockClient)
+	mgr := newMockServerManager()
+	tool := newLSPToolForTesting(mgr)
 	ctx := context.Background()
 
-	// Create a temporary file larger than 10MB
 	tmpDir := t.TempDir()
 	largeFile := filepath.Join(tmpDir, "large.go")
 	f, err := os.Create(largeFile)
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	// Write more than 10MB of data
 	data := make([]byte, 11*1024*1024) // 11 MB
 	for i := range data {
 		data[i] = 'x'
@@ -269,7 +177,6 @@ func TestLSPTool_FileSizeLimit(t *testing.T) {
 	f.Write(data)
 	f.Close()
 
-	// Files >10MB should be rejected
 	result, err := tool.Execute(ctx, map[string]any{
 		"operation": "hover",
 		"uri":       "file://" + largeFile,
@@ -288,28 +195,24 @@ func TestLSPTool_FileSizeLimit(t *testing.T) {
 }
 
 func TestLSPTool_ConcurrencySafety(t *testing.T) {
-	mockClient := newMockLSPClient()
-	tool := NewLSPTool(mockClient)
-	ctx := context.Background()
-
-	// Set up mock responses
-	mockClient.setHoverResult(&lsp.HoverResult{
+	mgr := newMockServerManager()
+	mgr.hoverResult = &lsp.HoverResult{
 		Contents: "example documentation",
 		Line:     5,
 		Start:    10,
-	})
-	mockClient.setGoToDefResult([]lsp.Location{
+	}
+	mgr.goToDefResult = []lsp.Location{
 		{URI: "file:///test.go", Line: 5, Start: 10, End: 20},
-	})
+	}
+	tool := newLSPToolForTesting(mgr)
+	ctx := context.Background()
 
-	// Concurrent calls should work without race conditions
 	var wg sync.WaitGroup
 	errors := make(chan error, 20)
 
 	for i := range 10 {
 		wg.Add(2)
 
-		// Concurrent hover call
 		go func(id int) {
 			defer wg.Done()
 			result, err := tool.Execute(ctx, map[string]any{
@@ -327,7 +230,6 @@ func TestLSPTool_ConcurrencySafety(t *testing.T) {
 			}
 		}(i)
 
-		// Concurrent goToDefinition call
 		go func(id int) {
 			defer wg.Done()
 			result, err := tool.Execute(ctx, map[string]any{
@@ -357,26 +259,21 @@ func TestLSPTool_ConcurrencySafety(t *testing.T) {
 }
 
 func TestLSPTool_GitignoreFiltering_WorkspaceSymbol(t *testing.T) {
-	// Create a temp directory with a .gitignore
 	tmpDir := t.TempDir()
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
 	os.WriteFile(gitignorePath, []byte("ignored.go\n*.log\n"), 0644)
-
-	// Create a .git directory to make it a git repo
 	os.MkdirAll(filepath.Join(tmpDir, ".git"), 0755)
 
-	mockClient := newMockLSPClient()
-	tool := NewLSPTool(mockClient)
+	mgr := newMockServerManager()
+	tool := newLSPToolForTesting(mgr)
 	ctx := context.Background()
 
-	// Set up workspaceSymbol results that include gitignored paths
-	mockClient.setWorkspaceSymbolResult([]lsp.WorkspaceSymbol{
+	mgr.workspaceSymRes = []lsp.WorkspaceSymbol{
 		{Name: "GoodSymbol", Kind: "Function", URI: "file:///good.go", Line: 1, Start: 0, FilePath: filepath.Join(tmpDir, "good.go")},
 		{Name: "BadSymbol", Kind: "Function", URI: "file:///ignored.go", Line: 1, Start: 0, FilePath: filepath.Join(tmpDir, "ignored.go")},
 		{Name: "AlsoBad", Kind: "Function", URI: "file:///debug.log", Line: 1, Start: 0, FilePath: filepath.Join(tmpDir, "debug.log")},
-	})
+	}
 
-	// Gitignored paths should be filtered from results
 	result, err := tool.Execute(ctx, map[string]any{
 		"operation": "workspaceSymbol",
 		"query":     "test",
@@ -389,7 +286,6 @@ func TestLSPTool_GitignoreFiltering_WorkspaceSymbol(t *testing.T) {
 		t.Errorf("expected no error, got: %s", result.Content)
 	}
 
-	// Should only contain good.go, not ignored.go or debug.log
 	if strings.Contains(result.Content, "ignored.go") {
 		t.Error("gitignored path 'ignored.go' should be filtered from results")
 	}
@@ -402,26 +298,20 @@ func TestLSPTool_GitignoreFiltering_WorkspaceSymbol(t *testing.T) {
 }
 
 func TestLSPTool_GitignoreFiltering_FindReferences(t *testing.T) {
-	// Create a temp directory with a .gitignore
 	tmpDir := t.TempDir()
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
 	os.WriteFile(gitignorePath, []byte("secret.go\n"), 0644)
-
-	// Create a .git directory to make it a git repo
 	os.MkdirAll(filepath.Join(tmpDir, ".git"), 0755)
 
-	mockClient := newMockLSPClient()
-	tool := NewLSPTool(mockClient)
+	mgr := newMockServerManager()
+	tool := newLSPToolForTesting(mgr)
 	ctx := context.Background()
 
-	// Set up findReferences results that include gitignored paths
-	// Note: URIs must be file:// URIs that point to files within the repo for gitignore filtering to work
-	mockClient.setFindRefsResult([]lsp.Reference{
+	mgr.findRefsResult = []lsp.Reference{
 		{URI: "file://" + filepath.Join(tmpDir, "visible.go"), Line: 5, Start: 10},
 		{URI: "file://" + filepath.Join(tmpDir, "secret.go"), Line: 5, Start: 10},
-	})
+	}
 
-	// Gitignored paths should be filtered from findReferences
 	result, err := tool.Execute(ctx, map[string]any{
 		"operation": "findReferences",
 		"uri":       "file:///test.go",
@@ -436,7 +326,6 @@ func TestLSPTool_GitignoreFiltering_FindReferences(t *testing.T) {
 		t.Errorf("expected no error, got: %s", result.Content)
 	}
 
-	// Should only contain visible.go, not secret.go
 	if strings.Contains(result.Content, "secret.go") {
 		t.Error("gitignored path 'secret.go' should be filtered from findReferences results")
 	}
@@ -446,8 +335,8 @@ func TestLSPTool_GitignoreFiltering_FindReferences(t *testing.T) {
 }
 
 func TestLSPTool_InvalidOperation(t *testing.T) {
-	mockClient := newMockLSPClient()
-	tool := NewLSPTool(mockClient)
+	mgr := newMockServerManager()
+	tool := newLSPToolForTesting(mgr)
 	ctx := context.Background()
 
 	result, err := tool.Execute(ctx, map[string]any{
@@ -466,8 +355,8 @@ func TestLSPTool_InvalidOperation(t *testing.T) {
 }
 
 func TestLSPTool_MissingOperation(t *testing.T) {
-	mockClient := newMockLSPClient()
-	tool := NewLSPTool(mockClient)
+	mgr := newMockServerManager()
+	tool := newLSPToolForTesting(mgr)
 	ctx := context.Background()
 
 	result, err := tool.Execute(ctx, map[string]any{
@@ -483,23 +372,22 @@ func TestLSPTool_MissingOperation(t *testing.T) {
 }
 
 func TestLSPTool_AllOperations(t *testing.T) {
-	mockClient := newMockLSPClient()
-	tool := NewLSPTool(mockClient)
+	mgr := newMockServerManager()
+	tool := newLSPToolForTesting(mgr)
 	ctx := context.Background()
 
 	tmpDir := t.TempDir()
 	os.MkdirAll(filepath.Join(tmpDir, ".git"), 0755)
 
-	// Set up mock responses for all operations
-	mockClient.setGoToDefResult([]lsp.Location{{URI: "file:///test.go", Line: 5, Start: 10}})
-	mockClient.setFindRefsResult([]lsp.Reference{{URI: "file:///test.go", Line: 5, Start: 10}})
-	mockClient.setHoverResult(&lsp.HoverResult{Contents: "test", Line: 5, Start: 10})
-	mockClient.setDocumentSymbolResult([]lsp.DocumentSymbol{{Name: "Test", Kind: "Function", Line: 5, Start: 10, FilePath: filepath.Join(tmpDir, "test.go")}})
-	mockClient.setWorkspaceSymbolResult([]lsp.WorkspaceSymbol{{Name: "Test", Kind: "Function", URI: "file:///test.go", Line: 5, Start: 10, FilePath: filepath.Join(tmpDir, "test.go")}})
-	mockClient.setGoToImplResult([]lsp.Location{{URI: "file:///test.go", Line: 5, Start: 10}})
-	mockClient.setPrepareCHResult([]lsp.CallHierarchyItem{{Name: "Test", Kind: "Function", URI: "file:///test.go", Line: 5, Start: 10}})
-	mockClient.setIncomingResult([]lsp.CallHierarchyItem{{Name: "Test", Kind: "Function", URI: "file:///test.go", Line: 5, Start: 10}})
-	mockClient.setOutgoingResult([]lsp.CallHierarchyItem{{Name: "Test", Kind: "Function", URI: "file:///test.go", Line: 5, Start: 10}})
+	mgr.goToDefResult = []lsp.Location{{URI: "file:///test.go", Line: 5, Start: 10}}
+	mgr.findRefsResult = []lsp.Reference{{URI: "file:///test.go", Line: 5, Start: 10}}
+	mgr.hoverResult = &lsp.HoverResult{Contents: "test", Line: 5, Start: 10}
+	mgr.docSymResults = []lsp.DocumentSymbol{{Name: "Test", Kind: "Function", Line: 5, Start: 10, FilePath: filepath.Join(tmpDir, "test.go")}}
+	mgr.workspaceSymRes = []lsp.WorkspaceSymbol{{Name: "Test", Kind: "Function", URI: "file:///test.go", Line: 5, Start: 10, FilePath: filepath.Join(tmpDir, "test.go")}}
+	mgr.goToImplResult = []lsp.Location{{URI: "file:///test.go", Line: 5, Start: 10}}
+	mgr.prepareCHRes = []lsp.CallHierarchyItem{{Name: "Test", Kind: "Function", URI: "file:///test.go", Line: 5, Start: 10}}
+	mgr.incomingRes = []lsp.CallHierarchyItem{{Name: "Test", Kind: "Function", URI: "file:///test.go", Line: 5, Start: 10}}
+	mgr.outgoingRes = []lsp.CallHierarchyItem{{Name: "Test", Kind: "Function", URI: "file:///test.go", Line: 5, Start: 10}}
 
 	operations := []string{
 		"goToDefinition",

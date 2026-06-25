@@ -19,6 +19,7 @@ import (
 	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/git"
 	"github.com/ipy/jenny/internal/log"
+	"github.com/ipy/jenny/internal/lsp"
 	"github.com/ipy/jenny/internal/mcp"
 	"github.com/ipy/jenny/internal/memdir"
 	"github.com/ipy/jenny/internal/plugin"
@@ -482,6 +483,22 @@ func run() error {
 	}
 	registry.WithWebSearchConfig(&searchCfg)
 
+	// Initialize LSP server manager if --lsp flag is set
+	if flags.LSP {
+		lspManager := lsp.NewServerManager()
+		// Discover LSP servers from plugins
+		lspConfigs, err := discoverLSPConfigs()
+		if err != nil {
+			log.Warn("failed to discover LSP server configs", "err", err)
+		} else if len(lspConfigs) > 0 {
+			if err := lspManager.Initialize(lspConfigs); err != nil {
+				log.Warn("failed to initialize LSP server manager", "err", err)
+			} else {
+				registry.WithLSPEnabled(true).WithLSPManager(lspManager)
+			}
+		}
+	}
+
 	tools = registry.Build()
 
 	// Get skill activator to wire it to the engine for active skill tracking
@@ -725,6 +742,17 @@ func buildPrintTools(flags *cli.Flags) []tool.Tool {
 		WithPermissionLevel(permLevel).
 		WithStrictMCP(flags.StrictMCP).
 		WithSkillsFrameworkEnabled(!flags.Bare, nil)
+
+	if flags.LSP {
+		lspManager := lsp.NewServerManager()
+		lspConfigs, err := discoverLSPConfigs()
+		if err == nil && len(lspConfigs) > 0 {
+			if err := lspManager.Initialize(lspConfigs); err == nil {
+				registry.WithLSPEnabled(true).WithLSPManager(lspManager)
+			}
+		}
+	}
+
 	tools := registry.Build()
 
 	// Create subagent runners and AgentTool
@@ -790,4 +818,31 @@ func loadConfigHooks(k *koanf.Koanf) *agent.ConfigHooks {
 		return nil
 	}
 	return agent.ParseConfigHooks(map[string]any{"hooks": rawMap})
+}
+
+// discoverLSPConfigs discovers LSP server configurations from plugins.
+func discoverLSPConfigs() (map[string]lsp.ServerConfig, error) {
+	configs := make(map[string]lsp.ServerConfig)
+
+	// Discover plugins from project, home, and agents directories
+	cwd, _ := os.Getwd()
+	pluginRoots := plugin.FindPluginRoots(cwd)
+	pluginRoots = append(pluginRoots, plugin.FindPluginRoots(constants.JennyHomeDir())...)
+	pluginRoots = append(pluginRoots, plugin.FindPluginRoots(constants.AgentsHomeDir())...)
+
+	for _, root := range pluginRoots {
+		loaded := loadPluginFromRoot(root)
+		if loaded == nil {
+			continue
+		}
+		pluginConfigs, err := plugin.LoadPluginLSPServers(loaded)
+		if err != nil {
+			continue
+		}
+		for name, cfg := range pluginConfigs {
+			configs[name] = cfg
+		}
+	}
+
+	return configs, nil
 }

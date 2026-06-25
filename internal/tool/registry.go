@@ -24,7 +24,7 @@ type Registry struct {
 	webFetchEnabled        bool
 	webSearchEnabled       bool
 	lspEnabled             bool
-	lspClient              *lsp.Client
+	lspManager             *lsp.ServerManager
 	model                  string
 	webSearchConfig        *WebSearchConfig
 	nativeSearchRunner     NativeSearchRunner
@@ -158,9 +158,9 @@ func (r *Registry) WithLSPEnabled(enabled bool) *Registry {
 	return r
 }
 
-// WithLSPClient sets the LSP client for the LSP tool.
-func (r *Registry) WithLSPClient(client lsp.Client) *Registry {
-	r.lspClient = &client
+// WithLSPManager sets the LSP server manager for the LSP tool.
+func (r *Registry) WithLSPManager(manager *lsp.ServerManager) *Registry {
+	r.lspManager = manager
 	return r
 }
 
@@ -329,6 +329,18 @@ func (r *Registry) Build() []Tool {
 			}
 		}
 
+		// Wire LSP manager to Write/Edit tools if LSP is enabled
+		if r.lspEnabled && r.lspManager != nil {
+			for _, t := range r.baseTools {
+				switch tool := t.(type) {
+				case *WriteTool:
+					tool.WithLSPManager(r.lspManager)
+				case *EditTool:
+					tool.WithLSPManager(r.lspManager)
+				}
+			}
+		}
+
 		// Wire TaskManager to BashTool and add TaskStop/TaskOutput tools if enabled
 		if r.taskStopEnabled || r.taskOutputEnabled {
 			taskManager := NewTaskManager()
@@ -372,9 +384,9 @@ func (r *Registry) Build() []Tool {
 			r.baseTools = append(r.baseTools, NewWebSearchTool(cfg, r.nativeSearchRunner, r.searchClientProvider))
 		}
 
-		// Add LSP tool if enabled and client is provided (P3).
-		if r.lspEnabled && r.lspClient != nil {
-			r.baseTools = append(r.baseTools, NewLSPTool(*r.lspClient))
+		// Add LSP tool if enabled and manager is provided (P3).
+		if r.lspEnabled && r.lspManager != nil {
+			r.baseTools = append(r.baseTools, NewLSPTool(r.lspManager))
 		}
 
 		// Add Skill tool if skills are discovered (P3).
