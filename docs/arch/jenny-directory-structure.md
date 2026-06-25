@@ -28,7 +28,6 @@ The `.jenny` directory can exist in two locations:
 | :--- | :--- |
 | `sessions/` | Root for session-specific data isolation. |
 | `sessions/<id>/` | Dedicated directory for a specific session. |
-| `transcripts/` | Legacy directory — created at startup by `NewManager` for backward compatibility. New sessions use `sessions/<id>/transcript.jsonl` instead. |
 | `config` | Global cost state fallback (used when no session ID is set). |
 
 ### Project-Local Layout (`<project-root>/.jenny/`)

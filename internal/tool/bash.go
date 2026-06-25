@@ -162,7 +162,7 @@ func (t *BashTool) ConcurrencySafe() bool {
 
 // Description returns a description of the tool.
 func (t *BashTool) Description() string {
-	return "Execute shell commands. Use this to run bash commands like ls, cat, pwd, etc. Note: bash is a generic exec tool and does not apply .gitignore/.jennyignore filtering — use the Glob tool for ignore-aware file discovery."
+	return fmt.Sprintf("Execute shell commands. Use this to run bash commands like ls, cat, pwd, etc. Note: use dedicated tools like Glob/Grep/read/edit/write instead of this tool whenever possible, write scripts to a file if they are longer than %d lines.", maxHeredocLines)
 }
 
 // InputSchema returns the JSON schema for tool input.

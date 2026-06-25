@@ -88,9 +88,8 @@ type ToolUse struct {
 
 // Manager handles session persistence.
 type Manager struct {
-	jennyDir      string
-	transcriptDir string
-	Disabled      bool
+	jennyDir string
+	Disabled bool
 
 	// mu serializes transcript file access per Manager. We use a single
 	// RWMutex rather than per-session locks because transcript files are
@@ -116,28 +115,17 @@ var progressTypes = map[string]bool{
 	"mcp_progress":        true,
 }
 
-// NewManager creates a new session manager with the given transcript directory.
+// NewManager creates a new session manager rooted at the given Jenny home
+// directory. All session data is stored under <rootDir>/sessions/<id>/.
 // If disabled is true, no files are created, appended, or modified.
 func NewManager(rootDir string, disabled bool) (*Manager, error) {
 	if rootDir == "" {
 		rootDir = constants.JennyHomeDir()
 	}
-	jennyDir := rootDir
-	transcriptDir := rootDir
-	if filepath.Base(rootDir) == "transcripts" {
-		jennyDir = filepath.Dir(rootDir)
-	} else {
-		transcriptDir = filepath.Join(rootDir, "transcripts")
-	}
-
 	if disabled {
-		return &Manager{jennyDir: jennyDir, transcriptDir: transcriptDir, Disabled: true}, nil
+		return &Manager{jennyDir: rootDir, Disabled: true}, nil
 	}
-	// Ensure the transcripts directory exists for legacy support (though we prefer sessions/)
-	if err := os.MkdirAll(transcriptDir, 0755); err != nil {
-		return nil, fmt.Errorf("creating transcript directory: %w", err)
-	}
-	return &Manager{jennyDir: jennyDir, transcriptDir: transcriptDir}, nil
+	return &Manager{jennyDir: rootDir}, nil
 }
 
 // NewSessionID generates a new session ID as a lowercase UUID v7 string.
@@ -163,11 +151,6 @@ func ValidateSessionID(id string) error {
 		return fmt.Errorf("invalid session ID: path traversal not allowed")
 	}
 	return nil
-}
-
-// TranscriptDir returns the configured transcript directory.
-func (m *Manager) TranscriptDir() string {
-	return m.transcriptDir
 }
 
 // pidPath returns the path to the pid file for a session.

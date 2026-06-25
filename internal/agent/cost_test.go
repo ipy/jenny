@@ -259,7 +259,7 @@ func TestPersistsEndTurnPath(t *testing.T) {
 		constants.JennyHomeDirFunc = originalFunc
 	}()
 
-	sessMgr, err := session.NewManager(filepath.Join(tmpDir, "transcripts"), false)
+	sessMgr, err := session.NewManager(filepath.Join(tmpDir, constants.ProjectDirName), false)
 	if err != nil {
 		t.Fatalf("FAIL: NewManager error = %v", err)
 	}
@@ -496,7 +496,7 @@ func TestResultLineContainsCacheAndCostFields(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		sessMgr, err := session.NewManager(filepath.Join(tmpDir, "transcripts"), false)
+		sessMgr, err := session.NewManager(filepath.Join(tmpDir, constants.ProjectDirName), false)
 		if err != nil {
 			errCh <- err
 			return
@@ -648,7 +648,7 @@ func TestBudgetStopInRunStream(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		sessMgr, err := session.NewManager(filepath.Join(tmpDir, "transcripts"), false)
+		sessMgr, err := session.NewManager(filepath.Join(tmpDir, constants.ProjectDirName), false)
 		if err != nil {
 			errCh <- err
 			return
@@ -710,7 +710,7 @@ func TestBudgetNoLimitWhenMaxBudgetUSDIsZero(t *testing.T) {
 	os.Chdir(tmpDir)
 	defer os.Chdir(origWd)
 
-	sessMgr, err := session.NewManager(filepath.Join(tmpDir, "transcripts"), false)
+	sessMgr, err := session.NewManager(filepath.Join(tmpDir, constants.ProjectDirName), false)
 	if err != nil {
 		t.Fatalf("FAIL: NewManager error = %v", err)
 	}

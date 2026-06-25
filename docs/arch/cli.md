@@ -143,7 +143,7 @@ Help (`-h`) exits 0. Version (`--version`) uses `constants.Version` for unified 
 | `JENNY_DEBUG` | Enable debug slog (`1` = DEBUG) |
 | `JENNY_PERMISSION_LEVEL` | Default permission level when `--permission-level` not specified. Values: `read`, `analyze`, `edit`, `execute`, `unrestricted`. Flag overrides env. |
 | `JENNY_REDACT` | Default secret redaction mode (`disabled`, `redact` (default), `recover`). `--redact` overrides this. |
-| `JENNY_TRANSCRIPT_DIR` | Override transcript directory (default: `~/.jenny/transcripts`). `--transcript-dir` overrides this. |
+| `JENNY_TRANSCRIPT_DIR` | Override Jenny home directory (default: `~/.jenny`). `--transcript-dir` overrides this. |
 | `JENNY_MAX_TOOL_CONCURRENCY` | Default max parallel tool executions. `--max-tool-concurrency` overrides this. |
 | `JENNY_SWEEP_KEEP_ARCHIVE` | Keep `<id>.tar.gz` after resume extraction. `--sweep-keep-archive` overrides this. |
 | `JENNY_DISABLE_COMPACT` | Disable all compaction. `--disable-compact` overrides this. |

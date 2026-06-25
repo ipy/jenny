@@ -52,10 +52,6 @@ dist/
 
 references/
 
-# Agent transcripts
-transcripts/
-internal/agent/transcripts/*.jsonl
-
 # Frontend
 node_modules/
 .eslintcache

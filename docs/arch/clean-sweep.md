@@ -207,7 +207,6 @@ See also: jenny clean — remove every session directory without archiving.
 - Compression algorithm choice (always gzip; no `zstd` / `xz`).
 - Encrypting the archive.
 - Remote/cloud archival (`s3`, `gs`).
-- Migrating data currently in the legacy `~/.jenny/transcripts/` directory; that path is left as-is.
 - Any change to the on-disk format of `transcript.jsonl`, `config`, or `memory.md`.
 - Any change to MCP or provider routing code.
 - Automated scheduling of `clean` / `sweep` (cron-like behavior).
