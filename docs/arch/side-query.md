@@ -99,11 +99,11 @@ Pricing data comes from `GetModelPricing()` in `cost.go`.
 | Caller | Mode | Purpose |
 |--------|------|---------|
 | `dispatchComplexityEval` | Fork only | Classify task complexity (4 dimensions + need_write) |
-| `dispatchProgressEval` | Fork only | Judge whether the agent is making meaningful progress |
+| `dispatchProgressEval` | `Execute()` (auto-select) | Judge whether the agent is making meaningful progress |
 | `fallbackSummaryCompact` | `ExecuteSummary()` | Fallback compaction — thinking disabled, `fallbackCompactSystemPrompt` |
 | `inSessionCompact` | Main client directly | In-session compaction reuses main client for cache sharing |
 
-Complexity and progress evals use `ExecuteFork()` because they need cache-sharing. `fallbackSummaryCompact` uses `ExecuteSummary()` with `DisableThinking: true`.
+Complexity eval uses `ExecuteFork()` because it always needs cache-sharing and fires early (short prefix). Progress eval uses `Execute()` with `SelectMode` to choose between fork (cache-sharing) and summary (cheaper for long conversations) based on estimated cost. `fallbackSummaryCompact` uses `ExecuteSummary()` with `DisableThinking: true`.
 
 ## Compact Integration
 

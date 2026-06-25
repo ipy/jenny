@@ -365,7 +365,18 @@ func (c *Client) SendMessageStream(
 			if result.IsPermanent {
 				log.Debug("Streaming failed with permanent error, skipping fallback", "error", result.Error, "category", result.ErrorCategory)
 			} else if ctx.Err() != nil {
-				log.Debug("Parent context cancelled, skipping fallback")
+				log.Debug("Parent context cancelled, skipping fallback",
+					"streamIncomplete", streamIncomplete, "blocksReceived", len(result.Blocks))
+				// Even though we can't retry, emit any buffered pending blocks
+				// so the engine loop has partial content to work with rather than
+				// silently discarding it. The StreamComplete=false flag tells the
+				// engine loop that the stream was interrupted.
+				for _, block := range pendingBlocks {
+					blocksChan <- block
+				}
+				if streamIncomplete && result.Error == "" {
+					result.Error = "stream interrupted: connection lost before message_stop"
+				}
 			} else {
 				log.Debug("Streaming incomplete or error, attempting fallback", "error", result.Error, "streamIncomplete", streamIncomplete, "isIdleTimeout", isIdleTimeout)
 				// Stream was incomplete - discard pending blocks and use fallback

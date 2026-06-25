@@ -37,6 +37,7 @@ These fields are added to the same JSON response alongside the four complexity d
 |-----------|-----------|
 | Stream-json mode is enabled | QA events are only meaningful in structured output mode |
 | Not a fork child (`IsForkChild == false`) | Prevents QA inside subagents or verification agents |
+| Not a resumed session (`IsResume == false`) | Resumed sessions already completed prior QA evaluation |
 | QA retry count < max retries (default: 2) | Bounded retry budget |
 | At least one complexity signal is high | See below |
 
@@ -164,7 +165,7 @@ No separate acceptance-criteria-only query is ever sent. When the async complexi
 
 ## Invariants
 
-- QA never triggers inside fork children or subagents
+- QA never triggers inside fork children, subagents, or resumed sessions
 - QA retries are bounded by `qaMaxRetries` (default 2)
 - The `result` event is emitted exactly once per `SubmitMessage`: after QA passes or retries are exhausted
 - Memory extraction runs only on final delivery, not on QA retry iterations

@@ -669,9 +669,8 @@ func (p *anthropicProvider) SendMessageStream(ctx context.Context, messages []Me
 			result.ContextRejected = true
 		}
 
-		shouldFallback := !hasMessageStart || !hasMessageStop || result.Error != ""
-		if shouldFallback {
-			log.Warn("Anthropic: stream incomplete, triggering fallback", "hasMessageStart", hasMessageStart, "hasMessageStop", hasMessageStop, "error", result.Error)
+		if !hasMessageStart || !hasMessageStop || result.Error != "" {
+			log.Warn("Anthropic: stream incomplete", "hasMessageStart", hasMessageStart, "hasMessageStop", hasMessageStop, "error", result.Error)
 		}
 
 		result.StreamComplete = hasMessageStop

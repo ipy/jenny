@@ -258,7 +258,7 @@ func (e *QueryEngine) compactMessages(ctx context.Context, messages []api.Messag
 //
 // The summary is the only preserved context from dropped messages. Each item
 // ensures the model can continue correctly after compaction.
-const compactSummaryRequirements = `Provide a comprehensive summary of the entire conversation so far. Output ONLY the summary text.
+const compactSummaryRequirements = `Provide a comprehensive summary of the entire conversation so far. Output ONLY the summary text. TOOL CALLS ARE FORBIDDEN.
 
 For every claim, tag it with a confidence level: [CONFIRMED] for observed facts, [SPECULATIVE] for reasoned but unverified judgments, [UNVERIFIED] for stated intent not yet acted on, [EXCLUDED] for approaches tried and rejected or ruled out.
 

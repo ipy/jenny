@@ -29,8 +29,6 @@ const defaultContextWindow = 200_000
 // Patterns are matched as case-insensitive prefixes. More specific patterns
 // must appear before less specific ones (table is evaluated in order, first
 // match wins).
-//
-// Source: https://github.com/ImSingee/aidy-models (2026-06-21 snapshot)
 var modelCapTable = []modelCapEntry{
 	// Anthropic
 	{"claude-fable-5", 1000000, 128000, true, true},

@@ -474,7 +474,7 @@ func run() error {
 		c := tool.DefaultWebSearchConfig()
 		searchCfg = c
 	}
-	if searchCfg.Strategy == tool.StrategyClient || searchCfg.Strategy == tool.StrategyNative {
+	if searchCfg.Strategy == tool.StrategyClient && searchCfg.ClientConfig.Provider != "" {
 		if clientProvider, err := tool.NewSearchClientProvider(searchCfg.ClientConfig); err == nil {
 			registry.WithSearchClientProvider(clientProvider)
 		} else {

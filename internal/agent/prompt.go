@@ -50,6 +50,7 @@ func defaultIntroSection() (string, bool) {
 - List files first, then articulate goal/deliverables/constraints based on user request and discovery. Pay attention to request details.
 - Identify existing tests/linters/styles and follow them; if user explicitly requests an anti-pattern, obey the user.
 - Prefer dedicated tools (read/edit/write/Grep/Glob) over shell.
+- Use Grep/Glob to locate relevant content. and read key lines of files, avoid reading entire files unless necessary.
 - Force non-interactive shell flags (e.g., -y, -sS, BatchMode=yes, --no-pager).
 
 ## Coding Guidelines

@@ -22,7 +22,6 @@ import (
 // progress eval). Set high enough that thinking models don't starve the JSON output:
 // the prompt + expected response is ~200 tokens, but thinking models share the output
 // budget between thinking blocks and visible text, so a larger headroom is needed.
-// Increased from 1024 to accommodate accept_criteria/constraints in complexity eval.
 const forkMaxTokens = 2048
 
 // SubmitMessage runs a single query turn: persist message, run agent loop,
@@ -279,26 +278,28 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			})
 		}
 
-		// Progress monitor: dispatch L1-second fork-judge if needed, then drain results
-		if e.progressMonitor.ShouldForkProgressEval() {
-			e.progressMonitor.MarkForkDispatched()
-			e.dispatchProgressEval(ctx, messages, "progress_eval")
-		}
+		// Progress monitor: dispatch fork-judge and check escalation (when enabled)
+		if !e.streamCfg.DisableProgressMonitor {
+			if e.progressMonitor.ShouldForkProgressEval() {
+				e.progressMonitor.MarkForkDispatched()
+				e.dispatchProgressEval(ctx, messages, "progress_eval")
+			}
 
-		// L3 fork-judge: dispatch before hard termination to give agent a last chance
-		if e.progressMonitor.ShouldForkL3ProgressEval() {
-			e.progressMonitor.MarkL3ForkDispatched()
-			e.dispatchProgressEval(ctx, messages, "L3 progress_eval")
-		}
+			// L3 fork-judge: dispatch before hard termination to give agent a last chance
+			if e.progressMonitor.ShouldForkL3ProgressEval() {
+				e.progressMonitor.MarkL3ForkDispatched()
+				e.dispatchProgressEval(ctx, messages, "L3 progress_eval")
+			}
 
-		// Drain any pending fork result before checking escalation
-		e.progressMonitor.DrainForkResult()
+			// Drain any pending fork result before checking escalation
+			e.progressMonitor.DrainForkResult()
 
-		if msg, terminate := e.progressMonitor.CheckAndInject(); terminate {
-			return e.terminateProgressMonitor(sessionID)
-		} else if msg != nil {
-			messages = append(messages, *msg)
-			e.persistSystemReminder(sessionID, msg.Content)
+			if msg, terminate := e.progressMonitor.CheckAndInject(); terminate {
+				return e.terminateProgressMonitor(sessionID)
+			} else if msg != nil {
+				messages = append(messages, *msg)
+				e.persistSystemReminder(sessionID, msg.Content)
+			}
 		}
 
 		// Check compaction threshold before API request
@@ -389,8 +390,10 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		// which caused cache invalidation. The hint is appended before the API
 		// call and stripped afterwards — it does not persist in the history.
 		// It's placed at the end so the existing prefix remains a cache hit.
+		// Skip on resume sessions: the "early exploration turn" hint is
+		// inappropriate because the agent is continuing prior work, not starting fresh.
 		var thinkingHintInjected bool
-		if hint := e.maxTokensCtrl.ThinkingGuidanceHint(e.turnCount); hint != "" {
+		if hint := e.maxTokensCtrl.ThinkingGuidanceHint(e.turnCount, e.streamCfg.IsResume, e.thinkingMonitor); hint != "" {
 			messages = append(messages, api.Message{
 				Role:      api.RoleUser,
 				Content:   "<system-reminder>\n" + hint + "\n</system-reminder>",
@@ -407,7 +410,11 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		e.lastAPIStartTime = apiStartTime
 		// Defense-in-depth: wrap the API call with an overall timeout so the
 		// engine loop never blocks indefinitely on a single streaming request.
-		apiCtx, apiCancel := context.WithTimeout(ctx, api.DefaultFallbackTimeout+30*time.Second)
+		// The timeout covers the full streaming window plus fallback time.
+		// It's set independently of the fallback timeout: streaming itself may
+		// take up to 10 minutes for large outputs, plus up to 5 minutes for
+		// the non-streaming fallback if the stream fails.
+		apiCtx, apiCancel := context.WithTimeout(ctx, 15*time.Minute)
 		dynamicSuffix := DynamicSystemSuffix(e.streamCfg, cwd)
 		blocksChan, streamResult := e.client.SendMessageStream(
 			apiCtx,
@@ -762,6 +769,40 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			return "", fmt.Errorf("streaming error: %v", streamResult.Error)
 		}
 
+		// Detect incomplete stream: the provider received message_start but
+		// never received message_stop (connection dropped mid-generation).
+		// This can happen when the stream times out or the connection is lost.
+		// Surface an explicit error instead of silently treating partial output
+		// as a successful end_turn.
+		if !streamResult.StreamComplete && streamResult.Error == "" {
+			log.Warn("Stream incomplete: message_stop not received",
+				"hasBlocks", len(streamResult.Blocks) > 0,
+				"textLen", textOutput.Len(),
+				"toolUseBlocks", len(toolUseBlocks),
+			)
+			// If we have partial content (text or tool calls), preserve it in
+			// the message history and retry. The partial assistant message helps
+			// the model continue from where it left off.
+			if textOutput.Len() > 0 || len(toolUseBlocks) > 0 {
+				errMsg := "stream interrupted: connection lost during response generation"
+				if e.streamCfg.Enabled {
+					msg := StreamMessage{
+						Type:         "system",
+						Subtype:      "stream_interrupted",
+						Result:       errMsg,
+						SessionID:    sessionID,
+						Uuid:         GenerateUUID(),
+						TotalCostUSD: e.costState.TotalCostUSD,
+						ModelUsage:   e.buildModelUsage(),
+					}
+					data, _ := json.Marshal(msg)
+					fmt.Fprintln(os.Stdout, string(data))
+				}
+				return "", fmt.Errorf("streaming error: %s", errMsg)
+			}
+			return "", fmt.Errorf("streaming error: stream interrupted before any content was generated")
+		}
+
 	handle_resp:
 		// Use results from streaming (or fallback)
 		if resp == nil {
@@ -936,9 +977,11 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		}
 		toolResults = append(toolResults, execToolResults...)
 
-		// Progress monitor: record turn and update max_tokens level
-		e.progressMonitor.RecordTurn(toolUseBlocks, execToolResults)
-		e.maxTokensCtrl.SetProgressLevel(e.progressMonitor.Level())
+		// Progress monitor: record turn and update max_tokens level (when enabled)
+		if !e.streamCfg.DisableProgressMonitor {
+			e.progressMonitor.RecordTurn(toolUseBlocks, execToolResults)
+			e.maxTokensCtrl.SetProgressLevel(e.progressMonitor.Level())
+		}
 		// Record turn outcome for next-turn adaptive max_tokens
 		hadToolUse := len(toolUseBlocks) > 0
 		hadWrite := false
@@ -956,7 +999,13 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		if cr := e.maxTokensCtrl.GetComplexityResult(); cr != nil {
 			thinkingComplexity = cr.OverallComplexity()
 		}
-		e.thinkingMonitor.RecordTurn(e.turnCount, turnThinkingTokens, len(toolUseBlocks) > 0, thinkingComplexity)
+		// On resume sessions, offset the turn number so the ThinkingMonitor's
+		// early-turn penalty doesn't fire on the first few post-resume turns.
+		recordedTurn := e.turnCount
+		if e.streamCfg.IsResume {
+			recordedTurn += 10
+		}
+		e.thinkingMonitor.RecordTurn(recordedTurn, turnThinkingTokens, len(toolUseBlocks) > 0, thinkingComplexity)
 		if reminder := e.thinkingMonitor.ShouldRemind(); reminder != "" {
 			messages = append(messages, api.Message{
 				Role:      api.RoleUser,
@@ -1021,7 +1070,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			// are appended to messages by handleStopReason so the fork sees
 			// a valid tool_use/tool_result sequence.
 			e.toolResultCount += len(execToolResults)
-			if e.toolResultCount >= 3 && e.maxTokensCtrl.ShouldFork() {
+			if !e.streamCfg.DisableComplexityEval && e.toolResultCount >= 3 && e.maxTokensCtrl.ShouldFork() {
 				e.dispatchComplexityEval(ctx, messages)
 			}
 			continue
@@ -1035,9 +1084,19 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 	return "", fmt.Errorf("max iterations (%d) exceeded", maxIterations)
 }
 
+// progressEvalSummarySystemPrompt is the system prompt for summary-mode progress evaluation.
+// Summary mode is cheaper than fork mode for long conversations because it condenses the
+// conversation into a flat transcript instead of replaying the full message history.
+var progressEvalSummarySystemPrompt = []string{
+	"You are a progress evaluation judge. You will receive a transcript of an agent's work session. " +
+		"Evaluate whether the agent is making genuine forward progress toward the user's goal. " +
+		"Do not continue the agent's work. Respond ONLY with a JSON evaluation object. TOOL CALLS ARE FORBIDDEN.",
+}
+
 // dispatchProgressEval launches a progress evaluation side query as a goroutine.
-// Uses the unified SideQuery framework to share the exact same cache prefix as
-// the main session.
+// Uses SelectMode to choose between fork (cache-sharing) and summary (cheaper for
+// long conversations) based on estimated cost. The summary mode condenses the last
+// 20 messages into a flat transcript with thinking disabled.
 func (e *QueryEngine) dispatchProgressEval(ctx context.Context, messages []api.Message, label string) {
 	forkMessages := make([]api.Message, len(messages))
 	copy(forkMessages, messages)
@@ -1046,17 +1105,20 @@ func (e *QueryEngine) dispatchProgressEval(ctx context.Context, messages []api.M
 
 	go func() {
 		sq := &SideQuery{
-			Name:      "progress_eval",
-			Messages:  forkMessages,
-			Prompt:    progressEvalPrompt,
-			MaxTokens: forkMaxTokens,
-			Timeout:   30 * time.Second,
+			Name:                "progress_eval",
+			Messages:            forkMessages,
+			Prompt:              progressEvalPrompt,
+			MaxTokens:           forkMaxTokens,
+			Timeout:             30 * time.Second,
+			SummarySystemPrompt: progressEvalSummarySystemPrompt,
+			SummaryMaxMessages:  20,
+			DisableThinking:     true,
 		}
 
 		forkCtx := context.WithoutCancel(parentCtx)
-		sqResult, err := sq.ExecuteFork(forkCtx, sqctx)
+		sqResult, err := sq.Execute(forkCtx, sqctx)
 		if err != nil {
-			log.Debug(label+" fork failed", "error", err)
+			log.Debug(label+" eval failed", "error", err)
 			return
 		}
 		if parentCtx.Err() != nil {
@@ -1070,12 +1132,10 @@ func (e *QueryEngine) dispatchProgressEval(ctx context.Context, messages []api.M
 			return
 		}
 
-		select {
-		case e.progressMonitor.forkResultCh <- result:
-		default:
-		}
-
+		// Log and emit stream event BEFORE sending to channel.
+		// MeaningfulProgress is already correctly computed by parseProgressEvalResponse.
 		log.Info(label+" result",
+			"mode", sqResult.Mode,
 			"overall", result.Overall,
 			"meaningful_progress", result.MeaningfulProgress,
 			"reasoning", result.Reasoning,
@@ -1097,6 +1157,11 @@ func (e *QueryEngine) dispatchProgressEval(ctx context.Context, messages []api.M
 			}
 			data, _ := json.Marshal(msg)
 			fmt.Fprintln(os.Stdout, string(data))
+		}
+
+		select {
+		case e.progressMonitor.forkResultCh <- result:
+		default:
 		}
 	}()
 }

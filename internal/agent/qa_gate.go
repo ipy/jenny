@@ -13,12 +13,11 @@ import (
 )
 
 const (
-	qaMaxRetries          = 2
-	qaComplexityThreshold = 3.0
-	qaTurnThreshold       = 10
-	qaVerifyTimeout       = 60 * time.Second
-	qaVerifyMaxTokens     = 4096
-	qaVerifyMaxTurns      = 5
+	qaMaxRetries      = 2
+	qaTurnThreshold   = 20
+	qaVerifyTimeout   = 60 * time.Second
+	qaVerifyMaxTokens = 4096
+	qaVerifyMaxTurns  = 5
 )
 
 // qaVerdict holds the parsed evaluation result from a QA verification agent.
@@ -30,51 +29,59 @@ type qaVerdict struct {
 }
 
 // shouldTriggerQA returns true when the QA gate should intercept end_turn.
+// Skipped for: disabled flag, resumed sessions, fork children, short sessions (<20 turns),
+// L3-terminated sessions, and retries exhausted.
 func (e *QueryEngine) shouldTriggerQA() bool {
+	if e.streamCfg.DisableQAGate {
+		return false
+	}
 	if !e.streamCfg.Enabled {
 		return false
 	}
 	if e.streamCfg.IsForkChild {
 		return false
 	}
+	if e.streamCfg.IsResume {
+		return false
+	}
 	if e.qaRetryCount >= qaMaxRetries {
 		return false
 	}
-
-	// Check complexity signals
-	cr := e.maxTokensCtrl.GetComplexityResult()
-	if cr != nil && cr.OverallComplexity() >= qaComplexityThreshold {
-		return true
+	// Skip QA for short sessions — the overhead is not worthwhile
+	if e.turnCount < qaTurnThreshold {
+		return false
 	}
-	if e.turnCount >= qaTurnThreshold {
-		return true
+	// Skip QA if progress monitor reached L3 (session is being terminated)
+	if e.progressMonitor != nil && e.progressMonitor.Level() >= ProgressLevelL3 {
+		return false
 	}
-	if e.qaCompactSeen {
-		return true
-	}
-	return false
+	return true
 }
 
 // runQAGate spawns a verification agent and returns the verdict.
-// It runs synchronously within the SubmitMessage call.
+// It runs synchronously within the SubmitMessage call. The verification agent
+// receives the user's original request directly (no accept_criteria extraction)
+// and is instructed to perform only critical targeted checks.
 func (e *QueryEngine) runQAGate(ctx context.Context, messages []api.Message, sessionID string) (*qaVerdict, error) {
-	ac, constraints := e.extractAcceptCriteria(messages)
-	if len(ac) == 0 {
-		log.Debug("QA gate skipped: no acceptance criteria extracted")
-		return &qaVerdict{Verdict: "PASS", Reasoning: "No acceptance criteria to evaluate"}, nil
+	userRequest := extractUserRequest(messages)
+	if userRequest == "" {
+		log.Debug("QA gate skipped: no user request found")
+		return &qaVerdict{Verdict: "PASS", Reasoning: "No user request found"}, nil
 	}
 
 	fileSummary := buildFileSummary(messages)
-	prompt := buildQAVerificationPrompt(ac, constraints, e.cwd, fileSummary)
+	prompt := buildQAVerificationPrompt(userRequest, e.cwd, fileSummary)
 
-	// Filter tools to read-only subset
 	qaTools := filterQATools(e.tools)
 
-	// Build child StreamConfig
+	// Child config: disable all meta-evaluation mechanisms to avoid recursive overhead
 	childCfg := &StreamConfig{
-		Enabled:     false,
-		IsForkChild: true,
-		MaxTurns:    qaVerifyMaxTurns,
+		Enabled:                false,
+		IsForkChild:            true,
+		MaxTurns:               qaVerifyMaxTurns,
+		DisableComplexityEval:  true,
+		DisableProgressMonitor: true,
+		DisableQAGate:          true,
 	}
 
 	qaCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), qaVerifyTimeout)
@@ -84,69 +91,27 @@ func (e *QueryEngine) runQAGate(ctx context.Context, messages []api.Message, ses
 
 	_, output, _, err := RunStream(qaCtx, prompt, qaTools, e.cwd, childCfg, model, WithClient(e.client))
 	if err != nil {
-		// On timeout or error, default to PASS to avoid blocking delivery
 		log.Warn("QA verification agent failed", "error", err)
-		return &qaVerdict{Verdict: "PASS", Reasoning: fmt.Sprintf("Verification failed: %v", err)}, nil
+		return &qaVerdict{Verdict: "FAIL", Reasoning: fmt.Sprintf("Verification failed: %v", err)}, nil
 	}
 
 	verdict, err := parseQAVerdict(output)
 	if err != nil {
 		log.Warn("QA verdict parse failed", "error", err, "output", output)
-		return &qaVerdict{Verdict: "PASS", Reasoning: fmt.Sprintf("Could not parse verdict: %v", err)}, nil
+		return &qaVerdict{Verdict: "FAIL", Reasoning: fmt.Sprintf("Could not parse verdict: %v", err)}, nil
 	}
 	return verdict, nil
 }
 
-// extractAcceptCriteria retrieves acceptance criteria from the complexity result.
-// If the async complexity eval hasn't fired yet, runs it synchronously using the
-// same complexityEvalPrompt — one query yields both complexity dimensions and AC,
-// feeding maxTokensCtrl as a side-effect. No separate AC-only query is ever sent.
-func (e *QueryEngine) extractAcceptCriteria(messages []api.Message) (acceptCriteria []string, constraints []string) {
-	cr := e.maxTokensCtrl.GetComplexityResult()
-	if cr != nil && len(cr.AcceptCriteria) > 0 {
-		return cr.AcceptCriteria, cr.Constraints
+// extractUserRequest finds the first non-virtual user message in the conversation,
+// which is the user's original task request.
+func extractUserRequest(messages []api.Message) string {
+	for _, msg := range messages {
+		if msg.Role == api.RoleUser && !msg.IsVirtual {
+			return msg.Content
+		}
 	}
-
-	// Complexity eval never fired — run it synchronously with the same prompt
-	// so one API call produces both complexity dimensions and acceptance criteria.
-	if e.sideQueryCtx == nil || len(messages) == 0 {
-		return nil, nil
-	}
-
-	sq := &SideQuery{
-		Name:      "complexity_eval",
-		Messages:  messages,
-		Prompt:    complexityEvalPrompt,
-		MaxTokens: forkMaxTokens,
-		Timeout:   30 * time.Second,
-	}
-
-	ctx := context.Background()
-	result, err := sq.Execute(ctx, e.sideQueryCtx)
-	if err != nil {
-		log.Debug("Synchronous complexity eval for QA gate failed", "error", err)
-		return nil, nil
-	}
-
-	text := extractJSON(result.Text)
-	var parsed ComplexityResult
-	if err := json.Unmarshal([]byte(text), &parsed); err != nil {
-		log.Debug("Synchronous complexity eval parse failed", "error", err)
-		return nil, nil
-	}
-	parsed.ReasoningDepth = clampDim(parsed.ReasoningDepth)
-	parsed.CodeVolume = clampDim(parsed.CodeVolume)
-	parsed.DomainSpecialization = clampDim(parsed.DomainSpecialization)
-	parsed.IntegrationBreadth = clampDim(parsed.IntegrationBreadth)
-
-	// Store result so maxTokensCtrl also benefits from the late eval
-	e.maxTokensCtrl.SetComplexityResult(&parsed)
-	log.Info("Synchronous complexity eval for QA gate",
-		"overall", parsed.OverallComplexity(),
-		"accept_criteria", len(parsed.AcceptCriteria),
-	)
-
-	return parsed.AcceptCriteria, parsed.Constraints
+	return ""
 }
 
 // parseQAVerdict extracts a structured verdict from the verification agent's output.
@@ -200,21 +165,15 @@ func buildQAFeedbackMessage(v *qaVerdict, retryCount, maxRetries int) api.Messag
 }
 
 // buildQAVerificationPrompt assembles the prompt for the QA verification agent.
-func buildQAVerificationPrompt(acceptCriteria, constraints []string, cwd, fileSummary string) string {
+// It provides the user's original request directly and instructs the agent to
+// perform only critical targeted checks with minimal turns.
+func buildQAVerificationPrompt(userRequest, cwd, fileSummary string) string {
 	var sb strings.Builder
-	sb.WriteString("You are a QA verification agent. Evaluate whether the deliverables satisfy the acceptance criteria.\n\n")
+	sb.WriteString("You are a QA verification agent. Verify that the deliverables satisfy the user's request.\n\n")
 
-	sb.WriteString("## Acceptance Criteria\n")
-	for i, ac := range acceptCriteria {
-		fmt.Fprintf(&sb, "%d. %s\n", i+1, ac)
-	}
-
-	if len(constraints) > 0 {
-		sb.WriteString("\n## Constraints\n")
-		for i, c := range constraints {
-			fmt.Fprintf(&sb, "%d. %s\n", i+1, c)
-		}
-	}
+	sb.WriteString("## User's Original Request\n")
+	sb.WriteString(userRequest)
+	sb.WriteString("\n")
 
 	fmt.Fprintf(&sb, "\n## Working Directory\n%s\n", cwd)
 
@@ -223,12 +182,14 @@ func buildQAVerificationPrompt(acceptCriteria, constraints []string, cwd, fileSu
 	}
 
 	sb.WriteString("\n## Instructions\n")
-	sb.WriteString("1. Use Read, Glob, and Grep to inspect the filesystem and verify each criterion.\n")
-	sb.WriteString("2. Use Bash ONLY for read-only commands (listing, checking, running tests). NEVER modify files.\n")
-	sb.WriteString("3. Check each acceptance criterion independently.\n")
-	sb.WriteString("4. After verification, respond with ONLY a JSON object:\n")
-	sb.WriteString(`{"verdict": "PASS" or "FAIL", "reasoning": "brief explanation", "gaps": ["unmet criterion 1", ...], "suggestions": ["fix 1", ...]}`)
-	sb.WriteString("\n\nRespond with the JSON verdict and nothing else after it.\n")
+	sb.WriteString("Complete verification in as few turns as possible. Be efficient:\n")
+	sb.WriteString("- Run critical tests or check commands ONLY — do not read entire files.\n")
+	sb.WriteString("- Use Bash for targeted checks (file existence, command exit codes, grep for key outputs).\n")
+	sb.WriteString("- Use Glob to confirm expected files exist. Use Grep for specific content checks.\n")
+	sb.WriteString("- NEVER modify files. Read-only verification only.\n")
+	sb.WriteString("- After verification, respond with ONLY a JSON object:\n")
+	sb.WriteString(`{"verdict": "PASS" or "FAIL", "reasoning": "brief explanation", "gaps": ["unmet requirement 1", ...], "suggestions": ["fix 1", ...]}`)
+	sb.WriteString("\n")
 
 	return sb.String()
 }

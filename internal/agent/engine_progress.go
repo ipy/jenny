@@ -102,22 +102,23 @@ func (pm *ProgressMonitor) ConsecutiveNoProgress() int {
 }
 
 // resetScoreForLevel returns the minimum positive score needed to reset the
-// counter at a given escalation level. Higher levels require stronger progress
-// signals to break out, preventing low-value actions (e.g. a single package
-// install) from resetting the counter deep into an escalation cycle.
+// counter at a given escalation level. The thresholds are kept low so that
+// genuine recovery signals (a new file write, a passing test) can break out
+// of escalation at any level. A ratchet effect (ever-increasing thresholds)
+// makes recovery nearly impossible for agents that are making partial progress.
 //
 //	L0 (None): score >= 1 (any positive signal)
-//	L1:        score >= 2 (single +1 is insufficient)
-//	L2:        score >= 3 (needs a strong signal like test_pass or file_write)
-//	L3:        score >= 4 (only test_pass + other, or multiple strong signals)
+//	L1:        score >= 1 (L1 is an advisory reminder, same bar as L0)
+//	L2:        score >= 2 (moderate signal: a file write or build success)
+//	L3:        score >= 2 (last chance — same bar as L2 to allow rescue)
 func resetScoreForLevel(level ProgressLevel) int {
 	switch level {
 	case ProgressLevelL3:
-		return 4
-	case ProgressLevelL2:
-		return 3
-	case ProgressLevelL1:
 		return 2
+	case ProgressLevelL2:
+		return 2
+	case ProgressLevelL1:
+		return 1
 	default:
 		return 1
 	}
@@ -519,31 +520,29 @@ func (pm *ProgressMonitor) CheckAndInject() (msg *api.Message, terminate bool) {
 }
 
 const l1FirstReminderText = `<system-reminder>
-PROGRESS CHECK: No meaningful progress in the last 10 turns. Before continuing, perform a self-assessment:
+PROGRESS CHECK: Limited progress detected over recent turns. Consider:
 
-1. CAPABILITY: Does this task require abilities you lack (vision, specific language runtime, network access, etc.)? If yes, write your best-effort output and stop.
-2. STRATEGY: Is your current approach fundamentally flawed? If so, describe an alternative strategy before your next action.
+1. CAPABILITY: Does this task require abilities you may lack (vision, specific runtime, etc.)? If so, it may be best to write a best-effort output and stop.
+2. STRATEGY: If your current approach has not been converging, consider pivoting to a substantively different strategy rather than retrying the same approach.
 
-After this assessment:
-- If blocked by missing capability: write your best-effort result and stop.
-- If a strategy pivot is viable: execute the NEW strategy. Do NOT repeat failed approaches.
-- Keep responses concise. Focus on actions, not analysis.
+Continue with your current approach if you believe it is working, or pivot if you see a better path forward.
 </system-reminder>`
 
 const l1SecondReminderText = `<system-reminder>
-PROGRESS CHECK (2nd): 20 turns without progress. You should seriously consider stopping.
+PROGRESS CHECK (2nd): Extended period without clear progress. Be aware that continued lack of progress may result in session termination.
 
-If you have a viable strategy remaining, execute it now — but be aware that continued lack of progress will result in session termination.
+Consider whether a different strategy might be more effective. If you believe you are close to a solution, continue — but avoid repeating approaches that have already failed.
 
-If you are stuck, write your BEST-EFFORT result to the expected output location NOW and stop.
+If you are genuinely stuck, writing a partial or best-effort result is preferable to no output.
 </system-reminder>`
 
 const l2ReminderText = `<system-reminder>
-FINAL WARNING: 25 turns without progress. You have at most 5 more turns before termination.
+PROGRESS WARNING: You have a limited number of turns remaining before automatic termination.
 
-Write your BEST-EFFORT result to the expected output location NOW, even if incomplete. A partial answer is better than no answer. Then stop.
-
-Do NOT continue exploring or debugging. Deliver what you have.
+Suggestions:
+- If you have a working partial result, ensure it is saved to the expected output location.
+- If you have an untried strategy, now is the time to attempt it.
+- A partial answer is better than no answer.
 </system-reminder>`
 
 // State returns the monitor state for inclusion in result events.
@@ -586,17 +585,14 @@ func (pm *ProgressMonitor) MarkL3ForkDispatched() {
 const forkJudgeThreshold = 3.0
 
 // ApplyProgressEvalResult applies the judge result. If meaningful progress is found
-// (above the fork-judge threshold), all counters and escalation state reset to 0.
-// Otherwise the L1-second flow continues.
+// (MeaningfulProgress was already computed by parseProgressEvalResponse), all
+// counters and escalation state reset to 0. Otherwise the L1-second flow continues.
 // Always clears forkDispatched — the fork has completed and delivered its result.
 func (pm *ProgressMonitor) ApplyProgressEvalResult(result *ProgressEvalResult) {
 	pm.forkDispatched = false
 
-	threshold := forkJudgeThreshold
-	result.MeaningfulProgress = result.Overall >= threshold
-
-	log.Debug("Fork-judge threshold applied",
-		"threshold", threshold,
+	log.Debug("Fork-judge result applied",
+		"threshold", forkJudgeThreshold,
 		"overall", result.Overall,
 		"meaningful", result.MeaningfulProgress,
 	)
@@ -755,7 +751,7 @@ func (e *QueryEngine) terminateProgressMonitor(sessionID string) (string, error)
 }
 
 const progressEvalPrompt = `<system-reminder>
-This is a separate meta-evaluation request. Prior conversation is from another agent, do not continue it or call any tools.
+This is a separate meta-evaluation request. Prior conversation is from another agent, do not continue it. TOOL CALLS ARE FORBIDDEN.
 </system-reminder>
 Evaluate whether the previous conversation is making genuine forward progress. Score 1-5 on each dimension:
 
@@ -833,10 +829,9 @@ func parseProgressEvalResponse(text string) (*ProgressEvalResult, error) {
 	}
 
 	// Compute overall from weighted average (ignore the model's overall to avoid gaming).
-	// MeaningfulProgress is set later by ApplyProgressEvalResult using the dynamic threshold.
 	overall := float64(result.TaskAlignment)*0.50 + float64(result.OutcomeMomentum)*0.35 + float64(result.FreshExploration)*0.15
 	result.Overall = overall
-	result.MeaningfulProgress = false // will be set by ApplyProgressEvalResult with dynamic threshold
+	result.MeaningfulProgress = overall >= forkJudgeThreshold
 
 	return &result, nil
 }

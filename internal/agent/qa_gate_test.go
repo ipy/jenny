@@ -9,13 +9,11 @@ import (
 
 func TestShouldTriggerQA_ForkChild(t *testing.T) {
 	e := &QueryEngine{
-		streamCfg:     &StreamConfig{Enabled: true, IsForkChild: true},
-		maxTokensCtrl: NewMaxTokensController("test-model"),
+		streamCfg:       &StreamConfig{Enabled: true, IsForkChild: true},
+		maxTokensCtrl:   NewMaxTokensController("test-model"),
+		progressMonitor: NewProgressMonitor(),
+		turnCount:       25,
 	}
-	e.maxTokensCtrl.SetComplexityResult(&ComplexityResult{
-		ReasoningDepth: 5, CodeVolume: 5, DomainSpecialization: 5, IntegrationBreadth: 5,
-	})
-	e.turnCount = 15
 	if e.shouldTriggerQA() {
 		t.Error("should not trigger QA inside fork child")
 	}
@@ -23,13 +21,11 @@ func TestShouldTriggerQA_ForkChild(t *testing.T) {
 
 func TestShouldTriggerQA_StreamDisabled(t *testing.T) {
 	e := &QueryEngine{
-		streamCfg:     &StreamConfig{Enabled: false},
-		maxTokensCtrl: NewMaxTokensController("test-model"),
+		streamCfg:       &StreamConfig{Enabled: false},
+		maxTokensCtrl:   NewMaxTokensController("test-model"),
+		progressMonitor: NewProgressMonitor(),
+		turnCount:       25,
 	}
-	e.maxTokensCtrl.SetComplexityResult(&ComplexityResult{
-		ReasoningDepth: 5, CodeVolume: 5, DomainSpecialization: 5, IntegrationBreadth: 5,
-	})
-	e.turnCount = 15
 	if e.shouldTriggerQA() {
 		t.Error("should not trigger QA when stream mode is disabled")
 	}
@@ -37,69 +33,62 @@ func TestShouldTriggerQA_StreamDisabled(t *testing.T) {
 
 func TestShouldTriggerQA_RetriesExhausted(t *testing.T) {
 	e := &QueryEngine{
-		streamCfg:     &StreamConfig{Enabled: true},
-		maxTokensCtrl: NewMaxTokensController("test-model"),
-		qaRetryCount:  qaMaxRetries,
+		streamCfg:       &StreamConfig{Enabled: true},
+		maxTokensCtrl:   NewMaxTokensController("test-model"),
+		progressMonitor: NewProgressMonitor(),
+		qaRetryCount:    qaMaxRetries,
+		turnCount:       25,
 	}
-	e.maxTokensCtrl.SetComplexityResult(&ComplexityResult{
-		ReasoningDepth: 5, CodeVolume: 5, DomainSpecialization: 5, IntegrationBreadth: 5,
-	})
-	e.turnCount = 15
 	if e.shouldTriggerQA() {
 		t.Error("should not trigger QA when retries are exhausted")
 	}
 }
 
-func TestShouldTriggerQA_LowComplexity(t *testing.T) {
+func TestShouldTriggerQA_ShortSession(t *testing.T) {
 	e := &QueryEngine{
-		streamCfg:     &StreamConfig{Enabled: true},
-		maxTokensCtrl: NewMaxTokensController("test-model"),
-		turnCount:     3,
+		streamCfg:       &StreamConfig{Enabled: true},
+		maxTokensCtrl:   NewMaxTokensController("test-model"),
+		progressMonitor: NewProgressMonitor(),
+		turnCount:       10,
 	}
-	e.maxTokensCtrl.SetComplexityResult(&ComplexityResult{
-		ReasoningDepth: 1, CodeVolume: 1, DomainSpecialization: 1, IntegrationBreadth: 1,
-	})
 	if e.shouldTriggerQA() {
-		t.Error("should not trigger QA for low complexity tasks with few turns")
-	}
-}
-
-func TestShouldTriggerQA_HighComplexity(t *testing.T) {
-	e := &QueryEngine{
-		streamCfg:     &StreamConfig{Enabled: true},
-		maxTokensCtrl: NewMaxTokensController("test-model"),
-		turnCount:     5,
-	}
-	// OverallComplexity = 4*0.30 + 4*0.25 + 3*0.20 + 4*0.25 = 1.2+1.0+0.6+1.0 = 3.8
-	e.maxTokensCtrl.SetComplexityResult(&ComplexityResult{
-		ReasoningDepth: 4, CodeVolume: 4, DomainSpecialization: 3, IntegrationBreadth: 4,
-	})
-	if !e.shouldTriggerQA() {
-		t.Error("should trigger QA for high complexity tasks")
+		t.Error("should not trigger QA for short sessions (<20 turns)")
 	}
 }
 
 func TestShouldTriggerQA_ManyTurns(t *testing.T) {
 	e := &QueryEngine{
-		streamCfg:     &StreamConfig{Enabled: true},
-		maxTokensCtrl: NewMaxTokensController("test-model"),
-		turnCount:     12,
+		streamCfg:       &StreamConfig{Enabled: true},
+		maxTokensCtrl:   NewMaxTokensController("test-model"),
+		progressMonitor: NewProgressMonitor(),
+		turnCount:       25,
 	}
-	// No complexity result, but many turns should still trigger
 	if !e.shouldTriggerQA() {
-		t.Error("should trigger QA for sessions with many turns even without complexity result")
+		t.Error("should trigger QA for sessions with >=20 turns")
 	}
 }
 
-func TestShouldTriggerQA_AfterCompaction(t *testing.T) {
+func TestShouldTriggerQA_Disabled(t *testing.T) {
 	e := &QueryEngine{
-		streamCfg:     &StreamConfig{Enabled: true},
-		maxTokensCtrl: NewMaxTokensController("test-model"),
-		turnCount:     5,
-		qaCompactSeen: true,
+		streamCfg:       &StreamConfig{Enabled: true, DisableQAGate: true},
+		maxTokensCtrl:   NewMaxTokensController("test-model"),
+		progressMonitor: NewProgressMonitor(),
+		turnCount:       25,
 	}
-	if !e.shouldTriggerQA() {
-		t.Error("should trigger QA after auto-compact even with few turns")
+	if e.shouldTriggerQA() {
+		t.Error("should not trigger QA when DisableQAGate is true")
+	}
+}
+
+func TestShouldTriggerQA_ResumeSession(t *testing.T) {
+	e := &QueryEngine{
+		streamCfg:       &StreamConfig{Enabled: true, IsResume: true},
+		maxTokensCtrl:   NewMaxTokensController("test-model"),
+		progressMonitor: NewProgressMonitor(),
+		turnCount:       25,
+	}
+	if e.shouldTriggerQA() {
+		t.Error("should not trigger QA for resumed sessions")
 	}
 }
 
@@ -188,59 +177,42 @@ func TestBuildQAFeedbackMessage(t *testing.T) {
 }
 
 func TestBuildQAVerificationPrompt(t *testing.T) {
-	ac := []string{"Feature X works", "Tests pass"}
-	constraints := []string{"No new dependencies"}
+	userRequest := "Add a login page with email validation and error handling"
 	fileSummary := "Modified: main.go, main_test.go"
-	prompt := buildQAVerificationPrompt(ac, constraints, "/tmp/work", fileSummary)
+	prompt := buildQAVerificationPrompt(userRequest, "/tmp/work", fileSummary)
 	if len(prompt) == 0 {
 		t.Error("prompt should not be empty")
 	}
-	if !qaContains(prompt, "Feature X works") {
-		t.Error("prompt should contain acceptance criteria")
-	}
-	if !qaContains(prompt, "No new dependencies") {
-		t.Error("prompt should contain constraints")
+	if !qaContains(prompt, userRequest) {
+		t.Error("prompt should contain user request")
 	}
 	if !qaContains(prompt, "/tmp/work") {
 		t.Error("prompt should contain working directory")
 	}
-}
-
-func TestExtractAcceptCriteria_FromComplexityResult(t *testing.T) {
-	e := &QueryEngine{
-		streamCfg:     &StreamConfig{Enabled: true},
-		maxTokensCtrl: NewMaxTokensController("test-model"),
-	}
-	e.maxTokensCtrl.SetComplexityResult(&ComplexityResult{
-		ReasoningDepth:       3,
-		CodeVolume:           3,
-		DomainSpecialization: 2,
-		IntegrationBreadth:   3,
-		AcceptCriteria:       []string{"Tests pass", "Docs updated"},
-		Constraints:          []string{"No breaking changes"},
-	})
-
-	ac, constraints := e.extractAcceptCriteria(nil)
-	if len(ac) != 2 {
-		t.Errorf("expected 2 accept criteria, got %d", len(ac))
-	}
-	if len(constraints) != 1 {
-		t.Errorf("expected 1 constraint, got %d", len(constraints))
+	if !qaContains(prompt, "as few turns as possible") {
+		t.Error("prompt should instruct minimal turns")
 	}
 }
 
-func TestExtractAcceptCriteria_EmptyComplexityResult(t *testing.T) {
-	e := &QueryEngine{
-		streamCfg:     &StreamConfig{Enabled: true},
-		maxTokensCtrl: NewMaxTokensController("test-model"),
-	}
-	// No complexity result and no sideQueryCtx — returns nil without API call
+func TestExtractUserRequest(t *testing.T) {
 	messages := []api.Message{
-		{Role: api.RoleUser, Content: "Please add a login page with email validation and error handling"},
+		{Role: api.RoleUser, Content: "Build a REST API", IsVirtual: false},
+		{Role: api.RoleAssistant, Content: "Done"},
+		{Role: api.RoleUser, Content: "<system-reminder>progress check</system-reminder>", IsVirtual: true},
 	}
-	ac, _ := e.extractAcceptCriteria(messages)
-	if ac != nil {
-		t.Errorf("expected nil AC without sideQueryCtx, got %v", ac)
+	got := extractUserRequest(messages)
+	if got != "Build a REST API" {
+		t.Errorf("expected user request, got %q", got)
+	}
+}
+
+func TestExtractUserRequest_Empty(t *testing.T) {
+	messages := []api.Message{
+		{Role: api.RoleUser, Content: "<system-reminder>virtual</system-reminder>", IsVirtual: true},
+	}
+	got := extractUserRequest(messages)
+	if got != "" {
+		t.Errorf("expected empty, got %q", got)
 	}
 }
 

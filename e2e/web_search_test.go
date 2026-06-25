@@ -38,8 +38,7 @@ func TestWebSearchEnvDisabled(t *testing.T) {
 }
 
 // TestWebSearchEnvNative verifies SC3: JENNY_WEB_SEARCH_PROVIDER=native
-// shows the client provider warning (because native mode still tries to create
-// a fallback client provider).
+// enables the native web_search tool without client provider warnings.
 func TestWebSearchEnvNative(t *testing.T) {
 	mock := mockapi.NewMockServer(mockapi.WithCassetteDir(cassetteDir))
 	defer mock.Close()
@@ -62,6 +61,11 @@ func TestWebSearchEnvNative(t *testing.T) {
 	foundWebSearch := strings.Contains(res.Stdout, `"web_search"`)
 	if !foundWebSearch {
 		t.Error("web_search tool not found in init tools with native provider")
+	}
+
+	// Native strategy without client config should NOT produce a client provider warning
+	if strings.Contains(res.Stderr, "web search client provider not created") {
+		t.Error("native strategy without client config should not produce client provider warning")
 	}
 }
 
@@ -272,7 +276,7 @@ func TestWebSearchJSONConfigDisabled(t *testing.T) {
 }
 
 // TestWebSearchJSONConfigNative verifies JSON config web-search.provider=native
-// is read from .jenny/settings.json.
+// is read from .jenny/settings.json and enables web_search without warnings.
 func TestWebSearchJSONConfigNative(t *testing.T) {
 	mock := mockapi.NewMockServer(mockapi.WithCassetteDir(cassetteDir))
 	defer mock.Close()
@@ -301,9 +305,10 @@ func TestWebSearchJSONConfigNative(t *testing.T) {
 		t.Fatalf("exit %d; stderr=%q", res.ExitCode, res.Stderr)
 	}
 
-	// JSON config with provider=native should show client provider warning
-	if !strings.Contains(res.Stderr, "web search client provider not created") {
-		t.Error("JSON config with provider=native should show client provider warning")
+	// JSON config with provider=native should NOT produce a client provider warning
+	// when no client config is set
+	if strings.Contains(res.Stderr, "web search client provider not created") {
+		t.Error("JSON config with provider=native without client config should not warn")
 	}
 }
 
@@ -340,9 +345,9 @@ func TestWebSearchConfigPrecedenceEnvWins(t *testing.T) {
 		t.Fatalf("exit %d; stderr=%q", res.ExitCode, res.Stderr)
 	}
 
-	// Env var should override JSON config; native mode should show warning
-	if !strings.Contains(res.Stderr, "web search client provider not created") {
-		t.Error("env var should override JSON config; expected native mode warning")
+	// Env var should override JSON config; native mode without client config should not warn
+	if strings.Contains(res.Stderr, "web search client provider not created") {
+		t.Error("env var should override JSON config; native mode without client config should not warn")
 	}
 }
 

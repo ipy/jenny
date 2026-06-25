@@ -547,13 +547,15 @@ func TestProgressMonitor_L3_ForkJudgePositiveRescues(t *testing.T) {
 		t.Error("L3 should defer while fork is in flight")
 	}
 
-	// Positive fork result → rescue
+	// Positive fork result → rescue (MeaningfulProgress is computed by
+	// parseProgressEvalResponse; tests that bypass parsing must set it explicitly)
 	pm.forkResultCh <- &ProgressEvalResult{
-		TaskAlignment:    4,
-		OutcomeMomentum:  3,
-		FreshExploration: 3,
-		Overall:          3.55,
-		Reasoning:        "making real progress",
+		TaskAlignment:      4,
+		OutcomeMomentum:    3,
+		FreshExploration:   3,
+		Overall:            3.55,
+		MeaningfulProgress: true,
+		Reasoning:          "making real progress",
 	}
 	pm.DrainForkResult()
 
@@ -719,13 +721,11 @@ func TestParseProgressEvalResponse_MeaningfulProgress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// parseProgressEvalResponse always sets MeaningfulProgress=false;
-	// the dynamic threshold is applied later by ApplyProgressEvalResult.
-	if result.MeaningfulProgress {
-		t.Error("expected meaningful_progress=false from parser (deferred to ApplyProgressEvalResult)")
+	// parseProgressEvalResponse computes MeaningfulProgress from the weighted
+	// average vs forkJudgeThreshold (3.0). With scores 4/3/4, overall=3.65 >= 3.0.
+	if !result.MeaningfulProgress {
+		t.Errorf("expected meaningful_progress=true for overall=%.2f >= threshold", result.Overall)
 	}
-	// Verify the computed overall is high enough that ApplyProgressEvalResult
-	// with the default threshold (3.0) would accept it.
 	expectedOverall := float64(4)*0.50 + float64(3)*0.35 + float64(4)*0.15
 	if result.Overall != expectedOverall {
 		t.Errorf("expected overall=%.2f, got %.2f", expectedOverall, result.Overall)
@@ -758,9 +758,9 @@ func TestParseProgressEvalResponse_WithFences(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Parser always sets false; verify the overall is correctly computed.
-	if result.MeaningfulProgress {
-		t.Error("expected meaningful_progress=false from parser (deferred to ApplyProgressEvalResult)")
+	// With scores 5/4/5, overall = 5*0.50 + 4*0.35 + 5*0.15 = 4.65 >= 3.0 threshold
+	if !result.MeaningfulProgress {
+		t.Errorf("expected meaningful_progress=true for overall=%.2f >= threshold", result.Overall)
 	}
 	expectedOverall := float64(5)*0.50 + float64(4)*0.35 + float64(5)*0.15
 	if diff := result.Overall - expectedOverall; diff > 0.01 || diff < -0.01 {
