@@ -38,7 +38,7 @@ Both commands resolve the jenny home directory via `constants.JennyHomeDir()` (w
 
 ### Behavior
 
-1. Walk `<home>/sessions/`. For each direct child that is a regular directory, print or delete it. Directories containing a `pid` file whose process is still alive are skipped with `skip (running): <id>` on stdout.
+1. Walk `<home>/sessions/`. For each direct child that is a directory or a `*.tar.gz` file, print or delete it. Directories containing a `pid` file whose process is still alive are skipped with `skip (running): <id>` on stdout.
 2. If `<home>/sessions/` does not exist or has no entries, print `nothing to clean` and exit 0.
 3. After real deletion, recreate `<home>/sessions/` (empty) so future sessions can be appended without an extra `mkdir`.
 4. Never touch files outside `<home>/sessions/`.

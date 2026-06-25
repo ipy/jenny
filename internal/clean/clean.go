@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/ipy/jenny/internal/constants"
 	"github.com/ipy/jenny/internal/utils"
@@ -35,6 +36,8 @@ See also: jenny sweep — archive each session directory into a single .tar.gz f
 //   - dryRun: when true, print "would remove:" lines and exit without mutation.
 //   - stdout, stderr: writers for output.
 //
+// Removes every direct child of <JENNY_HOME>/sessions/ — both directories and
+// *.tar.gz archives. Running sessions (directories with a live pid) are skipped.
 // Files outside <JENNY_HOME>/sessions/ are never touched or reported.
 func RunClean(dryRun bool, stdout, stderr io.Writer) int {
 	home := constants.JennyHomeDir()
@@ -50,26 +53,25 @@ func RunClean(dryRun bool, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	// Filter to directories only — files at the top of sessions/ are unexpected
-	// but we do not delete them silently.
-	targets := make([]os.DirEntry, 0, len(entries))
-	for _, e := range entries {
-		if e.IsDir() {
-			targets = append(targets, e)
-		}
-	}
-
-	if len(targets) == 0 {
+	if len(entries) == 0 {
 		fmt.Fprintln(stdout, "nothing to clean")
 		return 0
 	}
 
-	for _, e := range targets {
-		full := filepath.Join(sessionsDir, e.Name())
-		if utils.IsSessionRunning(sessionsDir, e.Name()) {
-			fmt.Fprintf(stdout, "skip (running): %s\n", e.Name())
+	for _, e := range entries {
+		name := e.Name()
+		full := filepath.Join(sessionsDir, name)
+
+		if e.IsDir() {
+			if utils.IsSessionRunning(sessionsDir, name) {
+				fmt.Fprintf(stdout, "skip (running): %s\n", name)
+				continue
+			}
+		} else if !strings.HasSuffix(name, ".tar.gz") {
+			// Skip non-archive files silently.
 			continue
 		}
+
 		if dryRun {
 			fmt.Fprintf(stdout, "would remove: %s\n", full)
 			continue

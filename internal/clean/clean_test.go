@@ -304,3 +304,42 @@ func TestClean_SkipsRunningSession(t *testing.T) {
 		t.Errorf("stale-session survived: err=%v", err)
 	}
 }
+
+// TestClean_RemovesTarGz — .tar.gz archives in sessions/ are removed.
+func TestClean_RemovesTarGz(t *testing.T) {
+	home := t.TempDir()
+	withJennyHome(t, home)
+
+	sessionsDir := filepath.Join(home, "sessions")
+	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	// A .tar.gz archive.
+	archive := filepath.Join(sessionsDir, "old-session.tar.gz")
+	if err := os.WriteFile(archive, []byte("fake tarball"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// A non-archive file should be left alone.
+	otherFile := filepath.Join(sessionsDir, "notes.txt")
+	if err := os.WriteFile(otherFile, []byte("notes"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	rc := RunClean(false, &stdout, &stderr)
+	if rc != 0 {
+		t.Errorf("RunClean rc = %d, want 0 (stderr=%q)", rc, stderr.String())
+	}
+
+	// Archive removed.
+	if _, err := os.Stat(archive); !os.IsNotExist(err) {
+		t.Errorf("old-session.tar.gz survived: err=%v", err)
+	}
+
+	// Non-archive file left alone.
+	if _, err := os.Stat(otherFile); err != nil {
+		t.Errorf("notes.txt was removed: err=%v", err)
+	}
+}
