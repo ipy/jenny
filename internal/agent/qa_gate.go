@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/api"
+	"github.com/ipy/jenny/internal/jsonrepair"
 	"github.com/ipy/jenny/internal/log"
 	"github.com/ipy/jenny/internal/tool"
 )
@@ -116,9 +117,13 @@ func extractUserRequest(messages []api.Message) string {
 
 // parseQAVerdict extracts a structured verdict from the verification agent's output.
 func parseQAVerdict(output string) (*qaVerdict, error) {
-	text := extractJSON(output)
+	text := jsonrepair.ExtractJSON(output)
+	repaired, err := jsonrepair.Repair(text, "")
+	if err != nil {
+		return nil, fmt.Errorf("invalid verdict JSON: %w", err)
+	}
 	var v qaVerdict
-	if err := json.Unmarshal([]byte(text), &v); err != nil {
+	if err := mapToStruct(repaired, &v); err != nil {
 		return nil, fmt.Errorf("invalid verdict JSON: %w", err)
 	}
 	v.Verdict = strings.ToUpper(strings.TrimSpace(v.Verdict))

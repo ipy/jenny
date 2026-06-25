@@ -87,6 +87,9 @@ type QueryEngine struct {
 	// Progress monitor (circuit breaker)
 	progressMonitor *ProgressMonitor
 
+	// Loop guard (repetition detection)
+	loopGuard *LoopGuard
+
 	// Thinking monitor (per-turn thinking token usage)
 	thinkingMonitor *ThinkingMonitor
 
@@ -350,6 +353,7 @@ func NewQueryEngine(cfg *StreamConfig, tools []tool.Tool, model string, opts ...
 	}
 
 	e.progressMonitor = NewProgressMonitor()
+	e.loopGuard = NewLoopGuard()
 	e.thinkingMonitor = NewThinkingMonitor()
 
 	// Wire context into tools
@@ -512,6 +516,7 @@ func (e *QueryEngine) persistCompactBoundary(preTokens int, preservedCount int, 
 	entry := session.TranscriptEntry{
 		Type:    session.EntryTypeSystem,
 		Subtype: session.SubtypeCompactBoundary,
+		Pinned:  true,
 		CompactMetadata: &session.CompactMetadata{
 			Trigger:          trigger,
 			PreTokens:        preTokens,
@@ -641,6 +646,11 @@ func buildSkillsChangeReminder(frozen map[string]string, current map[string]stri
 // These are restored as virtual user messages on resume, keeping the message
 // chain structurally identical without polluting the system prompt prefix.
 func (e *QueryEngine) persistSystemReminder(sessionID string, content string) {
+	e.persistSystemReminderWithPinned(sessionID, content, false)
+}
+
+// persistSystemReminderWithPinned persists a system_reminder with optional pin flag.
+func (e *QueryEngine) persistSystemReminderWithPinned(sessionID string, content string, pinned bool) {
 	if e.sessionManager == nil || sessionID == "" {
 		return
 	}
@@ -649,11 +659,13 @@ func (e *QueryEngine) persistSystemReminder(sessionID string, content string) {
 		Subtype: session.SubtypeSystemReminder,
 		Content: content,
 		CWD:     e.cwd,
+		Pinned:  pinned,
 	}
 	if err := e.sessionManager.AppendEntry(sessionID, entry); err != nil {
 		log.Error("Failed to persist system reminder", "error", err)
 	}
 }
+
 
 // syncActiveSkills syncs the activated skills from the skill activator to StreamConfig.
 // This should be called after each tool execution to keep the system prompt in sync.

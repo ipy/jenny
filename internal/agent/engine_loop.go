@@ -12,6 +12,7 @@ import (
 
 	"github.com/ipy/jenny/internal/api"
 	"github.com/ipy/jenny/internal/git"
+	"github.com/ipy/jenny/internal/jsonrepair"
 	"github.com/ipy/jenny/internal/log"
 	"github.com/ipy/jenny/internal/memdir"
 	"github.com/ipy/jenny/internal/session"
@@ -58,10 +59,12 @@ func (e *QueryEngine) SubmitMessage(ctx context.Context, prompt string) (string,
 			skipUserPersist = exists
 		}
 		if !skipUserPersist {
+			pinFirst := !isResume && len(historyMessages) == 0
 			if err := sessionManager.AppendEntry(sessionID, session.TranscriptEntry{
 				Type:    session.EntryTypeUser,
 				Content: prompt,
 				CWD:     cwd,
+				Pinned:  pinFirst,
 			}); err != nil {
 				return "", fmt.Errorf("persisting user message to transcript: %w", err)
 			}
@@ -115,12 +118,15 @@ func (e *QueryEngine) SubmitMessage(ctx context.Context, prompt string) (string,
 		messages = append(messages, api.Message{
 			Role:    api.RoleUser,
 			Content: prompt,
+			Pinned:  !isResume,
 		})
 	} else {
+		pinFirst := true
 		messages = []api.Message{
 			{
 				Role:    api.RoleUser,
 				Content: prompt,
+				Pinned:  pinFirst,
 			},
 		}
 	}
@@ -292,7 +298,11 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			}
 
 			// Drain any pending fork result before checking escalation
+			prevConsec := e.progressMonitor.ConsecutiveNoProgress()
 			e.progressMonitor.DrainForkResult()
+			if e.progressMonitor.ConsecutiveNoProgress() == 0 && prevConsec > 0 {
+				e.loopGuard.Reset()
+			}
 
 			if msg, terminate := e.progressMonitor.CheckAndInject(); terminate {
 				return e.terminateProgressMonitor(sessionID)
@@ -305,11 +315,12 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		// Check compaction threshold before API request
 		// Estimate tokens and check if auto-compact should trigger
 		var estimatedTokens int
-		var preAPICharCount int // cached for EWMA Observe after API response
+		var preAPIWireRaw int // uncorrected wire estimate for EWMA Observe after API response
 		if e.tokenEstimator != nil {
-			estimatedTokens, preAPICharCount = e.tokenEstimator.EstimateMessagesWithChars(messages, e.requestedModel)
+			estimatedTokens = e.tokenEstimator.EstimateWireTokens(messages, systemPrompt, e.toolParams, e.requestedModel)
+			preAPIWireRaw = estimateWireTokens(messages, systemPrompt, e.toolParams)
 		} else {
-			estimatedTokens = estimateTokens(messages)
+			estimatedTokens = estimateWireTokens(messages, systemPrompt, e.toolParams)
 		}
 
 		// Emit warning if approaching threshold
@@ -338,9 +349,21 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				if err == nil {
 					summaryText := extractCompactSummary(compacted)
 					messages = normalizeCompactedChain(compacted)
-					preservedCount := len(compacted) - 1
+					preservedCount := tailMessageCount(compacted)
 					if err := e.persistCompactBoundary(preCompactTokens, preservedCount, "auto", summaryText); err != nil {
 						log.Error("Failed to persist compaction boundary", "error", err)
+					}
+					// Verify post-compaction size against target (hysteresis goal).
+					var postCompactTokens int
+					if e.tokenEstimator != nil {
+						postCompactTokens = e.tokenEstimator.EstimateMessages(messages, e.requestedModel)
+					} else {
+						postCompactTokens = estimateTokens(messages)
+					}
+					if target := e.compactConfig.compactionTarget(); target > 0 && postCompactTokens > target {
+						log.Warn("Post-compaction size exceeds target",
+							"estimatedTokens", postCompactTokens,
+							"target", target)
 					}
 					// Re-inject active skills after compaction since the activation
 					// tool results may have been summarized away.
@@ -521,7 +544,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				// When IncludePartial is true, thinking blocks are already emitted via thinking_tokens events,
 				// so don't accumulate them for emitConsolidatedAssistant to avoid duplication.
 				if !e.streamCfg.IncludePartial {
-					thinkingBlocks = append(thinkingBlocks, thinkingBlock{Text: block.Block.Thinking, Signature: block.Block.Signature})
+					thinkingBlocks = append(thinkingBlocks, thinkingBlock{Text: block.Block.Thinking, Signature: block.Block.Signature, HasThinking: block.Block.HasThinking})
 				}
 				// Emit assistant event for thinking block stop
 				if e.streamCfg.Enabled {
@@ -538,10 +561,11 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				}
 				// Collect tool_use blocks for the assistant message
 				toolUseBlocks = append(toolUseBlocks, api.ToolUseBlock{
-					ID:        block.Block.ToolID,
-					Name:      block.Block.ToolName,
-					Input:     block.Block.ToolInput,
-					Signature: block.Block.Signature,
+					ID:              block.Block.ToolID,
+					Name:            block.Block.ToolName,
+					Input:           block.Block.ToolInput,
+					Signature:       block.Block.Signature,
+					InputParseError: block.Block.ToolInputParseError,
 				})
 				// Emit assistant event for tool_use block stop
 				if e.streamCfg.Enabled {
@@ -566,6 +590,21 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		if thinkingHintInjected && len(messages) > 0 && messages[len(messages)-1].IsVirtual {
 			messages = messages[:len(messages)-1]
 			thinkingHintInjected = false
+		}
+
+		// Truncated tool input: retry without persisting the incomplete assistant turn.
+		if shouldRetryTruncatedToolInput(streamResult, toolUseBlocks) {
+			e.turnCount--
+			i--
+			reminder := buildTruncatedToolInputReminder()
+			messages = append(messages, reminder)
+			e.persistSystemReminder(sessionID, reminder.Content)
+			log.Warn("Truncated tool input parse failed, retrying turn",
+				"stop_reason", streamResult.StopReason,
+				"stream_complete", streamResult.StreamComplete,
+				"tool_count", len(toolUseBlocks),
+			)
+			continue
 		}
 
 		// Emit final thinking_tokens events for all active thinking blocks
@@ -829,7 +868,7 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 						textOutput.WriteString(block.Text)
 					}
 				case api.BlockTypeThinking:
-					thinkingBlocks = append(thinkingBlocks, thinkingBlock{Text: block.Thinking, Signature: block.Signature})
+					thinkingBlocks = append(thinkingBlocks, thinkingBlock{Text: block.Thinking, Signature: block.Signature, HasThinking: block.HasThinking})
 				case api.BlockTypeToolUse:
 					// Collect tool_use blocks for the assistant message
 					toolUseBlocks = append(toolUseBlocks, api.ToolUseBlock{
@@ -904,11 +943,10 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 					}
 				}
 				// Feed input token observations for EWMA calibration of the
-				// token estimator. Uses the pre-API char count to avoid
-				// redundant re-marshaling of the entire message chain.
+				// token estimator against the wire-equivalent prediction.
 				actualInputTokens := resp.Usage.InputTokens + resp.Usage.CacheReadInputTokens + resp.Usage.CacheCreationInputTokens
-				if actualInputTokens > 0 && preAPICharCount > 0 {
-					e.tokenEstimator.Observe(e.model, preAPICharCount, actualInputTokens, false)
+				if actualInputTokens > 0 && preAPIWireRaw > 0 {
+					e.tokenEstimator.ObserveWireInput(e.model, preAPIWireRaw, actualInputTokens)
 				}
 			}
 		}
@@ -922,9 +960,11 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 			var thinkingText strings.Builder
 			for _, tb := range thinkingBlocks {
 				thinkingText.WriteString(tb.Text)
+				if tb.HasThinking {
+					assistantMsg.HasThinking = true
+				}
 			}
 			assistantMsg.Thinking = thinkingText.String()
-			// Use signature from last thinking block if present
 			if thinkingBlocks[len(thinkingBlocks)-1].Signature != "" {
 				assistantMsg.Signature = thinkingBlocks[len(thinkingBlocks)-1].Signature
 			}
@@ -943,14 +983,15 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 				Content: textOutput.String(),
 				CWD:     cwd,
 			}
-			// Persist thinking blocks (concatenated text with signature from last block)
 			if len(thinkingBlocks) > 0 {
 				var thinkingText strings.Builder
 				for _, tb := range thinkingBlocks {
 					thinkingText.WriteString(tb.Text)
+					if tb.HasThinking {
+						entry.HasThinking = true
+					}
 				}
 				entry.Thinking = thinkingText.String()
-				// Use signature from last thinking block if present
 				if thinkingBlocks[len(thinkingBlocks)-1].Signature != "" {
 					entry.Signature = thinkingBlocks[len(thinkingBlocks)-1].Signature
 				}
@@ -970,8 +1011,31 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 		// Capture skill count BEFORE tool execution to detect changes
 		prevSkillCount := len(e.streamCfg.ActiveSkills)
 
+		// Loop Guard: record assistant text repetition before tool execution.
+		var loopGuardSupplemental TurnScore
+		if text := textOutput.String(); text != "" && e.loopGuard != nil {
+			score, signals := e.loopGuard.RecordAssistantText(text)
+			loopGuardSupplemental.Score = score
+			loopGuardSupplemental.Signals = signals
+		}
+
+		// Loop Guard: evaluate tool calls before execution.
+		var lgDecisions []ToolCallDecision
+		var loopGuardWarnings []string
+		if e.loopGuard != nil && len(toolUseBlocks) > 0 {
+			lgDecisions = e.loopGuard.EvaluateToolCalls(toolUseBlocks)
+			toolScore := e.loopGuard.ToolTurnScore(lgDecisions)
+			loopGuardSupplemental.Score += toolScore.Score
+			loopGuardSupplemental.Signals = append(loopGuardSupplemental.Signals, toolScore.Signals...)
+			for _, d := range lgDecisions {
+				if d.Warning != "" {
+					loopGuardWarnings = append(loopGuardWarnings, d.Warning)
+				}
+			}
+		}
+
 		// Execute all tools using the parallel executor with cross-turn state support
-		execToolResults, hasSynthetic, execErr := e.executeAndProcessTools(ctx, toolUseBlocks, sessionID, cwd)
+		execToolResults, hasSynthetic, execErr := e.executeAndProcessTools(ctx, toolUseBlocks, sessionID, cwd, lgDecisions)
 		if execErr != nil {
 			return "", fmt.Errorf("executing tools: %w", execErr)
 		}
@@ -979,8 +1043,24 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 
 		// Progress monitor: record turn and update max_tokens level (when enabled)
 		if !e.streamCfg.DisableProgressMonitor {
-			e.progressMonitor.RecordTurn(toolUseBlocks, execToolResults)
+			prevConsec := e.progressMonitor.ConsecutiveNoProgress()
+			prevLevel := e.progressMonitor.Level()
+			e.progressMonitor.RecordTurn(toolUseBlocks, execToolResults, loopGuardSupplemental)
+			if e.progressMonitor.ConsecutiveNoProgress() == 0 && (prevConsec > 0 || prevLevel > ProgressLevelNone) {
+				e.loopGuard.Reset()
+			}
 			e.maxTokensCtrl.SetProgressLevel(e.progressMonitor.Level())
+		}
+
+		// Loop Guard: inject accumulated soft-threshold warnings after tool results.
+		if len(loopGuardWarnings) > 0 {
+			reminder := strings.Join(loopGuardWarnings, "\n")
+			messages = append(messages, api.Message{
+				Role:      api.RoleUser,
+				Content:   reminder,
+				IsVirtual: true,
+			})
+			e.persistSystemReminder(sessionID, reminder)
 		}
 		// Record turn outcome for next-turn adaptive max_tokens
 		hadToolUse := len(toolUseBlocks) > 0
@@ -1194,9 +1274,14 @@ func (e *QueryEngine) dispatchComplexityEval(ctx context.Context, messages []api
 			return
 		}
 
-		text := extractJSON(sqResult.Text)
+		text := jsonrepair.ExtractJSON(sqResult.Text)
+		repaired, err := jsonrepair.Repair(text, "")
+		if err != nil {
+			log.Debug("Complexity eval parse failed", "error", err)
+			return
+		}
 		var cr ComplexityResult
-		if err := json.Unmarshal([]byte(text), &cr); err != nil {
+		if err := mapToStruct(repaired, &cr); err != nil {
 			log.Debug("Complexity eval parse failed", "error", err)
 			return
 		}

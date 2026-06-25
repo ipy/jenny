@@ -1,7 +1,11 @@
 package agent
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"sort"
+	"strings"
 	"sync"
 	"unicode/utf8"
 
@@ -15,6 +19,12 @@ const (
 	defaultMultiByteCharsPerToken = 1.5
 	// EWMA alpha — weight given to the most recent observation.
 	ewmaAlpha = 0.2
+	// wireFixedOverhead accounts for message structure, cache control markers,
+	// thinking parameters, and other per-request overhead not in message content.
+	wireFixedOverhead = 200
+	// toolMessageEnvelopeOverhead accounts for the JSON envelope wrapping each
+	// tool_use and tool_result block: {"type":"tool_use",...} and similar.
+	toolMessageEnvelopeOverhead = 50
 )
 
 // TokenEstimator provides charset-aware token estimation with per-model EWMA
@@ -25,6 +35,13 @@ type TokenEstimator struct {
 	asciiCharsPerToken     float64
 	multiByteCharsPerToken float64
 	modelCorrections       map[string]*modelCorrection
+	toolTokenCache         cachedToolTokens
+}
+
+// cachedToolTokens holds the cached token estimate for tool definitions.
+type cachedToolTokens struct {
+	fingerprint string // hash of sorted tool names
+	tokens      int
 }
 
 // modelCorrection tracks EWMA correction factors for a single model.
@@ -126,19 +143,93 @@ func (e *TokenEstimator) EstimateMessagesWithChars(messages []api.Message, model
 		total += e.EstimateString(msg.Signature, model)
 		charCount += len(msg.Signature)
 		for _, tu := range msg.ToolUse {
-			// +50 for JSON envelope: {"type":"tool_use",...}
-			total += len(tu.Name) + 50
-			charCount += len(tu.Name) + 50
+			total += len(tu.Name) + toolMessageEnvelopeOverhead
+			charCount += len(tu.Name) + toolMessageEnvelopeOverhead
 			inputBytes, _ := json.Marshal(tu.Input)
 			total += e.EstimateString(string(inputBytes), model)
 			charCount += len(inputBytes)
 		}
 		for _, tr := range msg.ToolResults {
-			total += e.EstimateString(tr.Content, model) + 50
-			charCount += len(tr.Content) + 50
+			total += e.EstimateString(tr.Content, model) + toolMessageEnvelopeOverhead
+			charCount += len(tr.Content) + toolMessageEnvelopeOverhead
 		}
 	}
 	return total, charCount
+}
+
+// EstimateWireTokens estimates the total token count for a complete API request,
+// including messages, system prompt, tool definitions, and fixed overhead.
+func (e *TokenEstimator) EstimateWireTokens(
+	messages []api.Message,
+	systemPrompt []string,
+	tools []api.ToolParam,
+	model string,
+) int {
+	total := e.EstimateMessages(messages, model)
+	for _, block := range systemPrompt {
+		total += e.EstimateString(block, model)
+	}
+	total += e.estimateToolTokensCached(tools, model)
+	total += wireFixedOverhead
+	return total
+}
+
+// estimateSystemAndToolTokensCalibrated is the model-aware version of
+// estimateSystemAndToolTokens for use when a TokenEstimator is available.
+func (e *TokenEstimator) estimateSystemAndToolTokensCalibrated(systemPrompt []string, tools []api.ToolParam, model string) int {
+	total := wireFixedOverhead
+	for _, block := range systemPrompt {
+		total += e.EstimateString(block, model)
+	}
+	total += e.estimateToolTokensCached(tools, model)
+	return total
+}
+
+// estimateToolTokensCached returns the token estimate for tool definitions,
+// reusing a per-session cache keyed by tool name fingerprint.
+func (e *TokenEstimator) estimateToolTokensCached(tools []api.ToolParam, model string) int {
+	fp := toolsFingerprint(tools)
+	e.mu.Lock()
+	if e.toolTokenCache.fingerprint == fp {
+		tokens := e.toolTokenCache.tokens
+		e.mu.Unlock()
+		return tokens
+	}
+	e.mu.Unlock()
+
+	tokens := 0
+	if jsonBytes, err := json.Marshal(tools); err == nil && len(jsonBytes) > 0 {
+		tokens = e.EstimateString(string(jsonBytes), model)
+	}
+
+	e.mu.Lock()
+	e.toolTokenCache = cachedToolTokens{fingerprint: fp, tokens: tokens}
+	e.mu.Unlock()
+	return tokens
+}
+
+// ObserveWireInput records actual API input tokens against a wire-equivalent
+// prediction (uncorrected) and updates the input EWMA correction factor.
+func (e *TokenEstimator) ObserveWireInput(model string, predictedWireTokens int, actualTokens int) {
+	if predictedWireTokens <= 0 || actualTokens <= 0 || model == "" {
+		return
+	}
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	corr, ok := e.modelCorrections[model]
+	if !ok {
+		corr = &modelCorrection{
+			inputFactor:  1.0,
+			outputFactor: 1.0,
+		}
+		e.modelCorrections[model] = corr
+	}
+
+	observedCorrection := float64(actualTokens) / float64(predictedWireTokens)
+	corr.inputFactor = ewmaAlpha*observedCorrection + (1-ewmaAlpha)*corr.inputFactor
+	corr.sampleCount++
 }
 
 // Observe records an actual token count from API usage data and updates the EWMA
@@ -247,6 +338,61 @@ func estimateCharsetFromCount(totalChars int) (asciiCount, mbCount int) {
 // These are the simpler, non-EWMA versions with fixed ratios.
 // ---------------------------------------------------------------------------
 
+// estimateWireTokens is the uncalibrated version using fixed ratios.
+func estimateWireTokens(
+	messages []api.Message,
+	systemPrompt []string,
+	tools []api.ToolParam,
+) int {
+	return estimateTokens(messages) + estimateSystemAndToolTokens(systemPrompt, tools)
+}
+
+// estimateSystemAndToolTokens estimates non-message wire overhead: system prompt,
+// tool definitions, and fixed per-request overhead.
+func estimateSystemAndToolTokens(systemPrompt []string, tools []api.ToolParam) int {
+	total := wireFixedOverhead
+	for _, block := range systemPrompt {
+		total += estimateStringTokens(block)
+	}
+	total += estimateToolDefinitionTokens(tools)
+	return total
+}
+
+// effectiveWireOverhead returns the computed wire overhead, falling back to
+// MIN_SAFETY_OVERHEAD when the precise estimate is unavailable (zero).
+func effectiveWireOverhead(computed int) int {
+	if computed <= 0 {
+		return MIN_SAFETY_OVERHEAD
+	}
+	return computed
+}
+
+// estimateToolDefinitionTokens estimates tokens for serialized tool definitions.
+func estimateToolDefinitionTokens(tools []api.ToolParam) int {
+	if len(tools) == 0 {
+		return 0
+	}
+	jsonBytes, err := json.Marshal(tools)
+	if err != nil || len(jsonBytes) == 0 {
+		return 0
+	}
+	return estimateStringTokens(string(jsonBytes))
+}
+
+// toolsFingerprint returns a stable hash of sorted tool names for cache lookup.
+func toolsFingerprint(tools []api.ToolParam) string {
+	if len(tools) == 0 {
+		return ""
+	}
+	names := make([]string, len(tools))
+	for i, t := range tools {
+		names[i] = t.Name
+	}
+	sort.Strings(names)
+	h := sha256.Sum256([]byte(strings.Join(names, "\x00")))
+	return hex.EncodeToString(h[:])
+}
+
 // estimateTokens estimates the token count for a message chain using a
 // charset-aware heuristic. ASCII/Latin text uses ~4 chars/token; multi-byte
 // characters (CJK, emoji) use ~1.5 chars/token.
@@ -257,12 +403,12 @@ func estimateTokens(messages []api.Message) int {
 		total += estimateStringTokens(msg.Thinking)
 		total += estimateStringTokens(msg.Signature)
 		for _, tu := range msg.ToolUse {
-			total += len(tu.Name) + 50
+			total += len(tu.Name) + toolMessageEnvelopeOverhead
 			inputBytes, _ := json.Marshal(tu.Input)
 			total += estimateStringTokens(string(inputBytes))
 		}
 		for _, tr := range msg.ToolResults {
-			total += estimateStringTokens(tr.Content) + 50
+			total += estimateStringTokens(tr.Content) + toolMessageEnvelopeOverhead
 		}
 	}
 	return total

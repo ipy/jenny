@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -29,8 +28,6 @@ func isExecFailure(err error) bool {
 }
 
 const (
-	// maxInlineSize is the maximum size for inline output (30KB)
-	maxInlineSize = 30720
 	// maxHeredocLines is the max number of lines in a heredoc before suggesting Write.
 	maxHeredocLines = 30
 	// fallbackHint is shown when a shell is missing and the command can't be
@@ -417,7 +414,7 @@ func (t *BashTool) runForegroundShell(ctx context.Context, shellPath, command st
 		output += "\n(Tip: long-running commands work better with run_in_background: true)"
 	}
 
-	return t.handleOutput(output)
+	return t.spillOutput(output), nil
 }
 
 func (t *BashTool) executeShellFallback(ctx context.Context, command string, timeout int) (*ToolResult, error) {
@@ -509,7 +506,7 @@ func (t *BashTool) runForegroundExec(ctx context.Context, path string, args []st
 		}, nil
 	}
 
-	return t.handleOutput(output)
+	return t.spillOutput(output), nil
 }
 
 func combineExecOutput(stdout, stderr string) string {
@@ -523,80 +520,8 @@ func combineExecOutput(stdout, stderr string) string {
 	return output
 }
 
-// handleOutput checks output size and spills to disk if > maxInlineSize
-func (t *BashTool) handleOutput(output string) (*ToolResult, error) {
-	if len(output) <= maxInlineSize {
-		return &ToolResult{
-			Content: output,
-			IsError: false,
-		}, nil
-	}
-
-	// Spill to disk
-	spillPath, err := t.writeSpillFile(output)
-	if err != nil {
-		// Fall back to truncated inline if spill fails
-		return &ToolResult{
-			Content: fmt.Sprintf("Output truncated (spill file error: %v). First %d chars:\n%s",
-				err, maxInlineSize/2, output[:maxInlineSize/2]),
-			IsError:   false,
-			Truncated: true,
-		}, nil
-	}
-
-	return &ToolResult{
-		Content:   fmt.Sprintf("Output spilled to %s (%d chars)", spillPath, len(output)),
-		IsError:   false,
-		Truncated: true,
-	}, nil
-}
-
-// writeSpillFile writes output to a temp file and returns the path
-func (t *BashTool) writeSpillFile(output string) (string, error) {
-	// 1. Try jenny home spills directory (~/.jenny/sessions/<id>/spills or ~/.jenny/spills)
-	spillsDir := constants.SpillsDir(t.sessionID)
-	if dirExists(spillsDir) || mkdirAll(spillsDir, 0755) == nil {
-		f, err := os.CreateTemp(spillsDir, "spill-*")
-		if err == nil {
-			defer f.Close()
-			if _, err := f.WriteString(output); err == nil {
-				return f.Name(), nil
-			}
-		}
-	}
-
-	// 2. Try project .jenny/spills directory (or .jenny/sessions/<id>/spills if we wanted to be consistent,
-	// but usually project-local .jenny is simpler)
-	projectSpillsDir := filepath.Join(constants.ProjectJennyDir(t.projectRoot), "spills")
-	if t.sessionID != "" {
-		projectSpillsDir = filepath.Join(constants.ProjectJennyDir(t.projectRoot), "sessions", t.sessionID, "spills")
-	}
-	if dirExists(projectSpillsDir) || mkdirAll(projectSpillsDir, 0755) == nil {
-		f, err := os.CreateTemp(projectSpillsDir, "spill-*")
-		if err == nil {
-			defer f.Close()
-			if _, err := f.WriteString(output); err == nil {
-				return f.Name(), nil
-			}
-		}
-	}
-
-	// 3. Fallback to system temp directory (/tmp/jenny-spills/<id> or /tmp/jenny-spills)
-	tmpDir := filepath.Join(os.TempDir(), "jenny-spills")
-	if t.sessionID != "" {
-		tmpDir = filepath.Join(tmpDir, t.sessionID)
-	}
-	if dirExists(tmpDir) || mkdirAll(tmpDir, 0755) == nil {
-		f, err := os.CreateTemp(tmpDir, "spill-*")
-		if err == nil {
-			defer f.Close()
-			if _, err := f.WriteString(output); err == nil {
-				return f.Name(), nil
-			}
-		}
-	}
-
-	return "", fmt.Errorf("failed to create spill file in any location")
+func (t *BashTool) spillOutput(output string) *ToolResult {
+	return ApplySpillToToolResult(output, spillConfig(t.sessionID, t.projectRoot), false)
 }
 
 // isBackgroundExecution checks if run_in_background flag is set

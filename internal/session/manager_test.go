@@ -1089,7 +1089,40 @@ func TestConcurrency(t *testing.T) {
 	}
 }
 
-// TestLoadPostBoundaryMessages tests that LoadPostBoundaryMessages correctly
+// TestTranscriptPinnedRoundTrip verifies the pinned flag survives JSONL persistence.
+func TestTranscriptPinnedRoundTrip(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "jenny-pinned-*")
+	if err != nil {
+		t.Fatalf("MkdirTemp() error = %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	m, err := NewManager(tmpDir, false)
+	if err != nil {
+		t.Fatalf("NewManager() error = %v", err)
+	}
+
+	sessionID := "sess_pinned"
+	if err := m.AppendEntry(sessionID, TranscriptEntry{
+		Type:    EntryTypeUser,
+		Content: "original task",
+		Pinned:  true,
+	}); err != nil {
+		t.Fatalf("AppendEntry() error = %v", err)
+	}
+
+	loaded, err := m.LoadTranscript(sessionID)
+	if err != nil {
+		t.Fatalf("LoadTranscript() error = %v", err)
+	}
+	if len(loaded) != 1 {
+		t.Fatalf("LoadTranscript() returned %d entries, want 1", len(loaded))
+	}
+	if !loaded[0].Pinned {
+		t.Error("pinned flag not persisted in transcript")
+	}
+}
+
 // filters entries after a compaction boundary.
 func TestLoadPostBoundaryMessages(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "jenny-test-*")

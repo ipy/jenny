@@ -68,6 +68,7 @@ func RebuildMessages(entries []session.TranscriptEntry) []api.Message {
 			messages = append(messages, api.Message{
 				Role:    api.RoleUser,
 				Content: entry.Content,
+				Pinned:  entry.Pinned,
 			})
 
 		case session.EntryTypeAssistant:
@@ -85,11 +86,12 @@ func RebuildMessages(entries []session.TranscriptEntry) []api.Message {
 				})
 			}
 			currentAssistant = &api.Message{
-				Role:      api.RoleAssistant,
-				Content:   entry.Content,
-				ToolUse:   toolUseBlocks,
-				Thinking:  entry.Thinking,
-				Signature: entry.Signature,
+				Role:        api.RoleAssistant,
+				Content:     entry.Content,
+				ToolUse:     toolUseBlocks,
+				Thinking:    entry.Thinking,
+				Signature:   entry.Signature,
+				HasThinking: entry.HasThinking,
 			}
 
 		case session.EntryTypeToolResult:
@@ -121,6 +123,7 @@ func RebuildMessages(entries []session.TranscriptEntry) []api.Message {
 				messages = append(messages, api.Message{
 					Role:    api.RoleSystem,
 					Content: compactSummaryPrefix + entry.CompactMetadata.Summary,
+					Pinned:  true,
 				})
 			case entry.Subtype == session.SubtypeSystemReminder && entry.Content != "":
 				// Restore system_reminder as a virtual user message so it appears
@@ -129,6 +132,7 @@ func RebuildMessages(entries []session.TranscriptEntry) []api.Message {
 					Role:      api.RoleUser,
 					Content:   "<system-reminder>\n" + entry.Content + "\n</system-reminder>",
 					IsVirtual: true,
+					Pinned:    entry.Pinned,
 				})
 			case entry.Content != "":
 				messages = append(messages, api.Message{

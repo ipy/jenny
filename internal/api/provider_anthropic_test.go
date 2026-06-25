@@ -1,6 +1,8 @@
 package api
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -128,4 +130,22 @@ func TestCategorizeMaxTokensError(t *testing.T) {
 			t.Errorf("Category = %q, want %q", err.Category, CategoryContextExhausted)
 		}
 	})
+}
+
+// TestBuildMessages_PinnedOmittedFromWire verifies pinned metadata is not included
+// in provider wire-format messages.
+func TestBuildMessages_PinnedOmittedFromWire(t *testing.T) {
+	p := &anthropicProvider{model: "claude-sonnet-4-20250514"}
+	msgs := []Message{
+		{Role: RoleUser, Content: "original task", Pinned: true},
+		{Role: RoleAssistant, Content: "working", Pinned: false},
+	}
+	wire := p.buildMessages(msgs, nil)
+	data, err := json.Marshal(wire)
+	if err != nil {
+		t.Fatalf("marshal wire messages: %v", err)
+	}
+	if strings.Contains(string(data), "pinned") {
+		t.Errorf("wire JSON must not contain pinned field, got: %s", data)
+	}
 }

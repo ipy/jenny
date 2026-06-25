@@ -4,6 +4,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -282,9 +283,15 @@ func TestExecutor_UnknownTool(t *testing.T) {
 		t.Errorf("Expected IsError=true for unknown tool")
 	}
 
-	expectedMsg := "Error: No such tool available: UnknownTool"
-	if results[0].Content != expectedMsg {
-		t.Errorf("Expected error message %q, got %q", expectedMsg, results[0].Content)
+	content := results[0].Content
+	if !strings.Contains(content, "Error: No such tool available: UnknownTool") {
+		t.Errorf("Expected attempted tool name in error, got %q", content)
+	}
+	if !strings.Contains(content, "Available tools:") {
+		t.Errorf("Expected available tools list in error, got %q", content)
+	}
+	if !strings.Contains(content, "Read") {
+		t.Errorf("Expected available tool Read in error, got %q", content)
 	}
 }
 
@@ -695,6 +702,35 @@ func TestExecutor_CtxCancelled_SetsInterruptedField(t *testing.T) {
 
 	if interruptedCount == 0 {
 		t.Errorf("Expected at least one tool with Interrupted=true after context cancellation, got 0")
+	}
+}
+
+// TestExecutor_ToolNameAliasResolution verifies common misspelled tool names resolve and execute.
+func TestExecutor_ToolNameAliasResolution(t *testing.T) {
+	tools := []tool.Tool{
+		&execMockTool{name: "Read", delay: 10 * time.Millisecond, content: "read ok", isSafe: true},
+		&execMockTool{name: "Bash", delay: 10 * time.Millisecond, content: "bash ok", isSafe: false},
+	}
+
+	executor := NewToolExecutor(tools, t.TempDir())
+
+	blocks := []toolUseBlock{
+		{ID: "1", Name: "read", Input: map[string]any{}},
+		{ID: "2", Name: "terminal", Input: map[string]any{"command": "echo hi"}},
+	}
+
+	results, err := executor.Execute(context.Background(), blocks)
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("Expected 2 results, got %d", len(results))
+	}
+	if results[0].IsError || results[0].Content != "read ok" {
+		t.Errorf("read alias: got error=%v content=%q", results[0].IsError, results[0].Content)
+	}
+	if results[1].IsError || results[1].Content != "bash ok" {
+		t.Errorf("terminal alias: got error=%v content=%q", results[1].IsError, results[1].Content)
 	}
 }
 

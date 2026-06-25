@@ -18,8 +18,6 @@ import (
 )
 
 const (
-	// maxResultSizeChars is the maximum output size before truncation.
-	maxResultSizeChars = 20000
 	// defaultHeadLimit is the default maximum number of matches.
 	defaultHeadLimit = 250
 	// defaultTimeout is the default timeout in seconds.
@@ -28,12 +26,19 @@ const (
 
 // GrepTool searches file contents via ripgrep.
 type GrepTool struct {
-	sandbox sandbox.SandboxManager
+	sandbox   sandbox.SandboxManager
+	sessionID string
 }
 
 // NewGrepTool creates a new GrepTool.
 func NewGrepTool() *GrepTool {
 	return &GrepTool{}
+}
+
+// WithSessionID sets the session ID for spill directory scoping.
+func (t *GrepTool) WithSessionID(id string) *GrepTool {
+	t.sessionID = id
+	return t
 }
 
 // WithSandbox sets the sandbox manager for the GrepTool.
@@ -327,22 +332,7 @@ func (t *GrepTool) Execute(ctx context.Context, input map[string]any, cwd string
 		output = strings.Join(lines, "\n")
 	}
 
-	// Truncate if needed (20K char cap, rune-safe)
-	truncated := false
-	if len(output) > maxResultSizeChars {
-		runes := []rune(output)
-		if len(runes) > maxResultSizeChars {
-			output = string(runes[:maxResultSizeChars])
-		}
-		truncated = true
-		output += "\n[output truncated]"
-	}
-
-	return &ToolResult{
-		Content:   output,
-		IsError:   false,
-		Truncated: truncated,
-	}, nil
+	return t.spillGrepResult(output, false, cwd), nil
 }
 
 // boolVal safely extracts a boolean from a map.
@@ -469,21 +459,16 @@ func (t *GrepTool) executeInProcess(ctx context.Context, input map[string]any, p
 	}
 	output = strings.Join(lines, "\n")
 
-	truncated := false
-	if len(output) > maxResultSizeChars {
-		runes := []rune(output)
-		if len(runes) > maxResultSizeChars {
-			output = string(runes[:maxResultSizeChars])
-		}
-		truncated = true
-		output += "\n[output truncated]"
-	}
+	return t.spillGrepResult(output, false, cwd), nil
+}
 
+func (t *GrepTool) spillGrepResult(output string, truncated bool, cwd string) *ToolResult {
+	sr := CheckAndSpill(output, spillConfig(t.sessionID, cwd))
 	return &ToolResult{
-		Content:   output,
+		Content:   sr.Content,
 		IsError:   false,
-		Truncated: truncated,
-	}, nil
+		Truncated: truncated || sr.Truncated,
+	}
 }
 
 // renderGrepResults converts grepinproc results into ripgrep-style text.

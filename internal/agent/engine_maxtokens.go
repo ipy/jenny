@@ -1,9 +1,7 @@
 package agent
 
 import (
-	"context"
 	"encoding/json"
-	"strings"
 	"sync"
 
 	"github.com/ipy/jenny/internal/api"
@@ -12,16 +10,12 @@ import (
 
 // ComplexityResult holds the parsed result from a fork-based complexity evaluation.
 // Four orthogonal dimensions are evaluated independently and combined internally.
-// Also captures acceptance criteria and constraints for QA gate evaluation.
 type ComplexityResult struct {
 	ReasoningDepth       int  `json:"reasoning_depth"`
 	CodeVolume           int  `json:"code_volume"`
 	DomainSpecialization int  `json:"domain_specialization"`
 	IntegrationBreadth   int  `json:"integration_breadth"`
 	NeedWrite            bool `json:"need_write"`
-
-	AcceptCriteria []string `json:"accept_criteria,omitempty"`
-	Constraints    []string `json:"constraints,omitempty"`
 }
 
 // OverallComplexity computes a weighted aggregate from the four dimensions.
@@ -381,54 +375,11 @@ INTEGRATION BREADTH — how many components or files are touched:
 
 need_write=true if the task involves writing/modifying code, articles, or other complex artifacts.`
 
-// forkComplexityEval is deprecated — complexity eval now uses the SideQuery
-// framework via dispatchComplexityEval in engine_loop.go. This function is
-// retained only for tests that call it directly.
-func forkComplexityEval(ctx context.Context, client api.Requester, messages []api.Message, systemPrompt []string, tools []api.ToolParam) (*ComplexityResult, string, api.Usage, error) {
-	evalMsg := api.Message{
-		Role:    api.RoleUser,
-		Content: complexityEvalPrompt,
-	}
-	forkMessages := make([]api.Message, len(messages), len(messages)+1)
-	copy(forkMessages, messages)
-	forkMessages = append(forkMessages, evalMsg)
-
-	resp, err := client.SendMessage(ctx, forkMessages, tools, nil, systemPrompt, "")
+// mapToStruct converts a map to a struct via JSON round-trip.
+func mapToStruct(m map[string]any, dest any) error {
+	data, err := json.Marshal(m)
 	if err != nil {
-		return nil, "", api.Usage{}, err
+		return err
 	}
-
-	var text string
-	for _, block := range resp.Content {
-		if block.Type == "text" || block.Text != "" {
-			text += block.Text
-		}
-	}
-
-	text = extractJSON(text)
-
-	var cr ComplexityResult
-	if err := json.Unmarshal([]byte(text), &cr); err != nil {
-		return nil, "", api.Usage{}, err
-	}
-
-	cr.ReasoningDepth = clampDim(cr.ReasoningDepth)
-	cr.CodeVolume = clampDim(cr.CodeVolume)
-	cr.DomainSpecialization = clampDim(cr.DomainSpecialization)
-	cr.IntegrationBreadth = clampDim(cr.IntegrationBreadth)
-
-	return &cr, resp.Model, resp.Usage, nil
-}
-
-// extractJSON finds the first {...} in the text.
-func extractJSON(text string) string {
-	start := strings.Index(text, "{")
-	if start < 0 {
-		return text
-	}
-	end := strings.LastIndex(text, "}")
-	if end < start {
-		return text
-	}
-	return text[start : end+1]
+	return json.Unmarshal(data, dest)
 }

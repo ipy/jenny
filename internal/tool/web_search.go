@@ -25,6 +25,8 @@ type WebSearchTool struct {
 	clientProvider SearchClientProvider
 	provider       api.Provider
 	callCount      atomic.Int32
+	sessionID      string
+	projectRoot    string
 }
 
 // NewWebSearchTool creates a new WebSearchTool.
@@ -39,6 +41,12 @@ func NewWebSearchTool(config *WebSearchConfig, nativeRunner NativeSearchRunner, 
 // WithProvider sets the active provider for capability checks (SupportsNativeSearch).
 func (t *WebSearchTool) WithProvider(p api.Provider) {
 	t.provider = p
+}
+
+// WithSessionID sets the session ID for spill directory scoping.
+func (t *WebSearchTool) WithSessionID(id string) *WebSearchTool {
+	t.sessionID = id
+	return t
 }
 
 // Name returns the tool name.
@@ -79,6 +87,8 @@ func (t *WebSearchTool) InputSchema() map[string]any {
 
 // Execute validates the search inputs and performs the search according to the configured strategy.
 func (t *WebSearchTool) Execute(ctx context.Context, input map[string]any, cwd string) (*ToolResult, error) {
+	t.projectRoot = cwd
+
 	// Enforce max searches per agent session
 	count := t.callCount.Add(1)
 	if int(count) > webSearchMaxCallsPerAgent {
@@ -153,10 +163,7 @@ func (t *WebSearchTool) executeNativeSearch(ctx context.Context, query string) (
 		return t.fallbackToClient(ctx, query)
 	}
 
-	return &ToolResult{
-		Content: RenderSearchResponse(resp),
-		IsError: false,
-	}, nil
+	return t.spillSearchResult(RenderSearchResponse(resp)), nil
 }
 
 // executeClientSearch uses the configured client provider directly.
@@ -176,10 +183,7 @@ func (t *WebSearchTool) executeClientSearch(ctx context.Context, query string) (
 		}, nil
 	}
 
-	return &ToolResult{
-		Content: RenderSearchResponse(resp),
-		IsError: false,
-	}, nil
+	return t.spillSearchResult(RenderSearchResponse(resp)), nil
 }
 
 // fallbackToClient attempts to use the client provider as a fallback.
@@ -199,8 +203,9 @@ func (t *WebSearchTool) fallbackToClient(ctx context.Context, query string) (*To
 		}, nil
 	}
 
-	return &ToolResult{
-		Content: RenderSearchResponse(resp),
-		IsError: false,
-	}, nil
+	return t.spillSearchResult(RenderSearchResponse(resp)), nil
+}
+
+func (t *WebSearchTool) spillSearchResult(content string) *ToolResult {
+	return ApplySpillToToolResult(content, spillConfig(t.sessionID, t.projectRoot), false)
 }

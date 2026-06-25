@@ -418,7 +418,12 @@ func TestBuildCompactedChain(t *testing.T) {
 	}
 
 	summary := "This is a summary of the conversation."
-	result := buildCompactedChain(messages, summary)
+	// Use a generous target so token budget allows keeping many messages
+	cfg := CompactConfig{
+		ModelContextWindow:   200_000,
+		ModelMaxOutputTokens: 20_000,
+	}
+	result := buildCompactedChain(messages, summary, cfg.compactionTarget())
 
 	// First message should be the boundary marker
 	if len(result) == 0 {
@@ -426,7 +431,7 @@ func TestBuildCompactedChain(t *testing.T) {
 	}
 
 	if result[0].Role != "user" {
-		t.Errorf("FAIL: first message should be system role, got %s", result[0].Role)
+		t.Errorf("FAIL: first message should be user role, got %s", result[0].Role)
 	}
 
 	if !strings.Contains(result[0].Content, "[Context boundary") {
@@ -437,9 +442,10 @@ func TestBuildCompactedChain(t *testing.T) {
 		t.Error("FAIL: first message should contain summary text")
 	}
 
-	// Should have kept last 10 messages
-	if len(result) != 11 { // 1 boundary + 10 kept messages
-		t.Errorf("FAIL: expected11 messages, got %d", len(result))
+	// With token budget, short messages should keep more than minimum 2
+	trailingCount := len(result) - 1
+	if trailingCount < 2 {
+		t.Errorf("FAIL: expected at least 2 trailing messages, got %d", trailingCount)
 	}
 
 	t.Log("buildCompactedChain produces correct structure")
@@ -657,7 +663,7 @@ func TestCompactedChainPreservesToolPairs(t *testing.T) {
 		ToolResults: []api.ToolResultBlock{{ToolUseID: "call_001", Content: "result"}},
 	}
 
-	result := buildCompactedChain(messages, "summary")
+	result := buildCompactedChain(messages, "summary", 100_000)
 
 	// Find the assistant with tool_use and verify the next message has its tool_result
 	for i, msg := range result {
@@ -836,8 +842,15 @@ func newTestEngine(mock api.Requester) *QueryEngine {
 	return e
 }
 
+// compactPreflightMaxMessageTokens mirrors the pre-flight budget in compactMessages:
+// effectiveContextWindow minus wire overhead (with MIN_SAFETY_OVERHEAD fallback) minus summary reserve.
+func compactPreflightMaxMessageTokens(cfg CompactConfig, systemPrompt []string, tools []api.ToolParam) int {
+	wireOverhead := effectiveWireOverhead(estimateSystemAndToolTokens(systemPrompt, tools))
+	return cfg.effectiveContextWindow() - wireOverhead - SUMMARY_MAX_TOKENS
+}
+
 // TestInSessionCompact_Behavior_WithLargeMessages verifies that when
-// estimated tokens exceed effectiveContextWindow - MIN_SAFETY_OVERHEAD - SUMMARY_MAX_TOKENS,
+// estimated tokens exceed effectiveContextWindow - wireOverhead - SUMMARY_MAX_TOKENS,
 // compactMessages succeeds via fallbackSummaryCompact (proving inSessionCompact was skipped).
 // This is a behavioral test that actually calls compactMessages — not just setup math.
 func TestInSessionCompact_Behavior_WithLargeMessages(t *testing.T) {
@@ -845,15 +858,16 @@ func TestInSessionCompact_Behavior_WithLargeMessages(t *testing.T) {
 		ModelContextWindow:   200_000,
 		ModelMaxOutputTokens: 20_000,
 	}
+	systemPrompt := []string{"test system prompt"}
 
-	// maxMessagesTokens = 180K - 30K - 20K = 130K
-	maxMessagesTokens := cfg.effectiveContextWindow() - MIN_SAFETY_OVERHEAD - SUMMARY_MAX_TOKENS
-	if maxMessagesTokens != 130_000 {
-		t.Fatalf("expected maxMessagesTokens=130000, got %d", maxMessagesTokens)
+	maxMessagesTokens := compactPreflightMaxMessageTokens(cfg, systemPrompt, nil)
+	fallbackLimit := cfg.effectiveContextWindow() - MIN_SAFETY_OVERHEAD - SUMMARY_MAX_TOKENS
+	if maxMessagesTokens <= fallbackLimit {
+		t.Fatalf("wire overhead should be more permissive than MIN_SAFETY_OVERHEAD fallback: precise=%d fallback=%d", maxMessagesTokens, fallbackLimit)
 	}
 
-	// Create messages totaling ~135K tokens (over the 130K limit)
-	largeContent := strings.Repeat("hello world ", 45_000)
+	// Create messages exceeding the wire-based pre-flight limit (~160K with small system prompt).
+	largeContent := strings.Repeat("hello world ", 55_000) // ~165K tokens
 	messages := []api.Message{
 		{Role: "user", Content: largeContent},
 	}
@@ -863,17 +877,17 @@ func TestInSessionCompact_Behavior_WithLargeMessages(t *testing.T) {
 		t.Fatalf("test setup: estimated %d should exceed maxMessagesTokens %d", estimated, maxMessagesTokens)
 	}
 
-	mock := &mockCompactClient{}
+	mock := &mock1MWindowClient{}
 	engine := newTestEngine(mock)
 
-	// compactMessages should succeed via fallbackSummaryCompact
-	_, err := engine.compactMessages(context.Background(), messages, cfg, []string{"test system prompt"})
+	_, err := engine.compactMessages(context.Background(), messages, cfg, systemPrompt)
 	if err != nil {
 		t.Fatalf("compactMessages with large messages should succeed via fallback, got error: %v", err)
 	}
+	if mock.inSessionCompactCalled {
+		t.Fatal("inSessionCompact should be skipped when messages exceed wire-based pre-flight limit")
+	}
 
-	// The safety check skipped inSessionCompact, but fallbackSummaryCompact was called.
-	// Success here proves the skip logic worked (inSessionCompact would have overflowed).
 	t.Logf("PASS: compactMessages succeeded with large messages (%d estimated tokens, limit %d)",
 		estimated, maxMessagesTokens)
 }
@@ -887,9 +901,10 @@ func TestInSessionCompact_Behavior_WithSmallMessages(t *testing.T) {
 		ModelMaxOutputTokens: 20_000,
 	}
 
-	maxMessagesTokens := cfg.effectiveContextWindow() - MIN_SAFETY_OVERHEAD - SUMMARY_MAX_TOKENS
+	systemPrompt := []string{"test system prompt"}
+	maxMessagesTokens := compactPreflightMaxMessageTokens(cfg, systemPrompt, nil)
 
-	// Create messages totaling ~100K tokens (within the 130K limit)
+	// Create messages totaling ~100K tokens (within the wire-based limit)
 	smallContent := strings.Repeat("hello world ", 33_334)
 	messages := []api.Message{
 		{Role: "user", Content: smallContent},
@@ -904,7 +919,7 @@ func TestInSessionCompact_Behavior_WithSmallMessages(t *testing.T) {
 	engine := newTestEngine(mock)
 
 	// compactMessages should succeed (via inSessionCompact or fallback)
-	_, err := engine.compactMessages(context.Background(), messages, cfg, []string{"test system prompt"})
+	_, err := engine.compactMessages(context.Background(), messages, cfg, systemPrompt)
 	if err != nil {
 		t.Fatalf("compactMessages with small messages should succeed, got error: %v", err)
 	}
@@ -916,6 +931,25 @@ func TestInSessionCompact_Behavior_WithSmallMessages(t *testing.T) {
 
 	t.Logf("PASS: compactMessages succeeded with small messages (%d estimated tokens, limit %d), compaction attempted",
 		estimated, maxMessagesTokens)
+}
+
+// TestCompactPreflight_WireOverheadFallback verifies the pre-flight budget uses
+// precise wire overhead when available and falls back to MIN_SAFETY_OVERHEAD when not.
+func TestCompactPreflight_WireOverheadFallback(t *testing.T) {
+	cfg := CompactConfig{
+		ModelContextWindow:   200_000,
+		ModelMaxOutputTokens: 20_000,
+	}
+	systemPrompt := []string{"test system prompt"}
+
+	precise := compactPreflightMaxMessageTokens(cfg, systemPrompt, nil)
+	fallback := cfg.effectiveContextWindow() - MIN_SAFETY_OVERHEAD - SUMMARY_MAX_TOKENS
+	if precise <= fallback {
+		t.Errorf("precise pre-flight limit (%d) should exceed MIN_SAFETY_OVERHEAD fallback (%d)", precise, fallback)
+	}
+	if got := effectiveWireOverhead(0); got != MIN_SAFETY_OVERHEAD {
+		t.Errorf("effectiveWireOverhead(0) = %d, want %d", got, MIN_SAFETY_OVERHEAD)
+	}
 }
 
 // ============================================================
@@ -1020,10 +1054,8 @@ func Test175KTokensForkRetries(t *testing.T) {
 		t.Fatalf("expected autoCompactThreshold=155000, got %d", autoCompactThreshold)
 	}
 
-	maxMessagesTokens := cfg.effectiveContextWindow() - MIN_SAFETY_OVERHEAD - SUMMARY_MAX_TOKENS
-	if maxMessagesTokens != 130_000 {
-		t.Fatalf("expected maxMessagesTokens=130000, got %d", maxMessagesTokens)
-	}
+	systemPrompt := []string{"test system prompt"}
+	maxMessagesTokens := compactPreflightMaxMessageTokens(cfg, systemPrompt, nil)
 
 	// Build a message chain with ~175K tokens across multiple API rounds.
 	// Each round: user (bulk text) + assistant (with tool_use) + user (tool_results).
@@ -1060,7 +1092,11 @@ func Test175KTokensForkRetries(t *testing.T) {
 	mock := &mockForkRetryClient{}
 	engine := newTestEngine(mock)
 
-	result, err := engine.compactMessages(context.Background(), messages, cfg, []string{"test system prompt"})
+	if estimated <= maxMessagesTokens {
+		t.Fatalf("test setup: estimated %d should exceed wire-based maxMessagesTokens %d", estimated, maxMessagesTokens)
+	}
+
+	result, err := engine.compactMessages(context.Background(), messages, cfg, systemPrompt)
 	if err != nil {
 		t.Fatalf("FAIL: compactMessages should succeed via fallbackSummaryCompact retry, got error: %v", err)
 	}
@@ -1086,11 +1122,9 @@ func Test175KTokensForkRetries(t *testing.T) {
 		t.Fatal("FAIL: compacted chain should have trailing messages")
 	}
 	trailingCount := len(result) - 1
-	// buildCompactedChain keeps messagesToKeep=10, but the tool_use/tool_result
-	// pairing guard may shift the cut earlier, keeping up to 11 trailing messages
-	// (or fewer if the original chain is shorter than messagesToKeep).
-	if trailingCount < 1 || trailingCount > 15 {
-		t.Errorf("FAIL: expected 1-15 trailing messages, got %d", trailingCount)
+	// Token-budget tail selection keeps 2–30 messages; tool pairing may add one more.
+	if trailingCount < 1 || trailingCount > 31 {
+		t.Errorf("FAIL: expected 1-31 trailing messages, got %d", trailingCount)
 	}
 	if trailingCount < 1 {
 		t.Error("FAIL: expected at least 1 trailing message")
@@ -1138,10 +1172,8 @@ func TestDeepSeek1MWindowUsesInSessionCompact(t *testing.T) {
 		ModelMaxOutputTokens: 8_192,
 	}
 
-	maxMessagesTokens := cfg.effectiveContextWindow() - MIN_SAFETY_OVERHEAD - SUMMARY_MAX_TOKENS
-	if maxMessagesTokens != 941_808 {
-		t.Fatalf("expected maxMessagesTokens=941808 for deepseek, got %d", maxMessagesTokens)
-	}
+	systemPrompt := []string{"test system prompt"}
+	maxMessagesTokens := compactPreflightMaxMessageTokens(cfg, systemPrompt, nil)
 
 	content := strings.Repeat("hello world ", 33_334)
 	messages := []api.Message{
@@ -1157,7 +1189,7 @@ func TestDeepSeek1MWindowUsesInSessionCompact(t *testing.T) {
 	mock := &mock1MWindowClient{}
 	engine := newTestEngine(mock)
 
-	_, err := engine.compactMessages(context.Background(), messages, cfg, []string{"test system prompt"})
+	_, err := engine.compactMessages(context.Background(), messages, cfg, systemPrompt)
 	if err != nil {
 		t.Fatalf("FAIL: compactMessages should succeed for 1M-window model, got error: %v", err)
 	}
@@ -1222,7 +1254,8 @@ func TestForkRetriesExhaustedReturnsUnderlyingError(t *testing.T) {
 	}
 
 	estimated := estimateTokens(messages)
-	maxMessagesTokens := cfg.effectiveContextWindow() - MIN_SAFETY_OVERHEAD - SUMMARY_MAX_TOKENS
+	systemPrompt := []string{"test system prompt"}
+	maxMessagesTokens := compactPreflightMaxMessageTokens(cfg, systemPrompt, nil)
 	if estimated <= maxMessagesTokens {
 		t.Fatalf("FAIL: test setup: estimated %d should exceed maxMessagesTokens %d", estimated, maxMessagesTokens)
 	}
@@ -1231,7 +1264,7 @@ func TestForkRetriesExhaustedReturnsUnderlyingError(t *testing.T) {
 	mock := &mockExhaustClient{}
 	engine := newTestEngine(mock)
 
-	_, err := engine.compactMessages(context.Background(), messages, cfg, []string{"test system prompt"})
+	_, err := engine.compactMessages(context.Background(), messages, cfg, systemPrompt)
 	if err == nil {
 		t.Fatal("FAIL: compactMessages should return error when fallbackSummaryCompact exhausts retries")
 	}
@@ -1251,4 +1284,258 @@ func TestForkRetriesExhaustedReturnsUnderlyingError(t *testing.T) {
 	}
 
 	t.Logf("PASS: compactMessages returned underlying error %q (calls=%d)", errStr, mock.calls)
+}
+
+// ============================================================
+// Compaction target (hysteresis)
+// ============================================================
+
+func TestCompactionTarget(t *testing.T) {
+	tests := []struct {
+		name                 string
+		modelContextWindow   int
+		modelMaxOutputTokens int
+		autoCompactWindow    int
+		wantThreshold        int
+		wantTarget           int
+	}{
+		{
+			name:                 "200K model tier 1",
+			modelContextWindow:   200_000,
+			modelMaxOutputTokens: 20_000,
+			wantThreshold:        155_000,
+			wantTarget:           108_000, // 60% of 180K effective
+		},
+		{
+			name:                 "300K model tier 2",
+			modelContextWindow:   300_000,
+			modelMaxOutputTokens: 20_000,
+			wantThreshold:        150_000,
+			wantTarget:           105_000, // 35% of 300K
+		},
+		{
+			name:                 "1M model tier 3",
+			modelContextWindow:   1_048_576,
+			modelMaxOutputTokens: 393_216,
+			wantThreshold:        512_000,
+			wantTarget:           360_000,
+		},
+		{
+			name:                 "256K boundary tier 1",
+			modelContextWindow:   256_000,
+			modelMaxOutputTokens: 20_000,
+			wantThreshold:        211_000,
+			wantTarget:           141_600, // 60% of 236K effective
+		},
+		{
+			name:                 "AUTO_COMPACT_WINDOW override",
+			modelContextWindow:   300_000,
+			modelMaxOutputTokens: 20_000,
+			autoCompactWindow:    300_000,
+			wantThreshold:        255_000,
+			wantTarget:           168_000, // 60% of 280K effective
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := CompactConfig{
+				ModelContextWindow:   tt.modelContextWindow,
+				ModelMaxOutputTokens: tt.modelMaxOutputTokens,
+				AutoCompactWindow:    tt.autoCompactWindow,
+			}
+			threshold := cfg.autoCompactThreshold()
+			target := cfg.compactionTarget()
+			if threshold != tt.wantThreshold {
+				t.Errorf("autoCompactThreshold = %d, want %d", threshold, tt.wantThreshold)
+			}
+			if target != tt.wantTarget {
+				t.Errorf("compactionTarget = %d, want %d", target, tt.wantTarget)
+			}
+		})
+	}
+}
+
+func TestCompactionTargetLessThanThreshold(t *testing.T) {
+	configs := []CompactConfig{
+		{ModelContextWindow: 200_000, ModelMaxOutputTokens: 20_000},
+		{ModelContextWindow: 300_000, ModelMaxOutputTokens: 20_000},
+		{ModelContextWindow: 1_048_576, ModelMaxOutputTokens: 393_216},
+		{ModelContextWindow: 300_000, ModelMaxOutputTokens: 20_000, AutoCompactWindow: 300_000},
+	}
+	for i, cfg := range configs {
+		threshold := cfg.autoCompactThreshold()
+		target := cfg.compactionTarget()
+		if threshold > 0 && target >= threshold {
+			t.Errorf("config %d: target %d must be < threshold %d", i, target, threshold)
+		}
+	}
+}
+
+func TestCompactionTargetZeroWhenThresholdZero(t *testing.T) {
+	cfg := CompactConfig{
+		ModelContextWindow:   200_000,
+		ModelMaxOutputTokens: 393_216,
+		AutoCompactWindow:    200_000,
+	}
+	if cfg.autoCompactThreshold() != 0 {
+		t.Fatalf("expected threshold 0, got %d", cfg.autoCompactThreshold())
+	}
+	if cfg.compactionTarget() != 0 {
+		t.Errorf("compactionTarget = %d, want 0 when threshold is 0", cfg.compactionTarget())
+	}
+}
+
+// ============================================================
+// Token-based tail selection
+// ============================================================
+
+func TestBuildCompactedChainTokenBasedTail(t *testing.T) {
+	// Ten messages with substantial content; budget should keep fewer than all.
+	messages := make([]api.Message, 10)
+	for i := range messages {
+		messages[i] = api.Message{Role: "user", Content: strings.Repeat("x", 10_000)}
+	}
+
+	// ~2500 tokens per message; target fits boundary + ~3 messages.
+	target := 8_000
+
+	result := buildCompactedChain(messages, "summary", target)
+	trailing := len(result) - 1
+
+	if trailing < 2 {
+		t.Fatalf("expected at least 2 trailing messages, got %d", trailing)
+	}
+	if trailing >= 10 {
+		t.Errorf("expected fewer than 10 trailing messages due to budget, got %d", trailing)
+	}
+}
+
+func TestBuildCompactedChainMinMessages(t *testing.T) {
+	// Even with tiny budget, keep at least 2 messages
+	messages := []api.Message{
+		{Role: "user", Content: strings.Repeat("a", 100_000)},
+		{Role: "assistant", Content: strings.Repeat("b", 100_000)},
+		{Role: "user", Content: "current prompt"},
+	}
+	result := buildCompactedChain(messages, "summary", 100)
+	trailing := len(result) - 1
+	if trailing < 2 {
+		t.Errorf("expected at least 2 trailing messages, got %d", trailing)
+	}
+}
+
+func TestBuildCompactedChainMaxMessages(t *testing.T) {
+	// 40 tiny messages with generous budget — cap at 30
+	messages := make([]api.Message, 40)
+	for i := range messages {
+		messages[i] = api.Message{Role: "user", Content: "x"}
+	}
+	result := buildCompactedChain(messages, "summary", 1_000_000)
+	trailing := len(result) - 1
+	if trailing > 30 {
+		t.Errorf("expected at most 30 trailing messages, got %d", trailing)
+	}
+}
+
+// ============================================================
+// Post-compact tail pruning
+// ============================================================
+
+func TestPruneTailToolResults(t *testing.T) {
+	largeContent := strings.Repeat("data", 2000) // 8000 chars
+	messages := []api.Message{
+		{Role: "user", Content: "round 1"},
+		{Role: "assistant", Content: "response 1", ToolUse: []api.ToolUseBlock{{ID: "c1", Name: "Grep"}}},
+		{Role: "user", ToolResults: []api.ToolResultBlock{{ToolUseID: "c1", Content: largeContent}}},
+		{Role: "user", Content: "round 2"},
+		{Role: "assistant", Content: "response 2", ToolUse: []api.ToolUseBlock{{ID: "c2", Name: "Read"}}},
+		{Role: "user", ToolResults: []api.ToolResultBlock{{ToolUseID: "c2", Content: largeContent}}},
+		{Role: "user", Content: "round 3"},
+		{Role: "assistant", Content: "response 3", ToolUse: []api.ToolUseBlock{{ID: "c3", Name: "Grep"}}},
+		{Role: "user", ToolResults: []api.ToolResultBlock{{ToolUseID: "c3", Content: largeContent}}},
+	}
+
+	result := pruneTailToolResults(messages)
+
+	// Round 1 tool result (oldest) should be trimmed
+	round1Result := result[2].ToolResults[0].Content
+	if !strings.Contains(round1Result, "[Trimmed:") {
+		t.Error("oldest round tool result should be trimmed")
+	}
+	if len(round1Result) >= len(largeContent) {
+		t.Errorf("trimmed content should be shorter than original %d chars", len(largeContent))
+	}
+
+	// Round 3 tool result (most recent) should be intact
+	round3Result := result[8].ToolResults[0].Content
+	if round3Result != largeContent {
+		t.Error("most recent round tool result should be preserved")
+	}
+}
+
+func TestPruneTailToolResultsPreservesErrors(t *testing.T) {
+	largeContent := strings.Repeat("error data", 1000) // > 4KB
+	messages := []api.Message{
+		{Role: "user", Content: "round 1"},
+		{Role: "assistant", Content: "failed", ToolUse: []api.ToolUseBlock{{ID: "c1", Name: "Bash"}}},
+		{Role: "user", ToolResults: []api.ToolResultBlock{{ToolUseID: "c1", Content: largeContent, IsError: true}}},
+		{Role: "user", Content: "round 2"},
+		{Role: "assistant", Content: "ok"},
+	}
+
+	result := pruneTailToolResults(messages)
+	errResult := result[2].ToolResults[0].Content
+	if errResult != largeContent {
+		t.Error("error tool results should not be trimmed")
+	}
+}
+
+func TestPruneTailToolResultsSmallContentUntouched(t *testing.T) {
+	smallContent := strings.Repeat("x", 1000) // under 4KB
+	messages := []api.Message{
+		{Role: "user", Content: "round 1"},
+		{Role: "assistant", Content: "response", ToolUse: []api.ToolUseBlock{{ID: "c1", Name: "Read"}}},
+		{Role: "user", ToolResults: []api.ToolResultBlock{{ToolUseID: "c1", Content: smallContent}}},
+		{Role: "user", Content: "round 2"},
+		{Role: "assistant", Content: "done"},
+	}
+
+	result := pruneTailToolResults(messages)
+	if result[2].ToolResults[0].Content != smallContent {
+		t.Error("small tool results should not be trimmed even in old rounds")
+	}
+}
+
+func TestBuildCompactedChainAppliesTailPruning(t *testing.T) {
+	largeContent := strings.Repeat("grep output ", 500) // > 4KB
+	messages := make([]api.Message, 0, 12)
+	for i := range 3 {
+		messages = append(messages, api.Message{Role: "user", Content: fmt.Sprintf("round %d", i)})
+		messages = append(messages, api.Message{
+			Role:    "assistant",
+			Content: "using tool",
+			ToolUse: []api.ToolUseBlock{{ID: fmt.Sprintf("c%d", i), Name: "Grep"}},
+		})
+		messages = append(messages, api.Message{
+			Role:        "user",
+			ToolResults: []api.ToolResultBlock{{ToolUseID: fmt.Sprintf("c%d", i), Content: largeContent}},
+		})
+	}
+
+	cfg := CompactConfig{ModelContextWindow: 200_000, ModelMaxOutputTokens: 20_000}
+	result := buildCompactedChain(messages, "summary", cfg.compactionTarget())
+
+	// Find oldest tool result in result chain (skip boundary marker)
+	foundTrimmed := false
+	for _, msg := range result[1:] {
+		for _, tr := range msg.ToolResults {
+			if strings.Contains(tr.Content, "[Trimmed:") {
+				foundTrimmed = true
+			}
+		}
+	}
+	if !foundTrimmed {
+		t.Error("buildCompactedChain should apply tail pruning on old tool results")
+	}
 }

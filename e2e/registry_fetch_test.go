@@ -116,13 +116,13 @@ func TestRegistryFetchSyncRefreshNotBroken(t *testing.T) {
 		"ANTHROPIC_AUTH_TOKEN=dummy",
 	}
 
-	res := harness.RunJenny(t, env, "--refresh-registry", "-p", "hello")
+	res := harness.RunJenny(t, env, "--refresh-registry")
 
 	// The synchronous --refresh-registry should either succeed or fail
 	// with a clear error. It should NOT hang, crash, or panic.
 	stderr := res.Stderr
-	if !strings.Contains(stderr, "registry") && !strings.Contains(stderr, "refresh") {
-		t.Errorf("expected stderr to mention registry/refresh, got: %s", stderr)
+	if !strings.Contains(stderr, "registry") && !strings.Contains(stderr, "refresh") && !strings.Contains(stderr, "fetch") {
+		t.Errorf("expected stderr to mention registry/refresh/fetch, got: %s", stderr)
 	}
 
 	// Exit code can be 0 (success) or 1 (failure), but not -1 (killed)

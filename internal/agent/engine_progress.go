@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ipy/jenny/internal/api"
+	"github.com/ipy/jenny/internal/jsonrepair"
 	"github.com/ipy/jenny/internal/log"
 )
 
@@ -125,9 +126,14 @@ func resetScoreForLevel(level ProgressLevel) int {
 }
 
 // RecordTurn evaluates the tool results from a turn and updates the progress state.
+// Optional supplemental scores (e.g. from Loop Guard) are merged before escalation.
 // Returns the computed TurnScore.
-func (pm *ProgressMonitor) RecordTurn(toolUseBlocks []api.ToolUseBlock, toolResults []api.ToolResult) TurnScore {
+func (pm *ProgressMonitor) RecordTurn(toolUseBlocks []api.ToolUseBlock, toolResults []api.ToolResult, supplemental ...TurnScore) TurnScore {
 	score := pm.scoreTurn(toolUseBlocks, toolResults)
+	for _, extra := range supplemental {
+		score.Score += extra.Score
+		score.Signals = append(score.Signals, extra.Signals...)
+	}
 
 	pm.pushSlidingWindow(score.Score)
 
@@ -811,10 +817,15 @@ func progressEvalResultJSON(result *ProgressEvalResult) string {
 
 // parseProgressEvalResponse extracts and parses the JSON response from the judge.
 func parseProgressEvalResponse(text string) (*ProgressEvalResult, error) {
-	text = extractJSON(text)
+	text = jsonrepair.ExtractJSON(text)
+
+	repaired, err := jsonrepair.Repair(text, "")
+	if err != nil {
+		return nil, err
+	}
 
 	var result ProgressEvalResult
-	if err := json.Unmarshal([]byte(text), &result); err != nil {
+	if err := mapToStruct(repaired, &result); err != nil {
 		return nil, err
 	}
 

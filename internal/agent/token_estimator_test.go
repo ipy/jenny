@@ -219,3 +219,111 @@ func TestTokenEstimator_CharsetAware(t *testing.T) {
 		t.Errorf("ASCII estimate (%d) should be < CJK estimate (%d) for same char count", asciiEstimate, cjkEstimate)
 	}
 }
+
+// TestEstimateWireTokens_IncludesOverhead verifies wire estimation exceeds message-only.
+func TestEstimateWireTokens_IncludesOverhead(t *testing.T) {
+	messages := []api.Message{{Role: "user", Content: "hello world"}}
+	systemPrompt := []string{"You are a helpful assistant.", "Follow all instructions carefully."}
+	tools := []api.ToolParam{
+		{Name: "Read", Description: "Read a file", InputSchema: api.ToolInputSchema{Type: "object"}},
+		{Name: "Write", Description: "Write a file", InputSchema: api.ToolInputSchema{Type: "object"}},
+	}
+
+	msgOnly := estimateTokens(messages)
+	wire := estimateWireTokens(messages, systemPrompt, tools)
+	if wire <= msgOnly {
+		t.Errorf("wire estimate (%d) should exceed message-only (%d)", wire, msgOnly)
+	}
+
+	overhead := estimateSystemAndToolTokens(systemPrompt, tools)
+	if overhead < wireFixedOverhead {
+		t.Errorf("system+tool overhead (%d) should include fixed overhead (%d)", overhead, wireFixedOverhead)
+	}
+}
+
+// TestEstimateWireTokens_EmptyComponents verifies zero overhead for empty system/tools.
+func TestEstimateWireTokens_EmptyComponents(t *testing.T) {
+	messages := []api.Message{{Role: "user", Content: "test"}}
+	msgOnly := estimateTokens(messages)
+	wire := estimateWireTokens(messages, nil, nil)
+	want := msgOnly + wireFixedOverhead
+	if wire != want {
+		t.Errorf("wire with empty system/tools = %d, want %d (messages + fixed overhead)", wire, want)
+	}
+}
+
+// TestTokenEstimator_EstimateWireTokens_CachesToolTokens verifies tool token cache reuse.
+func TestTokenEstimator_EstimateWireTokens_CachesToolTokens(t *testing.T) {
+	estimator := NewTokenEstimator()
+	messages := []api.Message{{Role: "user", Content: "hello"}}
+	systemPrompt := []string{"system block"}
+	tools := []api.ToolParam{
+		{Name: "Alpha", Description: strings.Repeat("desc ", 100), InputSchema: api.ToolInputSchema{Type: "object"}},
+		{Name: "Beta", Description: strings.Repeat("desc ", 100), InputSchema: api.ToolInputSchema{Type: "object"}},
+	}
+
+	first := estimator.EstimateWireTokens(messages, systemPrompt, tools, "m")
+	second := estimator.EstimateWireTokens(messages, systemPrompt, tools, "m")
+	if first != second {
+		t.Errorf("cached wire estimates should match: first=%d second=%d", first, second)
+	}
+
+	// Different tool set invalidates cache (different fingerprint)
+	tools2 := append(tools, api.ToolParam{Name: "Gamma", Description: "extra"})
+	third := estimator.EstimateWireTokens(messages, systemPrompt, tools2, "m")
+	if third <= first {
+		t.Errorf("adding tool should increase wire estimate: first=%d third=%d", first, third)
+	}
+}
+
+// TestTokenEstimator_EstimateWireTokens_ExceedsMessages verifies calibrated wire > messages.
+func TestTokenEstimator_EstimateWireTokens_ExceedsMessages(t *testing.T) {
+	estimator := NewTokenEstimator()
+	messages := []api.Message{{Role: "user", Content: strings.Repeat("hello ", 50)}}
+	systemPrompt := []string{strings.Repeat("instruction ", 200)}
+	tools := []api.ToolParam{
+		{Name: "Read", Description: strings.Repeat("read files ", 50), InputSchema: api.ToolInputSchema{Type: "object"}},
+	}
+
+	msgs := estimator.EstimateMessages(messages, "m")
+	wire := estimator.EstimateWireTokens(messages, systemPrompt, tools, "m")
+	if wire <= msgs {
+		t.Errorf("EstimateWireTokens (%d) should exceed EstimateMessages (%d)", wire, msgs)
+	}
+}
+
+// TestTokenEstimator_ObserveWireInput verifies EWMA calibration against wire prediction.
+func TestTokenEstimator_ObserveWireInput(t *testing.T) {
+	estimator := NewTokenEstimator()
+	predicted := 1000
+	actual := 1100
+
+	estimator.ObserveWireInput("m", predicted, actual)
+	f := estimator.getInputCorrection("m")
+	if f < 1.01 || f > 1.05 {
+		t.Errorf("after single wire observation, factor should be ~1.02, got %f", f)
+	}
+}
+
+// TestEstimateSystemAndToolTokens_FallbackFloor verifies MIN_SAFETY_OVERHEAD fallback helper.
+func TestEffectiveWireOverhead(t *testing.T) {
+	if got := effectiveWireOverhead(0); got != MIN_SAFETY_OVERHEAD {
+		t.Errorf("effectiveWireOverhead(0) = %d, want MIN_SAFETY_OVERHEAD %d", got, MIN_SAFETY_OVERHEAD)
+	}
+	if got := effectiveWireOverhead(5000); got != 5000 {
+		t.Errorf("effectiveWireOverhead(5000) = %d, want 5000", got)
+	}
+}
+
+// TestToolsFingerprint_OrderIndependent verifies fingerprint ignores tool order.
+func TestToolsFingerprint_OrderIndependent(t *testing.T) {
+	a := toolsFingerprint([]api.ToolParam{{Name: "Alpha"}, {Name: "Beta"}})
+	b := toolsFingerprint([]api.ToolParam{{Name: "Beta"}, {Name: "Alpha"}})
+	if a != b {
+		t.Errorf("fingerprints should match regardless of order: %q vs %q", a, b)
+	}
+	c := toolsFingerprint([]api.ToolParam{{Name: "Alpha"}, {Name: "Gamma"}})
+	if a == c {
+		t.Error("different tool sets should produce different fingerprints")
+	}
+}

@@ -41,10 +41,13 @@ func (r OpenAIRequest) MarshalJSON() ([]byte, error) {
 type openAIRequestAlias OpenAIRequest
 
 // OpenAIMessage represents a message in the OpenAI chat format.
+// ReasoningContent is *string to distinguish absent (nil → omitted) from
+// present-but-empty (&"" → "reasoning_content":""), which DeepSeek requires
+// to be echoed back verbatim.
 type OpenAIMessage struct {
 	Role             string           `json:"role"`
 	Content          json.RawMessage  `json:"content,omitempty"`
-	ReasoningContent string           `json:"reasoning_content,omitempty"`
+	ReasoningContent *string          `json:"reasoning_content,omitempty"`
 	ToolCalls        []OpenAIToolCall `json:"tool_calls,omitempty"`
 	ToolCallID       string           `json:"tool_call_id,omitempty"`
 }

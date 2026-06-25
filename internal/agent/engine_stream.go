@@ -183,8 +183,9 @@ func toLoopUsage(src api.Usage) *Usage {
 // collected during streaming or fallback processing. Used as the unit of
 // emission by emitConsolidatedAssistant.
 type thinkingBlock struct {
-	Text      string
-	Signature string
+	Text        string
+	Signature   string
+	HasThinking bool
 }
 
 // totalThinkingChars returns the total character count of all thinking blocks.

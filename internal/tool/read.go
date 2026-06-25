@@ -395,8 +395,15 @@ func (t *ReadTool) Execute(ctx context.Context, input map[string]any, cwd string
 		}
 	}
 
+	resultContent := output.String()
+	if isFullRead {
+		sr := CheckAndSpill(resultContent, spillConfig(t.sessionID, cwd))
+		resultContent = sr.Content
+		truncated = truncated || sr.Truncated
+	}
+
 	return &ToolResult{
-		Content:   output.String(),
+		Content:   resultContent,
 		IsError:   false,
 		Truncated: truncated,
 	}, nil

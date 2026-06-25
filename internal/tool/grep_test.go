@@ -300,16 +300,15 @@ func TestGrepTool_Timeout(t *testing.T) {
 	t.Logf("timeout test: search completed (timeout may be clamped to minimum)")
 }
 
-// Output capped at ~20K characters
-func TestGrepTool_OutputCap(t *testing.T) {
+// Large output is spilled to disk
+func TestGrepTool_OutputSpill(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create a file with large content that will exceed 20K when searched
-	// Each line is ~100 chars, 300 lines = ~30K chars
+	// Create a file with large content that will exceed 30KB spill threshold
 	var largeContent strings.Builder
-	for i := range 300 {
-		largeContent.WriteString("This is a very long line of text for testing output truncation in grep tool. ")
-		largeContent.WriteString("We need to create enough content to exceed the 20K character limit. ")
+	for i := range 500 {
+		largeContent.WriteString("This is a very long line of text for testing output spill in grep tool. ")
+		largeContent.WriteString("We need to create enough content to exceed the spill threshold of 30 KB. ")
 		largeContent.WriteString("Line number: ")
 		largeContent.WriteString(string(rune('0' + i%10)))
 		largeContent.WriteString("\n")
@@ -330,14 +329,12 @@ func TestGrepTool_OutputCap(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Check that output is truncated
 	if !result.Truncated {
-		t.Errorf("expected output to be truncated")
+		t.Errorf("expected output to be truncated (spilled)")
 	}
 
-	// Check that content is within bounds
-	if len(result.Content) > maxResultSizeChars+100 { // +100 for truncation notice
-		t.Errorf("output too long: %d chars", len(result.Content))
+	if !strings.Contains(result.Content, "Output too large for inline display") {
+		t.Errorf("expected spill preview, got: %s", result.Content[:min(200, len(result.Content))])
 	}
 }
 

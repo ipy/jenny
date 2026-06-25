@@ -2,9 +2,9 @@
 package api
 
 import (
-	"encoding/json"
 	"time"
 
+	"github.com/ipy/jenny/internal/jsonrepair"
 	"github.com/ipy/jenny/internal/utils"
 )
 
@@ -124,12 +124,15 @@ func (acc *streamAccumulator) appendToolInputJSON(index int, partialJSON string)
 // finalizeToolInput parses accumulated JSON into ToolInput for the block.
 func (acc *streamAccumulator) finalizeToolInput(index int) {
 	if jsonStr, ok := acc.toolInputJSON[index]; ok && jsonStr != "" {
-		var input map[string]any
-		if err := json.Unmarshal([]byte(jsonStr), &input); err != nil {
-			input = make(map[string]any)
-		}
 		acc.ensureBlock(index)
-		acc.blocks[index].ToolInput = input
+		toolName := acc.blocks[index].ToolName
+		input, err := jsonrepair.Repair(jsonStr, toolName)
+		if err != nil {
+			acc.blocks[index].ToolInput = make(map[string]any)
+			acc.blocks[index].ToolInputParseError = err.Error()
+		} else {
+			acc.blocks[index].ToolInput = input
+		}
 	}
 }
 

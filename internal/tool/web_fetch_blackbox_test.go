@@ -36,19 +36,15 @@ func TestWebFetch_BodyTruncation(t *testing.T) {
 	if !result.Truncated {
 		t.Error("expected Truncated flag to be set for oversized body")
 	}
-	if len(result.Content) > 140*1024 { // allow small overhead
-		t.Errorf("expected content capped near 128K chars, got %d chars", len(result.Content))
-	}
-	if !strings.Contains(result.Content, "[Content truncated at") {
-		t.Errorf("expected truncation note in content, got: %s", result.Content[:200])
+	if !strings.Contains(result.Content, "Output too large for inline display") {
+		t.Errorf("expected spill preview in content, got: %s", result.Content[:min(200, len(result.Content))])
 	}
 }
 
 func TestWebFetch_MarkdownCap(t *testing.T) {
-	// Start a server that returns HTML that will produce > 128K chars of markdown.
+	// Large HTML should be spilled to disk after markdown conversion.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		// Generate enough paragraphs to exceed the 128K cap.
 		var sb strings.Builder
 		sb.WriteString("<html><body>")
 		for i := range 3000 {
@@ -71,11 +67,11 @@ func TestWebFetch_MarkdownCap(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("unexpected error: %s", result.Content)
 	}
-	if len(result.Content) > 140*1024 { // allow small overhead
-		t.Errorf("expected markdown to be capped near 128K chars, got %d chars", len(result.Content))
-	}
 	if !result.Truncated {
-		t.Error("expected Truncated flag to be set")
+		t.Error("expected Truncated flag to be set (spilled)")
+	}
+	if !strings.Contains(result.Content, "Output too large for inline display") {
+		t.Errorf("expected spill preview, got: %s", result.Content[:min(200, len(result.Content))])
 	}
 }
 
@@ -202,7 +198,7 @@ func TestWebFetch_RawHTML(t *testing.T) {
 }
 
 func TestWebFetch_RawHTMLTruncation(t *testing.T) {
-	// Raw mode should also truncate at 128K chars.
+	// Raw mode should spill large content to disk.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data := strings.Repeat("a", 200*1024)
 		w.Header().Set("Content-Type", "text/html")
@@ -226,11 +222,8 @@ func TestWebFetch_RawHTMLTruncation(t *testing.T) {
 	if !result.Truncated {
 		t.Error("expected Truncated flag to be set for oversized raw body")
 	}
-	if len(result.Content) > 140*1024 {
-		t.Errorf("expected raw content capped near 128K chars, got %d chars", len(result.Content))
-	}
-	if !strings.Contains(result.Content, "[Content truncated at") {
-		t.Errorf("expected truncation note in raw content, got: %s", result.Content[:200])
+	if !strings.Contains(result.Content, "Output too large for inline display") {
+		t.Errorf("expected spill preview in raw content, got: %s", result.Content[:min(200, len(result.Content))])
 	}
 }
 

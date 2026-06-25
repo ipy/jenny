@@ -109,11 +109,12 @@ func MergeConsecutiveSameRole(messages []Message) []Message {
 				current.Content += msg.Content
 			}
 			// Merge Thinking
-			if msg.Thinking != "" {
+			if msg.Thinking != "" || msg.HasThinking {
 				if current.Thinking != "" {
 					current.Thinking += "\n"
 				}
 				current.Thinking += msg.Thinking
+				current.HasThinking = current.HasThinking || msg.HasThinking
 			}
 			// Concatenate tool_use for assistant
 			if msg.Role == RoleAssistant {

@@ -39,6 +39,21 @@ const (
 	// tools definition, and compaction instruction when estimating if in-session
 	// compaction would overflow the context window.
 	MIN_SAFETY_OVERHEAD = 30_000
+
+	// minTailMessages is the minimum number of tail messages kept after compaction.
+	minTailMessages = 2
+
+	// maxTailMessages caps tail selection to prevent degenerate cases.
+	maxTailMessages = 30
+
+	// tailPruneThresholdChars is the minimum tool result size subject to tail pruning.
+	tailPruneThresholdChars = 4096
+
+	// tailPruneHeadChars is the number of leading characters kept when pruning.
+	tailPruneHeadChars = 1024
+
+	// tailPruneTailChars is the number of trailing characters kept when pruning.
+	tailPruneTailChars = 512
 )
 
 // CompactConfig holds configuration for compaction.
@@ -62,7 +77,7 @@ type CompactConfig struct {
 // effectiveContextWindow returns the effective context window after accounting
 // for model max output tokens reserve.
 func (c CompactConfig) effectiveContextWindow() int {
-	return c.ModelContextWindow - c.ModelMaxOutputTokens
+	return max(c.ModelContextWindow-c.ModelMaxOutputTokens, 0)
 }
 
 // autoCompactBuffer returns the buffer for auto-compact threshold, scaled to
@@ -109,6 +124,32 @@ func (c CompactConfig) autoCompactThreshold() int {
 		return c.ModelContextWindow / 2
 	}
 	return 512_000
+}
+
+// compactionTarget returns the post-compaction token goal. It is always strictly
+// less than autoCompactThreshold when threshold > 0, creating hysteresis that
+// prevents immediate re-compaction on the next turn.
+//
+// Target strategy mirrors autoCompactThreshold tiers:
+//   - AUTO_COMPACT_WINDOW set or ≤ 256K: 60% of effectiveContextWindow
+//   - > 256K and ≤ 512K: 35% of context window
+//   - > 512K: 360K (fixed)
+func (c CompactConfig) compactionTarget() int {
+	if c.autoCompactThreshold() <= 0 {
+		return 0
+	}
+
+	if c.AutoCompactWindow > 0 || c.ModelContextWindow <= 256_000 {
+		t := c.effectiveContextWindow() * 60 / 100
+		if t < 0 {
+			return 0
+		}
+		return t
+	}
+	if c.ModelContextWindow <= 512_000 {
+		return c.ModelContextWindow * 35 / 100
+	}
+	return 360_000
 }
 
 // warningThreshold returns the token count at which to emit a warning event.
@@ -216,9 +257,15 @@ func (e *QueryEngine) compactMessages(ctx context.Context, messages []api.Messag
 	log.Debug("Starting context compaction", "messageCount", len(messages))
 
 	// Pre-flight check — skip in-session compaction if messages are too large.
-	// Reserve MIN_SAFETY_OVERHEAD for system prompt + tools + compaction instruction,
-	// plus SUMMARY_MAX_TOKENS for the summary output.
-	maxMessagesTokens := cfg.effectiveContextWindow() - MIN_SAFETY_OVERHEAD - SUMMARY_MAX_TOKENS
+	// Reserve wire overhead (system prompt + tools + fixed) for non-message payload,
+	// plus SUMMARY_MAX_TOKENS for the summary output. Falls back to MIN_SAFETY_OVERHEAD
+	// when precise overhead cannot be computed.
+	wireOverhead := estimateSystemAndToolTokens(systemPrompt, e.toolParams)
+	if e.tokenEstimator != nil {
+		wireOverhead = e.tokenEstimator.estimateSystemAndToolTokensCalibrated(systemPrompt, e.toolParams, e.model)
+	}
+	wireOverhead = effectiveWireOverhead(wireOverhead)
+	maxMessagesTokens := cfg.effectiveContextWindow() - wireOverhead - SUMMARY_MAX_TOKENS
 	var estimated int
 	if e.tokenEstimator != nil {
 		estimated = e.tokenEstimator.EstimateMessages(messages, e.model)
@@ -228,7 +275,8 @@ func (e *QueryEngine) compactMessages(ctx context.Context, messages []api.Messag
 
 	if estimated <= maxMessagesTokens {
 		// Step 1: In-session compaction — reuses the cached system prompt + tools prefix
-		compacted, err := e.inSessionCompact(ctx, messages, systemPrompt)
+		targetTokens := cfg.compactionTarget()
+		compacted, err := e.inSessionCompact(ctx, messages, systemPrompt, targetTokens)
 		if err == nil {
 			return compacted, nil
 		}
@@ -251,7 +299,6 @@ func (e *QueryEngine) compactMessages(ctx context.Context, messages []api.Messag
 	return e.fallbackSummaryCompact(ctx, messages, cfg, systemPrompt)
 }
 
-// compactSummaryRequirements is the shared summary specification used by both
 // in-session compaction and fallback summary compaction. Both paths must produce
 // identical output format so the compacted chain is consistent regardless of
 // which path succeeded.
@@ -282,13 +329,24 @@ var inSessionCompactPrompt = "<system-reminder>\nThe context window is approachi
 // to ensure consistent output format.
 var fallbackCompactSystemPrompt = []string{"You are a helpful assistant that summarizes conversations. Do not continue the conversation or call any tools. " + compactSummaryRequirements}
 
+// fallbackSummarySystemPrompt returns the fallback summary system prompt, optionally
+// annotated with pinned messages excluded from summarization.
+func fallbackSummarySystemPrompt(originalMessages []api.Message) []string {
+	pinnedNote := formatPinnedSummaryNote(pinnedMessagesForSummary(originalMessages))
+	if pinnedNote == "" {
+		return fallbackCompactSystemPrompt
+	}
+	return []string{fallbackCompactSystemPrompt[0] + "\n" + pinnedNote}
+}
+
 // inSessionCompact performs compaction by appending a summary instruction to the
 // existing message chain, sharing the cached system prompt + tools + message
 // prefix with the main session. Only the appended instruction is cold content.
-func (e *QueryEngine) inSessionCompact(ctx context.Context, messages []api.Message, systemPrompt []string) ([]api.Message, error) {
+func (e *QueryEngine) inSessionCompact(ctx context.Context, messages []api.Message, systemPrompt []string, targetTokens int) ([]api.Message, error) {
+	pinnedNote := formatPinnedSummaryNote(pinnedMessagesForSummary(messages))
 	compactMsg := api.Message{
 		Role:    api.RoleUser,
-		Content: inSessionCompactPrompt,
+		Content: inSessionCompactPrompt + "\n" + pinnedNote,
 	}
 	messagesWithInstruction := make([]api.Message, len(messages), len(messages)+1)
 	copy(messagesWithInstruction, messages)
@@ -323,7 +381,7 @@ func (e *QueryEngine) inSessionCompact(ctx context.Context, messages []api.Messa
 		return nil, fmt.Errorf("empty summary from in-session compaction")
 	}
 
-	return buildCompactedChain(messages, summary.String()), nil
+	return buildCompactedChain(messages, summary.String(), targetTokens), nil
 }
 
 // trySessionMemoryCompact attempts compaction via session memory.
@@ -382,7 +440,7 @@ func (e *QueryEngine) fallbackSummaryCompact(ctx context.Context, messages []api
 			Name:                "compact_fallback",
 			Messages:            currentMessages,
 			MaxTokens:           SUMMARY_MAX_TOKENS,
-			SummarySystemPrompt: fallbackCompactSystemPrompt,
+			SummarySystemPrompt: fallbackSummarySystemPrompt(messages),
 			DisableThinking:     true,
 		}
 
@@ -400,45 +458,10 @@ func (e *QueryEngine) fallbackSummaryCompact(ctx context.Context, messages []api
 			continue
 		}
 
-		return buildCompactedChain(messages, result.Text), nil
+		return buildCompactedChain(messages, result.Text, cfg.compactionTarget()), nil
 	}
 
 	return nil, fmt.Errorf("fallback summary compact failed after %d attempts: %w", maxRetries, lastErr)
-}
-
-// truncateLargeToolResults truncates tool result content that exceeds maxLen
-// characters, replacing the middle with a truncation marker.
-// Allocates new slices only when truncation is actually needed.
-func truncateLargeToolResults(messages []api.Message, maxLen int) []api.Message {
-	var result []api.Message // nil until first mutation
-	for i, msg := range messages {
-		if len(msg.ToolResults) == 0 {
-			continue
-		}
-		mutatedIdx := -1
-		for j, tr := range msg.ToolResults {
-			if len(tr.Content) > maxLen {
-				if result == nil {
-					result = make([]api.Message, len(messages))
-					copy(result, messages)
-				}
-				if mutatedIdx != i {
-					newResults := make([]api.ToolResultBlock, len(msg.ToolResults))
-					copy(newResults, msg.ToolResults)
-					result[i].ToolResults = newResults
-					mutatedIdx = i
-				}
-				half := maxLen / 2
-				result[i].ToolResults[j].Content = tr.Content[:half] +
-					"\n... [truncated for compaction] ...\n" +
-					tr.Content[len(tr.Content)-half:]
-			}
-		}
-	}
-	if result == nil {
-		return messages
-	}
-	return result
 }
 
 // isPromptTooLongError checks if an error indicates a prompt-too-long condition.
@@ -535,32 +558,172 @@ func dropOldestAPIRoundGroup(messages []api.Message) []api.Message {
 }
 
 // buildCompactedChain builds the new message chain after compaction.
-// Order: boundaryMarker → summaryMessages → messagesToKeep → attachments → hookResults
+// Order: boundaryMarker → olderPinnedMessages → tailMessages
 //
-// The cut point never splits a tool_use/tool_result pair. If the boundary
-// falls between an assistant with tool_use and its user with tool_results,
-// the boundary is moved earlier to include the full pair.
-func buildCompactedChain(originalMessages []api.Message, summary string) []api.Message {
-	messagesToKeep := 10
-	if len(originalMessages) <= messagesToKeep {
-		// Nothing to trim — keep everything
-	} else {
-		cutIdx := len(originalMessages) - messagesToKeep
-		// If the message at cutIdx is a user with tool_results, the preceding
-		// assistant (cutIdx-1) likely has the matching tool_use. Include both.
-		if cutIdx > 0 && originalMessages[cutIdx].Role == "user" && len(originalMessages[cutIdx].ToolResults) > 0 {
-			cutIdx--
+// targetTokens is the compactionTarget used to derive tailTokenBudget. The cut
+// point never splits a tool_use/tool_result pair. Pinned messages from the
+// original chain always survive; their token cost reduces the tail budget.
+func buildCompactedChain(originalMessages []api.Message, summary string, targetTokens int) []api.Message {
+	var olderPinned []api.Message
+	var nonPinned []api.Message
+	for _, msg := range originalMessages {
+		if msg.Pinned {
+			olderPinned = append(olderPinned, msg)
+		} else {
+			nonPinned = append(nonPinned, msg)
 		}
-		originalMessages = originalMessages[cutIdx:]
+	}
+
+	boundaryContent := "<system-reminder>\n" + compactSummaryPrefix + summary + "\n</system-reminder>"
+	boundaryMsg := api.Message{
+		Role:    api.RoleUser,
+		Content: boundaryContent,
+		Pinned:  true,
+	}
+
+	pinnedTokens := estimateTokens(olderPinned)
+	tailTokenBudget := targetTokens - estimateMessageTokens(boundaryMsg) - pinnedTokens
+	if tailTokenBudget < 0 {
+		tailTokenBudget = 0
+	}
+
+	var tail []api.Message
+	if tailTokenBudget > 0 {
+		tail = selectTailMessages(nonPinned, tailTokenBudget)
+	}
+	tail = pruneTailToolResults(tail)
+
+	var result []api.Message
+	result = append(result, boundaryMsg)
+	result = append(result, olderPinned...)
+	result = append(result, tail...)
+	return enforcePinnedLimit(result)
+}
+
+// tailMessageCount returns the number of tail messages preserved after compaction,
+// excluding the boundary marker and any older pinned messages.
+func tailMessageCount(compacted []api.Message) int {
+	if len(compacted) <= 1 {
+		return 0
+	}
+	i := 1
+	for i < len(compacted) && compacted[i].Pinned {
+		i++
+	}
+	return len(compacted) - i
+}
+
+// estimateMessageTokens estimates tokens for a single message using the
+// uncalibrated charset-aware heuristic.
+func estimateMessageTokens(msg api.Message) int {
+	return estimateTokens([]api.Message{msg})
+}
+
+// selectTailMessages chooses tail messages by walking backwards from the end,
+// accumulating token estimates until the budget is exceeded. Always keeps at
+// least minTailMessages and at most maxTailMessages.
+func selectTailMessages(messages []api.Message, tailTokenBudget int) []api.Message {
+	n := len(messages)
+	if n <= minTailMessages {
+		return messages
+	}
+
+	startIdx := n - minTailMessages
+	accumulated := estimateTokens(messages[startIdx:])
+
+	for startIdx > 0 && (n-startIdx) < maxTailMessages {
+		prevTokens := estimateMessageTokens(messages[startIdx-1])
+		if tailTokenBudget > 0 && accumulated+prevTokens > tailTokenBudget {
+			break
+		}
+		startIdx--
+		accumulated += prevTokens
+	}
+
+	// If cut falls between assistant tool_use and user tool_results, include both.
+	if startIdx > 0 && messages[startIdx].Role == api.RoleUser && len(messages[startIdx].ToolResults) > 0 {
+		startIdx--
+	}
+
+	return messages[startIdx:]
+}
+
+// totalUserRounds counts user messages as API round markers.
+func totalUserRounds(messages []api.Message) int {
+	count := 0
+	for _, msg := range messages {
+		if msg.Role == api.RoleUser {
+			count++
+		}
+	}
+	return count
+}
+
+// userRoundNumber returns the 1-based API round number for the message at idx.
+func userRoundNumber(messages []api.Message, idx int) int {
+	round := 0
+	for i := 0; i <= idx; i++ {
+		if messages[i].Role == api.RoleUser {
+			round++
+		}
+	}
+	return round
+}
+
+// pruneTailToolResults trims oversized tool results in tail messages belonging
+// to API rounds older than the most recent 2. Error tool results are preserved.
+// Operates on a copy; the original slice is returned unchanged when no pruning
+// is needed.
+func pruneTailToolResults(messages []api.Message) []api.Message {
+	totalRounds := totalUserRounds(messages)
+	if totalRounds <= 2 {
+		return messages
 	}
 
 	var result []api.Message
-	result = append(result, api.Message{
-		Role:    api.RoleUser,
-		Content: "<system-reminder>\n" + compactSummaryPrefix + summary + "\n</system-reminder>",
-	})
-	result = append(result, originalMessages...)
+	for i, msg := range messages {
+		if len(msg.ToolResults) == 0 {
+			continue
+		}
+		roundNum := userRoundNumber(messages, i)
+		if roundNum > totalRounds-2 {
+			continue
+		}
+
+		for j, tr := range msg.ToolResults {
+			if tr.IsError || len(tr.Content) <= tailPruneThresholdChars {
+				continue
+			}
+			if result == nil {
+				result = make([]api.Message, len(messages))
+				copy(result, messages)
+			}
+			newResults := make([]api.ToolResultBlock, len(msg.ToolResults))
+			copy(newResults, msg.ToolResults)
+			newResults[j].Content = formatTrimmedToolResult(tr.Content)
+			result[i].ToolResults = newResults
+		}
+	}
+	if result == nil {
+		return messages
+	}
 	return result
+}
+
+// formatTrimmedToolResult produces the elided tool result content for tail pruning.
+func formatTrimmedToolResult(content string) string {
+	head := content
+	if len(head) > tailPruneHeadChars {
+		head = head[:tailPruneHeadChars]
+	}
+	tail := content
+	if len(tail) > tailPruneTailChars {
+		tail = tail[len(tail)-tailPruneTailChars:]
+	}
+	return fmt.Sprintf(
+		"[Trimmed: original %d chars. First 1024 chars shown, last 512 chars shown. Re-run the tool if the full data is needed.]\n%s\n...\n%s",
+		len(content), head, tail,
+	)
 }
 
 // compactSummaryPrefix is the prefix added by buildCompactedChain to the boundary marker.
@@ -654,7 +817,7 @@ func (e *QueryEngine) emergencyCompact(ctx context.Context, messages []api.Messa
 		log.Warn("Emergency in-session summary failed, using mechanical summary", "error", err)
 	}
 
-	result := normalizeCompactedChain(buildCompactedChain(truncated, summaryText))
+	result := normalizeCompactedChain(buildCompactedChain(truncated, summaryText, e.compactConfig.compactionTarget()))
 	log.Info("Emergency compaction completed", "newMessageCount", len(result))
 	return result, nil
 }

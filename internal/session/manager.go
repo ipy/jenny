@@ -62,12 +62,16 @@ type TranscriptEntry struct {
 	CompactMetadata *CompactMetadata `json:"compact_metadata,omitempty"`
 
 	// Thinking fields - for reasoning/thinking block persistence
-	Thinking  string `json:"thinking,omitempty"`
-	Signature string `json:"signature,omitempty"`
+	Thinking    string `json:"thinking,omitempty"`
+	Signature   string `json:"signature,omitempty"`
+	HasThinking bool   `json:"has_thinking,omitempty"`
 
 	// Subagent fields - for subagent entries in the parent session transcript
 	SubagentID   string `json:"subagent_id,omitempty"`
 	SubagentName string `json:"subagent_name,omitempty"`
+
+	// Pinned marks chain entries that must survive compaction verbatim.
+	Pinned bool `json:"pinned,omitempty"`
 }
 
 // CompactMetadata holds metadata about a compaction boundary.

@@ -53,11 +53,7 @@ Every tool execution context is wrapped with an MCP progress token (`mcp.WithPro
 
 ## Unknown Tool
 
-Immediate synthetic error — never hang:
-
-```
-Error: No such tool available: {name}
-```
+Immediate synthetic error — never hang. See [tool-name-resolution.md](./tool-name-resolution.md) for name resolution and diagnostic error format.
 
 ## Result Ordering
 

@@ -277,7 +277,7 @@ func (p *anthropicProvider) buildMessages(messages []Message, toolResults []Tool
 	for _, msg := range messages {
 		contentBlocks := make([]AnthropicContentBlock, 0)
 
-		if msg.Thinking != "" {
+		if msg.Thinking != "" || msg.HasThinking {
 			contentBlocks = append(contentBlocks, AnthropicContentBlock{
 				Type:      BlockTypeThinking,
 				Thinking:  msg.Thinking,

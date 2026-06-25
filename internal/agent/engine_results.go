@@ -37,25 +37,45 @@ func (e *QueryEngine) emitToolProgress(toolUseID, toolName, content string) {
 // persists tool results to transcript. Returns the collected tool results, a
 // boolean indicating whether synthetic (interrupted) results were generated,
 // and any execution error.
-func (e *QueryEngine) executeAndProcessTools(ctx context.Context, toolUseBlocks []api.ToolUseBlock, sessionID, cwd string) ([]api.ToolResult, bool, error) {
-	// Convert API tool use blocks to executor format
+//
+// When lgDecisions is non-nil and matches toolUseBlocks length, Loop Guard
+// decisions control skip-duplicate, block, and execute behavior.
+func (e *QueryEngine) executeAndProcessTools(ctx context.Context, toolUseBlocks []api.ToolUseBlock, sessionID, cwd string, lgDecisions []ToolCallDecision) ([]api.ToolResult, bool, error) {
+	// Convert API tool use blocks to executor format; honor Loop Guard blocks/skips.
 	execBlocks := make([]toolUseBlock, 0, len(toolUseBlocks))
-	for _, tb := range toolUseBlocks {
+	execIndexMap := make([]int, 0, len(toolUseBlocks)) // execBlocks index -> toolUseBlocks index
+	prebuilt := make(map[int]api.ToolResult)
+
+	useLoopGuard := len(lgDecisions) == len(toolUseBlocks) && len(lgDecisions) > 0
+
+	for i, tb := range toolUseBlocks {
+		if useLoopGuard {
+			switch lgDecisions[i].Action {
+			case ToolActionBlock:
+				prebuilt[i] = api.ToolResult{
+					ToolUseID: tb.ID,
+					Content:   lgDecisions[i].BlockMsg,
+					IsError:   true,
+				}
+				continue
+			}
+		}
 		execBlocks = append(execBlocks, toolUseBlock{
 			ID:    tb.ID,
 			Name:  tb.Name,
 			Input: tb.Input,
 		})
+		execIndexMap = append(execIndexMap, i)
 	}
 
 	// Emit tool_progress started events before execution begins
 	if e.streamCfg.Enabled {
-		for _, block := range execBlocks {
+		for _, tb := range toolUseBlocks {
 			msg := StreamMessage{
 				Type:            "tool_progress",
 				Subtype:         "started",
-				ToolName:        block.Name,
-				ToolUseID:       block.ID,
+				ToolName:        tb.Name,
+				ToolUseID:       tb.ID,
 				SessionID:       sessionID,
 				ParentToolUseID: nil,
 				Uuid:            GenerateUUID(),
@@ -117,6 +137,22 @@ func (e *QueryEngine) executeAndProcessTools(ctx context.Context, toolUseBlocks 
 		return nil, false, fmt.Errorf("executing tools: %w", err)
 	}
 
+	// Map executor results back to original tool indices.
+	executedResults := make(map[int]api.ToolResult, len(execResults))
+	for j, res := range execResults {
+		origIdx := execIndexMap[j]
+		executedResults[origIdx] = api.ToolResult{
+			ToolUseID: res.ToolUseID,
+			Content:   res.Content,
+			IsError:   res.IsError,
+		}
+	}
+
+	// Merge prebuilt blocked results.
+	for i, tr := range prebuilt {
+		executedResults[i] = tr
+	}
+
 	// Sync active skills after tool execution (they may have changed)
 	e.syncActiveSkills()
 
@@ -125,20 +161,41 @@ func (e *QueryEngine) executeAndProcessTools(ctx context.Context, toolUseBlocks 
 	// replacement. We need this decision BEFORE appending to toolResults to
 	// avoid duplicate ToolUseID entries in the user message (fixes
 	// iter88-dup-tool-results).
-	interrupted := make([]bool, len(execResults))
+	interrupted := make([]bool, len(toolUseBlocks))
 	if ctx.Err() != nil {
-		for i, res := range execResults {
-			interrupted[i] = res.Interrupted
+		for j, er := range execResults {
+			if er.Interrupted {
+				interrupted[execIndexMap[j]] = true
+			}
 		}
 	}
 
 	// Process results and collect for API response
 	var toolResults []api.ToolResult
 	hasSynthetic := false
-	for i, res := range execResults {
+	for i := range toolUseBlocks {
+		res, ok := executedResults[i]
+		if !ok {
+			res = api.ToolResult{
+				ToolUseID: toolUseBlocks[i].ID,
+				Content:   "Tool execution skipped",
+				IsError:   true,
+			}
+		}
+
 		// Capture structured output result if StructuredOutput was called
-		if i < len(execBlocks) && execBlocks[i].Name == "StructuredOutput" && !res.IsError {
+		if toolUseBlocks[i].Name == "StructuredOutput" && !res.IsError {
 			e.structuredOutputResult = res.Content
+		}
+
+		// Notify Loop Guard of successful writes to new paths.
+		if e.loopGuard != nil && !res.IsError {
+			switch toolUseBlocks[i].Name {
+			case "write", "edit", "notebook_edit":
+				if path := extractStringField(toolUseBlocks[i].Input, "file_path"); path != "" {
+					e.loopGuard.NotifyFileWrite(path)
+				}
+			}
 		}
 
 		// For interrupted tools, replace executor's partial result with a
@@ -151,7 +208,7 @@ func (e *QueryEngine) executeAndProcessTools(ctx context.Context, toolUseBlocks 
 		if interrupted[i] {
 			emitContent = "Tool execution interrupted"
 			emitIsError = true
-			emitToolUseID = execBlocks[i].ID
+			emitToolUseID = toolUseBlocks[i].ID
 			hasSynthetic = true
 		}
 

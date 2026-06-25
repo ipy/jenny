@@ -22,9 +22,8 @@ import (
 
 // WebFetch limits.
 const (
-	webFetchMaxReadBytes     = 256 * 1024       // max bytes to read from network (headroom for HTML→markdown expansion)
-	webFetchMaxContentChars  = 128 * 1024       // 128K chars content cap
-	webFetchTimeout          = 60 * time.Second // request timeout
+	webFetchMaxReadBytes = 256 * 1024       // max bytes to read from network
+	webFetchTimeout      = 60 * time.Second // request timeout
 	webFetchMaxRedirects     = 10               // max redirect hops
 	webFetchMaxURLLength     = 2000             // max URL length
 	webFetchBlocklistTimeout = 10 * time.Second // DNS resolution timeout
@@ -168,6 +167,8 @@ type WebFetchTool struct {
 	responseCache *fetchCache    // 15 min / 50 MB LRU
 	hostnameCache *hostnameCache // 5 min TTL
 	skipBlocklist bool           // testing-only: bypass blocklist check
+	sessionID     string
+	projectRoot   string
 }
 
 // NewWebFetchTool creates a new WebFetchTool.
@@ -181,6 +182,12 @@ func NewWebFetchTool() *WebFetchTool {
 // WithSkipBlocklist disables the blocklist check. Used in tests with httptest servers.
 func (t *WebFetchTool) WithSkipBlocklist() *WebFetchTool {
 	t.skipBlocklist = true
+	return t
+}
+
+// WithSessionID sets the session ID for spill directory scoping.
+func (t *WebFetchTool) WithSessionID(id string) *WebFetchTool {
+	t.sessionID = id
 	return t
 }
 
@@ -216,6 +223,8 @@ func (t *WebFetchTool) InputSchema() map[string]any {
 
 // Execute fetches the URL and returns the content.
 func (t *WebFetchTool) Execute(ctx context.Context, input map[string]any, cwd string) (*ToolResult, error) {
+	t.projectRoot = cwd
+
 	// Extract URL parameter.
 	urlStr, ok := input["url"].(string)
 	if !ok || urlStr == "" {
@@ -361,20 +370,11 @@ func (t *WebFetchTool) fetch(ctx context.Context, parsedURL *url.URL, urlStr str
 	// Check if this is HTML content.
 	if contentType == "text/html" || contentType == "application/xhtml+xml" || contentType == "" {
 		if raw {
-			content, truncated := t.truncateContent(string(body))
-			return &ToolResult{
-				Content:   content,
-				IsError:   false,
-				Truncated: truncated,
-			}, nil
+			return t.spillFetchResult(string(body), false), nil
 		}
 		// Treat empty Content-Type as HTML (common for web pages).
-		markdown, truncated := t.convertHTMLToMarkdown(string(body))
-		return &ToolResult{
-			Content:   markdown,
-			IsError:   false,
-			Truncated: truncated,
-		}, nil
+		markdown := t.convertHTMLToMarkdown(string(body))
+		return t.spillFetchResult(markdown, false), nil
 	}
 
 	// Binary content — save to disk.
@@ -387,36 +387,25 @@ func (t *WebFetchTool) fetch(ctx context.Context, parsedURL *url.URL, urlStr str
 		"Content-Type: %s\nSize: %d bytes\nSaved to: %s",
 		contentType, len(body), savedPath,
 	)
-	return &ToolResult{
-		Content: contentSummary,
-		IsError: false,
-	}, nil
+	return t.spillFetchResult(contentSummary, false), nil
 }
 
-// convertHTMLToMarkdown converts HTML to markdown and caps the output at
-// webFetchMaxContentChars characters.
-func (t *WebFetchTool) convertHTMLToMarkdown(htmlInput string) (string, bool) {
+func (t *WebFetchTool) spillFetchResult(content string, truncated bool) *ToolResult {
+	sr := CheckAndSpill(content, spillConfig(t.sessionID, t.projectRoot))
+	return &ToolResult{
+		Content:   sr.Content,
+		IsError:   false,
+		Truncated: truncated || sr.Truncated,
+	}
+}
+
+// convertHTMLToMarkdown converts HTML to markdown.
+func (t *WebFetchTool) convertHTMLToMarkdown(htmlInput string) string {
 	markdown, err := htmltomarkdown.ConvertString(htmlInput)
 	if err != nil {
-		// Fallback: return the raw HTML if conversion fails.
-		markdown = htmlInput
+		return htmlInput
 	}
-
-	return t.truncateContent(markdown)
-}
-
-// truncateContent caps content at webFetchMaxContentChars characters (rune-safe).
-func (t *WebFetchTool) truncateContent(content string) (string, bool) {
-	if len(content) <= webFetchMaxContentChars {
-		return content, false
-	}
-	note := fmt.Sprintf("\n\n[Content truncated at %d characters]", webFetchMaxContentChars)
-	runes := []rune(content)
-	maxRunes := webFetchMaxContentChars - len(note)
-	if maxRunes > len(runes) {
-		maxRunes = len(runes)
-	}
-	return string(runes[:maxRunes]) + note, true
+	return markdown
 }
 
 // saveBinaryToDisk saves binary data to ~/.jenny/fetched/ and returns the path.

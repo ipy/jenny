@@ -279,9 +279,10 @@ func (p *openAIProvider) buildMessages(messages []Message, toolResults []ToolRes
 		case RoleAssistant:
 			sdkMsg := OpenAIMessage{Role: RoleAssistant}
 			sdkMsg.SetContent(msg.Content)
-			// Round-trip thinking content from transcript for multi-turn sessions
-			if msg.Thinking != "" {
-				sdkMsg.ReasoningContent = msg.Thinking
+			// Round-trip thinking content from transcript for multi-turn sessions.
+			// HasThinking preserves empty reasoning_content for DeepSeek.
+			if msg.Thinking != "" || msg.HasThinking {
+				sdkMsg.ReasoningContent = &msg.Thinking
 			}
 			if len(msg.ToolUse) > 0 {
 				sdkMsg.ToolCalls = make([]OpenAIToolCall, 0, len(msg.ToolUse))
@@ -371,10 +372,11 @@ func (p *openAIProvider) parseResponse(resp *OpenAIResponse) (*Response, error) 
 		response.StopReason = StopReason(choice.FinishReason)
 	}
 
-	if choice.Message.ReasoningContent != "" {
+	if choice.Message.ReasoningContent != nil {
 		response.Content = append(response.Content, ContentBlock{
-			Type:     BlockTypeThinking,
-			Thinking: choice.Message.ReasoningContent,
+			Type:        BlockTypeThinking,
+			Thinking:    *choice.Message.ReasoningContent,
+			HasThinking: true,
 		})
 	}
 
@@ -639,6 +641,7 @@ func (p *openAIProvider) processStreamChunk(chunk *OpenAIStreamChunk, acc *openA
 	if delta.ReasoningContent != "" {
 		if !acc.thinkingStarted {
 			acc.thinkingStarted = true
+			acc.hasThinking = true
 			acc.thinkingIndex = acc.nextBlockIndex()
 			blocksChan <- StreamContentBlock{
 				Type: "stream_event",
@@ -676,7 +679,7 @@ func (p *openAIProvider) processStreamChunk(chunk *OpenAIStreamChunk, acc *openA
 				},
 			}
 			blocksChan <- StreamContentBlock{Block: ContentBlock{
-				Type: BlockTypeThinking, Thinking: acc.getThinking(),
+				Type: BlockTypeThinking, Thinking: acc.getThinking(), HasThinking: true,
 			}}
 		}
 		if !acc.contentStarted {
@@ -722,7 +725,7 @@ func (p *openAIProvider) processStreamChunk(chunk *OpenAIStreamChunk, acc *openA
 					},
 				}
 				blocksChan <- StreamContentBlock{Block: ContentBlock{
-					Type: BlockTypeThinking, Thinking: acc.getThinking(),
+					Type: BlockTypeThinking, Thinking: acc.getThinking(), HasThinking: true,
 				}}
 			}
 			if acc.contentStarted && !acc.contentStopped {
@@ -787,7 +790,7 @@ func (p *openAIProvider) processStreamChunk(chunk *OpenAIStreamChunk, acc *openA
 				},
 			}
 			blocksChan <- StreamContentBlock{Block: ContentBlock{
-				Type: BlockTypeThinking, Thinking: acc.getThinking(),
+				Type: BlockTypeThinking, Thinking: acc.getThinking(), HasThinking: true,
 			}}
 		}
 		// Close any open text block
@@ -835,6 +838,7 @@ type openAIStreamAccumulator struct {
 	blockCounter     int
 	thinkingStarted  bool
 	thinkingStopped  bool
+	hasThinking      bool // true if any reasoning_content delta was received (even empty)
 	thinkingIndex    int
 	contentStarted   bool
 	contentStopped   bool
@@ -940,10 +944,11 @@ func (acc *openAIStreamAccumulator) getToolUseBlock(index int) *ContentBlock {
 func (acc *openAIStreamAccumulator) finalize() []ContentBlock {
 	var blocks []ContentBlock
 
-	if acc.thinking != "" {
+	if acc.thinking != "" || acc.hasThinking {
 		blocks = append(blocks, ContentBlock{
-			Type:     BlockTypeThinking,
-			Thinking: acc.thinking,
+			Type:        BlockTypeThinking,
+			Thinking:    acc.thinking,
+			HasThinking: true,
 		})
 	}
 

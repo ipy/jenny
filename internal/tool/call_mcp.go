@@ -12,11 +12,19 @@ import (
 // CallMcpTool provides dynamic MCP tool invocation. Instead of registering
 // individual MCP tools, this single tool delegates to connected MCP servers
 // at call time.
-type CallMcpTool struct{}
+type CallMcpTool struct {
+	sessionID string
+}
 
 // NewCallMcpTool creates a new CallMcpTool.
 func NewCallMcpTool() *CallMcpTool {
 	return &CallMcpTool{}
+}
+
+// WithSessionID sets the session ID for spill directory scoping.
+func (t *CallMcpTool) WithSessionID(id string) *CallMcpTool {
+	t.sessionID = id
+	return t
 }
 
 func (t *CallMcpTool) Name() string { return "call_mcp" }
@@ -86,10 +94,7 @@ func (t *CallMcpTool) Execute(ctx context.Context, input map[string]any, cwd str
 		}, nil
 	}
 
-	return &ToolResult{
-		Content: result,
-		IsError: false,
-	}, nil
+	return ApplySpillToToolResult(result, spillConfig(t.sessionID, cwd), false), nil
 }
 
 func formatServerList(servers []string) string {

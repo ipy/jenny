@@ -258,11 +258,8 @@ func TestWebFetchTool_ConvertHTMLToMarkdown(t *testing.T) {
 	tool := NewWebFetchTool()
 
 	html := `<h1>Hello World</h1><p>This is a <strong>test</strong>.</p>`
-	md, truncated := tool.convertHTMLToMarkdown(html)
+	md := tool.convertHTMLToMarkdown(html)
 
-	if truncated {
-		t.Error("expected not truncated for short HTML")
-	}
 	if !strings.Contains(md, "Hello World") {
 		t.Errorf("expected markdown to contain 'Hello World', got: %s", md)
 	}
@@ -295,11 +292,7 @@ func TestWebFetchTool_RawHTMLNoConversion(t *testing.T) {
 	tool := NewWebFetchTool()
 
 	html := `<html><body><h1>Test</h1><p>Hello</p></body></html>`
-	md, truncated := tool.convertHTMLToMarkdown(html)
-	if truncated {
-		t.Error("expected not truncated for short HTML")
-	}
-	// Markdown conversion should produce different output than raw HTML.
+	md := tool.convertHTMLToMarkdown(html)
 	if md == html {
 		t.Error("expected markdown conversion to differ from raw HTML")
 	}
@@ -308,25 +301,25 @@ func TestWebFetchTool_RawHTMLNoConversion(t *testing.T) {
 	}
 }
 
-func TestWebFetchTool_MarkdownCap(t *testing.T) {
+func TestWebFetchTool_LargeHTMLSpill(t *testing.T) {
 	tool := NewWebFetchTool()
 
-	// Generate HTML long enough to exceed the 128K content cap.
-	// Each <p>...</p> adds ~80 chars of markdown, so 2500 paragraphs = ~200K.
+	// Generate HTML long enough to exceed the 30K spill threshold.
 	var sb strings.Builder
 	sb.WriteString("<html><body>")
-	for i := range 2500 {
+	for i := range 500 {
 		sb.WriteString(fmt.Sprintf("<p>Paragraph number %d with some content to make it realistic and long enough to be meaningful.</p>", i))
 	}
 	sb.WriteString("</body></html>")
 
-	md, truncated := tool.convertHTMLToMarkdown(sb.String())
+	md := tool.convertHTMLToMarkdown(sb.String())
+	sr := CheckAndSpill(md, SpillConfig{})
 
-	if !truncated {
-		t.Error("expected truncated=true for very long HTML")
+	if !sr.Truncated {
+		t.Error("expected spill for large HTML output")
 	}
-	if len(md) > 140*1024 { // allow small overhead
-		t.Errorf("expected markdown to be capped near 128K chars, got %d", len(md))
+	if !sr.Spilled {
+		t.Error("expected content to be spilled to disk")
 	}
 }
 

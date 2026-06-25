@@ -37,12 +37,20 @@ type lspManager interface {
 
 // LSPTool provides Language Server Protocol operations for code intelligence.
 type LSPTool struct {
-	manager lspManager
+	manager     lspManager
+	sessionID   string
+	projectRoot string
 }
 
 // NewLSPTool creates a new LSP tool with the given server manager.
 func NewLSPTool(manager *lsp.ServerManager) *LSPTool {
 	return &LSPTool{manager: manager}
+}
+
+// WithSessionID sets the session ID for spill directory scoping.
+func (t *LSPTool) WithSessionID(id string) *LSPTool {
+	t.sessionID = id
+	return t
 }
 
 // newLSPToolForTesting creates a new LSP tool with any lspManager implementation.
@@ -96,6 +104,8 @@ func (t *LSPTool) InputSchema() map[string]any {
 
 // Execute runs the LSP tool with the given input.
 func (t *LSPTool) Execute(ctx context.Context, input map[string]any, cwd string) (*ToolResult, error) {
+	t.projectRoot = cwd
+
 	// Check if any LSP server is connected
 	if !t.manager.Connected() {
 		return &ToolResult{
@@ -223,10 +233,7 @@ func (t *LSPTool) executeGoToDefinition(ctx context.Context, input map[string]an
 	}
 
 	if len(locations) == 0 {
-		return &ToolResult{
-			Content: "no definition found",
-			IsError: false,
-		}, nil
+		return t.okResult("no definition found"), nil
 	}
 
 	var sb strings.Builder
@@ -234,10 +241,11 @@ func (t *LSPTool) executeGoToDefinition(ctx context.Context, input map[string]an
 	for _, loc := range locations {
 		sb.WriteString(fmt.Sprintf("  %s:%d:%d\n", loc.URI, loc.Line+1, loc.Start+1))
 	}
-	return &ToolResult{
-		Content: sb.String(),
-		IsError: false,
-	}, nil
+	return t.okResult(sb.String()), nil
+}
+
+func (t *LSPTool) okResult(content string) *ToolResult {
+	return ApplySpillToToolResult(content, spillConfig(t.sessionID, t.projectRoot), false)
 }
 
 // executeFindReferences executes the findReferences operation.
@@ -266,10 +274,7 @@ func (t *LSPTool) executeFindReferences(ctx context.Context, input map[string]an
 	}
 
 	if len(references) == 0 {
-		return &ToolResult{
-			Content: "no references found",
-			IsError: false,
-		}, nil
+		return t.okResult("no references found"), nil
 	}
 
 	var sb strings.Builder
@@ -277,10 +282,7 @@ func (t *LSPTool) executeFindReferences(ctx context.Context, input map[string]an
 	for _, ref := range references {
 		sb.WriteString(fmt.Sprintf("  %s:%d:%d\n", ref.URI, ref.Line+1, ref.Start+1))
 	}
-	return &ToolResult{
-		Content: sb.String(),
-		IsError: false,
-	}, nil
+	return t.okResult(sb.String()), nil
 }
 
 // executeHover executes the hover operation.
@@ -295,16 +297,10 @@ func (t *LSPTool) executeHover(ctx context.Context, input map[string]any, line, 
 	}
 
 	if result == nil {
-		return &ToolResult{
-			Content: "no hover information available",
-			IsError: false,
-		}, nil
+		return t.okResult("no hover information available"), nil
 	}
 
-	return &ToolResult{
-		Content: fmt.Sprintf("%s (line %d, char %d)", result.Contents, result.Line+1, result.Start+1),
-		IsError: false,
-	}, nil
+	return t.okResult(fmt.Sprintf("%s (line %d, char %d)", result.Contents, result.Line+1, result.Start+1)), nil
 }
 
 // executeDocumentSymbol executes the documentSymbol operation.
@@ -319,10 +315,7 @@ func (t *LSPTool) executeDocumentSymbol(ctx context.Context, input map[string]an
 	}
 
 	if len(symbols) == 0 {
-		return &ToolResult{
-			Content: "no symbols found",
-			IsError: false,
-		}, nil
+		return t.okResult("no symbols found"), nil
 	}
 
 	var sb strings.Builder
@@ -334,10 +327,7 @@ func (t *LSPTool) executeDocumentSymbol(ctx context.Context, input map[string]an
 		}
 		sb.WriteString(fmt.Sprintf("%s%s %s (line %d)\n", indent, sym.Kind, sym.Name, sym.Line+1))
 	}
-	return &ToolResult{
-		Content: sb.String(),
-		IsError: false,
-	}, nil
+	return t.okResult(sb.String()), nil
 }
 
 // executeWorkspaceSymbol executes the workspaceSymbol operation.
@@ -365,10 +355,7 @@ func (t *LSPTool) executeWorkspaceSymbol(ctx context.Context, input map[string]a
 	}
 
 	if len(symbols) == 0 {
-		return &ToolResult{
-			Content: "no symbols found",
-			IsError: false,
-		}, nil
+		return t.okResult("no symbols found"), nil
 	}
 
 	var sb strings.Builder
@@ -376,10 +363,7 @@ func (t *LSPTool) executeWorkspaceSymbol(ctx context.Context, input map[string]a
 	for _, sym := range symbols {
 		sb.WriteString(fmt.Sprintf("  %s %s (%s:%d:%d)\n", sym.Kind, sym.Name, sym.URI, sym.Line+1, sym.Start+1))
 	}
-	return &ToolResult{
-		Content: sb.String(),
-		IsError: false,
-	}, nil
+	return t.okResult(sb.String()), nil
 }
 
 // executeGoToImplementation executes the goToImplementation operation.
@@ -394,10 +378,7 @@ func (t *LSPTool) executeGoToImplementation(ctx context.Context, input map[strin
 	}
 
 	if len(locations) == 0 {
-		return &ToolResult{
-			Content: "no implementation found",
-			IsError: false,
-		}, nil
+		return t.okResult("no implementation found"), nil
 	}
 
 	var sb strings.Builder
@@ -405,10 +386,7 @@ func (t *LSPTool) executeGoToImplementation(ctx context.Context, input map[strin
 	for _, loc := range locations {
 		sb.WriteString(fmt.Sprintf("  %s:%d:%d\n", loc.URI, loc.Line+1, loc.Start+1))
 	}
-	return &ToolResult{
-		Content: sb.String(),
-		IsError: false,
-	}, nil
+	return t.okResult(sb.String()), nil
 }
 
 // executePrepareCallHierarchy executes the prepareCallHierarchy operation.
@@ -423,10 +401,7 @@ func (t *LSPTool) executePrepareCallHierarchy(ctx context.Context, input map[str
 	}
 
 	if len(items) == 0 {
-		return &ToolResult{
-			Content: "no call hierarchy items found",
-			IsError: false,
-		}, nil
+		return t.okResult("no call hierarchy items found"), nil
 	}
 
 	var sb strings.Builder
@@ -434,10 +409,7 @@ func (t *LSPTool) executePrepareCallHierarchy(ctx context.Context, input map[str
 	for _, item := range items {
 		sb.WriteString(fmt.Sprintf("  %s %s (%s:%d:%d)\n", item.Kind, item.Name, item.URI, item.Line+1, item.Start+1))
 	}
-	return &ToolResult{
-		Content: sb.String(),
-		IsError: false,
-	}, nil
+	return t.okResult(sb.String()), nil
 }
 
 // executeIncomingCalls executes the incomingCalls operation.
@@ -452,10 +424,7 @@ func (t *LSPTool) executeIncomingCalls(ctx context.Context, input map[string]any
 	}
 
 	if len(items) == 0 {
-		return &ToolResult{
-			Content: "no incoming calls found",
-			IsError: false,
-		}, nil
+		return t.okResult("no incoming calls found"), nil
 	}
 
 	var sb strings.Builder
@@ -463,10 +432,7 @@ func (t *LSPTool) executeIncomingCalls(ctx context.Context, input map[string]any
 	for _, item := range items {
 		sb.WriteString(fmt.Sprintf("  %s %s (%s:%d:%d)\n", item.Kind, item.Name, item.URI, item.Line+1, item.Start+1))
 	}
-	return &ToolResult{
-		Content: sb.String(),
-		IsError: false,
-	}, nil
+	return t.okResult(sb.String()), nil
 }
 
 // executeOutgoingCalls executes the outgoingCalls operation.
@@ -481,10 +447,7 @@ func (t *LSPTool) executeOutgoingCalls(ctx context.Context, input map[string]any
 	}
 
 	if len(items) == 0 {
-		return &ToolResult{
-			Content: "no outgoing calls found",
-			IsError: false,
-		}, nil
+		return t.okResult("no outgoing calls found"), nil
 	}
 
 	var sb strings.Builder
@@ -492,10 +455,7 @@ func (t *LSPTool) executeOutgoingCalls(ctx context.Context, input map[string]any
 	for _, item := range items {
 		sb.WriteString(fmt.Sprintf("  %s %s (%s:%d:%d)\n", item.Kind, item.Name, item.URI, item.Line+1, item.Start+1))
 	}
-	return &ToolResult{
-		Content: sb.String(),
-		IsError: false,
-	}, nil
+	return t.okResult(sb.String()), nil
 }
 
 // uriToFilePath converts a file URI to a file path.

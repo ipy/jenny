@@ -287,7 +287,7 @@ func (r *Registry) Build() []Tool {
 			r.baseTools = append(r.baseTools, NewBashTool(r.permissionLevel).WithSessionID(r.sessionID).WithExecTool(execTool))
 		}
 
-		r.baseTools = append(r.baseTools, NewGlobTool(), NewGrepTool())
+		r.baseTools = append(r.baseTools, NewGlobTool(), NewGrepTool().WithSessionID(r.sessionID))
 		// Add MCP interaction tools only when MCP servers are configured
 		if r.hasMCPServers {
 			r.baseTools = append(r.baseTools, NewReadMcpResourceTool().WithSessionID(r.sessionID), NewMcpPromptTool())
@@ -371,7 +371,7 @@ func (r *Registry) Build() []Tool {
 
 		// Add WebFetch tool if enabled (P3).
 		if r.webFetchEnabled {
-			r.baseTools = append(r.baseTools, NewWebFetchTool())
+			r.baseTools = append(r.baseTools, NewWebFetchTool().WithSessionID(r.sessionID))
 		}
 
 		// Add WebSearch tool if enabled (P3).
@@ -381,12 +381,12 @@ func (r *Registry) Build() []Tool {
 				c := DefaultWebSearchConfig()
 				cfg = &c
 			}
-			r.baseTools = append(r.baseTools, NewWebSearchTool(cfg, r.nativeSearchRunner, r.searchClientProvider))
+			r.baseTools = append(r.baseTools, NewWebSearchTool(cfg, r.nativeSearchRunner, r.searchClientProvider).WithSessionID(r.sessionID))
 		}
 
 		// Add LSP tool if enabled and manager is provided (P3).
 		if r.lspEnabled && r.lspManager != nil {
-			r.baseTools = append(r.baseTools, NewLSPTool(r.lspManager))
+			r.baseTools = append(r.baseTools, NewLSPTool(r.lspManager).WithSessionID(r.sessionID))
 		}
 
 		// Add Skill tool if skills are discovered (P3).
@@ -431,7 +431,7 @@ func (r *Registry) Build() []Tool {
 	if r.dynamicMCP && r.hasMCPServers {
 		// Dynamic MCP mode: register call_mcp instead of individual MCP tools.
 		// Non-MCP tools from mcpTools (e.g. list_mcp_resources) are still added.
-		callMcp := NewCallMcpTool()
+		callMcp := NewCallMcpTool().WithSessionID(r.sessionID)
 		name := callMcp.Name()
 		if !r.denyRules[name] {
 			if enabled, ok := r.enabled[name]; !ok || enabled {

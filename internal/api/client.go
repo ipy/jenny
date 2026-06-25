@@ -441,6 +441,15 @@ type Message struct {
 	Thinking  string `json:"thinking,omitempty"`
 	Signature string `json:"signature,omitempty"`
 
+	// HasThinking signals that the reasoning/thinking field was present in the
+	// API response, even if the value was empty string. DeepSeek requires empty
+	// reasoning_content to be echoed back; without this flag the field is dropped.
+	HasThinking bool `json:"-"`
+
+	// Pinned marks messages that must survive compaction verbatim.
+	// Persisted via session.TranscriptEntry; not sent to provider APIs.
+	Pinned bool `json:"-"`
+
 	// Internal fields - not serialized to API
 	IsVirtual bool   `json:"-"`
 	ID        string `json:"-"`
@@ -466,6 +475,8 @@ type ToolUseBlock struct {
 	Name      string
 	Input     map[string]any
 	Signature string // Gemini 3 thought_signature for function call validation
+	// InputParseError is set when streaming tool input JSON could not be repaired.
+	InputParseError string
 }
 
 // ToolResultBlock represents a tool result block in a message.
@@ -547,6 +558,12 @@ type ContentBlock struct {
 	ToolID    string
 	ToolName  string
 	ToolInput map[string]any
+	// ToolInputParseError holds a diagnostic message when tool input JSON repair failed.
+	ToolInputParseError string
+
+	// HasThinking signals that the thinking/reasoning field was present in the
+	// API response even if empty. Used to preserve empty reasoning_content for DeepSeek.
+	HasThinking bool
 
 	// WebSearchResult holds web_search_tool_result data when Type is "web_search_tool_result".
 	WebSearchResult *WebSearchResultData

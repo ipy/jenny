@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ipy/jenny/internal/log"
 	"github.com/ipy/jenny/internal/mcp"
 	"github.com/ipy/jenny/internal/tool"
 )
@@ -173,14 +174,16 @@ func (e *ToolExecutor) partitionGroups(toolUseBlocks []toolUseBlock) []toolGroup
 
 	for i, block := range toolUseBlocks {
 		var t tool.Tool
+		var resolvedName string
 		if i < len(e.tools) && e.tools[i].Name() == block.Name {
 			t = e.tools[i]
+			resolvedName = block.Name
 		} else {
-			t = tool.FindTool(e.tools, block.Name)
-		}
-		// Fallback: "task" is an alias for "agent"
-		if t == nil && block.Name == "task" {
-			t = tool.FindTool(e.tools, "agent")
+			var wasResolved bool
+			t, resolvedName, wasResolved = tool.FindToolResolved(e.tools, block.Name)
+			if wasResolved && t != nil {
+				log.Debug("Resolved tool name alias", "attempted", block.Name, "resolved", resolvedName)
+			}
 		}
 
 		if t == nil {
@@ -398,7 +401,7 @@ func (e *ToolExecutor) executeSerial(parentCtx context.Context, batch []toolUseW
 		if tw.tool == nil {
 			results[tw.index] = toolResult{
 				ToolUseID: tw.block.ID,
-				Content:   fmt.Sprintf("Error: No such tool available: %s", tw.block.Name),
+				Content:   tool.FormatUnknownToolError(tw.block.Name, e.tools),
 				IsError:   true,
 			}
 			continue

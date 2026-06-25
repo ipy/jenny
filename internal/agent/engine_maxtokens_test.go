@@ -2,6 +2,8 @@ package agent
 
 import (
 	"testing"
+
+	"github.com/ipy/jenny/internal/jsonrepair"
 )
 
 func TestComplexityResult_OverallComplexity(t *testing.T) {
@@ -225,9 +227,9 @@ func TestExtractJSON(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := extractJSON(tt.input)
+		got := jsonrepair.ExtractJSON(tt.input)
 		if got != tt.expected {
-			t.Errorf("extractJSON(%q) = %q, want %q", tt.input, got, tt.expected)
+			t.Errorf("ExtractJSON(%q) = %q, want %q", tt.input, got, tt.expected)
 		}
 	}
 }
