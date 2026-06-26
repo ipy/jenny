@@ -372,8 +372,7 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 	}
 
 	// Build stream config for the subagent.
-	// Meta-evaluation mechanisms are disabled for subagents to avoid recursive
-	// overhead (e.g., a QA gate spawning its own complexity eval).
+	// Meta-evaluation mechanisms are disabled for subagents to avoid recursive overhead.
 	streamCfg := &StreamConfig{
 		Enabled:                false, // Subagent runs without streaming
 		Verbose:                false,
@@ -381,7 +380,6 @@ func (r *LocalSubagentRunner) RunSubagent(ctx context.Context, params tool.Subag
 		IsNamedAgent:           params.Name != "", // Mark as named agent for nested name blocking
 		DisableComplexityEval:  true,
 		DisableProgressMonitor: true,
-		DisableQAGate:          true,
 	}
 
 	// Named agents inherit parent config fields

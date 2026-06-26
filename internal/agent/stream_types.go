@@ -75,7 +75,6 @@ type StreamConfig struct {
 	DisableAutoMemory      bool                  // When true, the auto-memory directory is suppressed entirely
 	DisableComplexityEval  bool                  // When true, complexity evaluation fork is not dispatched
 	DisableProgressMonitor bool                  // When true, progress monitor is disabled (no L1/L2/L3, no fork-judge)
-	DisableQAGate          bool                  // When true, QA gate verification is skipped on end_turn
 	ParentEngine           *QueryEngine          // Parent engine for subagent cost merge (set before RunStream)
 	PermissionLevel        tool.PermissionLevel  // Parent's permission level for subagent inheritance
 	TaskStore              *tool.TaskStore       // Shared task store for persistence across sessions

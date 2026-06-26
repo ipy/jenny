@@ -34,9 +34,14 @@ func (e *ParseError) Error() string {
 }
 
 var (
-	unquotedKeyRE         = regexp.MustCompile(`([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*:)`)
-	drivePathRE           = regexp.MustCompile(`[A-Za-z]:\\[^\s"']*`)
-	suspiciousDrivePathRE = regexp.MustCompile(`[A-Za-z]:\\(?:t|f|n|r|b|u)`)
+	unquotedKeyRE = regexp.MustCompile(`([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*:)`)
+	// drivePathRE matches Windows drive paths with at least 2 chars in the path component,
+	// avoiding false-positives on single-char JSON escape sequences like f:\n in code.
+	drivePathRE = regexp.MustCompile(`[A-Za-z]:\\[^\s"']{2,}`)
+	// suspiciousDrivePathRE detects Windows paths where backslash-escape-like sequences
+	// (e.g., C:\temp, D:\new) need doubling. Requires a word char after the escape-like
+	// char to avoid matching JSON escapes in code patterns like "as f:\n" or "line:\n".
+	suspiciousDrivePathRE = regexp.MustCompile(`[A-Za-z]:\\(?:t|f|n|r|b|u)\w`)
 )
 
 // Repair attempts to parse and repair malformed JSON tool arguments.
@@ -499,7 +504,16 @@ func extractAfterPrefix(s, prefix string) string {
 	for i := start; i < len(s); i++ {
 		c := s[i]
 		if escaped {
-			b.WriteByte(c)
+			switch c {
+			case 'n':
+				b.WriteByte('\n')
+			case 't':
+				b.WriteByte('\t')
+			case 'r':
+				b.WriteByte('\r')
+			default:
+				b.WriteByte(c)
+			}
 			escaped = false
 			continue
 		}

@@ -264,3 +264,49 @@ func TestRepair_ArrayTrailingComma(t *testing.T) {
 		t.Fatalf("items=%#v", got["items"])
 	}
 }
+
+func TestRepair_CodeNewlinesNotCorruptedByWindowsPathFix(t *testing.T) {
+	// Regression test: patterns like "as f:\n" in code must not be treated as Windows paths.
+	// The suspicious path regex previously matched "f:\n" and doubled the backslash,
+	// corrupting JSON escape sequences into literal \n in the output.
+	input := `{"file_path": "/tmp/test.py", "content": "with open('x') as f:\n    for line in f:\n        pass\n"}`
+	got, err := jsonrepair.Repair(input, "write")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	content := got["content"].(string)
+	if contains := "\n    for line in f:\n"; !containsStr(content, contains) {
+		t.Errorf("content should have real newlines, got: %q", content)
+	}
+	// Should NOT have literal \n (backslash-n) in indentation positions
+	if containsStr(content, "f:\\n") {
+		t.Errorf("content has literal backslash-n where real newline expected: %q", content)
+	}
+}
+
+func TestRepair_RealWindowsPathStillFixed(t *testing.T) {
+	// Ensure actual Windows paths (C:\temp, D:\new) are still handled.
+	input := `{"file_path": "C:\temp\new\file.txt", "content": "hello"}`
+	got, err := jsonrepair.Repair(input, "write")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	path := got["file_path"].(string)
+	if path != `C:\temp\new\file.txt` {
+		t.Errorf("Windows path not preserved: %q", path)
+	}
+}
+
+func containsStr(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
+		findSubstring(s, substr))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

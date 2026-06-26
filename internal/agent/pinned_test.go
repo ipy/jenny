@@ -229,4 +229,3 @@ func TestRebuildMessages_BoundaryPinnedWithoutFlag(t *testing.T) {
 		t.Error("compaction boundary should be pinned even when transcript entry omits pinned field")
 	}
 }
-

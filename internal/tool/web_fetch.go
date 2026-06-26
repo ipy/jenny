@@ -22,8 +22,8 @@ import (
 
 // WebFetch limits.
 const (
-	webFetchMaxReadBytes = 256 * 1024       // max bytes to read from network
-	webFetchTimeout      = 60 * time.Second // request timeout
+	webFetchMaxReadBytes     = 256 * 1024       // max bytes to read from network
+	webFetchTimeout          = 60 * time.Second // request timeout
 	webFetchMaxRedirects     = 10               // max redirect hops
 	webFetchMaxURLLength     = 2000             // max URL length
 	webFetchBlocklistTimeout = 10 * time.Second // DNS resolution timeout

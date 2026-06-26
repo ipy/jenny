@@ -102,10 +102,6 @@ type QueryEngine struct {
 	// Counter for consecutive output_cap_hit events (for truncate-and-continue)
 	outputCapHitCount int
 
-	// QA gate state
-	qaRetryCount  int  // Number of QA retries used in this session
-	qaCompactSeen bool // True if auto-compact has occurred (signals long session)
-
 	// syntheticInFlight is set when a tool turn produced synthetic (interrupted)
 	// results and context.WithoutCancel was used. It counts remaining synthetic
 	// delivery iterations: 1 means one delivery turn is allowed, 0 means no more.
@@ -665,7 +661,6 @@ func (e *QueryEngine) persistSystemReminderWithPinned(sessionID string, content 
 		log.Error("Failed to persist system reminder", "error", err)
 	}
 }
-
 
 // syncActiveSkills syncs the activated skills from the skill activator to StreamConfig.
 // This should be called after each tool execution to keep the system prompt in sync.

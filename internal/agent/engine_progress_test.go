@@ -868,7 +868,7 @@ func TestProgressMonitor_L1SecondForkJudge_OnlyFiresOnce(t *testing.T) {
 		}
 	}
 
-	// First fork fires at L1-second
+	// Fork fires at L1-second
 	if !pm.ShouldForkProgressEval() {
 		t.Fatal("L1-second trigger should request fork")
 	}
@@ -1029,13 +1029,18 @@ func TestProgressMonitor_L1SecondDeferredDuringFork(t *testing.T) {
 		t.Errorf("expected level 0 after positive judge, got %d", pm.Level())
 	}
 
-	// Now L1.2 should NOT fire because counter was reset
-	msg2, terminate2 := pm.CheckAndInject()
-	if terminate2 {
-		t.Fatal("L1 should not terminate after positive judge")
+	// Re-escalate to L1-second again
+	for i := 0; i < l1SecondThreshold; i++ {
+		failBlock[0].Input["command"] = fmt.Sprintf("cmd2_%d", i)
+		pm.RecordTurn(failBlock, failResult)
+		if i == l1FirstThreshold-1 {
+			pm.CheckAndInject()
+		}
 	}
-	if msg2 != nil {
-		t.Fatal("L1.2 reminder should not fire after positive judge reset")
+
+	// Fork should NOT fire again (forkEvalFired is permanent)
+	if pm.ShouldForkProgressEval() {
+		t.Error("fork should not fire twice even after positive reset")
 	}
 }
 

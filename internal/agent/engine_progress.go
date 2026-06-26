@@ -63,8 +63,9 @@ type ProgressMonitor struct {
 	lastCommandHash        string
 	lastErrorText          string
 
-	// L2 fork-judge state
+	// L1.2 fork-judge state
 	forkDispatched bool
+	forkEvalFired  bool // Set once when L1.2 fork is dispatched; never cleared by positive results
 	forkResultCh   chan *ProgressEvalResult
 
 	// L3 fork-judge state: before hard termination, dispatch one final fork-judge.
@@ -467,7 +468,7 @@ func (pm *ProgressMonitor) CheckAndInject() (msg *api.Message, terminate bool) {
 	switch pm.level {
 	case ProgressLevelL1:
 		if pm.consecutiveNoProgress >= l1SecondThreshold && !pm.l1SecondFired {
-			// If a fork is in flight, defer the L1.2 reminder until the result arrives.
+			// Defer L1.2 reminder while fork-judge is in flight
 			if pm.forkDispatched {
 				return nil, false
 			}
@@ -561,15 +562,17 @@ func (pm *ProgressMonitor) State() map[string]any {
 }
 
 // ShouldForkProgressEval returns true when the L1-second fork-judge should be dispatched.
-// It fires exactly once per L1-second trigger — when the consecutive no-progress count
-// reaches l1SecondThreshold (20) and the second L1 reminder hasn't fired yet.
+// It fires at most once per session when the consecutive no-progress count reaches
+// l1SecondThreshold (20) — giving the agent a chance to be "rescued" by the judge
+// before L2 escalation. The forkEvalFired flag ensures it never re-fires after reset.
 func (pm *ProgressMonitor) ShouldForkProgressEval() bool {
-	return pm.consecutiveNoProgress >= l1SecondThreshold && !pm.l1SecondFired && !pm.forkDispatched
+	return pm.consecutiveNoProgress >= l1SecondThreshold && !pm.forkEvalFired && !pm.forkDispatched
 }
 
 // MarkForkDispatched records that the fork has been launched.
 func (pm *ProgressMonitor) MarkForkDispatched() {
 	pm.forkDispatched = true
+	pm.forkEvalFired = true
 }
 
 // ShouldForkL3ProgressEval returns true when the L3 fork-judge should be dispatched.

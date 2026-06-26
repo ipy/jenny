@@ -375,7 +375,6 @@ func (e *QueryEngine) runLoop(ctx context.Context, messages []api.Message, cwd, 
 						})
 						e.persistSystemReminder(sessionID, reminder)
 					}
-					e.qaCompactSeen = true
 					log.Debug("Context compaction succeeded", "newMessageCount", len(messages))
 				} else {
 					// Compaction failed - increment failure counter with persistence
